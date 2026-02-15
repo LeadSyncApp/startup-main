@@ -20,83 +20,81 @@ router.get(
 
       const companyId = req.user.companyId;
 
-      const result = await prisma.$transaction(async (tx) => {
-        const leads = await tx.lead.count({
-          where: { companyId },
-        });
-
-        const conversations = await tx.conversation.count({
-          where: { companyId },
-        });
-
-        const orders = await tx.order.count({
-          where: { companyId },
-        });
-
-        const agents = await tx.user.count({
-          where: { companyId },
-        });
-
-        const pendingOrders = await tx.order.count({
-          where: {
-            companyId,
-            approvalStatus: "PENDING",
-          },
-        });
-
-        const approvedOrders = await tx.order.count({
-          where: {
-            companyId,
-            approvalStatus: "APPROVED",
-          },
-        });
-
-        const rejectedOrders = await tx.order.count({
-          where: {
-            companyId,
-            approvalStatus: "REJECTED",
-          },
-        });
-
-        const deliveredOrders = await tx.order.count({
-          where: {
-            companyId,
-            status: "DELIVERED",
-          },
-        });
-
-        const aiDetectedOrders = await tx.order.count({
-          where: {
-            companyId,
-            source: "BOT_DETECTED",
-          },
-        });
-
-        const revenueData = await tx.order.aggregate({
-          where: {
-            companyId,
-            status: "DELIVERED",
-          },
-          _sum: {
-            amount: true,
-          },
-        });
-
-        return {
-          leads,
-          conversations,
-          orders,
-          agents,
-          pendingOrders,
-          approvedOrders,
-          rejectedOrders,
-          deliveredOrders,
-          aiDetectedOrders,
-          totalRevenue: revenueData._sum.amount || 0,
-        };
+      const leads = await prisma.lead.count({
+        where: { companyId },
       });
 
-      res.json(result);
+      const conversations = await prisma.conversation.count({
+        where: { companyId },
+      });
+
+      const orders = await prisma.order.count({
+        where: { companyId },
+      });
+
+      const agents = await prisma.user.count({
+        where: { companyId },
+      });
+
+      const pendingOrders = await prisma.order.count({
+        where: {
+          companyId,
+          approvalStatus: "PENDING",
+        },
+      });
+
+      const approvedOrders = await prisma.order.count({
+        where: {
+          companyId,
+          approvalStatus: "APPROVED",
+        },
+      });
+
+      const rejectedOrders = await prisma.order.count({
+        where: {
+          companyId,
+          approvalStatus: "REJECTED",
+        },
+      });
+
+      const deliveredOrders = await prisma.order.count({
+        where: {
+          companyId,
+          status: "DELIVERED",
+        },
+      });
+
+      const aiDetectedOrders = await prisma.order.count({
+        where: {
+          companyId,
+          source: "BOT_DETECTED",
+        },
+      });
+
+      const revenueData = await prisma.order.aggregate({
+        where: {
+          companyId,
+          status: "DELIVERED",
+        },
+        _sum: {
+          amount: true,
+        },
+      });
+
+      const totalRevenue = revenueData._sum.amount || 0;
+
+      res.json({
+        leads,
+        conversations,
+        orders,
+        agents,
+        pendingOrders,
+        approvedOrders,
+        rejectedOrders,
+        deliveredOrders,
+        aiDetectedOrders,
+        totalRevenue,
+      });
 
     } catch (err) {
       console.error("KPI fetch error:", err);
