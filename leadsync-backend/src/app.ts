@@ -19,10 +19,11 @@ const app = express()
 /* -------------------- Middleware -------------------- */
 app.use(
   cors({
-    origin: true, // Allow all origins dynamically
+    origin: true,
     credentials: true,
   })
-);
+)
+
 // 🔴 REQUIRED FOR TELEGRAM
 app.use(express.json())
 
@@ -32,14 +33,21 @@ app.get('/health', (_req, res) => {
 })
 
 /* -------------------- API Routes -------------------- */
+
+/* 🔓 PUBLIC ROUTES (NO AUTH) */
 app.use('/api/auth', authRoutes)
-app.use('/api/leads', leadsRoutes)
-app.use('/api/integrations', integrationsRoutes)
-app.use('/api/conversations', conversationRoutes)
 app.use('/api/telegram', telegramRoutes)
 app.use('/api/public', publicRoutes)
-app.use('/api', secureRoutes)
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/integrations", telegramIntegrationRoutes);
+app.use('/api/integrations', integrationsRoutes)
+app.use('/api/integrations', telegramIntegrationRoutes)
+
+/* 🔐 SECURE ROUTE (ONLY /api/secure) */
+app.use('/api/secure', secureRoutes)
+
+/* 🔐 OTHER ROUTES (keep existing behavior) */
+app.use('/api/leads', leadsRoutes)
+app.use('/api/conversations', conversationRoutes)
+app.use('/api/dashboard', dashboardRoutes)
+
 /* -------------------- Export App -------------------- */
 export default app
