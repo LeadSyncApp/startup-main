@@ -3,9 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
+
 
 /**
  * =====================
@@ -26,6 +28,7 @@ enum Channel {
 
 enum Role {
   OWNER
+  ADMIN
   AGENT
 }
 
@@ -64,12 +67,10 @@ model Company {
   telegramWebhookSecret String?  @unique
   telegramConnected     Boolean  @default(false)
 
-  // 🔥 NEW FIELDS
   botWelcomeMessage     String?
   botBusinessType       String?
   botMenu               Json?
   botStructuredMenu     Json?
-
 
   createdAt             DateTime @default(now())
 
@@ -78,7 +79,6 @@ model Company {
   conversations Conversation[]
   orders        Order[]
 }
-
 
 model User {
   id           String   @id @default(uuid())
@@ -91,7 +91,10 @@ model User {
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  processedOrders Order[] @relation("ProcessedOrders")
+
   @@unique([email, companyId])
+  @@index([companyId])
 }
 
 model Lead {
@@ -148,8 +151,12 @@ model Order {
   leadId         String
 
   summary  String
+  amount   Float        @default(0)   // 🔥 Revenue tracking
   priority OrderPriority @default(NORMAL)
   status   OrderStatus   @default(NEW)
+
+  processedById String?
+  processedBy   User?    @relation("ProcessedOrders", fields: [processedById], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -161,4 +168,5 @@ model Order {
   @@index([companyId])
   @@index([conversationId])
   @@index([leadId])
+  @@index([processedById])
 }
