@@ -7,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 /**
  * =====================
  * ENUMS
@@ -49,6 +48,17 @@ enum OrderStatus {
 enum OrderPriority {
   NORMAL
   URGENT
+}
+
+enum OrderSource {
+  MANUAL
+  BOT_DETECTED
+}
+
+enum OrderApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 /**
@@ -150,9 +160,12 @@ model Order {
   leadId         String
 
   summary  String
-  amount   Float        @default(0)   // 🔥 Revenue tracking
+  amount   Float        @default(0)
   priority OrderPriority @default(NORMAL)
   status   OrderStatus   @default(NEW)
+
+  source         OrderSource         @default(MANUAL)
+  approvalStatus OrderApprovalStatus @default(APPROVED)
 
   processedById String?
   processedBy   User?    @relation("ProcessedOrders", fields: [processedById], references: [id])
@@ -168,4 +181,5 @@ model Order {
   @@index([conversationId])
   @@index([leadId])
   @@index([processedById])
+  @@index([approvalStatus])
 }
