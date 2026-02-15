@@ -5,6 +5,17 @@ import { sendTelegramMessage } from "../../bot/telegram.sender";
 import { generateBotReply } from "../../services/geminiService";
 
 /* ===============================
+   TYPES
+=============================== */
+
+interface StructuredMenu {
+  categories: {
+    name: string;
+    items: string[];
+  }[];
+}
+
+/* ===============================
    BUILD TELEGRAM KEYBOARD
 =============================== */
 function buildKeyboard(menu: any) {
@@ -21,11 +32,13 @@ function buildKeyboard(menu: any) {
    BUILD WELCOME MESSAGE
 =============================== */
 function buildWelcomeMessage(company: any, name: string) {
-  return (
-    `👋 Hello ${name}!\n\n` +
-    (company.botWelcomeMessage ||
-      `Welcome to ${company.name}! We are happy to assist you.`)
-  );
+  const customWelcome =
+    company?.botWelcomeMessage &&
+    company.botWelcomeMessage.trim().length > 0
+      ? company.botWelcomeMessage
+      : `Welcome to ${company?.name || "our store"}! We are happy to assist you.`;
+
+  return `👋 Hello ${name}!\n\n${customWelcome}`;
 }
 
 /* ===============================
@@ -49,7 +62,7 @@ export async function telegramWebhook(req: Request, res: Response) {
 
     res.json({ ok: true });
 
-    processTelegramMessage(req.body, company).catch((err) => {
+    processTelegramMessage(req.body, company.id).catch((err) => {
       console.error("Telegram async error:", err);
     });
 
@@ -62,13 +75,24 @@ export async function telegramWebhook(req: Request, res: Response) {
 /* ===============================
    PROCESS MESSAGE
 =============================== */
-async function processTelegramMessage(body: any, company: any) {
+async function processTelegramMessage(body: any, companyId: string) {
   const message = body.message;
   if (!message) return;
 
-  const botToken = company.telegramBotToken!;
   const chatId = String(message.chat.id);
   const name = message.from?.first_name || "Customer";
+
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+  });
+
+  if (!company || !company.telegramBotToken) return;
+
+  const botToken = company.telegramBotToken;
+
+  /* 🔥 SAFE CAST JSON FIELD */
+  const structuredMenu = company.botStructuredMenu as StructuredMenu | null;
+  const categories = structuredMenu?.categories || [];
 
   /* ===============================
      FIND OR CREATE LEAD
@@ -130,19 +154,16 @@ async function processTelegramMessage(body: any, company: any) {
       },
     });
 
-    /* 🔥 CRITICAL MODE GUARD */
     if (conversation.mode === ConversationMode.HUMAN) {
-      return; // STOP BOT
+      return;
     }
 
+    /* START */
     if (text === "/start") {
       const welcomeMsg = buildWelcomeMessage(company, name);
 
-      const categories =
-        company.botStructuredMenu?.categories || [];
-
       const keyboard = categories.length
-        ? categories.map((cat: any) => [cat.name])
+        ? categories.map((cat) => [cat.name])
         : company.botMenu;
 
       await sendTelegramMessage(
@@ -155,17 +176,14 @@ async function processTelegramMessage(body: any, company: any) {
       return;
     }
 
-    const categories =
-      company.botStructuredMenu?.categories || [];
-
+    /* CATEGORY CLICK */
     const selectedCategory = categories.find(
-      (cat: any) =>
-        cat.name.toLowerCase() === text.toLowerCase()
+      (cat) => cat.name.toLowerCase() === text.toLowerCase()
     );
 
     if (selectedCategory) {
       const itemsKeyboard = selectedCategory.items.map(
-        (item: string) => [item]
+        (item) => [item]
       );
 
       await sendTelegramMessage(
@@ -178,10 +196,11 @@ async function processTelegramMessage(body: any, company: any) {
       return;
     }
 
+    /* AI REPLY */
     const aiReply = await generateBotReply(
       text,
       company.botBusinessType || "general business",
-      company.botStructuredMenu
+      structuredMenu
     );
 
     await prisma.message.create({
@@ -200,9 +219,7 @@ async function processTelegramMessage(body: any, company: any) {
     );
   }
 
-  /* ===============================
-     IMAGE MESSAGE
-  =============================== */
+  /* IMAGE */
   if (message.photo) {
     await prisma.message.create({
       data: {
@@ -221,9 +238,7 @@ async function processTelegramMessage(body: any, company: any) {
     );
   }
 
-  /* ===============================
-     VOICE MESSAGE
-  =============================== */
+  /* VOICE */
   if (message.voice) {
     await prisma.message.create({
       data: {

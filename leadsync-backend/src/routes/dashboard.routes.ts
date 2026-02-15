@@ -26,12 +26,7 @@ router.get(
         prisma.user.count({ where: { companyId } }),
       ]);
 
-      res.json({
-        leads,
-        conversations,
-        orders,
-        agents,
-      });
+      res.json({ leads, conversations, orders, agents });
     } catch (err) {
       console.error("KPI fetch error:", err);
       res.status(500).json({ message: "Failed to fetch KPIs" });
@@ -51,10 +46,8 @@ router.get(
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const companyId = req.user.companyId;
-
       const company = await prisma.company.findUnique({
-        where: { id: companyId },
+        where: { id: req.user.companyId },
         select: {
           botBusinessType: true,
           botWelcomeMessage: true,
@@ -68,6 +61,41 @@ router.get(
       console.error("Fetch bot config error:", error);
       res.status(500).json({
         message: "Failed to fetch bot configuration",
+      });
+    }
+  }
+);
+
+/* =====================================================
+   PATCH /api/dashboard/update-welcome
+===================================================== */
+router.patch(
+  "/update-welcome",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const { botBusinessType, botWelcomeMessage } = req.body;
+
+      const updatedCompany = await prisma.company.update({
+        where: { id: req.user.companyId },
+        data: {
+          botBusinessType,
+          botWelcomeMessage,
+        },
+      });
+
+      res.json({
+        message: "Welcome updated successfully",
+        company: updatedCompany,
+      });
+    } catch (error) {
+      console.error("Update welcome error:", error);
+      res.status(500).json({
+        message: "Failed to update welcome",
       });
     }
   }
@@ -100,7 +128,6 @@ router.patch(
         });
       }
 
-      /* 🔥 Fetch existing menu for merge */
       const existingCompany = await prisma.company.findUnique({
         where: { id: companyId },
         select: { botStructuredMenu: true },
@@ -108,7 +135,6 @@ router.patch(
 
       const existingMenu = existingCompany?.botStructuredMenu || null;
 
-      /* 🔥 Generate or Merge */
       const structuredMenu = await generateStructuredMenu(
         shopDescription,
         existingMenu
@@ -116,7 +142,6 @@ router.patch(
 
       const categories = structuredMenu?.categories || [];
 
-      /* 🔥 Convert to Telegram keyboard (2 per row) */
       const keyboardMenu: string[][] = [];
 
       for (let i = 0; i < categories.length; i += 2) {
@@ -128,7 +153,6 @@ router.patch(
         keyboardMenu.push(row);
       }
 
-      /* 🔥 Save to DB */
       const updatedCompany = await prisma.company.update({
         where: { id: companyId },
         data: {
@@ -166,8 +190,6 @@ router.patch(
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const companyId = req.user.companyId;
-
       const {
         structuredMenu,
         botBusinessType,
@@ -194,7 +216,7 @@ router.patch(
       }
 
       const updatedCompany = await prisma.company.update({
-        where: { id: companyId },
+        where: { id: req.user.companyId },
         data: {
           botBusinessType,
           botWelcomeMessage,
