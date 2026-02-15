@@ -1,16 +1,16 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
-import { OrderPriority, OrderStatus } from "@prisma/client";
+import { OrderPriority, OrderStatus, Role } from "@prisma/client";
 
 const router = Router();
 
 /* ===============================
-   CREATE ORDER (Manual Confirmation)
+   CREATE ORDER
 =============================== */
 router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { conversationId, summary, priority } = req.body;
+    const { conversationId, summary, priority, amount } = req.body;
 
     if (!conversationId || !summary) {
       return res.status(400).json({ message: "Missing fields" });
@@ -20,7 +20,6 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // Ensure conversation belongs to company
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
     });
@@ -41,6 +40,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         summary,
         priority: priority || OrderPriority.NORMAL,
         status: OrderStatus.NEW,
+        amount: amount || 0,
       },
     });
 
@@ -52,7 +52,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 /* ===============================
-   GET ALL ORDERS (Company Scoped)
+   GET ORDERS (ROLE AWARE)
 =============================== */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -60,13 +60,27 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    let whereCondition: any = {
+      companyId: req.user.companyId,
+    };
+
+    // AGENT sees only their processed orders
+    if (req.user.role === "AGENT") {
+      whereCondition.processedById = req.user.userId;
+    }
+
     const orders = await prisma.order.findMany({
-      where: {
-        companyId: req.user.companyId,
-      },
+      where: whereCondition,
       include: {
         lead: true,
         conversation: true,
+        processedBy: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -85,7 +99,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 =============================== */
 router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { status } = req.body;
+    const { status, amount } = req.body;
     const { id } = req.params;
 
     if (!req.user) {
@@ -104,9 +118,31 @@ router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Respon
       return res.status(403).json({ message: "Forbidden" });
     }
 
+    const updateData: any = {
+      status,
+    };
+
+    // If order delivered → assign processor
+    if (status === OrderStatus.DELIVERED) {
+      updateData.processedById = req.user.userId;
+
+      if (amount !== undefined) {
+        updateData.amount = amount;
+      }
+    }
+
     const updated = await prisma.order.update({
       where: { id },
-      data: { status },
+      data: updateData,
+      include: {
+        processedBy: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+          },
+        },
+      },
     });
 
     return res.json(updated);
