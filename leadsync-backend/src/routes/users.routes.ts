@@ -6,7 +6,7 @@ import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 const router = Router();
 
 /* ===============================
-   GET ALL STAFF (Owner/Admin)
+   GET ALL STAFF
 =============================== */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -33,13 +33,12 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 
     res.json(users);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Failed to fetch users" });
   }
 });
 
 /* ===============================
-   CREATE STAFF
+   CREATE STAFF (Auto Password)
 =============================== */
 router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -49,9 +48,9 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    const { name, email, password, role } = req.body;
+    const { name, email, role } = req.body;
 
-    if (!name || !email || !password || !role) {
+    if (!name || !email || !role) {
       return res.status(400).json({ message: "Missing fields" });
     }
 
@@ -70,7 +69,10 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       return res.status(409).json({ message: "User already exists" });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    // 🔥 Generate temporary password
+    const tempPassword = Math.random().toString(36).slice(-8);
+
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
 
     const newUser = await prisma.user.create({
       data: {
@@ -87,52 +89,10 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       name: newUser.name,
       email: newUser.email,
       role: newUser.role,
+      tempPassword, // 🔥 return once
     });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Failed to create user" });
-  }
-});
-
-/* ===============================
-   UPDATE USER
-=============================== */
-router.patch("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-
-    if (!["OWNER", "ADMIN"].includes(req.user.role)) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    const { id } = req.params;
-    const { role, password } = req.body;
-
-    const user = await prisma.user.findUnique({ where: { id } });
-
-    if (!user || user.companyId !== req.user.companyId) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const updateData: any = {};
-
-    if (role && ["ADMIN", "AGENT"].includes(role)) {
-      updateData.role = role;
-    }
-
-    if (password) {
-      updateData.passwordHash = await bcrypt.hash(password, 10);
-    }
-
-    await prisma.user.update({
-      where: { id },
-      data: updateData,
-    });
-
-    res.json({ message: "User updated successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to update user" });
   }
 });
 
@@ -162,7 +122,6 @@ router.delete("/:id", authMiddleware, async (req: AuthRequest, res: Response) =>
 
     res.json({ message: "User disabled successfully" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Failed to disable user" });
   }
 });
