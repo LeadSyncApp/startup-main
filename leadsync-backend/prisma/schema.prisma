@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/**
+ * =====================
+ * ENUMS
+ * =====================
+ */
+
+enum ConversationMode {
+  BOT
+  HUMAN
+}
+
+enum Channel {
+  WEBSITE
+  TELEGRAM
+  WHATSAPP
+}
+
+enum Role {
+  OWNER
+  AGENT
+}
+
+enum MessageSender {
+  CLIENT
+  AGENT
+  SYSTEM
+}
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  PREPARING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum OrderPriority {
+  NORMAL
+  URGENT
+}
+
+/**
+ * =====================
+ * MODELS
+ * =====================
+ */
+
+model Company {
+  id                    String   @id @default(uuid())
+  name                  String
+
+  telegramBotToken      String?
+  telegramBotUsername   String?
+  telegramWebhookSecret String?  @unique
+  telegramConnected     Boolean  @default(false)
+
+  // 🔥 NEW FIELDS
+  botWelcomeMessage     String?
+  botBusinessType       String?
+  botMenu               Json?
+  botStructuredMenu     Json?
+
+
+  createdAt             DateTime @default(now())
+
+  users         User[]
+  leads         Lead[]
+  conversations Conversation[]
+  orders        Order[]
+}
+
+
+model User {
+  id           String   @id @default(uuid())
+  email        String
+  name         String
+  passwordHash String
+  role         Role     @default(AGENT)
+  companyId    String
+  createdAt    DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([email, companyId])
+}
+
+model Lead {
+  id        String   @id @default(uuid())
+  name      String?
+  contact   String
+  channel   Channel
+  companyId String
+  createdAt DateTime @default(now())
+
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  orders        Order[]
+
+  @@unique([contact, channel, companyId])
+  @@index([companyId])
+}
+
+model Conversation {
+  id         String   @id @default(uuid())
+  leadId     String
+  companyId  String
+  channel    Channel
+  mode       ConversationMode @default(BOT)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  lead    Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messages Message[]
+  orders   Order[]
+
+  @@unique([leadId, companyId, channel], name: "leadId_companyId_channel")
+  @@index([companyId])
+  @@index([leadId])
+}
+
+model Message {
+  id             String        @id @default(uuid())
+  content        String
+  sender         MessageSender
+  conversationId String
+  createdAt      DateTime      @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+model Order {
+  id             String        @id @default(uuid())
+  companyId      String
+  conversationId String
+  leadId         String
+
+  summary  String
+  priority OrderPriority @default(NORMAL)
+  status   OrderStatus   @default(NEW)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([conversationId])
+  @@index([leadId])
+}
