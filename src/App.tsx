@@ -13,29 +13,92 @@ import Revenue from "./pages/dashboard/Revenue";
 import Reports from "./pages/dashboard/Reports";
 import Settings from "./pages/dashboard/Settings";
 
-import RequireAuth from "./components/auth/RequireAuth";
+// 🔥 New
+import ProtectedRoute from "./components/ProtectedRoute";
+
+
+// 🔥 (We will create this next)
+import UserManagement from "./pages/dashboard/UserManagement";
 
 export default function App() {
   return (
     <Routes>
-      {/* Public */}
+      {/* ================= PUBLIC ROUTES ================= */}
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
 
-      {/* Protected Dashboard */}
-      <Route element={<RequireAuth />}>
-        <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<DashboardHome />} />
-          <Route path="leads" element={<Leads />} />
-          <Route path="conversations" element={<Conversations />} />
-          <Route path="orders" element={<Orders />} />
-          <Route path="revenue" element={<Revenue />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
+      {/* ================= DASHBOARD ================= */}
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        {/* Everyone logged in */}
+        <Route index element={<DashboardHome />} />
+        <Route path="conversations" element={<Conversations />} />
+
+        {/* OWNER + ADMIN */}
+        <Route
+          path="leads"
+          element={
+            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+              <Leads />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="orders"
+          element={
+            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+              <Orders />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="revenue"
+          element={
+            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+              <Revenue />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="reports"
+          element={
+            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+              <Reports />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="settings"
+          element={
+            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* OWNER ONLY */}
+        <Route
+          path="users"
+          element={
+            <ProtectedRoute allowedRoles={["OWNER"]}>
+              <UserManagement />
+            </ProtectedRoute>
+          }
+        />
       </Route>
 
+      {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
