@@ -19,20 +19,76 @@ router.get(
 
       const companyId = req.user.companyId;
 
-      const [leads, conversations, orders, agents] = await Promise.all([
+      const [
+        leads,
+        conversations,
+        orders,
+        agents,
+        pendingOrders,
+        approvedOrders,
+        rejectedOrders,
+        deliveredOrders,
+        aiDetectedOrders,
+        revenueData,
+      ] = await Promise.all([
         prisma.lead.count({ where: { companyId } }),
         prisma.conversation.count({ where: { companyId } }),
         prisma.order.count({ where: { companyId } }),
         prisma.user.count({ where: { companyId } }),
+
+        prisma.order.count({
+          where: { companyId, approvalStatus: "PENDING" },
+        }),
+
+        prisma.order.count({
+          where: { companyId, approvalStatus: "APPROVED" },
+        }),
+
+        prisma.order.count({
+          where: { companyId, approvalStatus: "REJECTED" },
+        }),
+
+        prisma.order.count({
+          where: { companyId, status: "DELIVERED" },
+        }),
+
+        prisma.order.count({
+          where: { companyId, source: "BOT_DETECTED" },
+        }),
+
+        prisma.order.aggregate({
+          where: {
+            companyId,
+            status: "DELIVERED",
+          },
+          _sum: {
+            amount: true,
+          },
+        }),
       ]);
 
-      res.json({ leads, conversations, orders, agents });
+      const totalRevenue = revenueData._sum.amount || 0;
+
+      res.json({
+        leads,
+        conversations,
+        orders,
+        agents,
+        pendingOrders,
+        approvedOrders,
+        rejectedOrders,
+        deliveredOrders,
+        aiDetectedOrders,
+        totalRevenue,
+      });
+
     } catch (err) {
       console.error("KPI fetch error:", err);
       res.status(500).json({ message: "Failed to fetch KPIs" });
     }
   }
 );
+
 
 /* =====================================================
    GET /api/dashboard/bot-config

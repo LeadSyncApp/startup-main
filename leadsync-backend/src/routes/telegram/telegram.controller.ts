@@ -1,6 +1,12 @@
 import { Request, Response } from "express";
 import { prisma } from "../../lib/prisma";
-import { Channel, MessageSender, ConversationMode } from "@prisma/client";
+import {
+  Channel,
+  MessageSender,
+  ConversationMode,
+  OrderSource,
+  OrderApprovalStatus,
+} from "@prisma/client";
 import { sendTelegramMessage } from "../../bot/telegram.sender";
 import { generateBotReply } from "../../services/geminiService";
 
@@ -8,16 +14,28 @@ import { generateBotReply } from "../../services/geminiService";
    TYPES
 =============================== */
 
+interface StructuredMenuItem {
+  name: string;
+  price: number;
+}
+
+interface StructuredMenuCategory {
+  name: string;
+  items: StructuredMenuItem[];
+}
+
 interface StructuredMenu {
-  categories: {
-    name: string;
-    items: string[];
-  }[];
+  categories: StructuredMenuCategory[];
+}
+
+interface DetectedOrder {
+  items: { name: string; quantity: number }[];
 }
 
 /* ===============================
-   BUILD TELEGRAM KEYBOARD
+   HELPERS
 =============================== */
+
 function buildKeyboard(menu: any) {
   return {
     keyboard:
@@ -28,9 +46,6 @@ function buildKeyboard(menu: any) {
   };
 }
 
-/* ===============================
-   BUILD WELCOME MESSAGE
-=============================== */
 function buildWelcomeMessage(company: any, name: string) {
   const customWelcome =
     company?.botWelcomeMessage &&
@@ -42,8 +57,9 @@ function buildWelcomeMessage(company: any, name: string) {
 }
 
 /* ===============================
-   TELEGRAM WEBHOOK
+   WEBHOOK
 =============================== */
+
 export async function telegramWebhook(req: Request, res: Response) {
   try {
     const secret = req.headers[
@@ -75,6 +91,7 @@ export async function telegramWebhook(req: Request, res: Response) {
 /* ===============================
    PROCESS MESSAGE
 =============================== */
+
 async function processTelegramMessage(body: any, companyId: string) {
   const message = body.message;
   if (!message) return;
@@ -90,13 +107,10 @@ async function processTelegramMessage(body: any, companyId: string) {
 
   const botToken = company.telegramBotToken;
 
-  /* 🔥 SAFE CAST JSON FIELD */
   const structuredMenu = company.botStructuredMenu as StructuredMenu | null;
   const categories = structuredMenu?.categories || [];
 
-  /* ===============================
-     FIND OR CREATE LEAD
-  =============================== */
+  /* FIND OR CREATE LEAD */
   let lead = await prisma.lead.findFirst({
     where: {
       contact: chatId,
@@ -116,9 +130,7 @@ async function processTelegramMessage(body: any, companyId: string) {
     });
   }
 
-  /* ===============================
-     FIND OR CREATE CONVERSATION
-  =============================== */
+  /* FIND OR CREATE CONVERSATION */
   let conversation = await prisma.conversation.findUnique({
     where: {
       leadId_companyId_channel: {
@@ -140,9 +152,7 @@ async function processTelegramMessage(body: any, companyId: string) {
     });
   }
 
-  /* ===============================
-     TEXT MESSAGE
-  =============================== */
+  /* TEXT */
   if (message.text) {
     const text = message.text.trim();
 
@@ -154,106 +164,81 @@ async function processTelegramMessage(body: any, companyId: string) {
       },
     });
 
-    if (conversation.mode === ConversationMode.HUMAN) {
-      return;
-    }
+    if (conversation.mode === ConversationMode.HUMAN) return;
 
-    /* START */
     if (text === "/start") {
       const welcomeMsg = buildWelcomeMessage(company, name);
-
-      const keyboard = categories.length
-        ? categories.map((cat) => [cat.name])
-        : company.botMenu;
-
-      await sendTelegramMessage(
-        botToken,
-        chatId,
-        welcomeMsg,
-        buildKeyboard(keyboard)
-      );
-
+      await sendTelegramMessage(botToken, chatId, welcomeMsg);
       return;
     }
 
-    /* CATEGORY CLICK */
-    const selectedCategory = categories.find(
-      (cat) => cat.name.toLowerCase() === text.toLowerCase()
-    );
+    /* ===============================
+       AI + ORDER DETECTION
+    =============================== */
 
-    if (selectedCategory) {
-      const itemsKeyboard = selectedCategory.items.map(
-        (item) => [item]
-      );
-
-      await sendTelegramMessage(
-        botToken,
-        chatId,
-        `📂 ${selectedCategory.name} Menu`,
-        buildKeyboard(itemsKeyboard)
-      );
-
-      return;
-    }
-
-    /* AI REPLY */
-    const aiReply = await generateBotReply(
+    const aiResponse = await generateBotReply(
       text,
       company.botBusinessType || "general business",
       structuredMenu
     );
 
+    let detectedOrder: DetectedOrder | null = null;
+    let cleanReply = aiResponse;
+
+    try {
+      const parsed = JSON.parse(aiResponse);
+      if (parsed.items) {
+        detectedOrder = parsed;
+      }
+    } catch {
+      // not JSON
+    }
+
+    /* IF ORDER DETECTED */
+    if (detectedOrder && structuredMenu) {
+      let total = 0;
+      let summaryParts: string[] = [];
+
+      for (const orderItem of detectedOrder.items) {
+        for (const cat of categories) {
+          const found = cat.items.find(
+            (i) =>
+              i.name.toLowerCase() === orderItem.name.toLowerCase()
+          );
+          if (found) {
+            total += found.price * orderItem.quantity;
+            summaryParts.push(
+              `${orderItem.quantity} x ${found.name}`
+            );
+          }
+        }
+      }
+
+      const summary = summaryParts.join(", ");
+
+      await prisma.order.create({
+        data: {
+          companyId: company.id,
+          conversationId: conversation.id,
+          leadId: lead.id,
+          summary,
+          amount: total,
+          source: OrderSource.BOT_DETECTED,
+          approvalStatus: OrderApprovalStatus.PENDING,
+        },
+      });
+
+      cleanReply = `🛒 Order Detected:\n\n${summary}\n\n💰 Total: ₹${total}\n\n⏳ Waiting for approval from our team.`;
+    }
+
     await prisma.message.create({
       data: {
-        content: aiReply,
+        content: cleanReply,
         sender: MessageSender.SYSTEM,
         conversationId: conversation.id,
       },
     });
 
-    await sendTelegramMessage(
-      botToken,
-      chatId,
-      aiReply,
-      buildKeyboard(company.botMenu)
-    );
-  }
-
-  /* IMAGE */
-  if (message.photo) {
-    await prisma.message.create({
-      data: {
-        content: "[Image Received]",
-        sender: MessageSender.CLIENT,
-        conversationId: conversation.id,
-      },
-    });
-
-    if (conversation.mode === ConversationMode.HUMAN) return;
-
-    await sendTelegramMessage(
-      botToken,
-      chatId,
-      "📸 Image received. Our team will review it."
-    );
-  }
-
-  /* VOICE */
-  if (message.voice) {
-    await prisma.message.create({
-      data: {
-        content: "[Voice Message Received]",
-        sender: MessageSender.CLIENT,
-        conversationId: conversation.id,
-      },
-    });
-
-    if (conversation.mode === ConversationMode.HUMAN) return;
-
-    await sendTelegramMessage(
-      botToken,
-      chatId,
-      "🎤 Voice message received. Processing..."
-    );
+    await sendTelegramMessage(botToken, chatId, cleanReply);
   }
 }

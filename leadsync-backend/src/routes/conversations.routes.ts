@@ -47,7 +47,7 @@ router.get(
 );
 
 /* =========================================
-   GET MESSAGES
+   GET MESSAGES + LATEST ORDER
 ========================================= */
 router.get(
   "/:id/messages",
@@ -72,10 +72,29 @@ router.get(
         orderBy: { createdAt: "asc" },
       });
 
+      /* 🔥 Get latest order for this conversation */
+      const latestOrder = await prisma.order.findFirst({
+        where: {
+          conversationId: conversation.id,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        select: {
+          id: true,
+          summary: true,
+          amount: true,
+          approvalStatus: true,
+          status: true,
+        },
+      });
+
       res.json({
         mode: conversation.mode,
         messages,
+        order: latestOrder || null,
       });
+
     } catch (error) {
       console.error("Fetch messages error:", error);
       res.status(500).json({ message: "Failed to fetch messages" });
@@ -144,6 +163,7 @@ router.post(
         ...message,
         mode: ConversationMode.HUMAN,
       });
+
     } catch (error) {
       console.error("Agent send error:", error);
       res.status(500).json({ message: "Failed to send message" });
@@ -190,6 +210,7 @@ router.patch(
       );
 
       res.json(updatedConversation);
+
     } catch (error) {
       console.error("Mode toggle error:", error);
       res.status(500).json({ message: "Failed to update mode" });

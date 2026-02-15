@@ -27,12 +27,12 @@ interface Order {
 }
 
 const STATUS = [
-  { value: "NEW", label: "New", color: "bg-blue-100 border-blue-300" },
-  { value: "CONFIRMED", label: "Confirmed", color: "bg-purple-100 border-purple-300" },
-  { value: "PREPARING", label: "Preparing", color: "bg-amber-100 border-amber-300" },
-  { value: "READY", label: "Ready", color: "bg-green-100 border-green-300" },
-  { value: "DELIVERED", label: "Delivered", color: "bg-emerald-200 border-emerald-400" },
-  { value: "CANCELLED", label: "Cancelled", color: "bg-red-200 border-red-400" },
+  { value: "NEW", label: "New", color: "bg-blue-50 border-blue-200" },
+  { value: "CONFIRMED", label: "Confirmed", color: "bg-purple-50 border-purple-200" },
+  { value: "PREPARING", label: "Preparing", color: "bg-amber-50 border-amber-200" },
+  { value: "READY", label: "Ready", color: "bg-green-50 border-green-200" },
+  { value: "DELIVERED", label: "Delivered", color: "bg-emerald-100 border-emerald-300" },
+  { value: "CANCELLED", label: "Cancelled", color: "bg-red-100 border-red-300" },
 ];
 
 export default function Orders() {
@@ -41,12 +41,9 @@ export default function Orders() {
   const [loading, setLoading] = useState(false);
 
   const fetchOrders = async () => {
-    const res = await fetch(
-      `${import.meta.env.VITE_API_URL}/orders`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/orders`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const data = await res.json();
     setOrders(data);
   };
@@ -73,12 +70,21 @@ export default function Orders() {
       );
 
       await fetchOrders();
-    } catch (err) {
-      console.error(err);
     } finally {
       setLoading(false);
     }
   };
+
+  /* ===============================
+     METRICS
+  =============================== */
+
+  const totalRevenue = orders
+    .filter((o) => o.status === "DELIVERED")
+    .reduce((sum, o) => sum + o.amount, 0);
+
+  const totalPending = orders.filter((o) => o.status === "NEW").length;
+  const totalOrders = orders.length;
 
   const grouped = useMemo(() => {
     return STATUS.map((s) => ({
@@ -89,35 +95,54 @@ export default function Orders() {
 
   return (
     <div className="p-8 space-y-8">
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-8 rounded-2xl shadow-xl">
-        <h1 className="text-3xl font-bold">Orders Board</h1>
-        <p className="opacity-90 mt-2">
-          Track lifecycle, revenue & performance
+      {/* HEADER */}
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-8 rounded-3xl shadow-2xl">
+        <h1 className="text-3xl font-bold tracking-tight">
+          Orders Dashboard
+        </h1>
+        <p className="opacity-90 mt-2 text-sm">
+          Track lifecycle, monitor revenue and manage workflow
         </p>
       </div>
 
+      {/* METRICS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <MetricCard title="Total Orders" value={totalOrders} />
+        <MetricCard title="New Orders" value={totalPending} />
+        <MetricCard
+          title="Revenue"
+          value={`₹${totalRevenue.toFixed(2)}`}
+        />
+      </div>
+
+      {/* BOARD */}
       <div className="overflow-x-auto">
-        <div className="flex gap-8 min-w-max pb-4">
+        <div className="flex gap-6 min-w-max pb-4">
           {grouped.map((col) => (
             <div
               key={col.value}
-              className="w-96 bg-white rounded-2xl shadow-lg border flex flex-col"
+              className="w-80 bg-white rounded-3xl shadow-lg border border-slate-200 flex flex-col"
             >
               <div
-                className={`p-5 text-lg font-semibold rounded-t-2xl border-b ${col.color}`}
+                className={`p-4 text-sm font-semibold rounded-t-3xl border-b ${col.color}`}
               >
-                {col.label} ({col.orders.length})
+                <div className="flex justify-between items-center">
+                  <span>{col.label}</span>
+                  <span className="bg-white px-2 py-0.5 text-xs rounded-full shadow">
+                    {col.orders.length}
+                  </span>
+                </div>
               </div>
 
-              <div className="p-5 space-y-5 flex-1 overflow-y-auto">
+              <div className="p-4 space-y-4 flex-1 overflow-y-auto">
                 {col.orders.map((order) => (
                   <motion.div
                     key={order.id}
                     whileHover={{ scale: 1.02 }}
-                    className="bg-slate-50 p-5 rounded-xl shadow-sm border space-y-3"
+                    className="bg-slate-50 hover:bg-white transition-all p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3"
                   >
                     <div className="flex justify-between items-start">
-                      <h3 className="font-semibold text-slate-900 text-base">
+                      <h3 className="font-semibold text-slate-800 text-sm">
                         {order.summary}
                       </h3>
 
@@ -127,45 +152,40 @@ export default function Orders() {
                     </div>
 
                     <div className="text-xs text-slate-500 space-y-1">
-                      <p>
-                        👤 {order.lead?.name || "Customer"}
-                      </p>
+                      <p>👤 {order.lead?.name || "Customer"}</p>
 
                       {order.processedBy && (
-                        <p>
-                          🧑 Processed by: {order.processedBy.name}
-                        </p>
+                        <p>🧑 {order.processedBy.name}</p>
                       )}
 
                       <p>
-                        🕒 {new Date(order.createdAt).toLocaleString()}
+                        🕒{" "}
+                        {new Date(order.createdAt).toLocaleString()}
                       </p>
                     </div>
 
-                    <div>
-                      <select
-                        value={order.status}
-                        onChange={(e) =>
-                          updateStatus(
-                            order.id,
-                            e.target.value as OrderStatus
-                          )
-                        }
-                        disabled={loading}
-                        className="w-full mt-2 px-3 py-2 text-sm border rounded-lg bg-white"
-                      >
-                        {STATUS.map((s) => (
-                          <option key={s.value} value={s.value}>
-                            Move to {s.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <select
+                      value={order.status}
+                      onChange={(e) =>
+                        updateStatus(
+                          order.id,
+                          e.target.value as OrderStatus
+                        )
+                      }
+                      disabled={loading}
+                      className="w-full mt-2 px-3 py-2 text-xs border rounded-xl bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
+                    >
+                      {STATUS.map((s) => (
+                        <option key={s.value} value={s.value}>
+                          Move to {s.label}
+                        </option>
+                      ))}
+                    </select>
                   </motion.div>
                 ))}
 
                 {col.orders.length === 0 && (
-                  <div className="text-sm text-slate-400 text-center py-6">
+                  <div className="text-xs text-slate-400 text-center py-6">
                     No orders here
                   </div>
                 )}
@@ -174,6 +194,29 @@ export default function Orders() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ===============================
+   METRIC CARD COMPONENT
+=============================== */
+
+function MetricCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: string | number;
+}) {
+  return (
+    <div className="bg-white rounded-3xl shadow-md p-6 border border-slate-200">
+      <p className="text-xs text-slate-500 uppercase tracking-wide">
+        {title}
+      </p>
+      <h2 className="text-2xl font-bold text-slate-800 mt-2">
+        {value}
+      </h2>
     </div>
   );
 }

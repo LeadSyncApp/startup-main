@@ -6,7 +6,7 @@ const openai = new OpenAI({
 });
 
 /* =====================================================
-   GENERATE AI BOT REPLY (SMART + GROUNDED)
+   GENERATE AI BOT REPLY (WITH ORDER DETECTION)
 ===================================================== */
 export async function generateBotReply(
   message: string,
@@ -17,26 +17,43 @@ export async function generateBotReply(
     let systemPrompt = `
 You are a professional AI assistant working for a ${businessType} company.
 
-Your responsibilities:
+You must follow STRICT rules.
+
+GENERAL BEHAVIOR:
 - Answer professionally and clearly
 - Stay within business context
 - Be friendly but concise
 - Guide customers properly
 
-If the user sends an image or unclear message,
-respond politely and guide them.
+ORDER DETECTION RULES:
+If the user clearly wants to BUY, ORDER, PURCHASE or CONFIRM items from the menu,
+you MUST return ONLY valid JSON in this EXACT format:
+
+{
+  "items": [
+    { "name": "Exact Menu Item Name", "quantity": 1 }
+  ]
+}
+
+STRICT JSON RULES:
+- No explanation
+- No markdown
+- No extra text
+- No comments
+- Only JSON
+- Item names must EXACTLY match the official menu
+- If item not found, respond normally (not JSON)
 `;
 
     if (structuredMenu && structuredMenu.categories?.length > 0) {
       systemPrompt += `
-OFFICIAL BUSINESS MENU (STRICT SOURCE OF TRUTH):
+OFFICIAL BUSINESS MENU (SOURCE OF TRUTH):
 ${JSON.stringify(structuredMenu, null, 2)}
 
-CRITICAL RULES:
-- Only recommend items that exist in the menu.
-- Do NOT invent products.
-- If item is unavailable, politely inform the user.
-- Help navigate categories.
+CRITICAL:
+- Never invent products.
+- Only use items from this menu.
+- If item does not exist, respond normally.
 `;
     }
 
@@ -46,13 +63,17 @@ CRITICAL RULES:
         { role: "system", content: systemPrompt },
         { role: "user", content: message },
       ],
-      temperature: 0.4,
+      temperature: 0.2,
     });
 
-    return (
+    let reply =
       completion.choices?.[0]?.message?.content ||
-      "I'm here to help you! 😊"
-    );
+      "I'm here to help you! 😊";
+
+    reply = reply.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    return reply;
+
   } catch (error: any) {
     console.error("🔥 Bot Reply Error:", error?.response?.data || error);
     return "Sorry, our assistant is temporarily unavailable.";
@@ -60,7 +81,7 @@ CRITICAL RULES:
 }
 
 /* =====================================================
-   GENERATE OR EDIT STRUCTURED MENU
+   GENERATE OR EDIT STRUCTURED MENU (WITH PRICES)
 ===================================================== */
 export async function generateStructuredMenu(
   description: string,
@@ -70,17 +91,15 @@ export async function generateStructuredMenu(
     let prompt = `
 You are a business analyst AI.
 
-Your task:
-Understand the business description carefully.
-Extract categories and items professionally.
-
-Return ONLY valid JSON in this exact format:
+Return ONLY valid JSON in this EXACT format:
 
 {
   "categories": [
     {
       "name": "Category Name",
-      "items": ["Item 1", "Item 2"]
+      "items": [
+        { "name": "Item Name", "price": 100 }
+      ]
     }
   ]
 }
@@ -90,19 +109,18 @@ Rules:
 - No markdown
 - No extra text
 - Only JSON
+- Price must be a number
 `;
 
     if (existingMenu && existingMenu.categories?.length > 0) {
       prompt += `
 
 IMPORTANT:
-An existing menu already exists:
+Existing menu:
 
 ${JSON.stringify(existingMenu, null, 2)}
 
-You must intelligently MODIFY the existing menu.
-
-Rules for modification:
+Rules:
 - Add new categories if mentioned
 - Add new items if mentioned
 - Do NOT remove existing items
@@ -120,12 +138,10 @@ ${description}
     const completion = await openai.chat.completions.create({
       model: "openai/gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
+      temperature: 0.2,
     });
 
     let raw = completion.choices?.[0]?.message?.content || "{}";
-
-    console.log("🧠 RAW MENU RESPONSE:", raw);
 
     raw = raw.replace(/```json/g, "").replace(/```/g, "").trim();
 
@@ -142,6 +158,7 @@ ${description}
     }
 
     return parsed;
+
   } catch (error) {
     console.error("🔥 Structured Menu Error:", error);
     return existingMenu || { categories: [] };

@@ -3,24 +3,37 @@ import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import { api } from "../../lib/api";
 
+interface MenuItem {
+  name: string;
+  price: number;
+}
+
+interface Category {
+  name: string;
+  items: MenuItem[];
+}
+
+interface StructuredMenu {
+  categories: Category[];
+}
+
 export default function Settings() {
   const { token, user } = useAuth();
 
   const [telegramConnected, setTelegramConnected] = useState(false);
   const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
   const [botToken, setBotToken] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const [botBusinessType, setBotBusinessType] = useState("");
   const [botWelcomeMessage, setBotWelcomeMessage] = useState("");
   const [shopDescription, setShopDescription] = useState("");
 
-  const [originalBusinessType, setOriginalBusinessType] = useState("");
-  const [originalWelcomeMessage, setOriginalWelcomeMessage] = useState("");
+  const [generatedMenu, setGeneratedMenu] =
+    useState<StructuredMenu | null>(null);
 
-  const [generatedMenu, setGeneratedMenu] = useState<any>(null);
-  const [isEditingWelcome, setIsEditingWelcome] = useState(false);
-
+  /* ===============================
+     LOAD TELEGRAM STATUS
+  =============================== */
   useEffect(() => {
     if (!token) return;
 
@@ -33,6 +46,9 @@ export default function Settings() {
     fetchStatus();
   }, [token]);
 
+  /* ===============================
+     LOAD BOT CONFIG
+  =============================== */
   useEffect(() => {
     if (!token) return;
 
@@ -40,13 +56,8 @@ export default function Settings() {
       const data = await api.get("/dashboard/bot-config");
 
       if (data.company) {
-        const business = data.company.botBusinessType || "";
-        const welcome = data.company.botWelcomeMessage || "";
-
-        setBotBusinessType(business);
-        setBotWelcomeMessage(welcome);
-        setOriginalBusinessType(business);
-        setOriginalWelcomeMessage(welcome);
+        setBotBusinessType(data.company.botBusinessType || "");
+        setBotWelcomeMessage(data.company.botWelcomeMessage || "");
         setGeneratedMenu(data.company.botStructuredMenu || null);
       }
     };
@@ -54,6 +65,9 @@ export default function Settings() {
     fetchBotConfig();
   }, [token]);
 
+  /* ===============================
+     CONNECT TELEGRAM
+  =============================== */
   const handleConnectTelegram = async () => {
     if (!botToken.trim()) {
       toast.error("Bot token required");
@@ -61,8 +75,6 @@ export default function Settings() {
     }
 
     try {
-      setLoading(true);
-
       const data = await api.post("/integrations/telegram/connect", {
         token: botToken,
       });
@@ -74,100 +86,101 @@ export default function Settings() {
       toast.success("Telegram connected 🚀");
     } catch (err: any) {
       toast.error(err.message || "Failed to connect");
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleDisconnectTelegram = async () => {
-    try {
-      setLoading(true);
-      await api.post("/integrations/telegram/disconnect");
-      setTelegramConnected(false);
-      setTelegramUsername(null);
-      setGeneratedMenu(null);
-      toast.success("Telegram disconnected ❌");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to disconnect");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdateWelcome = async () => {
-    try {
-      setLoading(true);
-
-      const typeChanged = botBusinessType !== originalBusinessType;
-      const welcomeChanged = botWelcomeMessage !== originalWelcomeMessage;
-
-      if (!typeChanged && !welcomeChanged) {
-        toast("No changes detected ⚡");
-        setIsEditingWelcome(false);
-        return;
-      }
-
-      await api.patch("/dashboard/update-welcome", {
-        botBusinessType,
-        botWelcomeMessage,
-      });
-
-      let message = "Updated: ";
-
-      if (typeChanged && welcomeChanged) {
-        message += "Business Type & Welcome Message 🎉";
-      } else if (typeChanged) {
-        message += "Business Type ✅";
-      } else if (welcomeChanged) {
-        message += "Welcome Message ✅";
-      }
-
-      toast.success(message);
-
-      setOriginalBusinessType(botBusinessType);
-      setOriginalWelcomeMessage(botWelcomeMessage);
-      setIsEditingWelcome(false);
-
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  /* ===============================
+     GENERATE MENU
+  =============================== */
   const handleGenerateMenu = async () => {
     if (!shopDescription.trim()) {
-      toast.error("Please describe your shop");
+      toast.error("Describe your shop first");
       return;
     }
 
     try {
-      setLoading(true);
-
       const data = await api.patch("/dashboard/bot-config", {
         botBusinessType,
         botWelcomeMessage,
         shopDescription,
       });
 
-      setGeneratedMenu(data.company?.botStructuredMenu);
+      setGeneratedMenu(data.company.botStructuredMenu);
       setShopDescription("");
 
-      toast.success("Menu updated 🎉");
-    } catch (err: any) {
-      toast.error(err.message || "Failed");
-    } finally {
-      setLoading(false);
+      toast.success("Menu generated 🎉");
+    } catch {
+      toast.error("Failed to generate menu");
     }
   };
 
+  /* ===============================
+     MENU EDIT FUNCTIONS
+  =============================== */
+
+  const updateCategoryName = (index: number, name: string) => {
+    if (!generatedMenu) return;
+
+    const updated = { ...generatedMenu };
+    updated.categories[index].name = name;
+    setGeneratedMenu(updated);
+  };
+
+  const updateItem = (
+    catIndex: number,
+    itemIndex: number,
+    field: "name" | "price",
+    value: string
+  ) => {
+    if (!generatedMenu) return;
+
+    const updated = { ...generatedMenu };
+
+    if (field === "price") {
+      updated.categories[catIndex].items[itemIndex].price =
+        Number(value);
+    } else {
+      updated.categories[catIndex].items[itemIndex].name = value;
+    }
+
+    setGeneratedMenu(updated);
+  };
+
+  const addCategory = () => {
+    if (!generatedMenu) return;
+
+    const updated = { ...generatedMenu };
+    updated.categories.push({
+      name: "New Category",
+      items: [],
+    });
+
+    setGeneratedMenu(updated);
+  };
+
+  const addItem = (catIndex: number) => {
+    if (!generatedMenu) return;
+
+    const updated = { ...generatedMenu };
+    updated.categories[catIndex].items.push({
+      name: "New Item",
+      price: 0,
+    });
+
+    setGeneratedMenu(updated);
+  };
+
   const deleteCategory = (index: number) => {
+    if (!generatedMenu) return;
+
     const updated = { ...generatedMenu };
     updated.categories.splice(index, 1);
     setGeneratedMenu(updated);
   };
 
   const deleteItem = (catIndex: number, itemIndex: number) => {
+    if (!generatedMenu) return;
+
     const updated = { ...generatedMenu };
     updated.categories[catIndex].items.splice(itemIndex, 1);
     setGeneratedMenu(updated);
@@ -175,164 +188,180 @@ export default function Settings() {
 
   const saveEditedMenu = async () => {
     try {
-      setLoading(true);
-
-      const data = await api.patch("/dashboard/save-edited-menu", {
+      await api.patch("/dashboard/save-edited-menu", {
         structuredMenu: generatedMenu,
         botBusinessType,
         botWelcomeMessage,
       });
 
-      setGeneratedMenu(data.company.botStructuredMenu);
       toast.success("Menu saved successfully ✅");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save");
-    } finally {
-      setLoading(false);
+    } catch {
+      toast.error("Failed to save menu");
     }
   };
 
-  return (
-    <div className="space-y-8 max-w-3xl">
+  /* ===============================
+     UI
+  =============================== */
 
-      <div className="bg-white p-6 rounded-xl border shadow-sm">
-        <h2 className="text-lg font-semibold mb-4">Profile</h2>
+  return (
+    <div className="space-y-8 max-w-4xl">
+
+      {/* PROFILE */}
+      <div className="bg-white p-6 rounded-2xl shadow border">
+        <h2 className="text-lg font-semibold mb-3">Profile</h2>
         <p><strong>Name:</strong> {user?.name}</p>
         <p><strong>Email:</strong> {user?.email}</p>
         <p><strong>Role:</strong> {user?.role}</p>
       </div>
 
-      <div className="bg-white p-6 rounded-xl border shadow-sm">
-        <h2 className="text-lg font-semibold mb-4">
+      {/* TELEGRAM */}
+      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
+        <h2 className="text-lg font-semibold">
           Telegram Integration
         </h2>
 
         {!telegramConnected ? (
-          <div className="space-y-4">
+          <>
             <input
               type="text"
-              placeholder="Paste your Bot Token"
+              placeholder="Bot Token"
               value={botToken}
               onChange={(e) => setBotToken(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className="w-full border rounded-lg px-3 py-2"
             />
-
             <button
               onClick={handleConnectTelegram}
-              disabled={loading}
-              className="px-4 py-2 rounded-lg bg-blue-600 text-white"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg"
             >
-              {loading ? "Connecting..." : "Connect Telegram"}
+              Connect Telegram
             </button>
-          </div>
+          </>
         ) : (
-          <div className="space-y-6">
-
-            <div className="flex justify-between items-center">
-              <div className="text-green-600 font-medium">
-                ✅ Connected as @{telegramUsername}
-              </div>
-
-              <button
-                onClick={handleDisconnectTelegram}
-                className="text-red-600 text-sm border border-red-500 px-3 py-1 rounded"
-              >
-                Disconnect
-              </button>
-            </div>
-
-            <div className="border-t pt-4 space-y-4">
-
-              <input
-                type="text"
-                placeholder="Business Type"
-                value={botBusinessType}
-                onChange={(e) => setBotBusinessType(e.target.value)}
-                disabled={!isEditingWelcome}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              />
-
-              <input
-                type="text"
-                placeholder="Welcome Message"
-                value={botWelcomeMessage}
-                onChange={(e) => setBotWelcomeMessage(e.target.value)}
-                disabled={!isEditingWelcome}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              />
-
-              <button
-                onClick={() => {
-                  if (!isEditingWelcome) {
-                    setIsEditingWelcome(true);
-                  } else {
-                    handleUpdateWelcome();
-                  }
-                }}
-                className={`px-4 py-2 rounded text-white ${
-                  isEditingWelcome ? "bg-green-600" : "bg-blue-600"
-                }`}
-              >
-                {isEditingWelcome ? "Save Changes" : "Edit Welcome & Type"}
-              </button>
-
-              <textarea
-                placeholder="Describe your shop (for menu generation)..."
-                value={shopDescription}
-                onChange={(e) => setShopDescription(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm h-28"
-              />
-
-              <button
-                onClick={handleGenerateMenu}
-                className="bg-purple-600 text-white px-4 py-2 rounded"
-              >
-                Generate / Update Menu
-              </button>
-
-              {generatedMenu && (
-                <div className="space-y-4">
-                  {generatedMenu.categories.map((cat: any, cIndex: number) => (
-                    <div key={cIndex} className="border p-4 rounded bg-gray-50">
-                      <div className="flex justify-between items-center">
-                        <p className="font-semibold">{cat.name}</p>
-                        <button
-                          onClick={() => deleteCategory(cIndex)}
-                          className="text-red-500 text-xs"
-                        >
-                          Delete Category
-                        </button>
-                      </div>
-
-                      <div className="mt-2 space-y-1">
-                        {cat.items.map((item: string, iIndex: number) => (
-                          <div key={iIndex} className="flex justify-between text-sm">
-                            <span>{item}</span>
-                            <button
-                              onClick={() => deleteItem(cIndex, iIndex)}
-                              className="text-red-400 text-xs"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-
-                  <button
-                    onClick={saveEditedMenu}
-                    className="bg-green-600 text-white px-4 py-2 rounded"
-                  >
-                    Save Menu Changes
-                  </button>
-                </div>
-              )}
-
-            </div>
-          </div>
+          <p className="text-green-600">
+            Connected as @{telegramUsername}
+          </p>
         )}
       </div>
+
+      {/* MENU GENERATOR */}
+      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
+        <h2 className="text-lg font-semibold">
+          AI Menu Generator
+        </h2>
+
+        <input
+          type="text"
+          placeholder="Business Type"
+          value={botBusinessType}
+          onChange={(e) => setBotBusinessType(e.target.value)}
+          className="w-full border rounded-lg px-3 py-2"
+        />
+
+        <textarea
+          placeholder="Describe your shop..."
+          value={shopDescription}
+          onChange={(e) => setShopDescription(e.target.value)}
+          className="w-full border rounded-lg px-3 py-2 h-24"
+        />
+
+        <button
+          onClick={handleGenerateMenu}
+          className="bg-purple-600 text-white px-4 py-2 rounded-lg"
+        >
+          Generate / Update Menu
+        </button>
+      </div>
+
+      {/* MENU EDITOR */}
+      {generatedMenu && (
+        <div className="bg-white p-6 rounded-2xl shadow border space-y-6">
+          <h2 className="text-lg font-semibold">
+            Edit Menu (with Pricing)
+          </h2>
+
+          {generatedMenu.categories.map((cat, cIndex) => (
+            <div key={cIndex} className="border p-4 rounded-xl space-y-4">
+              <div className="flex justify-between items-center">
+                <input
+                  value={cat.name}
+                  onChange={(e) =>
+                    updateCategoryName(cIndex, e.target.value)
+                  }
+                  className="border px-2 py-1 rounded text-sm font-semibold"
+                />
+                <button
+                  onClick={() => deleteCategory(cIndex)}
+                  className="text-red-500 text-xs"
+                >
+                  Delete
+                </button>
+              </div>
+
+              {cat.items.map((item, iIndex) => (
+                <div key={iIndex} className="flex gap-3 items-center">
+                  <input
+                    value={item.name}
+                    onChange={(e) =>
+                      updateItem(
+                        cIndex,
+                        iIndex,
+                        "name",
+                        e.target.value
+                      )
+                    }
+                    className="flex-1 border px-2 py-1 rounded text-sm"
+                  />
+
+                  <input
+                    type="number"
+                    value={item.price}
+                    onChange={(e) =>
+                      updateItem(
+                        cIndex,
+                        iIndex,
+                        "price",
+                        e.target.value
+                      )
+                    }
+                    className="w-24 border px-2 py-1 rounded text-sm"
+                  />
+
+                  <button
+                    onClick={() => deleteItem(cIndex, iIndex)}
+                    className="text-red-400 text-xs"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+
+              <button
+                onClick={() => addItem(cIndex)}
+                className="text-indigo-600 text-sm"
+              >
+                + Add Item
+              </button>
+            </div>
+          ))}
+
+          <button
+            onClick={addCategory}
+            className="text-indigo-600 text-sm"
+          >
+            + Add Category
+          </button>
+
+          <div>
+            <button
+              onClick={saveEditedMenu}
+              className="bg-green-600 text-white px-5 py-2 rounded-lg"
+            >
+              Save Menu Changes
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
