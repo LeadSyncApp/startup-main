@@ -17,7 +17,9 @@ export default function Settings() {
 
   const [generatedMenu, setGeneratedMenu] = useState<any>(null);
 
-  /* FETCH STATUS */
+  /* ===============================
+     FETCH STATUS
+  =============================== */
   useEffect(() => {
     if (!token) return;
 
@@ -30,7 +32,9 @@ export default function Settings() {
     fetchStatus();
   }, [token]);
 
-  /* FETCH BOT CONFIG */
+  /* ===============================
+     FETCH BOT CONFIG
+  =============================== */
   useEffect(() => {
     if (!token) return;
 
@@ -47,7 +51,9 @@ export default function Settings() {
     fetchBotConfig();
   }, [token]);
 
-  /* CONNECT TELEGRAM */
+  /* ===============================
+     CONNECT TELEGRAM
+  =============================== */
   const handleConnectTelegram = async () => {
     if (!botToken.trim()) {
       toast.error("Bot token required");
@@ -73,7 +79,50 @@ export default function Settings() {
     }
   };
 
-  /* GENERATE / MERGE MENU */
+  /* ===============================
+     DISCONNECT TELEGRAM
+  =============================== */
+  const handleDisconnectTelegram = async () => {
+    try {
+      setLoading(true);
+
+      await api.post("/integrations/telegram/disconnect");
+
+      setTelegramConnected(false);
+      setTelegramUsername(null);
+      setGeneratedMenu(null);
+
+      toast.success("Telegram disconnected ❌");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to disconnect");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ===============================
+     UPDATE WELCOME ONLY
+  =============================== */
+  const handleUpdateWelcome = async () => {
+    try {
+      setLoading(true);
+
+      await api.patch("/dashboard/update-welcome", {
+        botBusinessType,
+        botWelcomeMessage,
+      });
+
+      toast.success("Welcome message updated ✅");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ===============================
+     GENERATE MENU
+  =============================== */
   const handleGenerateMenu = async () => {
     if (!shopDescription.trim()) {
       toast.error("Please describe your shop");
@@ -100,21 +149,27 @@ export default function Settings() {
     }
   };
 
-  /* DELETE CATEGORY */
+  /* ===============================
+     DELETE CATEGORY
+  =============================== */
   const deleteCategory = (index: number) => {
     const updated = { ...generatedMenu };
     updated.categories.splice(index, 1);
     setGeneratedMenu(updated);
   };
 
-  /* DELETE ITEM */
+  /* ===============================
+     DELETE ITEM
+  =============================== */
   const deleteItem = (catIndex: number, itemIndex: number) => {
     const updated = { ...generatedMenu };
     updated.categories[catIndex].items.splice(itemIndex, 1);
     setGeneratedMenu(updated);
   };
 
-  /* SAVE MANUAL EDIT */
+  /* ===============================
+     SAVE EDITED MENU
+  =============================== */
   const saveEditedMenu = async () => {
     try {
       setLoading(true);
@@ -172,8 +227,17 @@ export default function Settings() {
         ) : (
           <div className="space-y-6">
 
-            <div className="text-green-600 font-medium">
-              ✅ Connected as @{telegramUsername}
+            <div className="flex justify-between items-center">
+              <div className="text-green-600 font-medium">
+                ✅ Connected as @{telegramUsername}
+              </div>
+
+              <button
+                onClick={handleDisconnectTelegram}
+                className="text-red-600 text-sm border border-red-500 px-3 py-1 rounded"
+              >
+                Disconnect
+              </button>
             </div>
 
             {/* BOT CONFIG */}
@@ -195,8 +259,15 @@ export default function Settings() {
                 className="w-full border rounded-lg px-3 py-2 text-sm"
               />
 
+              <button
+                onClick={handleUpdateWelcome}
+                className="bg-blue-600 text-white px-4 py-2 rounded"
+              >
+                Save Welcome Only
+              </button>
+
               <textarea
-                placeholder="Describe your shop..."
+                placeholder="Describe your shop (for menu generation)..."
                 value={shopDescription}
                 onChange={(e) => setShopDescription(e.target.value)}
                 className="w-full border rounded-lg px-3 py-2 text-sm h-28"
@@ -209,7 +280,7 @@ export default function Settings() {
                 Generate / Update Menu
               </button>
 
-              {/* MENU PREVIEW WITH DELETE */}
+              {/* MENU PREVIEW */}
               {generatedMenu && (
                 <div className="space-y-4">
                   {generatedMenu.categories.map((cat: any, cIndex: number) => (
@@ -244,7 +315,7 @@ export default function Settings() {
                     onClick={saveEditedMenu}
                     className="bg-green-600 text-white px-4 py-2 rounded"
                   >
-                    Save Changes
+                    Save Menu Changes
                   </button>
                 </div>
               )}
