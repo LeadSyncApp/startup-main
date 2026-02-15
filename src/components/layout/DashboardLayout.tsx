@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
-import { useAuth } from "../../context/AuthContext";
 import { Menu } from "lucide-react";
 
 export default function DashboardLayout() {
-  const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -43,10 +41,7 @@ export default function DashboardLayout() {
           lg:translate-x-0 lg:static
         `}
       >
-        <Sidebar
-          userRole={user?.role ?? "AGENT"}
-          closeSidebar={() => setSidebarOpen(false)}
-        />
+        <Sidebar closeSidebar={() => setSidebarOpen(false)} />
       </div>
 
       {/* Main Content */}
