@@ -47,7 +47,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         priority: priority || OrderPriority.NORMAL,
         status: OrderStatus.NEW,
         amount: amount || 0,
-        approvalStatus: OrderApprovalStatus.APPROVED, // manual orders auto approved
+        approvalStatus: OrderApprovalStatus.APPROVED,
       },
     });
 
@@ -59,7 +59,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 /* ===============================
-   GET ORDERS (ROLE AWARE)
+   GET ORDERS (ROLE AWARE FIXED)
 =============================== */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -67,12 +67,20 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    const companyId = req.user.companyId;
+
     let whereCondition: any = {
-      companyId: req.user.companyId,
+      companyId,
     };
 
     if (req.user.role === Role.AGENT) {
-      whereCondition.processedById = req.user.userId;
+      whereCondition = {
+        companyId,
+        OR: [
+          { approvalStatus: OrderApprovalStatus.PENDING },
+          { processedById: req.user.userId },
+        ],
+      };
     }
 
     const orders = await prisma.order.findMany({
@@ -136,7 +144,6 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
       },
     });
 
-    /* Notify Telegram user */
     if (order.company.telegramBotToken && order.lead.contact) {
       await sendTelegramMessage(
         order.company.telegramBotToken,
@@ -188,7 +195,6 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
       },
     });
 
-    /* Notify Telegram user */
     if (order.company.telegramBotToken && order.lead.contact) {
       await sendTelegramMessage(
         order.company.telegramBotToken,

@@ -36,20 +36,13 @@ interface DetectedOrder {
    HELPERS
 =============================== */
 
-function buildKeyboard(menu: any) {
-  return {
-    keyboard:
-      Array.isArray(menu) && menu.length > 0
-        ? menu
-        : [["Talk to Support"]],
-    resize_keyboard: true,
-  };
+function normalize(str: string) {
+  return str.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 }
 
 function buildWelcomeMessage(company: any, name: string) {
   const customWelcome =
-    company?.botWelcomeMessage &&
-    company.botWelcomeMessage.trim().length > 0
+    company?.botWelcomeMessage?.trim()?.length > 0
       ? company.botWelcomeMessage
       : `Welcome to ${company?.name || "our store"}! We are happy to assist you.`;
 
@@ -152,93 +145,107 @@ async function processTelegramMessage(body: any, companyId: string) {
     });
   }
 
-  /* TEXT */
-  if (message.text) {
-    const text = message.text.trim();
+  if (!message.text) return;
 
-    await prisma.message.create({
+  const text = message.text.trim();
+
+  await prisma.message.create({
+    data: {
+      content: text,
+      sender: MessageSender.CLIENT,
+      conversationId: conversation.id,
+    },
+  });
+
+  if (conversation.mode === ConversationMode.HUMAN) return;
+
+  if (text === "/start") {
+    const welcomeMsg = buildWelcomeMessage(company, name);
+    await sendTelegramMessage(botToken, chatId, welcomeMsg);
+    return;
+  }
+
+  /* ===============================
+     STRICT ORDER DETECTION
+  =============================== */
+
+  let detectedItems: { item: StructuredMenuItem; quantity: number }[] = [];
+
+  const normalizedText = normalize(text);
+
+  for (const category of categories) {
+    for (const item of category.items) {
+      const normalizedItemName = normalize(item.name);
+
+      if (normalizedText.includes(normalizedItemName)) {
+        let quantity = 1;
+
+        const qtyMatch = normalizedText.match(
+          new RegExp(`(\\d+)\\s*${normalizedItemName}`)
+        );
+
+        if (qtyMatch && qtyMatch[1]) {
+          quantity = parseInt(qtyMatch[1], 10);
+        }
+
+        detectedItems.push({ item, quantity });
+      }
+    }
+  }
+
+  /* IF VALID ORDER */
+  if (detectedItems.length > 0) {
+    let total = 0;
+    let summaryParts: string[] = [];
+
+    for (const entry of detectedItems) {
+      total += entry.item.price * entry.quantity;
+      summaryParts.push(`${entry.quantity} x ${entry.item.name}`);
+    }
+
+    const summary = summaryParts.join(", ");
+
+    await prisma.order.create({
       data: {
-        content: text,
-        sender: MessageSender.CLIENT,
+        companyId: company.id,
         conversationId: conversation.id,
+        leadId: lead.id,
+        summary,
+        amount: total,
+        source: OrderSource.BOT_DETECTED,
+        approvalStatus: OrderApprovalStatus.PENDING,
       },
     });
 
-    if (conversation.mode === ConversationMode.HUMAN) return;
-
-    if (text === "/start") {
-      const welcomeMsg = buildWelcomeMessage(company, name);
-      await sendTelegramMessage(botToken, chatId, welcomeMsg);
-      return;
-    }
-
-    /* ===============================
-       AI + ORDER DETECTION
-    =============================== */
-
-    const aiResponse = await generateBotReply(
-      text,
-      company.botBusinessType || "general business",
-      structuredMenu
-    );
-
-    let detectedOrder: DetectedOrder | null = null;
-    let cleanReply = aiResponse;
-
-    try {
-      const parsed = JSON.parse(aiResponse);
-      if (parsed.items) {
-        detectedOrder = parsed;
-      }
-    } catch {
-      // not JSON
-    }
-
-    /* IF ORDER DETECTED */
-    if (detectedOrder && structuredMenu) {
-      let total = 0;
-      let summaryParts: string[] = [];
-
-      for (const orderItem of detectedOrder.items) {
-        for (const cat of categories) {
-          const found = cat.items.find(
-            (i) =>
-              i.name.toLowerCase() === orderItem.name.toLowerCase()
-          );
-          if (found) {
-            total += found.price * orderItem.quantity;
-            summaryParts.push(
-              `${orderItem.quantity} x ${found.name}`
-            );
-          }
-        }
-      }
-
-      const summary = summaryParts.join(", ");
-
-      await prisma.order.create({
-        data: {
-          companyId: company.id,
-          conversationId: conversation.id,
-          leadId: lead.id,
-          summary,
-          amount: total,
-          source: OrderSource.BOT_DETECTED,
-          approvalStatus: OrderApprovalStatus.PENDING,
-        },
-      });
-
-      cleanReply = `🛒 Order Detected:\n\n${summary}\n\n💰 Total: ₹${total}\n\n⏳ Waiting for approval from our team.`;
-    }
+    const reply = `🛒 Order Detected:\n\n${summary}\n\n💰 Total: ₹${total}\n\n⏳ Waiting for approval from our team.`;
 
     await prisma.message.create({
       data: {
-        content: cleanReply,
+        content: reply,
         sender: MessageSender.SYSTEM,
         conversationId: conversation.id,
       },
     });
 
-    await sendTelegramMessage(botToken, chatId, cleanReply);
+    await sendTelegramMessage(botToken, chatId, reply);
+
+    return;
   }
+
+  /* NORMAL AI REPLY */
+  const aiReply = await generateBotReply(
+    text,
+    company.botBusinessType || "general business",
+    structuredMenu
+  );
+
+  await prisma.message.create({
+    data: {
+      content: aiReply,
+      sender: MessageSender.SYSTEM,
+      conversationId: conversation.id,
+    },
+  });
+
+  await sendTelegramMessage(botToken, chatId, aiReply);
 }
