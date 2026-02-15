@@ -26,16 +26,15 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        companyId: req.user.companyId,
+      },
     });
 
     if (!conversation) {
       return res.status(404).json({ message: "Conversation not found" });
-    }
-
-    if (conversation.companyId !== req.user.companyId) {
-      return res.status(403).json({ message: "Forbidden" });
     }
 
     const order = await prisma.order.create({
@@ -46,8 +45,8 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         summary,
         priority: priority || OrderPriority.NORMAL,
         status: OrderStatus.NEW,
-        amount: amount || 0,
-        approvalStatus: OrderApprovalStatus.APPROVED,
+        amount: amount ?? 0,
+        approvalStatus: OrderApprovalStatus.PENDING,
       },
     });
 
@@ -59,7 +58,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 /* ===============================
-   GET ORDERS (ROLE AWARE FIXED)
+   GET ORDERS
 =============================== */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -69,9 +68,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 
     const companyId = req.user.companyId;
 
-    let whereCondition: any = {
-      companyId,
-    };
+    let whereCondition: any = { companyId };
 
     if (req.user.role === Role.AGENT) {
       whereCondition = {
@@ -96,9 +93,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
           },
         },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: { createdAt: "desc" },
     });
 
     return res.json(orders);
@@ -109,34 +104,20 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 /* ===============================
-   APPROVE ORDER
+   APPROVE ORDER (RACE SAFE)
 =============================== */
 router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    if (!req.user) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: {
-        lead: true,
-        company: true,
+    const updated = await prisma.order.updateMany({
+      where: {
+        id,
+        companyId: req.user.companyId,
+        approvalStatus: OrderApprovalStatus.PENDING,
       },
-    });
-
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    if (order.companyId !== req.user.companyId) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    const updated = await prisma.order.update({
-      where: { id },
       data: {
         approvalStatus: OrderApprovalStatus.APPROVED,
         status: OrderStatus.CONFIRMED,
@@ -144,15 +125,29 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
       },
     });
 
-    if (order.company.telegramBotToken && order.lead.contact) {
-      await sendTelegramMessage(
-        order.company.telegramBotToken,
-        order.lead.contact,
-        `✅ Your order has been approved!\n\n🛒 ${order.summary}\n\n💰 Total: ₹${order.amount}`
-      );
+    if (updated.count === 0) {
+      return res.status(400).json({ message: "Order already processed" });
     }
 
-    return res.json(updated);
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { lead: true, company: true },
+    });
+
+    // Telegram send should NEVER break approval
+    if (order?.company.telegramBotToken && order.lead?.contact) {
+      try {
+        await sendTelegramMessage(
+          order.company.telegramBotToken,
+          order.lead.contact,
+          `✅ Your order has been approved!\n\n🛒 ${order.summary}\n\n💰 Total: ₹${order.amount}`
+        );
+      } catch (err) {
+        console.error("Telegram send failed:", err);
+      }
+    }
+
+    return res.json(order);
   } catch (error) {
     console.error("Approve order error:", error);
     return res.status(500).json({ message: "Failed to approve order" });
@@ -160,34 +155,20 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
 });
 
 /* ===============================
-   REJECT ORDER
+   REJECT ORDER (RACE SAFE)
 =============================== */
 router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    if (!req.user) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: {
-        lead: true,
-        company: true,
+    const updated = await prisma.order.updateMany({
+      where: {
+        id,
+        companyId: req.user.companyId,
+        approvalStatus: OrderApprovalStatus.PENDING,
       },
-    });
-
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    if (order.companyId !== req.user.companyId) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    const updated = await prisma.order.update({
-      where: { id },
       data: {
         approvalStatus: OrderApprovalStatus.REJECTED,
         status: OrderStatus.CANCELLED,
@@ -195,15 +176,11 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
       },
     });
 
-    if (order.company.telegramBotToken && order.lead.contact) {
-      await sendTelegramMessage(
-        order.company.telegramBotToken,
-        order.lead.contact,
-        `❌ Unfortunately, your order was not approved.\n\nPlease contact support for assistance.`
-      );
+    if (updated.count === 0) {
+      return res.status(400).json({ message: "Order already processed" });
     }
 
-    return res.json(updated);
+    return res.json({ message: "Order rejected" });
   } catch (error) {
     console.error("Reject order error:", error);
     return res.status(500).json({ message: "Failed to reject order" });
@@ -211,45 +188,35 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
 });
 
 /* ===============================
-   UPDATE ORDER STATUS
+   UPDATE ORDER STATUS (SAFE)
 =============================== */
 router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { status, amount } = req.body;
     const { id } = req.params;
 
-    if (!req.user) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
-    const order = await prisma.order.findUnique({
-      where: { id },
+    const updated = await prisma.order.updateMany({
+      where: {
+        id,
+        companyId: req.user.companyId,
+      },
+      data: {
+        status,
+        ...(status === OrderStatus.DELIVERED && {
+          processedById: req.user.userId,
+          amount: amount ?? undefined,
+        }),
+      },
     });
 
-    if (!order) {
+    if (updated.count === 0) {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    if (order.companyId !== req.user.companyId) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    const updateData: any = { status };
-
-    if (status === OrderStatus.DELIVERED) {
-      updateData.processedById = req.user.userId;
-
-      if (amount !== undefined) {
-        updateData.amount = amount;
-      }
-    }
-
-    const updated = await prisma.order.update({
-      where: { id },
-      data: updateData,
-    });
-
-    return res.json(updated);
+    const order = await prisma.order.findUnique({ where: { id } });
+    return res.json(order);
   } catch (error) {
     console.error("Update order error:", error);
     return res.status(500).json({ message: "Failed to update order" });

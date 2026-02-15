@@ -28,10 +28,6 @@ interface StructuredMenu {
   categories: StructuredMenuCategory[];
 }
 
-interface DetectedOrder {
-  items: { name: string; quantity: number }[];
-}
-
 /* ===============================
    HELPERS
 =============================== */
@@ -59,7 +55,9 @@ export async function telegramWebhook(req: Request, res: Response) {
       "x-telegram-bot-api-secret-token"
     ] as string;
 
-    if (!secret) return res.status(403).json({ ok: false });
+    if (!secret) {
+      return res.status(403).json({ ok: false });
+    }
 
     const company = await prisma.company.findUnique({
       where: { telegramWebhookSecret: secret },
@@ -69,14 +67,16 @@ export async function telegramWebhook(req: Request, res: Response) {
       return res.status(400).json({ ok: false });
     }
 
+    // Respond immediately (VERY IMPORTANT for Telegram reliability)
     res.json({ ok: true });
 
+    // Process async (never block webhook)
     processTelegramMessage(req.body, company.id).catch((err) => {
-      console.error("Telegram async error:", err);
+      console.error("Telegram async processing error:", err);
     });
 
   } catch (err) {
-    console.error("Telegram webhook error:", err);
+    console.error("Telegram webhook fatal error:", err);
     res.status(500).json({ ok: false });
   }
 }
@@ -86,166 +86,213 @@ export async function telegramWebhook(req: Request, res: Response) {
 =============================== */
 
 async function processTelegramMessage(body: any, companyId: string) {
-  const message = body.message;
-  if (!message) return;
+  try {
+    const message = body.message;
+    if (!message || !message.message_id) return;
 
-  const chatId = String(message.chat.id);
-  const name = message.from?.first_name || "Customer";
+    const chatId = String(message.chat.id);
+    const name = message.from?.first_name || "Customer";
+    const text = message.text?.trim();
 
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-  });
+    if (!text) return;
 
-  if (!company || !company.telegramBotToken) return;
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
 
-  const botToken = company.telegramBotToken;
+    if (!company || !company.telegramBotToken) return;
 
-  const structuredMenu = company.botStructuredMenu as StructuredMenu | null;
-  const categories = structuredMenu?.categories || [];
+    const botToken = company.telegramBotToken;
 
-  /* FIND OR CREATE LEAD */
-  let lead = await prisma.lead.findFirst({
-    where: {
-      contact: chatId,
-      channel: Channel.TELEGRAM,
-      companyId: company.id,
-    },
-  });
-
-  if (!lead) {
-    lead = await prisma.lead.create({
-      data: {
-        name,
+    /* -------------------------------
+       FIND OR CREATE LEAD
+    -------------------------------- */
+    let lead = await prisma.lead.findFirst({
+      where: {
         contact: chatId,
         channel: Channel.TELEGRAM,
-        companyId: company.id,
+        companyId,
       },
     });
-  }
 
-  /* FIND OR CREATE CONVERSATION */
-  let conversation = await prisma.conversation.findUnique({
-    where: {
-      leadId_companyId_channel: {
-        leadId: lead.id,
-        companyId: company.id,
-        channel: Channel.TELEGRAM,
-      },
-    },
-  });
+    if (!lead) {
+      lead = await prisma.lead.create({
+        data: {
+          name,
+          contact: chatId,
+          channel: Channel.TELEGRAM,
+          companyId,
+        },
+      });
+    }
 
-  if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: {
-        leadId: lead.id,
-        companyId: company.id,
-        channel: Channel.TELEGRAM,
-        mode: ConversationMode.BOT,
+    /* -------------------------------
+       FIND OR CREATE CONVERSATION
+    -------------------------------- */
+    let conversation = await prisma.conversation.findUnique({
+      where: {
+        leadId_companyId_channel: {
+          leadId: lead.id,
+          companyId,
+          channel: Channel.TELEGRAM,
+        },
       },
     });
-  }
 
-  if (!message.text) return;
-
-  const text = message.text.trim();
-
-  await prisma.message.create({
-    data: {
-      content: text,
-      sender: MessageSender.CLIENT,
-      conversationId: conversation.id,
-    },
-  });
-
-  if (conversation.mode === ConversationMode.HUMAN) return;
-
-  if (text === "/start") {
-    const welcomeMsg = buildWelcomeMessage(company, name);
-    await sendTelegramMessage(botToken, chatId, welcomeMsg);
-    return;
-  }
-
-  /* ===============================
-     STRICT ORDER DETECTION
-  =============================== */
-
-  let detectedItems: { item: StructuredMenuItem; quantity: number }[] = [];
-
-  const normalizedText = normalize(text);
-
-  for (const category of categories) {
-    for (const item of category.items) {
-      const normalizedItemName = normalize(item.name);
-
-      if (normalizedText.includes(normalizedItemName)) {
-        let quantity = 1;
-
-        const qtyMatch = normalizedText.match(
-          new RegExp(`(\\d+)\\s*${normalizedItemName}`)
-        );
-
-        if (qtyMatch && qtyMatch[1]) {
-          quantity = parseInt(qtyMatch[1], 10);
-        }
-
-        detectedItems.push({ item, quantity });
-      }
-    }
-  }
-
-  /* IF VALID ORDER */
-  if (detectedItems.length > 0) {
-    let total = 0;
-    let summaryParts: string[] = [];
-
-    for (const entry of detectedItems) {
-      total += entry.item.price * entry.quantity;
-      summaryParts.push(`${entry.quantity} x ${entry.item.name}`);
+    if (!conversation) {
+      conversation = await prisma.conversation.create({
+        data: {
+          leadId: lead.id,
+          companyId,
+          channel: Channel.TELEGRAM,
+          mode: ConversationMode.BOT,
+        },
+      });
     }
 
-    const summary = summaryParts.join(", ");
-
-    await prisma.order.create({
-      data: {
-        companyId: company.id,
+    /* -------------------------------
+       DEDUPLICATE CLIENT MESSAGE
+    -------------------------------- */
+    const existingMessage = await prisma.message.findFirst({
+      where: {
         conversationId: conversation.id,
-        leadId: lead.id,
-        summary,
-        amount: total,
-        source: OrderSource.BOT_DETECTED,
-        approvalStatus: OrderApprovalStatus.PENDING,
+        content: text,
+        sender: MessageSender.CLIENT,
       },
     });
 
-    const reply = `🛒 Order Detected:\n\n${summary}\n\n💰 Total: ₹${total}\n\n⏳ Waiting for approval from our team.`;
+    if (existingMessage) return;
 
     await prisma.message.create({
       data: {
-        content: reply,
+        content: text,
+        sender: MessageSender.CLIENT,
+        conversationId: conversation.id,
+      },
+    });
+
+    if (conversation.mode === ConversationMode.HUMAN) return;
+
+    /* -------------------------------
+       START COMMAND
+    -------------------------------- */
+    if (text === "/start") {
+      const welcomeMsg = buildWelcomeMessage(company, name);
+      await sendTelegramMessage(botToken, chatId, welcomeMsg);
+      return;
+    }
+
+    /* -------------------------------
+       ORDER DETECTION
+    -------------------------------- */
+
+    const structuredMenu = company.botStructuredMenu as StructuredMenu | null;
+    const categories = structuredMenu?.categories || [];
+
+    const normalizedText = normalize(text);
+
+    let detectedItems: { name: string; price: number; quantity: number }[] = [];
+
+    for (const category of categories) {
+      for (const item of category.items) {
+        const normalizedItemName = normalize(item.name);
+
+        if (normalizedText.includes(normalizedItemName)) {
+          let quantity = 1;
+
+          const qtyMatch = normalizedText.match(
+            new RegExp(`(\\d+)\\s*${normalizedItemName}`)
+          );
+
+          if (qtyMatch?.[1]) {
+            quantity = parseInt(qtyMatch[1], 10);
+          }
+
+          detectedItems.push({
+            name: item.name,
+            price: item.price,
+            quantity,
+          });
+        }
+      }
+    }
+
+    if (detectedItems.length > 0) {
+      let total = 0;
+      let summaryParts: string[] = [];
+
+      for (const entry of detectedItems) {
+        total += entry.price * entry.quantity;
+        summaryParts.push(`${entry.quantity} x ${entry.name}`);
+      }
+
+      const summary = summaryParts.join(", ");
+
+      // Prevent duplicate order within 2 minutes
+      const recentOrder = await prisma.order.findFirst({
+        where: {
+          conversationId: conversation.id,
+          summary,
+          createdAt: {
+            gte: new Date(Date.now() - 2 * 60 * 1000),
+          },
+        },
+      });
+
+      if (!recentOrder) {
+        await prisma.order.create({
+          data: {
+            companyId,
+            conversationId: conversation.id,
+            leadId: lead.id,
+            summary,
+            amount: total,
+            source: OrderSource.BOT_DETECTED,
+            approvalStatus: OrderApprovalStatus.PENDING,
+          },
+        });
+      }
+
+      const reply = `🛒 Order Detected:\n\n${summary}\n\n💰 Total: ₹${total}\n\n⏳ Waiting for approval from our team.`;
+
+      await prisma.message.create({
+        data: {
+          content: reply,
+          sender: MessageSender.SYSTEM,
+          conversationId: conversation.id,
+        },
+      });
+
+      await sendTelegramMessage(botToken, chatId, reply);
+      return;
+    }
+
+    /* -------------------------------
+       AI REPLY (SAFE WRAPPED)
+    -------------------------------- */
+    let aiReply = "Thank you! Our team will assist you shortly.";
+
+    try {
+      aiReply = await generateBotReply(
+        text,
+        company.botBusinessType || "general business",
+        structuredMenu
+      );
+    } catch (err) {
+      console.error("AI reply failed:", err);
+    }
+
+    await prisma.message.create({
+      data: {
+        content: aiReply,
         sender: MessageSender.SYSTEM,
         conversationId: conversation.id,
       },
     });
 
-    await sendTelegramMessage(botToken, chatId, reply);
+    await sendTelegramMessage(botToken, chatId, aiReply);
 
-    return;
+  } catch (err) {
+    console.error("processTelegramMessage error:", err);
   }
-
-  /* NORMAL AI REPLY */
-  const aiReply = await generateBotReply(
-    text,
-    company.botBusinessType || "general business",
-    structuredMenu
-  );
-
-  await prisma.message.create({
-    data: {
-      content: aiReply,
-      sender: MessageSender.SYSTEM,
-      conversationId: conversation.id,
-    },
-  });
-
-  await sendTelegramMessage(botToken, chatId, aiReply);
 }

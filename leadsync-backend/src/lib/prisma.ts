@@ -5,11 +5,21 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-export const prisma =
-  global.prisma ||
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  console.error("FATAL: DATABASE_URL is not defined.");
+  process.exit(1);
+}
+
+const createPrismaClient = () =>
   new PrismaClient({
-    log: ["error"],
+    log: process.env.NODE_ENV === "development"
+      ? ["query", "error", "warn"]
+      : ["error"],
   });
+
+export const prisma = global.prisma || createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   global.prisma = prisma;

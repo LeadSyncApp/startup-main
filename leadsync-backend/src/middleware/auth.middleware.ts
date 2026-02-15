@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import jwt, { JwtPayload as DefaultJwtPayload } from "jsonwebtoken";
 
 export interface AuthRequest extends Request {
   user?: {
@@ -9,10 +9,17 @@ export interface AuthRequest extends Request {
   };
 }
 
-interface JwtPayload {
+interface JwtPayload extends DefaultJwtPayload {
   userId: string;
   companyId: string;
   role: "OWNER" | "ADMIN" | "AGENT";
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET is not defined in environment variables.");
+  process.exit(1);
 }
 
 export const authMiddleware = (
@@ -23,19 +30,27 @@ export const authMiddleware = (
   try {
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (!authHeader) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const token = authHeader.split(" ")[1];
+    const parts = authHeader.split(" ");
+    if (parts.length !== 2 || parts[0] !== "Bearer") {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET as string
-    ) as JwtPayload;
+    const token = parts[1];
 
-    if (!decoded.userId || !decoded.companyId) {
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      algorithms: ["HS256"],
+    }) as JwtPayload;
+
+    if (!decoded.userId || !decoded.companyId || !decoded.role) {
       return res.status(401).json({ message: "Invalid token" });
+    }
+
+    if (!["OWNER", "ADMIN", "AGENT"].includes(decoded.role)) {
+      return res.status(401).json({ message: "Invalid role" });
     }
 
     req.user = {
