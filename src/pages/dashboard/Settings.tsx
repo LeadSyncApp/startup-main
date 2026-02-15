@@ -15,11 +15,12 @@ export default function Settings() {
   const [botWelcomeMessage, setBotWelcomeMessage] = useState("");
   const [shopDescription, setShopDescription] = useState("");
 
-  const [generatedMenu, setGeneratedMenu] = useState<any>(null);
+  const [originalBusinessType, setOriginalBusinessType] = useState("");
+  const [originalWelcomeMessage, setOriginalWelcomeMessage] = useState("");
 
-  /* ===============================
-     FETCH STATUS
-  =============================== */
+  const [generatedMenu, setGeneratedMenu] = useState<any>(null);
+  const [isEditingWelcome, setIsEditingWelcome] = useState(false);
+
   useEffect(() => {
     if (!token) return;
 
@@ -32,9 +33,6 @@ export default function Settings() {
     fetchStatus();
   }, [token]);
 
-  /* ===============================
-     FETCH BOT CONFIG
-  =============================== */
   useEffect(() => {
     if (!token) return;
 
@@ -42,8 +40,13 @@ export default function Settings() {
       const data = await api.get("/dashboard/bot-config");
 
       if (data.company) {
-        setBotBusinessType(data.company.botBusinessType || "");
-        setBotWelcomeMessage(data.company.botWelcomeMessage || "");
+        const business = data.company.botBusinessType || "";
+        const welcome = data.company.botWelcomeMessage || "";
+
+        setBotBusinessType(business);
+        setBotWelcomeMessage(welcome);
+        setOriginalBusinessType(business);
+        setOriginalWelcomeMessage(welcome);
         setGeneratedMenu(data.company.botStructuredMenu || null);
       }
     };
@@ -51,9 +54,6 @@ export default function Settings() {
     fetchBotConfig();
   }, [token]);
 
-  /* ===============================
-     CONNECT TELEGRAM
-  =============================== */
   const handleConnectTelegram = async () => {
     if (!botToken.trim()) {
       toast.error("Bot token required");
@@ -79,19 +79,13 @@ export default function Settings() {
     }
   };
 
-  /* ===============================
-     DISCONNECT TELEGRAM
-  =============================== */
   const handleDisconnectTelegram = async () => {
     try {
       setLoading(true);
-
       await api.post("/integrations/telegram/disconnect");
-
       setTelegramConnected(false);
       setTelegramUsername(null);
       setGeneratedMenu(null);
-
       toast.success("Telegram disconnected ❌");
     } catch (err: any) {
       toast.error(err.message || "Failed to disconnect");
@@ -100,19 +94,40 @@ export default function Settings() {
     }
   };
 
-  /* ===============================
-     UPDATE WELCOME ONLY
-  =============================== */
   const handleUpdateWelcome = async () => {
     try {
       setLoading(true);
+
+      const typeChanged = botBusinessType !== originalBusinessType;
+      const welcomeChanged = botWelcomeMessage !== originalWelcomeMessage;
+
+      if (!typeChanged && !welcomeChanged) {
+        toast("No changes detected ⚡");
+        setIsEditingWelcome(false);
+        return;
+      }
 
       await api.patch("/dashboard/update-welcome", {
         botBusinessType,
         botWelcomeMessage,
       });
 
-      toast.success("Welcome message updated ✅");
+      let message = "Updated: ";
+
+      if (typeChanged && welcomeChanged) {
+        message += "Business Type & Welcome Message 🎉";
+      } else if (typeChanged) {
+        message += "Business Type ✅";
+      } else if (welcomeChanged) {
+        message += "Welcome Message ✅";
+      }
+
+      toast.success(message);
+
+      setOriginalBusinessType(botBusinessType);
+      setOriginalWelcomeMessage(botWelcomeMessage);
+      setIsEditingWelcome(false);
+
     } catch (err: any) {
       toast.error(err.message || "Failed to update");
     } finally {
@@ -120,9 +135,6 @@ export default function Settings() {
     }
   };
 
-  /* ===============================
-     GENERATE MENU
-  =============================== */
   const handleGenerateMenu = async () => {
     if (!shopDescription.trim()) {
       toast.error("Please describe your shop");
@@ -149,27 +161,18 @@ export default function Settings() {
     }
   };
 
-  /* ===============================
-     DELETE CATEGORY
-  =============================== */
   const deleteCategory = (index: number) => {
     const updated = { ...generatedMenu };
     updated.categories.splice(index, 1);
     setGeneratedMenu(updated);
   };
 
-  /* ===============================
-     DELETE ITEM
-  =============================== */
   const deleteItem = (catIndex: number, itemIndex: number) => {
     const updated = { ...generatedMenu };
     updated.categories[catIndex].items.splice(itemIndex, 1);
     setGeneratedMenu(updated);
   };
 
-  /* ===============================
-     SAVE EDITED MENU
-  =============================== */
   const saveEditedMenu = async () => {
     try {
       setLoading(true);
@@ -192,7 +195,6 @@ export default function Settings() {
   return (
     <div className="space-y-8 max-w-3xl">
 
-      {/* PROFILE */}
       <div className="bg-white p-6 rounded-xl border shadow-sm">
         <h2 className="text-lg font-semibold mb-4">Profile</h2>
         <p><strong>Name:</strong> {user?.name}</p>
@@ -200,7 +202,6 @@ export default function Settings() {
         <p><strong>Role:</strong> {user?.role}</p>
       </div>
 
-      {/* TELEGRAM */}
       <div className="bg-white p-6 rounded-xl border shadow-sm">
         <h2 className="text-lg font-semibold mb-4">
           Telegram Integration
@@ -240,7 +241,6 @@ export default function Settings() {
               </button>
             </div>
 
-            {/* BOT CONFIG */}
             <div className="border-t pt-4 space-y-4">
 
               <input
@@ -248,6 +248,7 @@ export default function Settings() {
                 placeholder="Business Type"
                 value={botBusinessType}
                 onChange={(e) => setBotBusinessType(e.target.value)}
+                disabled={!isEditingWelcome}
                 className="w-full border rounded-lg px-3 py-2 text-sm"
               />
 
@@ -256,14 +257,23 @@ export default function Settings() {
                 placeholder="Welcome Message"
                 value={botWelcomeMessage}
                 onChange={(e) => setBotWelcomeMessage(e.target.value)}
+                disabled={!isEditingWelcome}
                 className="w-full border rounded-lg px-3 py-2 text-sm"
               />
 
               <button
-                onClick={handleUpdateWelcome}
-                className="bg-blue-600 text-white px-4 py-2 rounded"
+                onClick={() => {
+                  if (!isEditingWelcome) {
+                    setIsEditingWelcome(true);
+                  } else {
+                    handleUpdateWelcome();
+                  }
+                }}
+                className={`px-4 py-2 rounded text-white ${
+                  isEditingWelcome ? "bg-green-600" : "bg-blue-600"
+                }`}
               >
-                Save Welcome Only
+                {isEditingWelcome ? "Save Changes" : "Edit Welcome & Type"}
               </button>
 
               <textarea
@@ -280,7 +290,6 @@ export default function Settings() {
                 Generate / Update Menu
               </button>
 
-              {/* MENU PREVIEW */}
               {generatedMenu && (
                 <div className="space-y-4">
                   {generatedMenu.categories.map((cat: any, cIndex: number) => (
