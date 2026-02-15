@@ -41,17 +41,26 @@ export default function Orders() {
   const [loading, setLoading] = useState(false);
 
   const fetchOrders = async () => {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/orders`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/orders`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-    if (!res.ok) {
-      console.error("Failed to fetch orders:", res.status);
-      return;
+      if (!res.ok) {
+        console.error("Failed to fetch orders:", res.status);
+        return;
+      }
+
+      const data = await res.json();
+      setOrders(data);
+    } catch (error) {
+      console.error("Fetch error:", error);
     }
-
-    const data = await res.json();
-    setOrders(data);
   };
 
   useEffect(() => {
@@ -64,7 +73,7 @@ export default function Orders() {
       setLoading(true);
 
       await fetch(
-        `${import.meta.env.VITE_API_URL}/api/orders/${id}/status`,
+        `${import.meta.env.VITE_API_URL}/orders/${id}/status`,
         {
           method: "PATCH",
           headers: {
@@ -76,6 +85,8 @@ export default function Orders() {
       );
 
       await fetchOrders();
+    } catch (error) {
+      console.error("Update error:", error);
     } finally {
       setLoading(false);
     }
