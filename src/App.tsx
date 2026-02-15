@@ -13,11 +13,9 @@ import Revenue from "./pages/dashboard/Revenue";
 import Reports from "./pages/dashboard/Reports";
 import Settings from "./pages/dashboard/Settings";
 
-// 🔥 New
 import ProtectedRoute from "./components/ProtectedRoute";
 
-
-// 🔥 (We will create this next)
+// ✅ Staff Management Page
 import UserManagement from "./pages/dashboard/UserManagement";
 
 export default function App() {
@@ -87,11 +85,11 @@ export default function App() {
           }
         />
 
-        {/* OWNER ONLY */}
+        {/* ✅ OWNER + ADMIN can manage users */}
         <Route
           path="users"
           element={
-            <ProtectedRoute allowedRoles={["OWNER"]}>
+            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
               <UserManagement />
             </ProtectedRoute>
           }

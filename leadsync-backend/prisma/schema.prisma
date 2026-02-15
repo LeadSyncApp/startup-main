@@ -88,13 +88,13 @@ model Company {
   conversations Conversation[]
   orders        Order[]
 }
-
 model User {
   id           String   @id @default(uuid())
   email        String
   name         String
   passwordHash String
   role         Role     @default(AGENT)
+  isActive     Boolean  @default(true)
   companyId    String
   createdAt    DateTime @default(now())
 
@@ -104,6 +104,7 @@ model User {
 
   @@unique([email, companyId])
   @@index([companyId])
+  @@index([isActive])
 }
 
 model Lead {

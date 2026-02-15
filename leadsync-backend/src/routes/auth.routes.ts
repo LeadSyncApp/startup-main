@@ -18,8 +18,10 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ message: "Missing fields" });
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
     const existingUser = await prisma.user.findFirst({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (existingUser) {
@@ -34,13 +36,15 @@ router.post("/signup", async (req, res) => {
         users: {
           create: {
             name,
-            email,
+            email: normalizedEmail,
             role: "OWNER",
             passwordHash,
           },
         },
       },
-      include: { users: true },
+      include: {
+        users: true,
+      },
     });
 
     const owner = company.users[0];
@@ -77,8 +81,17 @@ router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+      return res.status(400).json({ message: "Missing credentials" });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
     const user = await prisma.user.findFirst({
-      where: { email },
+      where: {
+        email: normalizedEmail,
+        isActive: true, // 🔐 block disabled users
+      },
       include: { company: true },
     });
 
@@ -87,6 +100,7 @@ router.post("/login", async (req, res) => {
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
+
     if (!valid) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
@@ -113,77 +127,6 @@ router.post("/login", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Login failed" });
-  }
-});
-
-/* =====================================================
-   FORGOT PASSWORD (Phase 1 – Fast)
-===================================================== */
-router.post("/forgot-password", async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ message: "Email is required" });
-    }
-
-    const user = await prisma.user.findFirst({
-      where: { email },
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        message: "No account found with this email",
-      });
-    }
-
-    // ⚠️ Phase 1: Direct allow reset (no email verification yet)
-    res.json({
-      message: "Email verified. You can reset password.",
-      userId: user.id,
-    });
-  } catch (err) {
-    console.error("Forgot password error:", err);
-    res.status(500).json({ message: "Something went wrong" });
-  }
-});
-
-/* =====================================================
-   RESET PASSWORD
-===================================================== */
-router.post("/reset-password", async (req, res) => {
-  try {
-    const { userId, newPassword } = req.body;
-
-    if (!userId || !newPassword) {
-      return res.status(400).json({
-        message: "Missing fields",
-      });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({
-        message: "Password must be at least 6 characters",
-      });
-    }
-
-    const hashed = await bcrypt.hash(newPassword, 10);
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        passwordHash: hashed, // ✅ correct field
-      },
-    });
-
-    res.json({
-      message: "Password updated successfully",
-    });
-  } catch (err) {
-    console.error("Reset password error:", err);
-    res.status(500).json({
-      message: "Failed to reset password",
-    });
   }
 });
 

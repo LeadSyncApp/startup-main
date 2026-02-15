@@ -16,10 +16,6 @@ interface SidebarProps {
 
 export default function Sidebar({ closeSidebar }: SidebarProps) {
   const { logout, user, isOwner, isAdmin } = useAuth();
-  console.log("USER:", user);
-  console.log("ROLE:", user?.role);
-  console.log("isOwner:", isOwner);
-
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -53,10 +49,10 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
       show: isOwner || isAdmin,
     },
     {
-      label: "User Management",
+      label: "Team",
       icon: Shield,
       path: "/dashboard/users",
-      show: isOwner,
+      show: isOwner || isAdmin, // ✅ allow admin too
     },
     {
       label: "Settings",
@@ -69,6 +65,7 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
   return (
     <aside className="h-full w-64 bg-white border-r border-slate-200 shadow-lg flex flex-col">
 
+      {/* Logo Section */}
       <div className="px-8 py-8 border-b border-slate-200">
         <h1 className="text-xl font-semibold text-slate-900">
           LeadSync
@@ -78,6 +75,7 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
         </p>
       </div>
 
+      {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {navItems
           .filter(item => item.show)
@@ -90,7 +88,7 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                   isActive
-                    ? "bg-slate-900 text-white"
+                    ? "bg-slate-900 text-white shadow-md"
                     : "text-slate-700 hover:bg-slate-100"
                 }`
               }
@@ -101,12 +99,17 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
           ))}
       </nav>
 
+      {/* User Section */}
       <div className="px-6 py-6 border-t border-slate-200 space-y-4">
+
         <div>
           <div className="text-xs text-slate-500">
             Logged in as
           </div>
           <div className="text-sm font-medium text-slate-900 mt-1">
+            {user?.name}
+          </div>
+          <div className="text-xs text-slate-500">
             {user?.role}
           </div>
         </div>
@@ -118,6 +121,7 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
           <LogOut className="h-4 w-4" />
           Logout
         </button>
+
       </div>
     </aside>
   );
