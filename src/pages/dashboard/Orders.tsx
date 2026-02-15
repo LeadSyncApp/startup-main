@@ -41,9 +41,15 @@ export default function Orders() {
   const [loading, setLoading] = useState(false);
 
   const fetchOrders = async () => {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/orders`, {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/orders`, {
       headers: { Authorization: `Bearer ${token}` },
     });
+
+    if (!res.ok) {
+      console.error("Failed to fetch orders:", res.status);
+      return;
+    }
+
     const data = await res.json();
     setOrders(data);
   };
@@ -58,7 +64,7 @@ export default function Orders() {
       setLoading(true);
 
       await fetch(
-        `${import.meta.env.VITE_API_URL}/orders/${id}/status`,
+        `${import.meta.env.VITE_API_URL}/api/orders/${id}/status`,
         {
           method: "PATCH",
           headers: {
@@ -91,8 +97,6 @@ export default function Orders() {
 
   return (
     <div className="p-6 space-y-6 w-full">
-
-      {/* HEADER */}
       <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-2xl shadow">
         <h1 className="text-2xl font-bold">Orders Dashboard</h1>
         <p className="text-sm opacity-90 mt-1">
@@ -100,16 +104,13 @@ export default function Orders() {
         </p>
       </div>
 
-      {/* METRICS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <MetricCard title="Total Orders" value={totalOrders} />
         <MetricCard title="New Orders" value={totalPending} />
         <MetricCard title="Revenue" value={`₹${totalRevenue.toFixed(2)}`} />
       </div>
 
-      {/* BOARD */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-
         {grouped.map((col) => (
           <div
             key={col.value}
@@ -144,11 +145,7 @@ export default function Orders() {
 
                   <div className="text-xs text-slate-500 mt-2 space-y-1">
                     <p>👤 {order.lead?.name || "Customer"}</p>
-
-                    {order.processedBy && (
-                      <p>🧑 {order.processedBy.name}</p>
-                    )}
-
+                    {order.processedBy && <p>🧑 {order.processedBy.name}</p>}
                     <p>
                       🕒 {new Date(order.createdAt).toLocaleDateString()}
                     </p>
@@ -157,10 +154,7 @@ export default function Orders() {
                   <select
                     value={order.status}
                     onChange={(e) =>
-                      updateStatus(
-                        order.id,
-                        e.target.value as OrderStatus
-                      )
+                      updateStatus(order.id, e.target.value as OrderStatus)
                     }
                     disabled={loading}
                     className="w-full mt-2 px-2 py-1 text-xs border rounded-lg bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
@@ -182,7 +176,6 @@ export default function Orders() {
             </div>
           </div>
         ))}
-
       </div>
     </div>
   );
@@ -200,9 +193,7 @@ function MetricCard({
       <p className="text-xs text-slate-500 uppercase tracking-wide">
         {title}
       </p>
-      <h2 className="text-xl font-bold text-slate-800 mt-1">
-        {value}
-      </h2>
+      <h2 className="text-xl font-bold text-slate-800 mt-1">{value}</h2>
     </div>
   );
 }
