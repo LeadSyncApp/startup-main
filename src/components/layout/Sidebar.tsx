@@ -16,6 +16,10 @@ interface SidebarProps {
 
 export default function Sidebar({ closeSidebar }: SidebarProps) {
   const { logout, user, isOwner, isAdmin } = useAuth();
+  console.log("USER:", user);
+  console.log("ROLE:", user?.role);
+  console.log("isOwner:", isOwner);
+
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -65,7 +69,6 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
   return (
     <aside className="h-full w-64 bg-white border-r border-slate-200 shadow-lg flex flex-col">
 
-      {/* Logo */}
       <div className="px-8 py-8 border-b border-slate-200">
         <h1 className="text-xl font-semibold text-slate-900">
           LeadSync
@@ -75,7 +78,6 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
         </p>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {navItems
           .filter(item => item.show)
@@ -99,7 +101,6 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
           ))}
       </nav>
 
-      {/* Footer */}
       <div className="px-6 py-6 border-t border-slate-200 space-y-4">
         <div>
           <div className="text-xs text-slate-500">
