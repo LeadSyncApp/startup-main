@@ -1,53 +1,36 @@
-const API_BASE = 'http://localhost:4000/api'; // ✅ include /api here
+export const API_BASE = process.env.API_BASE_URL || "http://localhost:4000/api";
 
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
 
 interface ApiOptions {
   method?: HttpMethod;
   body?: any;
-  headers?: Record<string, string>;
 }
 
-async function apiFetch(
-  endpoint: string,
-  options: ApiOptions = {}
-) {
-  // ✅ FIXED: use correct key
-  const token = localStorage.getItem('token');
+async function apiFetch(endpoint: string, options: ApiOptions = {}) {
+  const token = localStorage.getItem("token");
 
   const res = await fetch(`${API_BASE}${endpoint}`, {
-    method: options.method || 'GET',
+    method: options.method || "GET",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {})
     },
-    body: options.body ? JSON.stringify(options.body) : undefined
+    body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
-  if (res.status === 401) {
-    console.error('Unauthorized - Token missing or invalid');
-    throw new Error('Unauthorized');
-  }
-
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.message || 'API Error');
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "API Error");
   }
 
   return res.json();
 }
 
 export const api = {
-  get: (endpoint: string) =>
-    apiFetch(endpoint),
-
-  post: (endpoint: string, body?: any) =>
-    apiFetch(endpoint, { method: 'POST', body }),
-
-  put: (endpoint: string, body?: any) =>
-    apiFetch(endpoint, { method: 'PUT', body }),
-
-  delete: (endpoint: string) =>
-    apiFetch(endpoint, { method: 'DELETE' })
+  get: (e: string) => apiFetch(e),
+  post: (e: string, b?: any) => apiFetch(e, { method: "POST", body: b }),
+  put: (e: string, b?: any) => apiFetch(e, { method: "PUT", body: b }),
+  patch: (e: string, b?: any) => apiFetch(e, { method: "PATCH", body: b }),
+  delete: (e: string) => apiFetch(e, { method: "DELETE" }),
 };
