@@ -6,6 +6,9 @@ import { ConversationMode, MessageSender } from "@prisma/client";
 
 const router = Router();
 
+/* =========================================
+   GET ALL CONVERSATIONS
+========================================= */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user!.companyId;
@@ -13,14 +16,11 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     const conversations = await prisma.conversation.findMany({
       where: { companyId },
       orderBy: { updatedAt: "desc" },
-      select: {
-        id: true,
-        mode: true,
+      include: {
         lead: true,
         messages: {
           take: 1,
           orderBy: { createdAt: "desc" },
-          select: { content: true },
         },
       },
     });
@@ -34,36 +34,83 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       }))
     );
   } catch (error) {
+    console.error("Fetch conversations error:", error);
     res.status(500).json({ message: "Failed to fetch conversations" });
   }
 });
 
+/* =========================================
+   GET MESSAGES + LATEST ORDER
+========================================= */
 router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user!.companyId;
 
-    const messages = await prisma.message.findMany({
+    const conversation = await prisma.conversation.findFirst({
       where: {
-        conversationId: req.params.id,
-        conversation: { companyId },
+        id: req.params.id,
+        companyId,
       },
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    const messages = await prisma.message.findMany({
+      where: { conversationId: conversation.id },
       orderBy: { createdAt: "asc" },
     });
 
-    res.json(messages);
-  } catch {
+    const latestOrder = await prisma.order.findFirst({
+      where: {
+        conversationId: conversation.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: {
+        id: true,
+        summary: true,
+        amount: true,
+        approvalStatus: true,
+        status: true,
+      },
+    });
+
+    res.json({
+      mode: conversation.mode,
+      messages,
+      order: latestOrder || null,
+    });
+
+  } catch (error) {
+    console.error("Fetch messages error:", error);
     res.status(500).json({ message: "Failed to fetch messages" });
   }
 });
 
+/* =========================================
+   AGENT SEND MESSAGE
+========================================= */
 router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { content } = req.body;
     const companyId = req.user!.companyId;
 
+    if (!content || !content.trim()) {
+      return res.status(400).json({ message: "Message content required" });
+    }
+
     const conversation = await prisma.conversation.findFirst({
-      where: { id: req.params.id, companyId },
-      include: { lead: true, company: true },
+      where: {
+        id: req.params.id,
+        companyId,
+      },
+      include: {
+        lead: true,
+        company: true,
+      },
     });
 
     if (!conversation) {
@@ -72,7 +119,7 @@ router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response)
 
     const message = await prisma.message.create({
       data: {
-        content,
+        content: content.trim(),
         sender: MessageSender.AGENT,
         conversationId: conversation.id,
       },
@@ -80,20 +127,63 @@ router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response)
 
     await prisma.conversation.update({
       where: { id: conversation.id },
-      data: { mode: ConversationMode.HUMAN },
+      data: {
+        mode: ConversationMode.HUMAN,
+        updatedAt: new Date(),
+      },
     });
 
     if (conversation.company.telegramBotToken) {
       await sendTelegramMessage(
         conversation.company.telegramBotToken,
         conversation.lead.contact,
-        content
+        content.trim()
       );
     }
 
-    res.json(message);
-  } catch {
+    res.json({
+      ...message,
+      mode: ConversationMode.HUMAN,
+    });
+
+  } catch (error) {
+    console.error("Agent send error:", error);
     res.status(500).json({ message: "Failed to send message" });
+  }
+});
+
+/* =========================================
+   TOGGLE MODE
+========================================= */
+router.patch("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { mode } = req.body;
+    const companyId = req.user!.companyId;
+
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: req.params.id,
+        companyId,
+      },
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    const updated = await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        mode,
+        updatedAt: new Date(),
+      },
+    });
+
+    res.json(updated);
+
+  } catch (error) {
+    console.error("Mode toggle error:", error);
+    res.status(500).json({ message: "Failed to update mode" });
   }
 });
 
