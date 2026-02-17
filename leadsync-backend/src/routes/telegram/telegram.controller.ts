@@ -183,6 +183,31 @@ async function processTelegramMessage(body: any, companyId: string) {
     }
 
     /* -------------------------------
+       MENU COMMAND
+    -------------------------------- */
+    if (text.toLowerCase() === "menu" || text.toLowerCase() === "/menu") {
+      const structuredMenu = company.botStructuredMenu as StructuredMenu | null;
+
+      if (!structuredMenu?.categories?.length) {
+        await sendTelegramMessage(botToken, chatId, "Menu is currently unavailable.");
+        return;
+      }
+
+      let menuMsg = "📜 *Our Menu*\n\n";
+
+      structuredMenu.categories.forEach((cat) => {
+        menuMsg += `*${cat.name}*\n`;
+        cat.items.forEach((item) => {
+          menuMsg += `- ${item.name}: ₹${item.price}\n`;
+        });
+        menuMsg += "\n";
+      });
+
+      await sendTelegramMessage(botToken, chatId, menuMsg);
+      return;
+    }
+
+    /* -------------------------------
        ORDER DETECTION
     -------------------------------- */
 

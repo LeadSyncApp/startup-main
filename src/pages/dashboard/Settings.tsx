@@ -259,7 +259,14 @@ export default function Settings() {
         />
 
         <textarea
-          placeholder="Describe your shop..."
+          placeholder="Bot Welcome Message (e.g. 'Hello there!')"
+          value={botWelcomeMessage}
+          onChange={(e) => setBotWelcomeMessage(e.target.value)}
+          className="w-full border rounded-lg px-3 py-2 h-20"
+        />
+
+        <textarea
+          placeholder="Describe your shop... (or 'update price of X')"
           value={shopDescription}
           onChange={(e) => setShopDescription(e.target.value)}
           className="w-full border rounded-lg px-3 py-2 h-24"
