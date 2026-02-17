@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
-import { Plus, Trash2, Copy, Check } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
 
 interface User {
   id: string;

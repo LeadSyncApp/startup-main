@@ -1,79 +1,53 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { useAuth } from "../../context/AuthContext";
-import { mockDeals, mockRevenue } from "../../data/mockData";
+import { api } from "../../lib/api";
 import {
   DollarSign,
-  Building2,
   TrendingUp,
+  Receipt,
+  Clock,
 } from "lucide-react";
 import { formatINR } from "../../utils/formatINR";
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
 } from "recharts";
 
-type Period = "day" | "month" | "year";
-
 export default function Revenue() {
-  const { companyId } = useAuth();
-  const [period] = useState<Period>("month"); // fixed default
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  // ✅ SAFE REVENUE DATA ACCESS
-  const revenueData =
-    companyId && companyId in mockRevenue
-      ? mockRevenue[companyId as keyof typeof mockRevenue]
-      : undefined;
-
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const yearStart = new Date(now.getFullYear(), 0, 1);
-
-  const closedWon = useMemo(() => {
-    return mockDeals.filter((d) => {
-      if (d.companyId !== companyId) return false;
-      if (d.stage !== "closed_won" || !d.closedAt) return false;
-
-      const closed = new Date(d.closedAt);
-
-      if (period === "month") return closed >= monthStart && closed <= now;
-      if (period === "year") return closed >= yearStart && closed <= now;
-
-      return true;
-    });
-  }, [companyId, period]);
-
-  const totalRevenue = closedWon.reduce((a, d) => a + d.value, 0);
-
-  const companyList = useMemo(() => {
-    const grouped: Record<
-      string,
-      { revenue: number; profit: number; count: number }
-    > = {};
-
-    closedWon.forEach((d) => {
-      const name = d.company || d.leadName || "Unknown";
-      const profit = d.value * 0.3;
-
-      if (!grouped[name]) {
-        grouped[name] = { revenue: 0, profit: 0, count: 0 };
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await api.get("/analytics/revenue");
+        setData(res);
+      } catch (err) {
+        console.error("Failed to fetch revenue data", err);
+      } finally {
+        setLoading(false);
       }
+    };
+    fetchData();
+  }, []);
 
-      grouped[name].revenue += d.value;
-      grouped[name].profit += profit;
-      grouped[name].count += 1;
-    });
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
+      </div>
+    );
+  }
 
-    return Object.entries(grouped).map(([name, data]) => ({
-      name,
-      ...data,
-    }));
-  }, [closedWon]);
+  const totalRevenue = data?.totalRevenue || 0;
+  const orderCount = data?.orderCount || 0;
+  const timeline = data?.timeline || [];
+  const recentOrders = data?.recentOrders || [];
 
   return (
     <motion.div
@@ -82,139 +56,99 @@ export default function Revenue() {
       className="space-y-8"
     >
       {/* HEADER */}
-      <div className="rounded-xl border bg-white p-6 shadow-sm">
-        <h1 className="text-3xl font-bold text-slate-900">
-          Revenue Dashboard
-        </h1>
-        <p className="mt-2 text-sm text-slate-500">
-          Revenue overview for your company.
+      <div>
+        <h1 className="text-3xl font-bold text-slate-900">Revenue Insights</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Track your sales performance and delivered orders.
         </p>
       </div>
 
       {/* KPI CARDS */}
       <div className="grid gap-6 sm:grid-cols-3">
-        {/* Total Revenue */}
-        <div className="rounded-xl border bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="bg-emerald-100 p-3 rounded-lg">
+        <div className="rounded-2xl border bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
               <DollarSign className="h-6 w-6 text-emerald-600" />
             </div>
-          </div>
-          <p className="text-sm text-slate-500">Total Revenue</p>
-          <p className="mt-3 text-3xl font-bold text-slate-900">
-            {formatINR(totalRevenue)}
-          </p>
-        </div>
-
-        {/* Closed Deals */}
-        <div className="rounded-xl border bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="bg-cyan-100 p-3 rounded-lg">
-              <TrendingUp className="h-6 w-6 text-cyan-600" />
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Revenue</p>
+              <p className="text-2xl font-bold text-slate-900">{formatINR(totalRevenue)}</p>
             </div>
           </div>
-          <p className="text-sm text-slate-500">Closed Deals</p>
-          <p className="mt-3 text-3xl font-bold text-slate-900">
-            {closedWon.length}
-          </p>
         </div>
 
-        {/* Companies */}
-        <div className="rounded-xl border bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="bg-amber-100 p-3 rounded-lg">
-              <Building2 className="h-6 w-6 text-amber-600" />
+        <div className="rounded-2xl border bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="bg-cyan-50 p-3 rounded-xl border border-cyan-100">
+              <Receipt className="h-6 w-6 text-cyan-600" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Orders Delivered</p>
+              <p className="text-2xl font-bold text-slate-900">{orderCount}</p>
             </div>
           </div>
-          <p className="text-sm text-slate-500">Companies</p>
-          <p className="mt-3 text-3xl font-bold text-slate-900">
-            {companyList.length}
-          </p>
+        </div>
+
+        <div className="rounded-2xl border bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="bg-amber-50 p-3 rounded-xl border border-amber-100">
+              <TrendingUp className="h-6 w-6 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg. Order Value</p>
+              <p className="text-2xl font-bold text-slate-900">
+                {formatINR(orderCount > 0 ? totalRevenue / orderCount : 0)}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* COMPANY TABLE */}
-      <div className="rounded-xl border bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">
-          Revenue by Company
-        </h2>
-
-        {companyList.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No closed deals yet.
-          </p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="border-b">
-              <tr className="text-left text-slate-500">
-                <th className="py-2">Company</th>
-                <th className="py-2 text-right">Revenue</th>
-                <th className="py-2 text-right">Profit</th>
-                <th className="py-2 text-right">Deals</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companyList.map((c) => (
-                <tr key={c.name} className="border-b last:border-0">
-                  <td className="py-2 font-medium text-slate-900">
-                    {c.name}
-                  </td>
-                  <td className="py-2 text-right">
-                    {formatINR(c.revenue)}
-                  </td>
-                  <td className="py-2 text-right text-emerald-600">
-                    {formatINR(c.profit)}
-                  </td>
-                  <td className="py-2 text-right">{c.count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* REVENUE CHART */}
-      <div className="rounded-xl border bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">
-          Revenue Timeline
-        </h2>
-
-        {!revenueData ? (
-          <p className="text-sm text-slate-500">
-            No revenue chart data available.
-          </p>
-        ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart
-              data={
-                period === "day"
-                  ? revenueData.daily
-                  : period === "month"
-                  ? revenueData.monthly
-                  : revenueData.yearly
-              }
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey={
-                  period === "month"
-                    ? "month"
-                    : period === "year"
-                    ? "year"
-                    : "date"
-                }
+      {/* MAIN CHART */}
+      <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900 mb-6">Revenue Growth (Last 6 Months)</h2>
+        <div className="h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={timeline}>
+              <defs>
+                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.1} />
+                  <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(v) => `₹${v / 1000}k`} />
+              <Tooltip
+                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                formatter={(v: any) => formatINR(v)}
               />
-              <YAxis />
-              <Tooltip formatter={(v: number) => formatINR(v)} />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke="#06B6D4"
-                strokeWidth={2}
-              />
-            </LineChart>
+              <Area type="monotone" dataKey="value" stroke="#06b6d4" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+            </AreaChart>
           </ResponsiveContainer>
-        )}
+        </div>
+      </div>
+
+      {/* RECENT SALES */}
+      <div className="rounded-2xl border bg-white overflow-hidden shadow-sm">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">Recent Deliveries</h2>
+          <Clock className="h-4 w-4 text-slate-400" />
+        </div>
+        <div className="divide-y divide-slate-100">
+          {recentOrders.map((o: any, idx: number) => (
+            <div key={idx} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition">
+              <div>
+                <p className="font-medium text-slate-900">{o.customer}</p>
+                <p className="text-xs text-slate-500">{new Date(o.date).toLocaleDateString()}</p>
+              </div>
+              <p className="font-bold text-emerald-600">{formatINR(o.amount)}</p>
+            </div>
+          ))}
+          {recentOrders.length === 0 && (
+            <p className="p-10 text-center text-slate-400">No delivered orders found.</p>
+          )}
+        </div>
       </div>
     </motion.div>
   );

@@ -13,7 +13,8 @@ import publicRoutes from "./routes/public.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import telegramIntegrationRoutes from "./routes/telegram.integration.routes";
 import ordersRoutes from "./routes/orders.routes";
-import usersRoutes from "./routes/users.routes"; // ✅ ADD THIS
+import usersRoutes from "./routes/users.routes";
+import analyticsRoutes from "./routes/analytics.routes";
 
 console.log("🔥 app.ts loaded");
 
@@ -49,6 +50,7 @@ app.use("/api/leads", leadsRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/orders", ordersRoutes);
-app.use("/api/users", usersRoutes); // ✅ REGISTER USERS ROUTE
+app.use("/api/users", usersRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 export default app;

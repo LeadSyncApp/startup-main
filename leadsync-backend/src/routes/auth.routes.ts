@@ -85,11 +85,14 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Missing credentials" });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const identifier = email.toLowerCase().trim();
 
     const user = await prisma.user.findFirst({
       where: {
-        email: normalizedEmail,
+        OR: [
+          { email: identifier },
+          { staffId: identifier }
+        ],
         isActive: true, // 🔐 block disabled users
       },
       include: { company: true },

@@ -22,6 +22,8 @@ export default function Leads() {
   useEffect(() => {
     if (!token) return;
 
+    let timeoutId: any;
+
     const fetchLeads = async (quiet = false) => {
       try {
         if (!quiet) setLoading(true);
@@ -32,14 +34,14 @@ export default function Leads() {
         console.error("❌ Failed to fetch leads:", err);
       } finally {
         setLoading(false);
+        // Poll every 30s
+        timeoutId = setTimeout(() => fetchLeads(true), 30000);
       }
     };
 
-    if (cached.length > 0) {
-      fetchLeads(true); // Background update
-    } else {
-      fetchLeads();
-    }
+    fetchLeads(cached.length > 0);
+
+    return () => clearTimeout(timeoutId);
   }, [token]);
 
   return (

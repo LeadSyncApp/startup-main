@@ -108,8 +108,8 @@ export default function Login() {
             {mode === "login"
               ? "Welcome back"
               : mode === "forgot"
-              ? "Forgot Password"
-              : "Reset Password"}
+                ? "Forgot Password"
+                : "Reset Password"}
           </h1>
 
           <p className="text-slate-400 mb-6">
@@ -131,15 +131,16 @@ export default function Login() {
             >
               <div>
                 <label className="block text-sm text-slate-200 mb-2">
-                  Email
+                  Email / Staff ID
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                   <input
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full rounded-lg bg-slate-700 border border-slate-600 py-3 pl-11 pr-4 text-white"
+                    placeholder="Enter email or staff ID"
                     required
                   />
                 </div>

@@ -12,12 +12,10 @@ export default function LeadsTable({
       <table className="min-w-full text-sm">
         <thead className="bg-slate-50 text-xs uppercase text-slate-600">
           <tr>
-            <th className="px-6 py-3 text-left">Lead Name</th>
-            <th className="px-6 py-3 text-left">Source</th>
-            <th className="px-6 py-3 text-left">Priority</th>
-            <th className="px-6 py-3 text-left">Status</th>
-            <th className="px-6 py-3 text-left">Agent Assigned</th>
-            <th className="px-6 py-3 text-left">Date</th>
+            <th className="px-6 py-3 text-left">Customer Name</th>
+            <th className="px-6 py-3 text-left">Contact / Phone</th>
+            <th className="px-6 py-3 text-left">Channel</th>
+            <th className="px-6 py-3 text-left">Last Interaction</th>
           </tr>
         </thead>
 
@@ -29,28 +27,29 @@ export default function LeadsTable({
               className="cursor-pointer hover:bg-slate-50 transition"
             >
               <td className="px-6 py-4 font-medium text-slate-900">
-                {lead.name}
+                {lead.name || "Unknown"}
               </td>
 
-              <td className="px-6 py-4">{lead.channel}</td>
+              <td className="px-6 py-4 text-slate-600">{lead.contact}</td>
 
-              <td className="px-6 py-4">{lead.priority}</td>
-
-              <td className="px-6 py-4">
-                <span className="px-2 py-1 text-xs rounded bg-emerald-100 text-emerald-700">
-                  {lead.status}
+              <td className="px-6 py-4 text-slate-600">
+                <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-bold">
+                  {lead.channel}
                 </span>
               </td>
 
-              <td className="px-6 py-4">
-                {lead.agentAssigned || "—"}
-              </td>
-
-              <td className="px-6 py-4">
-                {new Date(lead.createdAt).toLocaleDateString()}
+              <td className="px-6 py-4 text-slate-500">
+                {new Date(lead.createdAt).toLocaleString()}
               </td>
             </tr>
           ))}
+          {leads.length === 0 && (
+            <tr>
+              <td colSpan={4} className="px-6 py-8 text-center text-slate-400">
+                No customers found yet.
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
