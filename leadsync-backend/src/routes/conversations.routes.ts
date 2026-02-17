@@ -16,6 +16,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     const conversations = await prisma.conversation.findMany({
       where: { companyId },
       orderBy: { updatedAt: "desc" },
+      take: 50, // LIMIT to prevent 20s load times
       include: {
         lead: true,
         messages: {
@@ -59,8 +60,12 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
 
     const messages = await prisma.message.findMany({
       where: { conversationId: conversation.id },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" }, // Fetch newest first
+      take: 50,
     });
+
+    // Reverse to show oldest first in UI
+    messages.reverse();
 
     const latestOrder = await prisma.order.findFirst({
       where: {
@@ -188,4 +193,3 @@ router.patch("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response
 });
 
 export default router;
-  
