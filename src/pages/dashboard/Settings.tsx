@@ -68,6 +68,9 @@ export default function Settings() {
   /* ===============================
      CONNECT TELEGRAM
   =============================== */
+  /* ===============================
+     CONNECT TELEGRAM
+  =============================== */
   const handleConnectTelegram = async () => {
     if (!botToken.trim()) {
       toast.error("Bot token required");
@@ -86,6 +89,19 @@ export default function Settings() {
       toast.success("Telegram connected 🚀");
     } catch (err: any) {
       toast.error(err.message || "Failed to connect");
+    }
+  };
+
+  const handleDisconnectTelegram = async () => {
+    if (!window.confirm("Are you sure you want to disconnect Telegram?")) return;
+
+    try {
+      await api.post("/integrations/telegram/disconnect");
+      setTelegramConnected(false);
+      setTelegramUsername(null);
+      toast.success("Telegram disconnected 👋");
+    } catch (err: any) {
+      toast.error("Failed to disconnect");
     }
   };
 
@@ -108,7 +124,11 @@ export default function Settings() {
       setGeneratedMenu(data.company.botStructuredMenu);
       setShopDescription("");
 
-      toast.success("Menu generated 🎉");
+      toast.success(
+        shopDescription.toLowerCase().includes("update")
+          ? "Menu updated successfully! ✅"
+          : "Menu generated successfully! 🎉"
+      );
     } catch {
       toast.error("Failed to generate menu");
     }
@@ -238,9 +258,17 @@ export default function Settings() {
             </button>
           </>
         ) : (
-          <p className="text-green-600">
-            Connected as @{telegramUsername}
-          </p>
+          <div className="flex justify-between items-center">
+            <p className="text-green-600">
+              Connected as @{telegramUsername}
+            </p>
+            <button
+              onClick={handleDisconnectTelegram}
+              className="text-red-500 text-sm hover:underline"
+            >
+              Disconnect
+            </button>
+          </div>
         )}
       </div>
 

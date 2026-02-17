@@ -77,16 +77,37 @@ export default function Conversations() {
     return () => clearInterval(interval);
   }, [selected]);
 
-  /* SEND MESSAGE */
+  /* SEND MESSAGE (OPTIMISTIC UI) */
   const sendMessage = async () => {
     if (!newMessage.trim() || !selected) return;
 
-    await api.post(`/conversations/${selected.id}/send`, {
-      content: newMessage,
-    });
+    const tempId = `temp-${Date.now()}`;
+    const content = newMessage;
 
+    // 1. Optimistic Update
+    const optimisticMessage: Message = {
+      id: tempId,
+      content,
+      sender: "AGENT",
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, optimisticMessage]);
     setNewMessage("");
-    fetchMessages(selected);
+
+    try {
+      // 2. Network Request
+      await api.post(`/conversations/${selected.id}/send`, {
+        content,
+      });
+
+      // 3. Sync Real Data (Quietly)
+      fetchMessages(selected);
+    } catch (err) {
+      // 4. Rollback on Error
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      console.error("Failed to send message", err);
+    }
   };
 
   /* TOGGLE MODE */
@@ -110,11 +131,10 @@ export default function Conversations() {
           <div
             key={conv.id}
             onClick={() => fetchMessages(conv)}
-            className={`p-4 border-b cursor-pointer transition ${
-              selected?.id === conv.id
+            className={`p-4 border-b cursor-pointer transition ${selected?.id === conv.id
                 ? "bg-indigo-100"
                 : "hover:bg-slate-100"
-            }`}
+              }`}
           >
             <p className="font-medium">
               {conv.lead?.name || "Customer"}
@@ -151,22 +171,20 @@ export default function Conversations() {
               <div className="flex gap-2">
                 <button
                   onClick={() => toggleMode("BOT")}
-                  className={`px-3 py-1 text-xs rounded-full ${
-                    selected.mode === "BOT"
+                  className={`px-3 py-1 text-xs rounded-full ${selected.mode === "BOT"
                       ? "bg-green-600 text-white"
                       : "bg-green-100 text-green-800"
-                  }`}
+                    }`}
                 >
                   BOT
                 </button>
 
                 <button
                   onClick={() => toggleMode("HUMAN")}
-                  className={`px-3 py-1 text-xs rounded-full ${
-                    selected.mode === "HUMAN"
+                  className={`px-3 py-1 text-xs rounded-full ${selected.mode === "HUMAN"
                       ? "bg-red-600 text-white"
                       : "bg-red-100 text-red-800"
-                  }`}
+                    }`}
                 >
                   HUMAN
                 </button>
@@ -204,13 +222,12 @@ export default function Conversations() {
                   key={msg.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`max-w-xs p-3 rounded-2xl text-sm shadow-sm ${
-                    msg.sender === "CLIENT"
+                  className={`max-w-xs p-3 rounded-2xl text-sm shadow-sm ${msg.sender === "CLIENT"
                       ? "bg-white border"
                       : msg.sender === "SYSTEM"
-                      ? "bg-purple-100 text-purple-800 mx-auto"
-                      : "bg-indigo-600 text-white ml-auto"
-                  }`}
+                        ? "bg-purple-100 text-purple-800 mx-auto"
+                        : "bg-indigo-600 text-white ml-auto"
+                    }`}
                 >
                   {msg.content}
                 </motion.div>
