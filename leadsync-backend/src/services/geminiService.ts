@@ -61,10 +61,10 @@ export async function generateStructuredMenu(
   existingMenu?: any
 ): Promise<any> {
   try {
-    const prompt = `
+    let prompt = `
 Generate a clean structured product menu with pricing.
 
-Return ONLY valid JSON:
+Return ONLY valid JSON without markdown formatting:
 {
   "categories": [
     {
@@ -80,14 +80,22 @@ Business Description:
 ${description}
 `;
 
+    if (existingMenu) {
+      prompt += `\n\nExisting Menu to Update/Reference:\n${JSON.stringify(
+        existingMenu
+      )}\n\nIMPORTANT: Maintain the same structure. Update prices or items if requested in the description, otherwise keep existing items.`;
+    }
+
     const completion = await openai.chat.completions.create({
       model: "openai/gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
     });
 
-    const raw =
-      completion.choices?.[0]?.message?.content || "{}";
+    let raw = completion.choices?.[0]?.message?.content || "{}";
+
+    // Clean potential markdown code blocks
+    raw = raw.replace(/```json/g, "").replace(/```/g, "").trim();
 
     return JSON.parse(raw);
   } catch (error) {
