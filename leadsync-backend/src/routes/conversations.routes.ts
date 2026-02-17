@@ -181,7 +181,7 @@ router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response)
 
     res.json({
       ...message,
-      mode: ConversationMode.HUMAN,
+      mode: conversation.mode,
     });
 
   } catch (error) {

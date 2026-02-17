@@ -157,7 +157,7 @@ router.post("/:id/send", auth_middleware_1.authMiddleware, async (req, res) => {
         (0, socket_1.emitToConversation)(conversation.id, "new_message", message);
         res.json({
             ...message,
-            mode: client_1.ConversationMode.HUMAN,
+            mode: conversation.mode,
         });
     }
     catch (error) {

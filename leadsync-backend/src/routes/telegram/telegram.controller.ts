@@ -249,8 +249,8 @@ async function processTelegramMessage(body: any, companyId: string) {
         catMsg += `- ${item.name}: ₹${item.price}\n`;
       });
 
-      // Parallel execution: Send to Telegram + Save/Emit to DB/Socket
-      const botMsgPromise = prisma.message.create({
+      // 1. Save to DB
+      const botMsg = await prisma.message.create({
         data: {
           content: catMsg,
           sender: MessageSender.SYSTEM,
@@ -258,16 +258,19 @@ async function processTelegramMessage(body: any, companyId: string) {
         }
       });
 
-      const telegramPromise = sendTelegramMessage(botToken, chatId, catMsg);
-
-      const [botMsg] = await Promise.all([botMsgPromise, telegramPromise]);
-
+      // 2. Emit to Socket (INSTANT UPDATE)
       emitToCompany(companyId, "conversation_updated", {
         conversationId: conversation.id,
         lastMessage: catMsg,
         updatedAt: new Date(),
       });
       emitToConversation(conversation.id, "new_message", botMsg);
+
+      // 3. Send to Telegram (Async/Background)
+      sendTelegramMessage(botToken, chatId, catMsg).catch(err =>
+        console.error("Failed to send category to Telegram", err)
+      );
+
       return;
     }
 
@@ -363,8 +366,8 @@ async function processTelegramMessage(body: any, companyId: string) {
       console.error("AI reply failed:", err);
     }
 
-    // Parallel execution for AI reply
-    const botMsgPromise = prisma.message.create({
+    // 1. Save to DB
+    const botMsg = await prisma.message.create({
       data: {
         content: aiReply,
         sender: MessageSender.SYSTEM,
@@ -372,16 +375,18 @@ async function processTelegramMessage(body: any, companyId: string) {
       },
     });
 
-    const telegramPromise = sendTelegramMessage(botToken, chatId, aiReply);
-
-    const [botMsg] = await Promise.all([botMsgPromise, telegramPromise]);
-
+    // 2. Emit to Socket (INSTANT UPDATE)
     emitToCompany(companyId, "conversation_updated", {
       conversationId: conversation.id,
       lastMessage: aiReply,
       updatedAt: new Date(),
     });
     emitToConversation(conversation.id, "new_message", botMsg);
+
+    // 3. Send to Telegram (Async/Background)
+    sendTelegramMessage(botToken, chatId, aiReply).catch(err =>
+      console.error("Failed to send AI reply to Telegram", err)
+    );
 
   } catch (err) {
     console.error("processTelegramMessage error:", err);
