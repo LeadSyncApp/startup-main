@@ -3,6 +3,7 @@ import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { prisma } from "../lib/prisma";
 import { sendTelegramMessage } from "../bot/telegram.sender";
 import { ConversationMode, MessageSender } from "@prisma/client";
+import { emitToCompany, emitToConversation } from "../lib/socket";
 
 const router = Router();
 
@@ -167,6 +168,17 @@ router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response)
       ).catch(console.error);
     }
 
+    // ✅ REAL-TIME SOCKET EMISSION
+    // 1. Notify company for list updates
+    emitToCompany(companyId, "conversation_updated", {
+      conversationId: conversation.id,
+      lastMessage: content.trim(),
+      updatedAt: new Date(),
+    });
+
+    // 2. Notify specific conversation for active chat real-time feel
+    emitToConversation(conversation.id, "new_message", message);
+
     res.json({
       ...message,
       mode: ConversationMode.HUMAN,
@@ -206,13 +218,21 @@ router.patch("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response
     });
 
     // Create a system message so it appears instantly in the chat
-    await prisma.message.create({
+    const systemMsg = await prisma.message.create({
       data: {
         content: `Chat mode switched to ${mode}`,
         sender: MessageSender.SYSTEM,
         conversationId: conversation.id,
       },
     });
+
+    // ✅ REAL-TIME SOCKET EMISSION
+    emitToCompany(companyId, "mode_changed", {
+      conversationId: conversation.id,
+      mode
+    });
+
+    emitToConversation(conversation.id, "new_message", systemMsg);
 
     res.json(updated);
 

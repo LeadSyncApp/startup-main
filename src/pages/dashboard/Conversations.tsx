@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useSocket } from "../../context/SocketContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../../lib/api";
 import toast from "react-hot-toast";
@@ -20,6 +21,7 @@ interface Message {
   content: string;
   sender: "CLIENT" | "AGENT" | "SYSTEM";
   createdAt: string;
+  conversationId?: string; // Added for socket routing
 }
 
 interface Conversation {
@@ -47,6 +49,12 @@ export default function Conversations() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pollTimerRef = useRef<any>(null);
   const lastMsgCount = useRef(0);
+  const { socket } = useSocket();
+  const selectedRef = useRef(selected);
+
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
 
   // Load cache on mount
   useEffect(() => {
@@ -96,25 +104,68 @@ export default function Conversations() {
     }
   };
 
-  /* POLLING (NEAR REAL-TIME) */
+  /* REAL-TIME SOCKET LISTENERS */
   useEffect(() => {
-    if (!token) return;
+    if (!socket) return;
 
-    const poll = async () => {
-      if (document.visibilityState === "visible") {
-        // List refresh every 10s
-        await loadConversations(true);
-        // Active chat refresh every 1.5s for "instant" feel
-        if (selected) {
-          await fetchMessages(selected);
-        }
+    const onNewMessage = (msg: Message) => {
+      if (selectedRef.current && msg.conversationId === selectedRef.current.id) {
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === msg.id);
+          if (exists) return prev;
+          return [...prev.filter(m => !m.id.startsWith("temp-")), msg];
+        });
       }
-      pollTimerRef.current = setTimeout(poll, 1500);
     };
 
-    pollTimerRef.current = setTimeout(poll, 1500);
+    const onModeChanged = (data: { conversationId: string; mode: "BOT" | "HUMAN" }) => {
+      setConversations(prev => prev.map(c =>
+        c.id === data.conversationId ? { ...c, mode: data.mode } : c
+      ));
+      if (selectedRef.current?.id === data.conversationId) {
+        setSelected(prev => prev ? { ...prev, mode: data.mode } : null);
+      }
+    };
+
+    const onConversationUpdated = (data: { conversationId: string; lastMessage: string; updatedAt: string }) => {
+      setConversations(prev => {
+        const index = prev.findIndex(c => c.id === data.conversationId);
+        if (index === -1) return prev;
+        const updated = [...prev];
+        updated[index] = { ...updated[index], lastMessage: data.lastMessage, updatedAt: data.updatedAt };
+        const item = updated.splice(index, 1)[0];
+        updated.unshift(item);
+        return updated;
+      });
+    };
+
+    socket.on("new_message", onNewMessage);
+    socket.on("mode_changed", onModeChanged);
+    socket.on("conversation_updated", onConversationUpdated);
+
+    if (selected) {
+      socket.emit("join_conversation", selected.id);
+    }
+
+    return () => {
+      socket.off("new_message", onNewMessage);
+      socket.off("mode_changed", onModeChanged);
+      socket.off("conversation_updated", onConversationUpdated);
+    };
+  }, [socket, selected?.id]);
+
+  /* FALLBACK POLLING (SLOW) */
+  useEffect(() => {
+    if (!token) return;
+    const poll = async () => {
+      if (document.visibilityState === "visible") {
+        await loadConversations(true);
+      }
+      pollTimerRef.current = setTimeout(poll, 15000);
+    };
+    pollTimerRef.current = setTimeout(poll, 15000);
     return () => clearTimeout(pollTimerRef.current);
-  }, [token, selected]);
+  }, [token]);
 
   /* SELECT HANDLER */
   const handleSelect = (conv: Conversation) => {

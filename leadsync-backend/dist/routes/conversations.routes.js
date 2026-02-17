@@ -5,6 +5,7 @@ const auth_middleware_1 = require("../middleware/auth.middleware");
 const prisma_1 = require("../lib/prisma");
 const telegram_sender_1 = require("../bot/telegram.sender");
 const client_1 = require("@prisma/client");
+const socket_1 = require("../lib/socket");
 const router = (0, express_1.Router)();
 /* =========================================
    GET ALL CONVERSATIONS
@@ -145,6 +146,15 @@ router.post("/:id/send", auth_middleware_1.authMiddleware, async (req, res) => {
             // Fire-and-forget: Don't await
             (0, telegram_sender_1.sendTelegramMessage)(conversation.company.telegramBotToken, conversation.lead.contact, content.trim()).catch(console.error);
         }
+        // ✅ REAL-TIME SOCKET EMISSION
+        // 1. Notify company for list updates
+        (0, socket_1.emitToCompany)(companyId, "conversation_updated", {
+            conversationId: conversation.id,
+            lastMessage: content.trim(),
+            updatedAt: new Date(),
+        });
+        // 2. Notify specific conversation for active chat real-time feel
+        (0, socket_1.emitToConversation)(conversation.id, "new_message", message);
         res.json({
             ...message,
             mode: client_1.ConversationMode.HUMAN,
@@ -179,13 +189,19 @@ router.patch("/:id/mode", auth_middleware_1.authMiddleware, async (req, res) => 
             },
         });
         // Create a system message so it appears instantly in the chat
-        await prisma_1.prisma.message.create({
+        const systemMsg = await prisma_1.prisma.message.create({
             data: {
                 content: `Chat mode switched to ${mode}`,
                 sender: client_1.MessageSender.SYSTEM,
                 conversationId: conversation.id,
             },
         });
+        // ✅ REAL-TIME SOCKET EMISSION
+        (0, socket_1.emitToCompany)(companyId, "mode_changed", {
+            conversationId: conversation.id,
+            mode
+        });
+        (0, socket_1.emitToConversation)(conversation.id, "new_message", systemMsg);
         res.json(updated);
     }
     catch (error) {

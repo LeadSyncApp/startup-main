@@ -6,6 +6,7 @@ const client_1 = require("@prisma/client");
 const telegram_sender_1 = require("../../bot/telegram.sender");
 const geminiService_1 = require("../../services/geminiService");
 const cache_service_1 = require("../../services/cache.service");
+const socket_1 = require("../../lib/socket");
 /* ===============================
    HELPERS
 =============================== */
@@ -129,13 +130,20 @@ async function processTelegramMessage(body, companyId) {
         });
         if (existingMessage)
             return;
-        await prisma_1.prisma.message.create({
+        const clientMsg = await prisma_1.prisma.message.create({
             data: {
                 content: text,
                 sender: client_1.MessageSender.CLIENT,
                 conversationId: conversation.id,
             },
         });
+        // ✅ REAL-TIME SOCKET EMISSION (Client Message)
+        (0, socket_1.emitToCompany)(companyId, "conversation_updated", {
+            conversationId: conversation.id,
+            lastMessage: text,
+            updatedAt: new Date(),
+        });
+        (0, socket_1.emitToConversation)(conversation.id, "new_message", clientMsg);
         if (conversation.mode === client_1.ConversationMode.HUMAN)
             return;
         /* -------------------------------
@@ -222,13 +230,20 @@ async function processTelegramMessage(body, companyId) {
                 });
             }
             const reply = `🛒 Order Detected:\n\n${summary}\n\n💰 Total: ₹${total}\n\n⏳ Waiting for approval from our team.`;
-            await prisma_1.prisma.message.create({
+            const systemMsg = await prisma_1.prisma.message.create({
                 data: {
                     content: reply,
                     sender: client_1.MessageSender.SYSTEM,
                     conversationId: conversation.id,
                 },
             });
+            // ✅ REAL-TIME SOCKET EMISSION (Order System Message)
+            (0, socket_1.emitToCompany)(companyId, "conversation_updated", {
+                conversationId: conversation.id,
+                lastMessage: reply,
+                updatedAt: new Date(),
+            });
+            (0, socket_1.emitToConversation)(conversation.id, "new_message", systemMsg);
             await (0, telegram_sender_1.sendTelegramMessage)(botToken, chatId, reply);
             return;
         }
@@ -242,13 +257,20 @@ async function processTelegramMessage(body, companyId) {
         catch (err) {
             console.error("AI reply failed:", err);
         }
-        await prisma_1.prisma.message.create({
+        const botMsg = await prisma_1.prisma.message.create({
             data: {
                 content: aiReply,
                 sender: client_1.MessageSender.SYSTEM,
                 conversationId: conversation.id,
             },
         });
+        // ✅ REAL-TIME SOCKET EMISSION (AI Reply)
+        (0, socket_1.emitToCompany)(companyId, "conversation_updated", {
+            conversationId: conversation.id,
+            lastMessage: aiReply,
+            updatedAt: new Date(),
+        });
+        (0, socket_1.emitToConversation)(conversation.id, "new_message", botMsg);
         await (0, telegram_sender_1.sendTelegramMessage)(botToken, chatId, aiReply);
     }
     catch (err) {

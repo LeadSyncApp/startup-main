@@ -10,6 +10,7 @@ import {
 import { sendTelegramMessage, sendChatAction } from "../../bot/telegram.sender";
 import { generateBotReply } from "../../services/geminiService";
 import { cacheService } from "../../services/cache.service";
+import { emitToCompany, emitToConversation } from "../../lib/socket";
 
 
 /* ===============================
@@ -180,13 +181,21 @@ async function processTelegramMessage(body: any, companyId: string) {
 
     if (existingMessage) return;
 
-    await prisma.message.create({
+    const clientMsg = await prisma.message.create({
       data: {
         content: text,
         sender: MessageSender.CLIENT,
         conversationId: conversation.id,
       },
     });
+
+    // ✅ REAL-TIME SOCKET EMISSION (Client Message)
+    emitToCompany(companyId, "conversation_updated", {
+      conversationId: conversation.id,
+      lastMessage: text,
+      updatedAt: new Date(),
+    });
+    emitToConversation(conversation.id, "new_message", clientMsg);
 
     if (conversation.mode === ConversationMode.HUMAN) return;
 
@@ -297,13 +306,21 @@ async function processTelegramMessage(body: any, companyId: string) {
 
       const reply = `🛒 Order Detected:\n\n${summary}\n\n💰 Total: ₹${total}\n\n⏳ Waiting for approval from our team.`;
 
-      await prisma.message.create({
+      const systemMsg = await prisma.message.create({
         data: {
           content: reply,
           sender: MessageSender.SYSTEM,
           conversationId: conversation.id,
         },
       });
+
+      // ✅ REAL-TIME SOCKET EMISSION (Order System Message)
+      emitToCompany(companyId, "conversation_updated", {
+        conversationId: conversation.id,
+        lastMessage: reply,
+        updatedAt: new Date(),
+      });
+      emitToConversation(conversation.id, "new_message", systemMsg);
 
       await sendTelegramMessage(botToken, chatId, reply);
       return;
@@ -324,13 +341,21 @@ async function processTelegramMessage(body: any, companyId: string) {
       console.error("AI reply failed:", err);
     }
 
-    await prisma.message.create({
+    const botMsg = await prisma.message.create({
       data: {
         content: aiReply,
         sender: MessageSender.SYSTEM,
         conversationId: conversation.id,
       },
     });
+
+    // ✅ REAL-TIME SOCKET EMISSION (AI Reply)
+    emitToCompany(companyId, "conversation_updated", {
+      conversationId: conversation.id,
+      lastMessage: aiReply,
+      updatedAt: new Date(),
+    });
+    emitToConversation(conversation.id, "new_message", botMsg);
 
     await sendTelegramMessage(botToken, chatId, aiReply);
 
