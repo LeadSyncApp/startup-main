@@ -264,16 +264,19 @@ router.delete("/:id/messages", authMiddleware, async (req: AuthRequest, res: Res
     // Delete all messages associated with this conversation
     await prisma.message.deleteMany({
       where: { conversationId: conversation.id },
-    });
+    }).catch(err => console.log("Nothing to delete or already empty"));
 
     // Add a system message to indicate history was cleared
-    await prisma.message.create({
+    const systemMsg = await prisma.message.create({
       data: {
         content: "Chat history was cleared by the agent.",
         sender: MessageSender.SYSTEM,
         conversationId: conversation.id,
       },
     });
+
+    // ✅ REAL-TIME SOCKET EMISSION
+    emitToConversation(conversation.id, "messages_cleared", systemMsg);
 
     res.json({ message: "History cleared successfully" });
   } catch (error) {

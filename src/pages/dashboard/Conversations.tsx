@@ -114,12 +114,24 @@ export default function Conversations() {
     if (!socket) return;
 
     const onNewMessage = (msg: Message) => {
+      // If message belongs to selected chat
       if (selectedRef.current && msg.conversationId === selectedRef.current.id) {
         setMessages(prev => {
-          const exists = prev.some(m => m.id === msg.id);
-          if (exists) return prev;
-          return [...prev.filter(m => !m.id.startsWith("temp-")), msg];
+          // Remove temp message if exists
+          const filtered = prev.filter(m => !m.id.startsWith("temp-") || m.content !== msg.content);
+
+          // Prevent exact duplicate ID
+          if (filtered.some(m => m.id === msg.id)) return prev;
+
+          return [...filtered, msg];
         });
+
+        // Instant scroll to bottom
+        setTimeout(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+          }
+        }, 50);
       }
     };
 
