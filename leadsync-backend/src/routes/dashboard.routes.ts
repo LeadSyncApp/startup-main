@@ -21,6 +21,14 @@ router.get(
 
       const companyId = req.user.companyId;
 
+      /* CHECK CACHE */
+      const cacheKey = `dashboard_kpis_${companyId}`;
+      const cachedData = cacheService.get(cacheKey);
+
+      if (cachedData) {
+        return res.json(cachedData);
+      }
+
       /* =====================================================
          OPTIMIZED: Parallel Queries + GroupBy Aggregation
       ===================================================== */
@@ -76,7 +84,7 @@ router.get(
 
       const totalRevenue = revenueData._sum.amount || 0;
 
-      res.json({
+      const responseData = {
         leads,
         conversations,
         orders,
@@ -87,7 +95,12 @@ router.get(
         deliveredOrders: deliveredStats,
         aiDetectedOrders: botStats,
         totalRevenue,
-      });
+      };
+
+      // Set Cache (30 seconds TTL)
+      cacheService.set(cacheKey, responseData, 30);
+
+      res.json(responseData);
     } catch (err) {
       console.error("KPI fetch error:", err);
       res.status(500).json({ message: "Failed to fetch KPIs" });
