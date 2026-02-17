@@ -70,8 +70,13 @@ export default function Conversations() {
     try {
       if (!quiet) setLoadingConv(true);
       const data = await api.get("/conversations");
-      setConversations(data);
-      localStorage.setItem("leadsync_conv_cache", JSON.stringify(data));
+
+      // Only update if data changed to prevent jitter
+      setConversations(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
+        localStorage.setItem("leadsync_conv_cache", JSON.stringify(data));
+        return data;
+      });
     } catch (err) {
       console.error("Failed to load list", err);
     } finally {
@@ -223,8 +228,6 @@ export default function Conversations() {
 
     try {
       await api.patch(`/conversations/${selected.id}/mode`, { mode });
-      // Fetch messages immediately to show the "Chat mode switched" notification instantly
-      fetchMessages(selected);
       toast.success(`Switched to ${mode} mode`);
     } catch (err) {
       setSelected({ ...selected, mode: prevMode });

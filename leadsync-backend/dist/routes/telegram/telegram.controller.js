@@ -147,7 +147,7 @@ async function processTelegramMessage(body, companyId) {
         if (conversation.mode === client_1.ConversationMode.HUMAN)
             return;
         /* -------------------------------
-           START COMMAND
+           1. START COMMAND
         -------------------------------- */
         if (text === "/start") {
             const welcomeMsg = buildWelcomeMessage(company, name);
@@ -155,16 +155,17 @@ async function processTelegramMessage(body, companyId) {
             return;
         }
         /* -------------------------------
-           MENU COMMAND
+           2. FULL MENU COMMAND
         -------------------------------- */
+        const structuredMenu = company.botStructuredMenu;
+        const categories = structuredMenu?.categories || [];
         if (text.toLowerCase() === "menu" || text.toLowerCase() === "/menu") {
-            const structuredMenu = company.botStructuredMenu;
-            if (!structuredMenu?.categories?.length) {
+            if (!categories.length) {
                 await (0, telegram_sender_1.sendTelegramMessage)(botToken, chatId, "Menu is currently unavailable.");
                 return;
             }
             let menuMsg = "📜 *Our Menu*\n\n";
-            structuredMenu.categories.forEach((cat) => {
+            categories.forEach((cat) => {
                 menuMsg += `*${cat.name}*\n`;
                 cat.items.forEach((item) => {
                     menuMsg += `- ${item.name}: ₹${item.price}\n`;
@@ -175,10 +176,36 @@ async function processTelegramMessage(body, companyId) {
             return;
         }
         /* -------------------------------
-           ORDER DETECTION
+           3. KEYWORD DETECTION (Category/Item)
         -------------------------------- */
-        const structuredMenu = company.botStructuredMenu;
-        const categories = structuredMenu?.categories || [];
+        const input = text.toLowerCase().trim();
+        const matchedCategory = categories.find(cat => input === cat.name.toLowerCase() ||
+            input === cat.name.toLowerCase() + "s" || // plural
+            (input.length > 3 && cat.name.toLowerCase().includes(input)));
+        if (matchedCategory) {
+            let catMsg = `📜 *${matchedCategory.name}*\n\n`;
+            matchedCategory.items.forEach(item => {
+                catMsg += `- ${item.name}: ₹${item.price}\n`;
+            });
+            await (0, telegram_sender_1.sendTelegramMessage)(botToken, chatId, catMsg);
+            const botMsg = await prisma_1.prisma.message.create({
+                data: {
+                    content: catMsg,
+                    sender: client_1.MessageSender.SYSTEM,
+                    conversationId: conversation.id,
+                }
+            });
+            (0, socket_1.emitToCompany)(companyId, "conversation_updated", {
+                conversationId: conversation.id,
+                lastMessage: catMsg,
+                updatedAt: new Date(),
+            });
+            (0, socket_1.emitToConversation)(conversation.id, "new_message", botMsg);
+            return;
+        }
+        /* -------------------------------
+           4. ORDER DETECTION
+        -------------------------------- */
         const normalizedText = normalize(text);
         let detectedItems = [];
         for (const category of categories) {
@@ -187,9 +214,8 @@ async function processTelegramMessage(body, companyId) {
                 if (normalizedText.includes(normalizedItemName)) {
                     let quantity = 1;
                     const qtyMatch = normalizedText.match(new RegExp(`(\\d+)\\s*${normalizedItemName}`));
-                    if (qtyMatch?.[1]) {
+                    if (qtyMatch?.[1])
                         quantity = parseInt(qtyMatch[1], 10);
-                    }
                     detectedItems.push({
                         name: item.name,
                         price: item.price,
@@ -206,14 +232,11 @@ async function processTelegramMessage(body, companyId) {
                 summaryParts.push(`${entry.quantity} x ${entry.name}`);
             }
             const summary = summaryParts.join(", ");
-            // Prevent duplicate order within 2 minutes
             const recentOrder = await prisma_1.prisma.order.findFirst({
                 where: {
                     conversationId: conversation.id,
                     summary,
-                    createdAt: {
-                        gte: new Date(Date.now() - 2 * 60 * 1000),
-                    },
+                    createdAt: { gte: new Date(Date.now() - 2 * 60 * 1000) },
                 },
             });
             if (!recentOrder) {
@@ -237,7 +260,6 @@ async function processTelegramMessage(body, companyId) {
                     conversationId: conversation.id,
                 },
             });
-            // ✅ REAL-TIME SOCKET EMISSION (Order System Message)
             (0, socket_1.emitToCompany)(companyId, "conversation_updated", {
                 conversationId: conversation.id,
                 lastMessage: reply,
@@ -248,7 +270,7 @@ async function processTelegramMessage(body, companyId) {
             return;
         }
         /* -------------------------------
-           AI REPLY (SAFE WRAPPED)
+           5. AI REPLY (SAFE WRAPPED)
         -------------------------------- */
         let aiReply = "Thank you! Our team will assist you shortly.";
         try {
@@ -264,7 +286,6 @@ async function processTelegramMessage(body, companyId) {
                 conversationId: conversation.id,
             },
         });
-        // ✅ REAL-TIME SOCKET EMISSION (AI Reply)
         (0, socket_1.emitToCompany)(companyId, "conversation_updated", {
             conversationId: conversation.id,
             lastMessage: aiReply,

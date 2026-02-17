@@ -200,7 +200,7 @@ async function processTelegramMessage(body: any, companyId: string) {
     if (conversation.mode === ConversationMode.HUMAN) return;
 
     /* -------------------------------
-       START COMMAND
+       1. START COMMAND
     -------------------------------- */
     if (text === "/start") {
       const welcomeMsg = buildWelcomeMessage(company, name);
@@ -209,19 +209,19 @@ async function processTelegramMessage(body: any, companyId: string) {
     }
 
     /* -------------------------------
-       MENU COMMAND
+       2. FULL MENU COMMAND
     -------------------------------- */
-    if (text.toLowerCase() === "menu" || text.toLowerCase() === "/menu") {
-      const structuredMenu = company.botStructuredMenu as StructuredMenu | null;
+    const structuredMenu = company.botStructuredMenu as StructuredMenu | null;
+    const categories = structuredMenu?.categories || [];
 
-      if (!structuredMenu?.categories?.length) {
+    if (text.toLowerCase() === "menu" || text.toLowerCase() === "/menu") {
+      if (!categories.length) {
         await sendTelegramMessage(botToken, chatId, "Menu is currently unavailable.");
         return;
       }
 
       let menuMsg = "📜 *Our Menu*\n\n";
-
-      structuredMenu.categories.forEach((cat) => {
+      categories.forEach((cat) => {
         menuMsg += `*${cat.name}*\n`;
         cat.items.forEach((item) => {
           menuMsg += `- ${item.name}: ₹${item.price}\n`;
@@ -234,30 +234,53 @@ async function processTelegramMessage(body: any, companyId: string) {
     }
 
     /* -------------------------------
-       ORDER DETECTION
+       3. KEYWORD DETECTION (Category/Item)
     -------------------------------- */
+    const input = text.toLowerCase().trim();
+    const matchedCategory = categories.find(cat =>
+      input === cat.name.toLowerCase() ||
+      input === cat.name.toLowerCase() + "s" || // plural
+      (input.length > 3 && cat.name.toLowerCase().includes(input))
+    );
 
-    const structuredMenu = company.botStructuredMenu as StructuredMenu | null;
-    const categories = structuredMenu?.categories || [];
+    if (matchedCategory) {
+      let catMsg = `📜 *${matchedCategory.name}*\n\n`;
+      matchedCategory.items.forEach(item => {
+        catMsg += `- ${item.name}: ₹${item.price}\n`;
+      });
 
+      await sendTelegramMessage(botToken, chatId, catMsg);
+
+      const botMsg = await prisma.message.create({
+        data: {
+          content: catMsg,
+          sender: MessageSender.SYSTEM,
+          conversationId: conversation.id,
+        }
+      });
+
+      emitToCompany(companyId, "conversation_updated", {
+        conversationId: conversation.id,
+        lastMessage: catMsg,
+        updatedAt: new Date(),
+      });
+      emitToConversation(conversation.id, "new_message", botMsg);
+      return;
+    }
+
+    /* -------------------------------
+       4. ORDER DETECTION
+    -------------------------------- */
     const normalizedText = normalize(text);
-
     let detectedItems: { name: string; price: number; quantity: number }[] = [];
 
     for (const category of categories) {
       for (const item of category.items) {
         const normalizedItemName = normalize(item.name);
-
         if (normalizedText.includes(normalizedItemName)) {
           let quantity = 1;
-
-          const qtyMatch = normalizedText.match(
-            new RegExp(`(\\d+)\\s*${normalizedItemName}`)
-          );
-
-          if (qtyMatch?.[1]) {
-            quantity = parseInt(qtyMatch[1], 10);
-          }
+          const qtyMatch = normalizedText.match(new RegExp(`(\\d+)\\s*${normalizedItemName}`));
+          if (qtyMatch?.[1]) quantity = parseInt(qtyMatch[1], 10);
 
           detectedItems.push({
             name: item.name,
@@ -279,14 +302,11 @@ async function processTelegramMessage(body: any, companyId: string) {
 
       const summary = summaryParts.join(", ");
 
-      // Prevent duplicate order within 2 minutes
       const recentOrder = await prisma.order.findFirst({
         where: {
           conversationId: conversation.id,
           summary,
-          createdAt: {
-            gte: new Date(Date.now() - 2 * 60 * 1000),
-          },
+          createdAt: { gte: new Date(Date.now() - 2 * 60 * 1000) },
         },
       });
 
@@ -314,7 +334,6 @@ async function processTelegramMessage(body: any, companyId: string) {
         },
       });
 
-      // ✅ REAL-TIME SOCKET EMISSION (Order System Message)
       emitToCompany(companyId, "conversation_updated", {
         conversationId: conversation.id,
         lastMessage: reply,
@@ -327,7 +346,7 @@ async function processTelegramMessage(body: any, companyId: string) {
     }
 
     /* -------------------------------
-       AI REPLY (SAFE WRAPPED)
+       5. AI REPLY (SAFE WRAPPED)
     -------------------------------- */
     let aiReply = "Thank you! Our team will assist you shortly.";
 
@@ -349,7 +368,6 @@ async function processTelegramMessage(body: any, companyId: string) {
       },
     });
 
-    // ✅ REAL-TIME SOCKET EMISSION (AI Reply)
     emitToCompany(companyId, "conversation_updated", {
       conversationId: conversation.id,
       lastMessage: aiReply,

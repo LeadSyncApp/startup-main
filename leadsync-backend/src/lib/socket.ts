@@ -6,10 +6,11 @@ let io: Server | null = null;
 export const initSocket = (httpServer: HttpServer) => {
     io = new Server(httpServer, {
         cors: {
-            origin: "*", // Adjust in production
+            origin: "*",
             methods: ["GET", "POST", "PATCH", "DELETE"],
             credentials: true
-        }
+        },
+        transports: ["websocket"]
     });
 
     io.on("connection", (socket) => {

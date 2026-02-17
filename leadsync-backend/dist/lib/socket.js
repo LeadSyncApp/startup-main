@@ -6,10 +6,11 @@ let io = null;
 const initSocket = (httpServer) => {
     io = new socket_io_1.Server(httpServer, {
         cors: {
-            origin: "*", // Adjust in production
+            origin: "*",
             methods: ["GET", "POST", "PATCH", "DELETE"],
             credentials: true
-        }
+        },
+        transports: ["websocket"]
     });
     io.on("connection", (socket) => {
         console.log(`🔌 New socket connection: ${socket.id}`);
