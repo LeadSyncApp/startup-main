@@ -183,4 +183,5 @@ model Order {
   @@index([leadId])
   @@index([processedById])
   @@index([approvalStatus])
+  @@index([createdAt])
 }

@@ -2,6 +2,7 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { generateStructuredMenu } from "../services/geminiService";
+import { cacheService } from "../services/cache.service";
 
 const router = Router();
 
@@ -230,6 +231,9 @@ router.patch(
           botMenu: keyboardMenu,
         },
       });
+
+      // Invalidate cache
+      cacheService.delete(cacheService.getCompanyKey(companyId));
 
       res.json({
         message: existingMenu

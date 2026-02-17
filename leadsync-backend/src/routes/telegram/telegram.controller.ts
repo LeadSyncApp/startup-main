@@ -7,8 +7,10 @@ import {
   OrderSource,
   OrderApprovalStatus,
 } from "@prisma/client";
-import { sendTelegramMessage } from "../../bot/telegram.sender";
+import { sendTelegramMessage, sendChatAction } from "../../bot/telegram.sender";
 import { generateBotReply } from "../../services/geminiService";
+import { cacheService } from "../../services/cache.service";
+
 
 /* ===============================
    TYPES
@@ -96,13 +98,28 @@ async function processTelegramMessage(body: any, companyId: string) {
 
     if (!text) return;
 
-    const company = await prisma.company.findUnique({
-      where: { id: companyId },
-    });
+    // 1. Try Cache
+    let company: any = cacheService.get(cacheService.getCompanyKey(companyId));
+
+    if (!company) {
+      // 2. Fallback to DB
+      company = await prisma.company.findUnique({
+        where: { id: companyId },
+      });
+
+      if (company) {
+        // Cache success
+        cacheService.set(cacheService.getCompanyKey(companyId), company);
+      }
+    }
+
 
     if (!company || !company.telegramBotToken) return;
 
     const botToken = company.telegramBotToken;
+
+    // Report typing status (UX improvement)
+    sendChatAction(botToken, chatId, "typing");
 
     /* -------------------------------
        FIND OR CREATE LEAD

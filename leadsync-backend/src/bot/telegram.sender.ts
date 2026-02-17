@@ -27,3 +27,19 @@ export const sendTelegramMessage = async (
     );
   }
 };
+
+export const sendChatAction = async (
+  botToken: string,
+  chatId: string,
+  action: "typing" | "upload_photo" | "record_video" | "record_audio" = "typing"
+) => {
+  try {
+    const url = `https://api.telegram.org/bot${botToken}/sendChatAction`;
+    await axios.post(url, {
+      chat_id: chatId,
+      action,
+    });
+  } catch (error) {
+    // Ignore chat action errors (not critical)
+  }
+};
