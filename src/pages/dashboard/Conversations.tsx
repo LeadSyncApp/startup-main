@@ -48,12 +48,7 @@ export default function Conversations() {
   };
 
   useEffect(() => {
-    if (!token) return;
-    loadConversations();
-
-    // Refresh conversation list less frequently (every 15s)
-    const interval = setInterval(loadConversations, 15000);
-    return () => clearInterval(interval);
+    if (token) loadConversations();
   }, [token]);
 
   /* FETCH MESSAGES */
@@ -86,16 +81,33 @@ export default function Conversations() {
     }
   };
 
-  /* AUTO REFRESH MESSAGES ONLY */
+  /* AUTO REFRESH MESSAGES ONLY (RACE-SAFE) */
   useEffect(() => {
-    if (!selected) return;
+    if (!selected || !token) return;
 
-    const interval = setInterval(() => {
-      fetchMessages(selected, true); // Force background refresh
-    }, 3000);
+    let timer: any;
+    const poll = async () => {
+      await fetchMessages(selected, true);
+      timer = setTimeout(poll, 4000); // Wait 4s 
+    };
 
-    return () => clearInterval(interval);
-  }, [selected]);
+    timer = setTimeout(poll, 4000);
+    return () => clearTimeout(timer);
+  }, [selected, token]);
+
+  /* REFRESH CONVERSATION LIST (RACE-SAFE) */
+  useEffect(() => {
+    if (!token) return;
+
+    let timer: any;
+    const poll = async () => {
+      await loadConversations();
+      timer = setTimeout(poll, 20000); // 20s for list
+    };
+
+    timer = setTimeout(poll, 20000);
+    return () => clearTimeout(timer);
+  }, [token]);
 
   /* SEND MESSAGE (OPTIMISTIC UI) */
   const sendMessage = async () => {

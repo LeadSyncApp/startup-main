@@ -130,10 +130,11 @@ router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response)
       },
     });
 
+    // ✅ MODE REMOVED: Do not auto-switch to HUMAN.
+    // Respect the manual toggle from the site to allow 24/7 bot service.
     await prisma.conversation.update({
       where: { id: conversation.id },
       data: {
-        mode: ConversationMode.HUMAN,
         updatedAt: new Date(),
       },
     });

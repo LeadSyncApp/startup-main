@@ -97,8 +97,8 @@ router.get(
         totalRevenue,
       };
 
-      // Set Cache (30 seconds TTL)
-      cacheService.set(cacheKey, responseData, 30);
+      // Set Cache (60 seconds TTL)
+      cacheService.set(cacheKey, responseData, 60);
 
       res.json(responseData);
     } catch (err) {
