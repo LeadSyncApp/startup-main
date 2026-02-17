@@ -139,11 +139,12 @@ router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response)
     });
 
     if (conversation.company.telegramBotToken) {
-      await sendTelegramMessage(
+      // Fire-and-forget: Don't await
+      sendTelegramMessage(
         conversation.company.telegramBotToken,
         conversation.lead.contact,
         content.trim()
-      );
+      ).catch(console.error);
     }
 
     res.json({

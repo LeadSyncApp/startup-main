@@ -9,20 +9,18 @@
     "ngrok": "ngrok http 4000",
     "dev:all": "concurrently \"npm run dev\" \"npm run ngrok\"",
     "seed": "ts-node -P tsconfig.prisma.json prisma/seed.ts",
-
     "build": "tsc",
-
     "start": "node dist/server.js",
-
     "migrate": "prisma migrate deploy",
-
     "postinstall": "prisma generate"
   },
   "dependencies": {
     "@google/genai": "^1.40.0",
     "@prisma/client": "^6.19.2",
+    "@types/compression": "^1.8.1",
     "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
+    "compression": "^1.8.1",
     "cors": "^2.8.6",
     "dotenv": "^17.2.4",
     "express": "^4.22.1",

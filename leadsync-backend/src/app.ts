@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import compression from "compression";
 
 // Routes
 import authRoutes from "./routes/auth.routes";
@@ -17,6 +18,8 @@ import usersRoutes from "./routes/users.routes"; // ✅ ADD THIS
 console.log("🔥 app.ts loaded");
 
 const app = express();
+
+app.use(compression()); // ✅ GZIP Compression
 
 app.use(
   cors({
