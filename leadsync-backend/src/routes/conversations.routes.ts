@@ -205,6 +205,15 @@ router.patch("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response
       },
     });
 
+    // Create a system message so it appears instantly in the chat
+    await prisma.message.create({
+      data: {
+        content: `Chat mode switched to ${mode}`,
+        sender: MessageSender.SYSTEM,
+        conversationId: conversation.id,
+      },
+    });
+
     res.json(updated);
 
   } catch (error) {

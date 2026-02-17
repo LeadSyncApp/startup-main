@@ -46,6 +46,7 @@ export default function Conversations() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const pollTimerRef = useRef<any>(null);
+  const lastMsgCount = useRef(0);
 
   // Load cache on mount
   useEffect(() => {
@@ -122,13 +123,20 @@ export default function Conversations() {
     fetchMessages(conv);
   };
 
-  /* AUTO SCROLL */
+  /* AUTO SCROLL (STABLE & SMART) */
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: "smooth"
-      });
+      const el = scrollRef.current;
+      const isNewMessage = messages.length > lastMsgCount.current;
+
+      // If messages length changed significantly (like history clear), or if it's a small increment
+      if (isNewMessage || messages.length === 0) {
+        el.scrollTo({
+          top: el.scrollHeight,
+          behavior: isNewMessage && lastMsgCount.current > 0 ? "smooth" : "auto"
+        });
+      }
+      lastMsgCount.current = messages.length;
     }
   }, [messages]);
 
@@ -164,6 +172,8 @@ export default function Conversations() {
 
     try {
       await api.patch(`/conversations/${selected.id}/mode`, { mode });
+      // Fetch messages immediately to show the "Chat mode switched" notification instantly
+      fetchMessages(selected);
       toast.success(`Switched to ${mode} mode`);
     } catch (err) {
       setSelected({ ...selected, mode: prevMode });
