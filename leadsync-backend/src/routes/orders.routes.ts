@@ -94,6 +94,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: 50, // Added limit
     });
 
     return res.json(orders);

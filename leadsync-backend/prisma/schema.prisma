@@ -179,6 +179,9 @@ model Order {
   lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
+  @@index([companyId, approvalStatus])
+  @@index([companyId, status])
+  @@index([companyId, source])
   @@index([conversationId])
   @@index([leadId])
   @@index([processedById])

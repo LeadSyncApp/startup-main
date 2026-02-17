@@ -22,23 +22,20 @@ router.get("/", authMiddleware, async (req: AuthRequest, res) => {
       },
       include: {
         conversations: {
-          include: {
+          select: {
+            id: true,
             messages: {
-              orderBy: {
-                createdAt: "desc",
-              },
+              orderBy: { createdAt: "desc" },
               take: 1,
-            },
+              select: { content: true }
+            }
           },
-          orderBy: {
-            updatedAt: "desc",
-          },
+          orderBy: { updatedAt: "desc" },
           take: 1,
         },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: { createdAt: "desc" },
+      take: 50, // Added limit
     });
 
     const formatted = leads.map((lead) => ({

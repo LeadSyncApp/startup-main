@@ -28,46 +28,44 @@ export default function Settings() {
   const [botWelcomeMessage, setBotWelcomeMessage] = useState("");
   const [shopDescription, setShopDescription] = useState("");
 
-  const [generatedMenu, setGeneratedMenu] =
-    useState<StructuredMenu | null>(null);
+  const [generatedMenu, setGeneratedMenu] = useState<StructuredMenu | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   /* ===============================
-     LOAD TELEGRAM STATUS
+     LOAD DATA
   =============================== */
   useEffect(() => {
     if (!token) return;
 
-    const fetchStatus = async () => {
-      const data = await api.get("/integrations/status");
-      setTelegramConnected(data.telegram?.connected || false);
-      setTelegramUsername(data.telegram?.username || null);
-    };
+    const fetchData = async () => {
+      try {
+        const [statusData, configData] = await Promise.all([
+          api.get("/integrations/status"),
+          api.get("/dashboard/bot-config"),
+        ]);
 
-    fetchStatus();
-  }, [token]);
+        // Status
+        setTelegramConnected(statusData.telegram?.connected || false);
+        setTelegramUsername(statusData.telegram?.username || null);
 
-  /* ===============================
-     LOAD BOT CONFIG
-  =============================== */
-  useEffect(() => {
-    if (!token) return;
-
-    const fetchBotConfig = async () => {
-      const data = await api.get("/dashboard/bot-config");
-
-      if (data.company) {
-        setBotBusinessType(data.company.botBusinessType || "");
-        setBotWelcomeMessage(data.company.botWelcomeMessage || "");
-        setGeneratedMenu(data.company.botStructuredMenu || null);
+        // Config
+        if (configData.company) {
+          setBotBusinessType(configData.company.botBusinessType || "");
+          setBotWelcomeMessage(configData.company.botWelcomeMessage || "");
+          setGeneratedMenu(configData.company.botStructuredMenu || null);
+        }
+      } catch (error) {
+        console.error("Failed to load settings:", error);
+        toast.error("Failed to load settings");
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    fetchBotConfig();
+    fetchData();
   }, [token]);
 
-  /* ===============================
-     CONNECT TELEGRAM
-  =============================== */
   /* ===============================
      CONNECT TELEGRAM
   =============================== */
@@ -114,6 +112,9 @@ export default function Settings() {
       return;
     }
 
+    setIsGenerating(true);
+    const toastId = toast.loading("Generating menu via AI... (This may take 15s)");
+
     try {
       const data = await api.patch("/dashboard/bot-config", {
         botBusinessType,
@@ -127,10 +128,14 @@ export default function Settings() {
       toast.success(
         shopDescription.toLowerCase().includes("update")
           ? "Menu updated successfully! ✅"
-          : "Menu generated successfully! 🎉"
+          : "Menu generated successfully! 🎉",
+        { id: toastId }
       );
-    } catch {
-      toast.error("Failed to generate menu");
+    } catch (err) {
+      console.error("Generate error:", err);
+      toast.error("Failed to generate menu. Please try again.", { id: toastId });
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -224,6 +229,15 @@ export default function Settings() {
      UI
   =============================== */
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <span className="ml-3 text-slate-600">Loading settings...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 max-w-4xl">
 
@@ -302,9 +316,11 @@ export default function Settings() {
 
         <button
           onClick={handleGenerateMenu}
-          className="bg-purple-600 text-white px-4 py-2 rounded-lg"
+          disabled={isGenerating}
+          className={`bg-purple-600 text-white px-4 py-2 rounded-lg transition ${isGenerating ? "opacity-50 cursor-not-allowed" : "hover:bg-purple-700"
+            }`}
         >
-          Generate / Update Menu
+          {isGenerating ? "Generating..." : "Generate / Update Menu"}
         </button>
       </div>
 
@@ -315,7 +331,7 @@ export default function Settings() {
             Edit Menu (with Pricing)
           </h2>
 
-          {generatedMenu.categories.map((cat, cIndex) => (
+          {generatedMenu.categories.map((cat: Category, cIndex: number) => (
             <div key={cIndex} className="border p-4 rounded-xl space-y-4">
               <div className="flex justify-between items-center">
                 <input
@@ -333,7 +349,7 @@ export default function Settings() {
                 </button>
               </div>
 
-              {cat.items.map((item, iIndex) => (
+              {cat.items.map((item: MenuItem, iIndex: number) => (
                 <div key={iIndex} className="flex gap-3 items-center">
                   <input
                     value={item.name}

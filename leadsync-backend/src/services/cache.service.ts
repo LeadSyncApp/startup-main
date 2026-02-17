@@ -9,10 +9,10 @@ class MemoryCache {
 
     constructor() { }
 
-    set<T>(key: string, data: T, ttl: number = this.defaultTTL) {
+    set<T>(key: string, data: T, ttlSeconds: number = 300) {
         this.cache.set(key, {
             data,
-            expiry: Date.now() + ttl,
+            expiry: Date.now() + ttlSeconds * 1000,
         });
     }
 
