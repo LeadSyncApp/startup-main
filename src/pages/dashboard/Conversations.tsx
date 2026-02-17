@@ -35,43 +35,69 @@ export default function Conversations() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [pendingOrder, setPendingOrder] = useState<OrderPreview | null>(null);
   const [newMessage, setNewMessage] = useState("");
+  const [messageCache, setMessageCache] = useState<Record<string, Message[]>>({});
 
   /* LOAD CONVERSATIONS */
+  const loadConversations = async () => {
+    try {
+      const data = await api.get("/conversations");
+      setConversations(data);
+    } catch (err) {
+      console.error("Failed to load conversations", err);
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
     loadConversations();
+
+    // Refresh conversation list less frequently (every 15s)
+    const interval = setInterval(loadConversations, 15000);
+    return () => clearInterval(interval);
   }, [token]);
 
-  const loadConversations = async () => {
-    const data = await api.get("/conversations");
-    setConversations(data);
-  };
-
   /* FETCH MESSAGES */
-  const fetchMessages = async (conv: Conversation) => {
-    const data = await api.get(`/conversations/${conv.id}/messages`);
+  const fetchMessages = async (conv: Conversation, forceRefresh = false) => {
+    // 1. Instant Cache Hit
+    if (!forceRefresh && messageCache[conv.id]) {
+      setMessages(messageCache[conv.id]);
+      setSelected({ ...conv }); // Optimistic select
+    } else {
+      // Show loading only if no cache
+      if (!messageCache[conv.id]) setMessages([]);
+    }
 
-    setMessages(data.messages);
-    setSelected({ ...conv, mode: data.mode });
+    setSelected((prev) => (prev?.id === conv.id ? prev : { ...conv }));
 
-    // 🔥 Check for pending orders for this conversation
-    const orders = await api.get(`/orders`);
-    const found = orders.find(
-      (o: any) =>
-        o.conversationId === conv.id &&
-        o.approvalStatus === "PENDING"
-    );
+    try {
+      const data = await api.get(`/conversations/${conv.id}/messages`);
 
-    setPendingOrder(found || null);
+      setMessages(data.messages);
+      setSelected((prev) => prev ? { ...prev, mode: data.mode } : null);
+
+      // Update Cache
+      setMessageCache((prev) => ({ ...prev, [conv.id]: data.messages }));
+
+      // 🔥 Check for pending orders for this conversation
+      const orders = await api.get(`/orders`);
+      const found = orders.find(
+        (o: any) =>
+          o.conversationId === conv.id &&
+          o.approvalStatus === "PENDING"
+      );
+
+      setPendingOrder(found || null);
+    } catch (err) {
+      console.error("Failed to fetch messages", err);
+    }
   };
 
-  /* AUTO REFRESH */
+  /* AUTO REFRESH MESSAGES ONLY */
   useEffect(() => {
     if (!selected) return;
 
     const interval = setInterval(() => {
-      fetchMessages(selected);
-      loadConversations();
+      fetchMessages(selected, true); // Force background refresh
     }, 3000);
 
     return () => clearInterval(interval);
@@ -132,8 +158,8 @@ export default function Conversations() {
             key={conv.id}
             onClick={() => fetchMessages(conv)}
             className={`p-4 border-b cursor-pointer transition ${selected?.id === conv.id
-                ? "bg-indigo-100"
-                : "hover:bg-slate-100"
+              ? "bg-indigo-100"
+              : "hover:bg-slate-100"
               }`}
           >
             <p className="font-medium">
@@ -172,8 +198,8 @@ export default function Conversations() {
                 <button
                   onClick={() => toggleMode("BOT")}
                   className={`px-3 py-1 text-xs rounded-full ${selected.mode === "BOT"
-                      ? "bg-green-600 text-white"
-                      : "bg-green-100 text-green-800"
+                    ? "bg-green-600 text-white"
+                    : "bg-green-100 text-green-800"
                     }`}
                 >
                   BOT
@@ -182,8 +208,8 @@ export default function Conversations() {
                 <button
                   onClick={() => toggleMode("HUMAN")}
                   className={`px-3 py-1 text-xs rounded-full ${selected.mode === "HUMAN"
-                      ? "bg-red-600 text-white"
-                      : "bg-red-100 text-red-800"
+                    ? "bg-red-600 text-white"
+                    : "bg-red-100 text-red-800"
                     }`}
                 >
                   HUMAN
@@ -223,10 +249,10 @@ export default function Conversations() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={`max-w-xs p-3 rounded-2xl text-sm shadow-sm ${msg.sender === "CLIENT"
-                      ? "bg-white border"
-                      : msg.sender === "SYSTEM"
-                        ? "bg-purple-100 text-purple-800 mx-auto"
-                        : "bg-indigo-600 text-white ml-auto"
+                    ? "bg-white border"
+                    : msg.sender === "SYSTEM"
+                      ? "bg-purple-100 text-purple-800 mx-auto"
+                      : "bg-indigo-600 text-white ml-auto"
                     }`}
                 >
                   {msg.content}
