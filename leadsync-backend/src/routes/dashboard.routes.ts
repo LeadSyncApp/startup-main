@@ -21,66 +21,58 @@ router.get(
 
       const companyId = req.user.companyId;
 
-      const leads = await prisma.lead.count({
-        where: { companyId },
-      });
+      /* =====================================================
+         OPTIMIZED: Parallel Queries + GroupBy Aggregation
+      ===================================================== */
+      const [
+        leads,
+        conversations,
+        agents,
+        orders, // Total orders count
+        orderStats, // Grouped by approvalStatus
+        deliveredStats, // Grouped by status (for DELIVERED)
+        botStats, // Grouped by source (for BOT_DETECTED)
+        revenueData,
+      ] = await Promise.all([
+        prisma.lead.count({ where: { companyId } }),
+        prisma.conversation.count({ where: { companyId } }),
+        prisma.user.count({ where: { companyId } }),
+        prisma.order.count({ where: { companyId } }),
 
-      const conversations = await prisma.conversation.count({
-        where: { companyId },
-      });
+        // 1. Group by Approval Status (PENDING, APPROVED, REJECTED)
+        prisma.order.groupBy({
+          by: ["approvalStatus"],
+          where: { companyId },
+          _count: { approvalStatus: true },
+        }),
 
-      const orders = await prisma.order.count({
-        where: { companyId },
-      });
+        // 2. Count DELIVERED explicitly (status field)
+        prisma.order.count({
+          where: { companyId, status: "DELIVERED" },
+        }),
 
-      const agents = await prisma.user.count({
-        where: { companyId },
-      });
+        // 3. Count BOT_DETECTED (source field)
+        prisma.order.count({
+          where: { companyId, source: "BOT_DETECTED" },
+        }),
 
-      const pendingOrders = await prisma.order.count({
-        where: {
-          companyId,
-          approvalStatus: "PENDING",
-        },
-      });
+        // 4. Revenue Aggregate
+        prisma.order.aggregate({
+          where: { companyId, status: "DELIVERED" },
+          _sum: { amount: true },
+        }),
+      ]);
 
-      const approvedOrders = await prisma.order.count({
-        where: {
-          companyId,
-          approvalStatus: "APPROVED",
-        },
-      });
-
-      const rejectedOrders = await prisma.order.count({
-        where: {
-          companyId,
-          approvalStatus: "REJECTED",
-        },
-      });
-
-      const deliveredOrders = await prisma.order.count({
-        where: {
-          companyId,
-          status: "DELIVERED",
-        },
-      });
-
-      const aiDetectedOrders = await prisma.order.count({
-        where: {
-          companyId,
-          source: "BOT_DETECTED",
-        },
-      });
-
-      const revenueData = await prisma.order.aggregate({
-        where: {
-          companyId,
-          status: "DELIVERED",
-        },
-        _sum: {
-          amount: true,
-        },
-      });
+      // Process Grouped Data
+      const pendingOrders =
+        orderStats.find((s) => s.approvalStatus === "PENDING")?._count
+          .approvalStatus || 0;
+      const approvedOrders =
+        orderStats.find((s) => s.approvalStatus === "APPROVED")?._count
+          .approvalStatus || 0;
+      const rejectedOrders =
+        orderStats.find((s) => s.approvalStatus === "REJECTED")?._count
+          .approvalStatus || 0;
 
       const totalRevenue = revenueData._sum.amount || 0;
 
@@ -92,11 +84,10 @@ router.get(
         pendingOrders,
         approvedOrders,
         rejectedOrders,
-        deliveredOrders,
-        aiDetectedOrders,
+        deliveredOrders: deliveredStats,
+        aiDetectedOrders: botStats,
         totalRevenue,
       });
-
     } catch (err) {
       console.error("KPI fetch error:", err);
       res.status(500).json({ message: "Failed to fetch KPIs" });
