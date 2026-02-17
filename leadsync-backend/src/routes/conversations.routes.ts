@@ -16,14 +16,26 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     const conversations = await prisma.conversation.findMany({
       where: { companyId },
       orderBy: { updatedAt: "desc" },
-      take: 50, // LIMIT to prevent 20s load times
-      include: {
-        lead: true,
+      take: 20, // Reduced to 20 for faster initial load
+      select: {
+        id: true,
+        mode: true,
+        updatedAt: true,
+        lead: {
+          select: {
+            name: true,
+            contact: true,
+            channel: true,
+          }
+        },
         messages: {
           take: 1,
           orderBy: { createdAt: "desc" },
-        },
-      },
+          select: {
+            content: true,
+          }
+        }
+      }
     });
 
     res.json(
@@ -31,6 +43,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         id: c.id,
         mode: c.mode,
         lead: c.lead,
+        updatedAt: c.updatedAt,
         lastMessage: c.messages[0]?.content || "",
       }))
     );

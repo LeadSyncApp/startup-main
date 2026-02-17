@@ -1,9 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../../lib/api";
 import toast from "react-hot-toast";
-import { Trash2 } from "lucide-react";
+import {
+  Trash2,
+  Search,
+  ChevronLeft,
+  Send,
+  Bot,
+  User as UserIcon,
+  Check,
+  MoreVertical,
+  Zap
+} from "lucide-react";
 
 interface Message {
   id: string;
@@ -12,46 +22,51 @@ interface Message {
   createdAt: string;
 }
 
-interface OrderPreview {
-  id: string;
-  summary: string;
-  amount: number;
-  approvalStatus: "PENDING" | "APPROVED" | "REJECTED";
-}
-
 interface Conversation {
   id: string;
   mode: "BOT" | "HUMAN";
+  updatedAt: string;
   lead: {
     name: string | null;
     contact: string;
+    channel: string;
   };
   lastMessage: string;
 }
 
 export default function Conversations() {
   const { token } = useAuth();
-
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [pendingOrder, setPendingOrder] = useState<OrderPreview | null>(null);
   const [newMessage, setNewMessage] = useState("");
-  const [messageCache, setMessageCache] = useState<Record<string, Message[]>>({});
+  const [loadingConv, setLoadingConv] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showMobileList, setShowMobileList] = useState(true);
 
-  /* LOAD CONVERSATIONS (WITH CACHING) */
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pollTimerRef = useRef<any>(null);
+
+  // Load cache on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("leadsync_conv_cache");
+    if (saved) {
+      setConversations(JSON.parse(saved));
+      setLoadingConv(false);
+    }
+  }, []);
+
+  /* LOAD LIST */
   const loadConversations = async (quiet = false) => {
     try {
-      if (!quiet && conversations.length === 0) {
-        const saved = localStorage.getItem("leadsync_conv_cache");
-        if (saved) setConversations(JSON.parse(saved));
-      }
-
+      if (!quiet) setLoadingConv(true);
       const data = await api.get("/conversations");
       setConversations(data);
       localStorage.setItem("leadsync_conv_cache", JSON.stringify(data));
     } catch (err) {
-      console.error("Failed to load conversations", err);
+      console.error("Failed to load list", err);
+    } finally {
+      setLoadingConv(false);
     }
   };
 
@@ -60,281 +75,404 @@ export default function Conversations() {
   }, [token]);
 
   /* FETCH MESSAGES */
-  const fetchMessages = async (conv: Conversation, forceRefresh = false) => {
-    // 1. Instant Cache Hit
-    if (!forceRefresh && messageCache[conv.id]) {
-      setMessages(messageCache[conv.id]);
-      setSelected({ ...conv }); // Optimistic select
-    } else {
-      // Show loading only if no cache
-      if (!messageCache[conv.id]) setMessages([]);
-    }
-
-    setSelected((prev) => (prev?.id === conv.id ? prev : { ...conv }));
-
+  const fetchMessages = async (conv: Conversation) => {
     try {
       const data = await api.get(`/conversations/${conv.id}/messages`);
 
-      setMessages(data.messages);
+      // Deep comparison to prevent jitter
+      const newMsgs = data.messages;
+      setMessages((prev) => {
+        if (prev.length !== newMsgs.length || (prev.length > 0 && prev[prev.length - 1].id !== newMsgs[newMsgs.length - 1].id)) {
+          return newMsgs;
+        }
+        return prev;
+      });
 
-      // Update Cache
-      setMessageCache((prev) => ({ ...prev, [conv.id]: data.messages }));
-
-      // Use the order returned directly by fetchMessages backend
-      setPendingOrder(data.order?.approvalStatus === "PENDING" ? data.order : null);
-
-      setSelected((prev) => prev ? { ...prev, mode: data.mode } : null);
+      // Sync selected mode
+      setSelected(prev => prev?.id === conv.id ? { ...prev, mode: data.mode } : prev);
     } catch (err) {
-      console.error("Failed to fetch messages", err);
+      console.error("Failed message fetch", err);
     }
   };
 
-  /* AUTO REFRESH MESSAGES ONLY (SMART POLLING) */
-  useEffect(() => {
-    if (!selected || !token) return;
-
-    let timer: any;
-    const poll = async () => {
-      // Only poll if tab is active
-      if (document.visibilityState === "visible") {
-        await fetchMessages(selected, true);
-      }
-      timer = setTimeout(poll, 4000);
-    };
-
-    timer = setTimeout(poll, 4000);
-    return () => clearTimeout(timer);
-  }, [selected, token]);
-
-  /* REFRESH CONVERSATION LIST (SMART POLLING) */
+  /* POLLING (NEAR REAL-TIME) */
   useEffect(() => {
     if (!token) return;
 
-    let timer: any;
     const poll = async () => {
       if (document.visibilityState === "visible") {
+        // List refresh every 10s
         await loadConversations(true);
+        // Active chat refresh every 1.5s for "instant" feel
+        if (selected) {
+          await fetchMessages(selected);
+        }
       }
-      timer = setTimeout(poll, 20000);
+      pollTimerRef.current = setTimeout(poll, 1500);
     };
 
-    timer = setTimeout(poll, 20000);
-    return () => clearTimeout(timer);
-  }, [token]);
+    pollTimerRef.current = setTimeout(poll, 1500);
+    return () => clearTimeout(pollTimerRef.current);
+  }, [token, selected]);
 
-  /* SEND MESSAGE (OPTIMISTIC UI) */
+  /* SELECT HANDLER */
+  const handleSelect = (conv: Conversation) => {
+    setSelected(conv);
+    setShowMobileList(false);
+    fetchMessages(conv);
+  };
+
+  /* AUTO SCROLL */
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth"
+      });
+    }
+  }, [messages]);
+
+  /* SEND MESSAGE */
   const sendMessage = async () => {
     if (!newMessage.trim() || !selected) return;
 
-    const tempId = `temp-${Date.now()}`;
     const content = newMessage;
-
-    // 1. Optimistic Update
-    const optimisticMessage: Message = {
-      id: tempId,
+    const tempMsg: Message = {
+      id: `temp-${Date.now()}`,
       content,
       sender: "AGENT",
-      createdAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
     };
 
-    setMessages((prev) => [...prev, optimisticMessage]);
+    setMessages(prev => [...prev, tempMsg]);
     setNewMessage("");
 
     try {
-      // 2. Network Request
-      await api.post(`/conversations/${selected.id}/send`, {
-        content,
-      });
-
-      // 3. Sync Real Data (Quietly)
+      await api.post(`/conversations/${selected.id}/send`, { content });
       fetchMessages(selected);
     } catch (err) {
-      // 4. Rollback on Error
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      console.error("Failed to send message", err);
+      setMessages(prev => prev.filter(m => m.id !== tempMsg.id));
+      toast.error("Network error");
     }
   };
 
-  /* TOGGLE MODE (OPTIMISTIC) */
+  /* TOGGLE MODE */
   const toggleMode = async (mode: "BOT" | "HUMAN") => {
     if (!selected) return;
-
     const prevMode = selected.mode;
-    setSelected((prev) => prev ? { ...prev, mode } : null);
-    setConversations((prev) =>
-      prev.map(c => c.id === selected.id ? { ...c, mode } : c)
-    );
+    setSelected({ ...selected, mode });
 
     try {
       await api.patch(`/conversations/${selected.id}/mode`, { mode });
+      toast.success(`Switched to ${mode} mode`);
     } catch (err) {
-      setSelected((prev) => prev ? { ...prev, mode: prevMode } : null);
-      setConversations((prev) =>
-        prev.map(c => c.id === selected.id ? { ...c, mode: prevMode } : c)
-      );
-      console.error("Failed to update mode", err);
+      setSelected({ ...selected, mode: prevMode });
+      toast.error("Mode switch failed");
     }
   };
 
   /* CLEAR HISTORY */
   const clearHistory = async () => {
-    if (!selected || !window.confirm("Are you sure you want to clear the entire chat history?")) return;
+    if (!selected) return;
+    if (!window.confirm("Clear all messages? This action cannot be reversed.")) return;
 
     try {
       await api.delete(`/conversations/${selected.id}/messages`);
-      toast.success("History cleared");
-      fetchMessages(selected, true);
+      toast.success("Messages cleared");
+      setMessages([]);
+      fetchMessages(selected);
     } catch (err) {
-      toast.error("Failed to clear history");
+      toast.error("Delete failed");
     }
   };
 
-  return (
-    <div className="flex h-[80vh] bg-white border rounded-2xl overflow-hidden shadow-lg">
+  const filteredConversations = useMemo(() => {
+    return conversations.filter(c =>
+      c.lead.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.lead.contact.includes(searchQuery)
+    );
+  }, [conversations, searchQuery]);
 
-      {/* LEFT PANEL */}
-      <div className="w-1/3 border-r bg-slate-50 overflow-y-auto">
-        <div className="p-4 font-semibold border-b text-slate-700">
-          Conversations
+  return (
+    <div className="flex bg-white rounded-3xl overflow-hidden shadow-2xl h-[calc(100vh-160px)] min-h-[500px]">
+
+      {/* LEFT: CONVERSATION LIST */}
+      <div className={`
+        ${showMobileList ? "flex" : "hidden"}
+        lg:flex flex-col w-full lg:w-[400px] border-r border-slate-100 bg-slate-50/50
+      `}>
+        <div className="p-6 bg-white border-b border-slate-100 space-y-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+              Messages
+              <span className="h-2 w-2 bg-indigo-500 rounded-full animate-pulse" />
+            </h1>
+            <button className="p-2 hover:bg-slate-100 rounded-xl transition">
+              <MoreVertical size={20} className="text-slate-400" />
+            </button>
+          </div>
+
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors h-4 w-4" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search contacts..."
+              className="w-full bg-slate-100 border-none rounded-2xl py-3 pl-10 pr-4 text-sm focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
+            />
+          </div>
         </div>
 
-        {conversations.map((conv) => (
-          <div
-            key={conv.id}
-            onClick={() => fetchMessages(conv)}
-            className={`p-4 border-b cursor-pointer transition ${selected?.id === conv.id
-              ? "bg-indigo-100"
-              : "hover:bg-slate-100"
-              }`}
-          >
-            <p className="font-medium">
-              {conv.lead?.name || "Customer"}
-            </p>
-            <p className="text-xs text-slate-500">
-              {conv.lead?.contact}
-            </p>
-            <p className="text-xs text-slate-400">
-              Mode: {conv.mode}
-            </p>
-          </div>
-        ))}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          {loadingConv && conversations.length === 0 ? (
+            <div className="p-6 space-y-6">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="flex gap-4 animate-pulse">
+                  <div className="h-14 w-14 rounded-2xl bg-slate-200 shrink-0" />
+                  <div className="flex-1 space-y-3 py-1">
+                    <div className="h-4 bg-slate-200 rounded w-1/2" />
+                    <div className="h-3 bg-slate-200 rounded w-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <AnimatePresence>
+              {filteredConversations.map((conv) => (
+                <motion.div
+                  key={conv.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  onClick={() => handleSelect(conv)}
+                  className={`
+                    p-6 cursor-pointer transition-all relative group flex gap-4
+                    ${selected?.id === conv.id ? "bg-white shadow-lg shadow-indigo-500/5 z-10" : "hover:bg-indigo-50/50"}
+                  `}
+                >
+                  <div className="relative shrink-0">
+                    <div className={`h-14 w-14 rounded-2xl flex items-center justify-center text-xl font-black shadow-sm
+                        ${conv.mode === "BOT" ? "bg-indigo-100 text-indigo-600" : "bg-rose-100 text-rose-600"}`}>
+                      {(conv.lead.name || conv.lead.contact).charAt(0).toUpperCase()}
+                    </div>
+                    <div className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white shadow-sm
+                        ${conv.mode === "BOT" ? "bg-indigo-500" : "bg-rose-500"}`} />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <h3 className="font-bold text-slate-900 truncate">
+                        {conv.lead.name || conv.lead.contact}
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
+                        {new Date(conv.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    <p className="text-sm text-slate-500 truncate font-medium">
+                      {conv.lastMessage || "Started a conversation"}
+                    </p>
+
+                    <div className="flex gap-2 mt-2">
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded border border-slate-200 text-slate-400">
+                        {conv.lead.channel}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          )}
+        </div>
       </div>
 
-      {/* RIGHT PANEL */}
-      <div className="flex-1 flex flex-col">
+      {/* RIGHT: CHAT WINDOW */}
+      <div className={`
+        ${!showMobileList ? "flex" : "hidden"}
+        lg:flex flex-1 flex-col bg-slate-50 relative
+      `}>
         {!selected ? (
-          <div className="flex items-center justify-center h-full text-slate-400">
-            Select a conversation
+          <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+            <div className="h-24 w-24 bg-white rounded-3xl shadow-xl flex items-center justify-center mb-6 relative">
+              <Zap className="h-10 w-10 text-indigo-500" />
+              <div className="absolute -top-2 -right-2 h-6 w-6 bg-indigo-500 rounded-full border-4 border-white" />
+            </div>
+            <h2 className="text-2xl font-black text-slate-900">Select a Conversation</h2>
+            <p className="text-slate-500 mt-2 max-w-xs leading-relaxed">
+              Your real-time inbox is active. Select a customer to start assisting or manage bot automation.
+            </p>
           </div>
         ) : (
           <>
-            {/* HEADER */}
-            <div className="p-4 border-b flex justify-between items-center bg-white">
-              <div>
-                <p className="font-semibold text-slate-800">
-                  {selected.lead?.name || "Customer"}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {selected.lead?.contact}
-                </p>
+            {/* CHAT HEADER */}
+            <div className="px-8 py-4 bg-white border-b border-slate-100 flex items-center justify-between z-10 shadow-sm">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setShowMobileList(true)}
+                  className="lg:hidden p-3 bg-slate-100 rounded-2xl text-slate-600 active:scale-95 transition"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 bg-indigo-500 rounded-xl flex items-center justify-center text-white font-bold">
+                    {(selected.lead.name || "C").charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h2 className="font-extrabold text-slate-900 leading-none mb-1">
+                      {selected.lead.name || "Customer"}
+                    </h2>
+                    <span className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">{selected.lead.contact}</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex gap-2 items-center">
-                <div className="flex bg-slate-100 p-1 rounded-xl">
+              <div className="flex items-center gap-2">
+                <div className="hidden md:flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
                   <button
                     onClick={() => toggleMode("BOT")}
-                    className={`px-3 py-1 text-xs rounded-lg transition-all ${selected.mode === "BOT"
-                      ? "bg-white text-indigo-600 shadow-sm font-bold"
-                      : "text-slate-500 hover:text-slate-700"
-                      }`}
+                    className={`
+                      flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-black transition-all uppercase tracking-widest
+                      ${selected.mode === "BOT" ? "bg-white text-indigo-600 shadow-xl shadow-indigo-200/50" : "text-slate-500 hover:text-slate-900"}
+                    `}
                   >
+                    <Bot size={12} />
                     BOT
                   </button>
-
                   <button
                     onClick={() => toggleMode("HUMAN")}
-                    className={`px-3 py-1 text-xs rounded-lg transition-all ${selected.mode === "HUMAN"
-                      ? "bg-white text-rose-600 shadow-sm font-bold"
-                      : "text-slate-500 hover:text-slate-700"
-                      }`}
+                    className={`
+                      flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-black transition-all uppercase tracking-widest
+                      ${selected.mode === "HUMAN" ? "bg-white text-rose-600 shadow-xl shadow-rose-200/50" : "text-slate-500 hover:text-slate-900"}
+                    `}
                   >
+                    <UserIcon size={12} />
                     HUMAN
                   </button>
                 </div>
 
-                <div className="w-px h-6 bg-slate-200 mx-1" />
+                <div className="w-px h-8 bg-slate-100 mx-2 hidden md:block" />
 
                 <button
                   onClick={clearHistory}
-                  className="p-2 text-slate-400 hover:text-rose-500 transition-colors"
-                  title="Clear Chat History"
+                  className="p-3 bg-rose-50 text-rose-600 rounded-2xl hover:bg-rose-100 transition active:scale-90"
+                  title="Clear history"
                 >
                   <Trash2 size={18} />
                 </button>
               </div>
             </div>
 
-            {/* 🔥 PENDING ORDER BANNER */}
-            {pendingOrder && (
-              <div className="bg-yellow-50 border-b border-yellow-200 p-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-semibold text-yellow-800">
-                      ⏳ Pending Order Detected
-                    </p>
-                    <p className="text-xs text-yellow-700">
-                      {pendingOrder.summary} — ₹
-                      {pendingOrder.amount.toFixed(2)}
-                    </p>
+            {/* MESSAGE LIST */}
+            <div
+              ref={scrollRef}
+              className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar bg-slate-50/30"
+            >
+              <AnimatePresence mode="popLayout">
+                {messages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 opacity-50">
+                    <div className="p-6 bg-slate-100 rounded-full mb-4">
+                      <Zap size={32} />
+                    </div>
+                    <p className="text-sm font-bold uppercase tracking-widest">No history found</p>
                   </div>
+                ) : (
+                  messages.map((msg) => {
+                    const isAgent = msg.sender === "AGENT";
+                    const isSystem = msg.sender === "SYSTEM";
 
-                  <a
-                    href="/orders"
-                    className="text-xs bg-yellow-600 text-white px-3 py-1 rounded-full"
-                  >
-                    Open Orders
-                  </a>
-                </div>
-              </div>
-            )}
+                    if (isSystem) {
+                      return (
+                        <div key={msg.id} className="flex justify-center">
+                          <span className="bg-slate-200/50 text-slate-500 text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.2em] border border-slate-200 text-center max-w-[80%]">
+                            {msg.content}
+                          </span>
+                        </div>
+                      );
+                    }
 
-            {/* MESSAGES */}
-            <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50">
-              {messages.map((msg) => (
-                <motion.div
-                  key={msg.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`max-w-xs p-3 rounded-2xl text-sm shadow-sm ${msg.sender === "CLIENT"
-                    ? "bg-white border"
-                    : msg.sender === "SYSTEM"
-                      ? "bg-purple-100 text-purple-800 mx-auto"
-                      : "bg-indigo-600 text-white ml-auto"
-                    }`}
-                >
-                  {msg.content}
-                </motion.div>
-              ))}
+                    return (
+                      <motion.div
+                        key={msg.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`flex ${isAgent ? "justify-end" : "justify-start"}`}
+                      >
+                        <div className="flex flex-col max-w-[80%]">
+                          <div className={`
+                        px-5 py-3.5 rounded-[2rem] text-sm leading-relaxed font-medium shadow-sm transition-all
+                        ${isAgent
+                              ? "bg-indigo-600 text-white rounded-br-none"
+                              : "bg-white text-slate-800 rounded-bl-none border border-slate-100"}
+                      `}>
+                            {msg.content}
+                          </div>
+                          <div className={`
+                        flex items-center gap-1.5 mt-2 text-[10px] font-bold uppercase tracking-tighter
+                        ${isAgent ? "justify-end text-indigo-400" : "text-slate-400"}
+                      `}>
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {isAgent && <Check size={10} />}
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })
+                )}
+              </AnimatePresence>
             </div>
 
-            {/* INPUT */}
-            <div className="p-4 border-t flex gap-2 bg-white">
-              <input
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                className="flex-1 border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 outline-none"
-                placeholder="Type your reply..."
-              />
-              <button
-                onClick={sendMessage}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm"
-              >
-                Send
-              </button>
+            {/* CHAT INPUT AREA */}
+            <div className="p-8 bg-white border-t border-slate-100">
+              <div className="flex items-center gap-3 bg-slate-100/50 p-2.5 rounded-[2.5rem] border border-slate-200/60 shadow-inner focus-within:border-indigo-500/50 focus-within:bg-white transition-all">
+                <textarea
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  rows={1}
+                  placeholder="ASSIST CUSTOMER..."
+                  className="flex-1 bg-transparent border-none resize-none py-3 px-6 text-sm focus:ring-0 max-h-32 custom-scrollbar font-bold text-slate-700 uppercase tracking-wide placeholder:opacity-50"
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={!newMessage.trim()}
+                  className={`
+                    h-12 w-12 flex items-center justify-center rounded-full transition-all shadow-xl
+                    ${newMessage.trim()
+                      ? "bg-indigo-600 text-white scale-100 hover:bg-indigo-700 hover:rotate-12"
+                      : "bg-slate-200 text-slate-400 scale-90 cursor-not-allowed"}
+                  `}
+                >
+                  <Send size={20} />
+                </button>
+              </div>
             </div>
           </>
         )}
       </div>
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #e2e8f0;
+          border-radius: 20px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #cbd5e1;
+        }
+        textarea::placeholder {
+           letter-spacing: 0.1em;
+        }
+      `}</style>
     </div>
   );
 }
