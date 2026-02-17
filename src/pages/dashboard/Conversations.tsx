@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { motion } from "framer-motion";
 import { api } from "../../lib/api";
+import toast from "react-hot-toast";
+import { Trash2 } from "lucide-react";
 
 interface Message {
   id: string;
@@ -37,11 +39,17 @@ export default function Conversations() {
   const [newMessage, setNewMessage] = useState("");
   const [messageCache, setMessageCache] = useState<Record<string, Message[]>>({});
 
-  /* LOAD CONVERSATIONS */
-  const loadConversations = async () => {
+  /* LOAD CONVERSATIONS (WITH CACHING) */
+  const loadConversations = async (quiet = false) => {
     try {
+      if (!quiet && conversations.length === 0) {
+        const saved = localStorage.getItem("leadsync_conv_cache");
+        if (saved) setConversations(JSON.parse(saved));
+      }
+
       const data = await api.get("/conversations");
       setConversations(data);
+      localStorage.setItem("leadsync_conv_cache", JSON.stringify(data));
     } catch (err) {
       console.error("Failed to load conversations", err);
     }
@@ -81,28 +89,33 @@ export default function Conversations() {
     }
   };
 
-  /* AUTO REFRESH MESSAGES ONLY (RACE-SAFE) */
+  /* AUTO REFRESH MESSAGES ONLY (SMART POLLING) */
   useEffect(() => {
     if (!selected || !token) return;
 
     let timer: any;
     const poll = async () => {
-      await fetchMessages(selected, true);
-      timer = setTimeout(poll, 4000); // Wait 4s 
+      // Only poll if tab is active
+      if (document.visibilityState === "visible") {
+        await fetchMessages(selected, true);
+      }
+      timer = setTimeout(poll, 4000);
     };
 
     timer = setTimeout(poll, 4000);
     return () => clearTimeout(timer);
   }, [selected, token]);
 
-  /* REFRESH CONVERSATION LIST (RACE-SAFE) */
+  /* REFRESH CONVERSATION LIST (SMART POLLING) */
   useEffect(() => {
     if (!token) return;
 
     let timer: any;
     const poll = async () => {
-      await loadConversations();
-      timer = setTimeout(poll, 20000); // 20s for list
+      if (document.visibilityState === "visible") {
+        await loadConversations(true);
+      }
+      timer = setTimeout(poll, 20000);
     };
 
     timer = setTimeout(poll, 20000);
@@ -146,7 +159,6 @@ export default function Conversations() {
   const toggleMode = async (mode: "BOT" | "HUMAN") => {
     if (!selected) return;
 
-    // 1. Optimistic Update
     const prevMode = selected.mode;
     setSelected((prev) => prev ? { ...prev, mode } : null);
     setConversations((prev) =>
@@ -154,17 +166,26 @@ export default function Conversations() {
     );
 
     try {
-      // 2. Network Request
       await api.patch(`/conversations/${selected.id}/mode`, { mode });
-      // 3. sync quietly
-      // fetchMessages(selected, true);
     } catch (err) {
-      // 4. Rollback
       setSelected((prev) => prev ? { ...prev, mode: prevMode } : null);
       setConversations((prev) =>
         prev.map(c => c.id === selected.id ? { ...c, mode: prevMode } : c)
       );
       console.error("Failed to update mode", err);
+    }
+  };
+
+  /* CLEAR HISTORY */
+  const clearHistory = async () => {
+    if (!selected || !window.confirm("Are you sure you want to clear the entire chat history?")) return;
+
+    try {
+      await api.delete(`/conversations/${selected.id}/messages`);
+      toast.success("History cleared");
+      fetchMessages(selected, true);
+    } catch (err) {
+      toast.error("Failed to clear history");
     }
   };
 
@@ -218,25 +239,37 @@ export default function Conversations() {
                 </p>
               </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => toggleMode("BOT")}
-                  className={`px-3 py-1 text-xs rounded-full ${selected.mode === "BOT"
-                    ? "bg-green-600 text-white"
-                    : "bg-green-100 text-green-800"
-                    }`}
-                >
-                  BOT
-                </button>
+              <div className="flex gap-2 items-center">
+                <div className="flex bg-slate-100 p-1 rounded-xl">
+                  <button
+                    onClick={() => toggleMode("BOT")}
+                    className={`px-3 py-1 text-xs rounded-lg transition-all ${selected.mode === "BOT"
+                      ? "bg-white text-indigo-600 shadow-sm font-bold"
+                      : "text-slate-500 hover:text-slate-700"
+                      }`}
+                  >
+                    BOT
+                  </button>
+
+                  <button
+                    onClick={() => toggleMode("HUMAN")}
+                    className={`px-3 py-1 text-xs rounded-lg transition-all ${selected.mode === "HUMAN"
+                      ? "bg-white text-rose-600 shadow-sm font-bold"
+                      : "text-slate-500 hover:text-slate-700"
+                      }`}
+                  >
+                    HUMAN
+                  </button>
+                </div>
+
+                <div className="w-px h-6 bg-slate-200 mx-1" />
 
                 <button
-                  onClick={() => toggleMode("HUMAN")}
-                  className={`px-3 py-1 text-xs rounded-full ${selected.mode === "HUMAN"
-                    ? "bg-red-600 text-white"
-                    : "bg-red-100 text-red-800"
-                    }`}
+                  onClick={clearHistory}
+                  className="p-2 text-slate-400 hover:text-rose-500 transition-colors"
+                  title="Clear Chat History"
                 >
-                  HUMAN
+                  <Trash2 size={18} />
                 </button>
               </div>
             </div>

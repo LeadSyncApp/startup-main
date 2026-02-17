@@ -60,8 +60,14 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
 
     const messages = await prisma.message.findMany({
       where: { conversationId: conversation.id },
-      orderBy: { createdAt: "desc" }, // Fetch newest first
+      orderBy: { createdAt: "desc" },
       take: 50,
+      select: {
+        id: true,
+        content: true,
+        sender: true,
+        createdAt: true,
+      }
     });
 
     // Reverse to show oldest first in UI
@@ -191,6 +197,46 @@ router.patch("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response
   } catch (error) {
     console.error("Mode toggle error:", error);
     res.status(500).json({ message: "Failed to update mode" });
+  }
+});
+
+/* =========================================
+   CLEAR HISTORY
+   Deletes all messages for a conversation
+========================================= */
+router.delete("/:id/messages", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const companyId = req.user!.companyId;
+
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: req.params.id,
+        companyId,
+      },
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    // Delete all messages associated with this conversation
+    await prisma.message.deleteMany({
+      where: { conversationId: conversation.id },
+    });
+
+    // Add a system message to indicate history was cleared
+    await prisma.message.create({
+      data: {
+        content: "Chat history was cleared by the agent.",
+        sender: MessageSender.SYSTEM,
+        conversationId: conversation.id,
+      },
+    });
+
+    res.json({ message: "History cleared successfully" });
+  } catch (error) {
+    console.error("Clear history error:", error);
+    res.status(500).json({ message: "Failed to clear history" });
   }
 });
 
