@@ -73,20 +73,14 @@ export default function Conversations() {
       const data = await api.get(`/conversations/${conv.id}/messages`);
 
       setMessages(data.messages);
-      setSelected((prev) => prev ? { ...prev, mode: data.mode } : null);
 
       // Update Cache
       setMessageCache((prev) => ({ ...prev, [conv.id]: data.messages }));
 
-      // 🔥 Check for pending orders for this conversation
-      const orders = await api.get(`/orders`);
-      const found = orders.find(
-        (o: any) =>
-          o.conversationId === conv.id &&
-          o.approvalStatus === "PENDING"
-      );
+      // Use the order returned directly by fetchMessages backend
+      setPendingOrder(data.order?.approvalStatus === "PENDING" ? data.order : null);
 
-      setPendingOrder(found || null);
+      setSelected((prev) => prev ? { ...prev, mode: data.mode } : null);
     } catch (err) {
       console.error("Failed to fetch messages", err);
     }
@@ -136,12 +130,30 @@ export default function Conversations() {
     }
   };
 
-  /* TOGGLE MODE */
+  /* TOGGLE MODE (OPTIMISTIC) */
   const toggleMode = async (mode: "BOT" | "HUMAN") => {
     if (!selected) return;
 
-    await api.patch(`/conversations/${selected.id}/mode`, { mode });
-    fetchMessages(selected);
+    // 1. Optimistic Update
+    const prevMode = selected.mode;
+    setSelected((prev) => prev ? { ...prev, mode } : null);
+    setConversations((prev) =>
+      prev.map(c => c.id === selected.id ? { ...c, mode } : c)
+    );
+
+    try {
+      // 2. Network Request
+      await api.patch(`/conversations/${selected.id}/mode`, { mode });
+      // 3. sync quietly
+      // fetchMessages(selected, true);
+    } catch (err) {
+      // 4. Rollback
+      setSelected((prev) => prev ? { ...prev, mode: prevMode } : null);
+      setConversations((prev) =>
+        prev.map(c => c.id === selected.id ? { ...c, mode: prevMode } : c)
+      );
+      console.error("Failed to update mode", err);
+    }
   };
 
   return (

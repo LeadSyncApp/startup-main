@@ -20,28 +20,38 @@ interface KPIData {
 export default function DashboardHome() {
   const { token } = useAuth();
 
-  const [data, setData] = useState<KPIData>({
+  // Simple persist cache
+  const [cachedData] = useState<KPIData | null>(() => {
+    const saved = localStorage.getItem("leadsync_dashboard_cache");
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const [data, setData] = useState<KPIData>(cachedData || {
     leads: 0,
     conversations: 0,
     orders: 0,
     agents: 0,
   });
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedData);
 
   useEffect(() => {
     if (!token) return;
 
-    const fetchKPIs = async () => {
+    const fetchKPIs = async (quiet = false) => {
       try {
+        if (!quiet) setLoading(true);
         const json = await api.get("/dashboard/kpis");
 
-        setData({
+        const newData = {
           leads: json.leads ?? 0,
           conversations: json.conversations ?? 0,
           orders: json.orders ?? 0,
           agents: json.agents ?? 0,
-        });
+        };
+
+        setData(newData);
+        localStorage.setItem("leadsync_dashboard_cache", JSON.stringify(newData));
       } catch (err) {
         console.error("❌ Failed to load dashboard KPIs:", err);
       } finally {
@@ -49,7 +59,11 @@ export default function DashboardHome() {
       }
     };
 
-    fetchKPIs();
+    if (cachedData) {
+      fetchKPIs(true); // Background update
+    } else {
+      fetchKPIs();
+    }
   }, [token]);
 
   const cards = [

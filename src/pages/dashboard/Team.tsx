@@ -26,11 +26,18 @@ export default function Team() {
     role: "AGENT",
   });
 
-  async function fetchUsers() {
+  // Simple persist cache
+  const [cached] = useState<User[]>(() => {
+    const saved = localStorage.getItem("leadsync_team_cache");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  async function fetchUsers(quiet = false) {
     try {
-      setLoading(true);
+      if (!quiet) setLoading(true);
       const res = await api.get("/users");
       setUsers(res);
+      localStorage.setItem("leadsync_team_cache", JSON.stringify(res));
     } catch {
       toast.error("Failed to fetch team");
     } finally {
@@ -39,7 +46,12 @@ export default function Team() {
   }
 
   useEffect(() => {
-    fetchUsers();
+    if (cached.length > 0) {
+      setUsers(cached);
+      fetchUsers(true); // Update in background
+    } else {
+      fetchUsers();
+    }
   }, []);
 
   async function handleCreateUser() {
