@@ -255,4 +255,43 @@ router.patch(
   }
 );
 
+/* =====================================================
+   PATCH /api/dashboard/save-edited-menu
+===================================================== */
+router.patch(
+  "/save-edited-menu",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const { structuredMenu, botBusinessType, botWelcomeMessage } = req.body;
+
+      const updatedCompany = await prisma.company.update({
+        where: { id: req.user.companyId },
+        data: {
+          botStructuredMenu: structuredMenu,
+          botBusinessType,
+          botWelcomeMessage,
+        },
+      });
+
+      // Invalidate cache
+      cacheService.delete(cacheService.getCompanyKey(req.user.companyId));
+
+      res.json({
+        message: "Menu saved successfully",
+        company: updatedCompany,
+      });
+    } catch (error) {
+      console.error("Save menu error:", error);
+      res.status(500).json({
+        message: "Failed to save menu",
+      });
+    }
+  }
+);
+
 export default router;

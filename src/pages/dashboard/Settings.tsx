@@ -288,9 +288,14 @@ export default function Settings() {
 
       {/* MENU GENERATOR */}
       <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
-        <h2 className="text-lg font-semibold">
-          AI Menu Generator
-        </h2>
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-semibold">AI Menu Generator</h2>
+          {generatedMenu && (
+            <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-medium">
+              ✓ Menu Active
+            </span>
+          )}
+        </div>
 
         <input
           type="text"
@@ -314,14 +319,23 @@ export default function Settings() {
           className="w-full border rounded-lg px-3 py-2 h-24"
         />
 
-        <button
-          onClick={handleGenerateMenu}
-          disabled={isGenerating}
-          className={`bg-purple-600 text-white px-4 py-2 rounded-lg transition ${isGenerating ? "opacity-50 cursor-not-allowed" : "hover:bg-purple-700"
-            }`}
-        >
-          {isGenerating ? "Generating..." : "Generate / Update Menu"}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={handleGenerateMenu}
+            disabled={isGenerating}
+            className={`bg-purple-600 text-white px-4 py-2 rounded-lg transition ${isGenerating ? "opacity-50 cursor-not-allowed" : "hover:bg-purple-700"
+              }`}
+          >
+            {isGenerating ? "Generating..." : "AI Generate Menu"}
+          </button>
+
+          <button
+            onClick={saveEditedMenu}
+            className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 transition"
+          >
+            Save Basic Config
+          </button>
+        </div>
       </div>
 
       {/* MENU EDITOR */}
