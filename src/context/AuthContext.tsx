@@ -20,6 +20,7 @@ export interface User {
   name: string;
   role: Role;
   companyId: string;
+  staffId?: string;
 }
 
 export interface Company {

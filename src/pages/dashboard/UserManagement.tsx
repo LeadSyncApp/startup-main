@@ -10,23 +10,23 @@ interface User {
   email: string;
   role: "OWNER" | "ADMIN" | "AGENT";
   isActive: boolean;
+  staffId?: string;
   createdAt: string;
 }
 
 export default function UserManagement() {
   const { user } = useAuth();
-
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [generatedPassword, setGeneratedPassword] = useState("");
 
   const [form, setForm] = useState({
     name: "",
     email: "",
-    role: "AGENT",
+    staffId: "",
+    password: "",
+    role: "AGENT" as "ADMIN" | "AGENT",
   });
 
   async function fetchUsers() {
@@ -46,15 +46,16 @@ export default function UserManagement() {
   }, []);
 
   async function handleCreateUser() {
+    if (!form.staffId || !form.password || !form.name || !form.email) {
+      toast.error("All fields are required");
+      return;
+    }
+
     try {
-      const res = await api.post("/users", form);
-
-      setGeneratedPassword(res.tempPassword);
-      setShowPasswordModal(true);
-
+      await api.post("/users", form);
+      toast.success("Account created! 🎉");
       setShowModal(false);
-      setForm({ name: "", email: "", role: "AGENT" });
-
+      setForm({ name: "", email: "", staffId: "", password: "", role: "AGENT" });
       fetchUsers();
     } catch (err: any) {
       toast.error(err?.message || "Failed to create user");
@@ -66,14 +67,9 @@ export default function UserManagement() {
       await api.delete(`/users/${id}`);
       toast.success("User disabled");
       fetchUsers();
-    } catch {
-      toast.error("Failed to disable user");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to disable user");
     }
-  }
-
-  function copyPassword() {
-    navigator.clipboard.writeText(generatedPassword);
-    toast.success("Password copied");
   }
 
   return (
@@ -81,7 +77,12 @@ export default function UserManagement() {
 
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Team Management</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">Team Management</h1>
+          {user?.staffId && (
+            <p className="text-xs text-slate-500">Your ID: <span className="font-mono">{user.staffId}</span></p>
+          )}
+        </div>
 
         {(user?.role === "OWNER" || user?.role === "ADMIN") && (
           <button
@@ -103,6 +104,7 @@ export default function UserManagement() {
             <thead className="bg-slate-50 text-sm text-slate-600">
               <tr>
                 <th className="p-4">Name</th>
+                <th>Staff ID</th>
                 <th>Email</th>
                 <th>Role</th>
                 <th>Status</th>
@@ -113,22 +115,24 @@ export default function UserManagement() {
               {users.map((u) => (
                 <tr key={u.id} className="border-t">
                   <td className="p-4 font-medium">{u.name}</td>
+                  <td className="text-sm font-mono text-slate-500">{u.staffId || "N/A"}</td>
                   <td>{u.email}</td>
-                  <td>{u.role}</td>
+                  <td className="text-sm">{u.role}</td>
                   <td>
                     {u.isActive ? (
-                      <span className="text-green-600 text-sm">Active</span>
+                      <span className="text-green-600 text-xs bg-green-50 px-2 py-0.5 rounded-full">Active</span>
                     ) : (
-                      <span className="text-red-500 text-sm">Disabled</span>
+                      <span className="text-red-500 text-xs bg-red-50 px-2 py-0.5 rounded-full">Disabled</span>
                     )}
                   </td>
                   <td>
-                    {user?.role === "OWNER" && u.isActive && (
+                    {user?.role === "OWNER" && u.isActive && u.role !== "OWNER" && (
                       <button
                         onClick={() => handleDisable(u.id)}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-red-500 hover:text-red-700 p-2"
+                        title="Disable User"
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={16} />
                       </button>
                     )}
                   </td>
@@ -147,8 +151,8 @@ export default function UserManagement() {
 
             <input
               type="text"
-              placeholder="Name"
-              className="w-full border p-2 rounded"
+              placeholder="Full Name"
+              className="w-full border p-2 rounded-lg text-sm"
               value={form.name}
               onChange={(e) =>
                 setForm({ ...form, name: e.target.value })
@@ -156,24 +160,44 @@ export default function UserManagement() {
             />
 
             <input
+              type="text"
+              placeholder="Staff ID (e.g. AGENT001)"
+              className="w-full border p-2 rounded-lg text-sm font-mono"
+              value={form.staffId}
+              onChange={(e) =>
+                setForm({ ...form, staffId: e.target.value })
+              }
+            />
+
+            <input
               type="email"
-              placeholder="Email"
-              className="w-full border p-2 rounded"
+              placeholder="Email Address"
+              className="w-full border p-2 rounded-lg text-sm"
               value={form.email}
               onChange={(e) =>
                 setForm({ ...form, email: e.target.value })
               }
             />
 
+            <input
+              type="password"
+              placeholder="Assign Password"
+              className="w-full border p-2 rounded-lg text-sm"
+              value={form.password}
+              onChange={(e) =>
+                setForm({ ...form, password: e.target.value })
+              }
+            />
+
             <select
-              className="w-full border p-2 rounded"
+              className="w-full border p-2 rounded-lg text-sm"
               value={form.role}
               onChange={(e) =>
-                setForm({ ...form, role: e.target.value })
+                setForm({ ...form, role: e.target.value as any })
               }
             >
-              <option value="AGENT">Agent</option>
-              <option value="ADMIN">Admin</option>
+              <option value="AGENT">Role: Agent</option>
+              <option value="ADMIN">Role: Admin</option>
             </select>
 
             <div className="flex justify-end gap-3">
@@ -194,34 +218,6 @@ export default function UserManagement() {
           </div>
         </div>
       )}
-
-      {/* Temporary Password Modal */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-2xl w-96 space-y-4 text-center">
-            <Check className="mx-auto text-green-500" size={40} />
-            <h2 className="text-lg font-semibold">Account Created</h2>
-            <p className="text-sm text-slate-500">
-              Share this temporary password with the staff member:
-            </p>
-
-            <div className="bg-slate-100 p-3 rounded-lg font-mono text-sm flex justify-between items-center">
-              {generatedPassword}
-              <button onClick={copyPassword}>
-                <Copy size={16} />
-              </button>
-            </div>
-
-            <button
-              onClick={() => setShowPasswordModal(false)}
-              className="w-full bg-slate-900 text-white py-2 rounded-xl"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

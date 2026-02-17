@@ -26,6 +26,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         email: true,
         role: true,
         isActive: true,
+        staffId: true,
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },
@@ -48,31 +49,38 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    const { name, email, role } = req.body;
+    const { name, email, role, staffId, password } = req.body;
 
-    if (!name || !email || !role) {
-      return res.status(400).json({ message: "Missing fields" });
+    if (!name || !email || !role || !staffId || !password) {
+      return res.status(400).json({ message: "Missing fields. Name, email, role, staffId, and password are required." });
     }
 
     if (!["ADMIN", "AGENT"].includes(role)) {
       return res.status(400).json({ message: "Invalid role" });
     }
 
-    const existing = await prisma.user.findFirst({
+    const existingEmail = await prisma.user.findFirst({
       where: {
         email: email.toLowerCase(),
+      },
+    });
+
+    if (existingEmail) {
+      return res.status(409).json({ message: "Email already exists" });
+    }
+
+    const existingStaffId = await prisma.user.findFirst({
+      where: {
+        staffId,
         companyId: req.user.companyId,
       },
     });
 
-    if (existing) {
-      return res.status(409).json({ message: "User already exists" });
+    if (existingStaffId) {
+      return res.status(409).json({ message: "Staff ID already taken" });
     }
 
-    // 🔥 Generate temporary password
-    const tempPassword = Math.random().toString(36).slice(-8);
-
-    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
 
     const newUser = await prisma.user.create({
       data: {
@@ -80,6 +88,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         email: email.toLowerCase(),
         passwordHash,
         role,
+        staffId,
         companyId: req.user.companyId,
       },
     });
@@ -89,7 +98,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       name: newUser.name,
       email: newUser.email,
       role: newUser.role,
-      tempPassword, // 🔥 return once
+      staffId: newUser.staffId,
     });
   } catch (err) {
     res.status(500).json({ message: "Failed to create user" });
@@ -113,6 +122,10 @@ router.delete("/:id", authMiddleware, async (req: AuthRequest, res: Response) =>
 
     if (!user || user.companyId !== req.user.companyId) {
       return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.role === "OWNER") {
+      return res.status(403).json({ message: "Cannot disable the Owner account" });
     }
 
     await prisma.user.update({

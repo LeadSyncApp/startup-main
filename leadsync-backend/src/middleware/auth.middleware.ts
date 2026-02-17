@@ -6,6 +6,7 @@ export interface AuthRequest extends Request {
     userId: string;
     companyId: string;
     role: "OWNER" | "ADMIN" | "AGENT";
+    staffId?: string;
   };
 }
 
@@ -13,6 +14,7 @@ interface JwtPayload extends DefaultJwtPayload {
   userId: string;
   companyId: string;
   role: "OWNER" | "ADMIN" | "AGENT";
+  staffId?: string;
 }
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -57,6 +59,7 @@ export const authMiddleware = (
       userId: decoded.userId,
       companyId: decoded.companyId,
       role: decoded.role,
+      staffId: decoded.staffId,
     };
 
     next();

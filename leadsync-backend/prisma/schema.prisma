@@ -96,6 +96,7 @@ model User {
   role         Role     @default(AGENT)
   isActive     Boolean  @default(true)
   companyId    String
+  staffId      String?
   createdAt    DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
