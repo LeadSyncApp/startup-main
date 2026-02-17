@@ -217,6 +217,12 @@ router.patch("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response
       },
     });
 
+    // ✅ REAL-TIME SOCKET EMISSION (Immediate Mode Sync)
+    emitToCompany(companyId, "mode_changed", {
+      conversationId: conversation.id,
+      mode
+    });
+
     // Create a system message so it appears instantly in the chat
     const systemMsg = await prisma.message.create({
       data: {
@@ -224,12 +230,6 @@ router.patch("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response
         sender: MessageSender.SYSTEM,
         conversationId: conversation.id,
       },
-    });
-
-    // ✅ REAL-TIME SOCKET EMISSION
-    emitToCompany(companyId, "mode_changed", {
-      conversationId: conversation.id,
-      mode
     });
 
     emitToConversation(conversation.id, "new_message", systemMsg);

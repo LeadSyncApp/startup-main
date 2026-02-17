@@ -236,13 +236,23 @@ export default function Conversations() {
   const toggleMode = async (mode: "BOT" | "HUMAN") => {
     if (!selected) return;
     const prevMode = selected.mode;
-    setSelected({ ...selected, mode });
+
+    // OPTIMISTIC UPDATE
+    const optimisticUpdated = { ...selected, mode };
+    setSelected(optimisticUpdated);
+    setConversations(prev => prev.map(c =>
+      c.id === selected.id ? { ...c, mode } : c
+    ));
 
     try {
       await api.patch(`/conversations/${selected.id}/mode`, { mode });
       toast.success(`Switched to ${mode} mode`);
     } catch (err) {
+      // REVERT ON FAILURE
       setSelected({ ...selected, mode: prevMode });
+      setConversations(prev => prev.map(c =>
+        c.id === selected.id ? { ...c, mode: prevMode } : c
+      ));
       toast.error("Mode switch failed");
     }
   };
