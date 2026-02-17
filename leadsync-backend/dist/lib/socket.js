@@ -9,8 +9,7 @@ const initSocket = (httpServer) => {
             origin: "*",
             methods: ["GET", "POST", "PATCH", "DELETE"],
             credentials: true
-        },
-        transports: ["websocket"]
+        }
     });
     io.on("connection", (socket) => {
         console.log(`🔌 New socket connection: ${socket.id}`);

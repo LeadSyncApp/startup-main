@@ -249,15 +249,18 @@ async function processTelegramMessage(body: any, companyId: string) {
         catMsg += `- ${item.name}: ₹${item.price}\n`;
       });
 
-      await sendTelegramMessage(botToken, chatId, catMsg);
-
-      const botMsg = await prisma.message.create({
+      // Parallel execution: Send to Telegram + Save/Emit to DB/Socket
+      const botMsgPromise = prisma.message.create({
         data: {
           content: catMsg,
           sender: MessageSender.SYSTEM,
           conversationId: conversation.id,
         }
       });
+
+      const telegramPromise = sendTelegramMessage(botToken, chatId, catMsg);
+
+      const [botMsg] = await Promise.all([botMsgPromise, telegramPromise]);
 
       emitToCompany(companyId, "conversation_updated", {
         conversationId: conversation.id,
@@ -360,7 +363,8 @@ async function processTelegramMessage(body: any, companyId: string) {
       console.error("AI reply failed:", err);
     }
 
-    const botMsg = await prisma.message.create({
+    // Parallel execution for AI reply
+    const botMsgPromise = prisma.message.create({
       data: {
         content: aiReply,
         sender: MessageSender.SYSTEM,
@@ -368,14 +372,16 @@ async function processTelegramMessage(body: any, companyId: string) {
       },
     });
 
+    const telegramPromise = sendTelegramMessage(botToken, chatId, aiReply);
+
+    const [botMsg] = await Promise.all([botMsgPromise, telegramPromise]);
+
     emitToCompany(companyId, "conversation_updated", {
       conversationId: conversation.id,
       lastMessage: aiReply,
       updatedAt: new Date(),
     });
     emitToConversation(conversation.id, "new_message", botMsg);
-
-    await sendTelegramMessage(botToken, chatId, aiReply);
 
   } catch (err) {
     console.error("processTelegramMessage error:", err);
