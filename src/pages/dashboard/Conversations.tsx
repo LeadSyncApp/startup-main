@@ -37,7 +37,7 @@ interface Conversation {
 }
 
 export default function Conversations() {
-  const { token } = useAuth();
+  const { token, companyId } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -56,14 +56,19 @@ export default function Conversations() {
     selectedRef.current = selected;
   }, [selected]);
 
-  // Load cache on mount
+  // Load cache on mount or when companyId changes
   useEffect(() => {
-    const saved = localStorage.getItem("leadsync_conv_cache");
+    if (!companyId) return;
+    const saved = localStorage.getItem(`leadsync_conv_cache_${companyId}`);
     if (saved) {
       setConversations(JSON.parse(saved));
       setLoadingConv(false);
+    } else {
+      // If no cache for this company, ensure we don't show old data from state if switching users without full reload
+      setConversations([]);
+      setLoadingConv(true);
     }
-  }, []);
+  }, [companyId]);
 
   /* LOAD LIST */
   const loadConversations = async (quiet = false) => {
@@ -74,7 +79,9 @@ export default function Conversations() {
       // Only update if data changed to prevent jitter
       setConversations(prev => {
         if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
-        localStorage.setItem("leadsync_conv_cache", JSON.stringify(data));
+        if (companyId) {
+          localStorage.setItem(`leadsync_conv_cache_${companyId}`, JSON.stringify(data));
+        }
         return data;
       });
     } catch (err) {
@@ -85,8 +92,8 @@ export default function Conversations() {
   };
 
   useEffect(() => {
-    if (token) loadConversations();
-  }, [token]);
+    if (token && companyId) loadConversations();
+  }, [token, companyId]);
 
   /* FETCH MESSAGES */
   const fetchMessages = async (conv: Conversation) => {

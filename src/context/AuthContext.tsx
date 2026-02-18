@@ -99,6 +99,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("user");
     localStorage.removeItem("company");
 
+    // Clear application specific cache
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("leadsync_")) {
+        localStorage.removeItem(key);
+      }
+    });
+
     setToken(null);
     setUser(null);
     setCompany(null);

@@ -7,17 +7,17 @@ import SectionSummary from "../../components/dashboard/SectionSummary";
 import { api } from "../../lib/api"; // ✅ centralized API
 
 export default function Leads() {
-  const { token } = useAuth();
+  const { token, companyId } = useAuth();
   const navigate = useNavigate();
 
   // Simple persist cache
-  const [cached] = useState<any[]>(() => {
-    const saved = localStorage.getItem("leadsync_leads_cache");
+  const [leads, setLeads] = useState<any[]>(() => {
+    if (!companyId) return [];
+    const saved = localStorage.getItem(`leadsync_leads_cache_${companyId}`);
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [leads, setLeads] = useState<any[]>(cached);
-  const [loading, setLoading] = useState(cached.length === 0);
+  const [loading, setLoading] = useState(leads.length === 0);
 
   useEffect(() => {
     if (!token) return;
@@ -29,7 +29,9 @@ export default function Leads() {
         if (!quiet) setLoading(true);
         const data = await api.get("/leads");
         setLeads(data);
-        localStorage.setItem("leadsync_leads_cache", JSON.stringify(data));
+        if (companyId) {
+          localStorage.setItem(`leadsync_leads_cache_${companyId}`, JSON.stringify(data));
+        }
       } catch (err) {
         console.error("❌ Failed to fetch leads:", err);
       } finally {
@@ -39,7 +41,7 @@ export default function Leads() {
       }
     };
 
-    fetchLeads(cached.length > 0);
+    fetchLeads(leads.length > 0);
 
     return () => clearTimeout(timeoutId);
   }, [token]);

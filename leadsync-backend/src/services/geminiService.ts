@@ -37,14 +37,14 @@ Rules:
     }
 
     const completion = await openai.chat.completions.create({
-      model: "openai/gpt-4o-mini",
+      model: "google/gemini-2.0-flash-lite-preview-02-05:free",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: message },
       ],
       temperature: 0.3,
-      max_tokens: 300,
-    });
+      max_tokens: 150, // REPLACED: Optimized for speed
+    }, { timeout: 8000 }); // REPLACED: 8s timeout
 
     return (
       completion.choices?.[0]?.message?.content ||

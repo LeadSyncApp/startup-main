@@ -356,6 +356,14 @@ async function processTelegramMessage(body: any, companyId: string) {
     -------------------------------- */
     let aiReply = "Thank you! Our team will assist you shortly.";
 
+    // Improve perceived latency with typing indicator loop
+    const typingInterval = setInterval(() => {
+      sendChatAction(botToken, chatId, "typing");
+    }, 4000);
+
+    // Send immediate initial typing
+    sendChatAction(botToken, chatId, "typing");
+
     try {
       aiReply = await generateBotReply(
         text,
@@ -364,6 +372,8 @@ async function processTelegramMessage(body: any, companyId: string) {
       );
     } catch (err) {
       console.error("AI reply failed:", err);
+    } finally {
+      clearInterval(typingInterval);
     }
 
     // 1. Save to DB

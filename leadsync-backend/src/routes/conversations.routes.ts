@@ -150,13 +150,19 @@ router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response)
       },
     });
 
-    // ✅ MODE REMOVED: Do not auto-switch to HUMAN.
-    // Respect the manual toggle from the site to allow 24/7 bot service.
+    // ✅ Auto-switch to HUMAN when agent replies
     await prisma.conversation.update({
       where: { id: conversation.id },
       data: {
+        mode: ConversationMode.HUMAN,
         updatedAt: new Date(),
       },
+    });
+
+    // Notify about mode change
+    emitToCompany(companyId, "mode_changed", {
+      conversationId: conversation.id,
+      mode: ConversationMode.HUMAN
     });
 
     if (conversation.company.telegramBotToken) {

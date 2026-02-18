@@ -18,25 +18,33 @@ interface KPIData {
 }
 
 export default function DashboardHome() {
-  const { token } = useAuth();
+  const { token, companyId } = useAuth();
 
   // Simple persist cache
-  const [cachedData] = useState<KPIData | null>(() => {
-    const saved = localStorage.getItem("leadsync_dashboard_cache");
-    return saved ? JSON.parse(saved) : null;
+  const [data, setData] = useState<KPIData>(() => {
+    if (!companyId) {
+      return { leads: 0, conversations: 0, orders: 0, agents: 0 };
+    }
+    const saved = localStorage.getItem(`leadsync_dashboard_cache_${companyId}`);
+    return saved ? JSON.parse(saved) : {
+      leads: 0,
+      conversations: 0,
+      orders: 0,
+      agents: 0,
+    };
   });
 
-  const [data, setData] = useState<KPIData>(cachedData || {
-    leads: 0,
-    conversations: 0,
-    orders: 0,
-    agents: 0,
+  // Loading if we don't have data (or if it's default 0s, though 0 could be valid... 
+  // better to check if we loaded from cache. 
+  // Let's assume if all are 0 it might be new or not loaded. 
+  // For simplicity, let's just use a separate loading state initialized by cache presence)
+  const [loading, setLoading] = useState(() => {
+    if (!companyId) return true;
+    return !localStorage.getItem(`leadsync_dashboard_cache_${companyId}`);
   });
-
-  const [loading, setLoading] = useState(!cachedData);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !companyId) return;
 
     const fetchKPIs = async (quiet = false) => {
       try {
@@ -51,7 +59,7 @@ export default function DashboardHome() {
         };
 
         setData(newData);
-        localStorage.setItem("leadsync_dashboard_cache", JSON.stringify(newData));
+        localStorage.setItem(`leadsync_dashboard_cache_${companyId}`, JSON.stringify(newData));
       } catch (err) {
         console.error("❌ Failed to load dashboard KPIs:", err);
       } finally {
@@ -59,12 +67,14 @@ export default function DashboardHome() {
       }
     };
 
-    if (cachedData) {
-      fetchKPIs(true); // Background update
+    // If we have data, do a quiet update (background). Else full load.
+    const hasCache = !!localStorage.getItem(`leadsync_dashboard_cache_${companyId}`);
+    if (hasCache) {
+      fetchKPIs(true);
     } else {
-      fetchKPIs();
+      fetchKPIs(false);
     }
-  }, [token]);
+  }, [token, companyId]);
 
   const cards = [
     {

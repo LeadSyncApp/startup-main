@@ -19,7 +19,7 @@ export const sendTelegramMessage = async (
       payload.reply_markup = replyMarkup;
     }
 
-    await axios.post(url, payload);
+    await axios.post(url, payload, { timeout: 5000 });
   } catch (error: any) {
     console.error(
       "❌ Telegram sendMessage error:",
@@ -38,7 +38,7 @@ export const sendChatAction = async (
     await axios.post(url, {
       chat_id: chatId,
       action,
-    });
+    }, { timeout: 5000 });
   } catch (error) {
     // Ignore chat action errors (not critical)
   }
