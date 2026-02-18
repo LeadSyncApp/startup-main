@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma";
-import { ConversationIntent, LeadSegment } from "@prisma/client";
+import { MessageSender } from "@prisma/client";
 import Groq from "groq-sdk";
+import { emitToCompany, emitToConversation } from "../lib/socket";
 
 // Initialize Groq
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "dummy" });
@@ -18,33 +19,94 @@ export class IntelligenceService {
         messageText: string
     ) {
         try {
-            // Only analyze meaningful messages > 10 chars to save AI calls
+            // Only analyze meaningful messages > 5 chars to save AI calls
             if (messageText.length < 5) return;
 
-            // 1. AI Analysis (Sentiment & Intent) - Using Llama 8b (Fast)
+            // 1. AI Analysis (Sentiment & Intent)
             const analysis = await this.performAIAnalysis(messageText);
 
-            // 2. Update Conversation & Lead
-            await prisma.$transaction([
-                // Update Conversation with new insights
-                prisma.conversation.update({
-                    where: { id: conversationId },
-                    data: {
-                        sentimentScore: { increment: analysis.sentimentDelta },
-                        intent: analysis.intent as ConversationIntent,
-                        updatedAt: new Date()
-                    }
-                }),
-                // Update Lead Activity
-                prisma.lead.update({
-                    where: { id: leadId },
-                    data: {
-                        lastActiveAt: new Date(),
-                    }
-                })
-            ]);
+            // 2. Intelligence Logic: Determine if we should Auto-Assign
+            const isHighIntent = analysis.intent === "ORDERING" || analysis.intent === "COMPLAINT";
+            const isUrgent = analysis.sentimentDelta <= -2; // Negative sentiment
 
-            console.log(`🧠 [Intelligence] Analyzed msg: ${analysis.intent} | Sentiment: ${analysis.sentimentDelta}`);
+            let assignedUserId: string | null = null;
+            let assignedUserName: string | null = null;
+
+            // Only auto-assign if currently unassigned and important
+            if (isHighIntent || isUrgent) {
+                // Force cast to access `assignedToId`
+                const existing = await (prisma.conversation as any).findUnique({
+                    where: { id: conversationId },
+                    select: { assignedToId: true }
+                });
+
+                if (existing && !existing.assignedToId) {
+                    // FIND BEST AGENT (First Available Active Agent)
+                    // Fallback to sorting by creation since lastActiveAt might not exist on User schema
+                    const agent = await prisma.user.findFirst({
+                        where: { companyId, isActive: true },
+                        orderBy: { createdAt: 'asc' } // Assign to oldest agent/admin first (often the owner)
+                    });
+
+                    if (agent) {
+                        assignedUserId = agent.id;
+                        assignedUserName = agent.name;
+                    }
+                }
+            }
+
+            // 3. Database Updates (Transaction)
+            await prisma.$transaction(async (tx) => {
+                // Update Conversation
+                const updateData: any = {
+                    sentimentScore: { increment: analysis.sentimentDelta },
+                    intent: analysis.intent, // String literal fine
+                    updatedAt: new Date(),
+                };
+
+                // Apply Auto-Assignment if triggered
+                if (assignedUserId) {
+                    updateData.assignedToId = assignedUserId;
+                    updateData.status = "ASSIGNED";
+                }
+
+                const updatedRaw = await (tx.conversation as any).update({
+                    where: { id: conversationId },
+                    data: updateData,
+                    include: { assignedTo: { select: { id: true, name: true } } }
+                });
+
+                const updatedConversation = updatedRaw as any;
+
+                // Update Lead Activity
+                await (tx.lead as any).update({
+                    where: { id: leadId },
+                    data: { lastActiveAt: new Date() }
+                });
+
+                // 4. Notifications & Side Effects
+                if (assignedUserId) {
+                    // System Message
+                    const sysMsg = await tx.message.create({
+                        data: {
+                            conversationId,
+                            sender: MessageSender.SYSTEM,
+                            content: `⚡ AI detected ${analysis.intent}. Auto-assigned to ${assignedUserName}.`
+                        }
+                    });
+
+                    // Emit Socket Events (After transaction)
+                    emitToCompany(companyId, "conversation_assigned", {
+                        conversationId,
+                        assignedTo: updatedConversation.assignedTo,
+                        status: updatedConversation.status
+                    });
+
+                    emitToConversation(conversationId, "new_message", sysMsg);
+                }
+            });
+
+            console.log(`🧠 [Intelligence] Analyzed intent=${analysis.intent}, sentiment=${analysis.sentimentDelta}, assigned=${assignedUserId ? 'YES' : 'NO'}`);
 
         } catch (error) {
             console.error("❌ Intelligence Analysis Failed:", error);
@@ -53,6 +115,7 @@ export class IntelligenceService {
 
     private async performAIAnalysis(text: string): Promise<{ sentimentDelta: number, intent: string }> {
         try {
+            // ... existing AI logic (unchanged) ...
             if (!process.env.GROQ_API_KEY) return { sentimentDelta: 0, intent: "BROWSING" };
 
             const response = await groq.chat.completions.create({
@@ -61,23 +124,22 @@ export class IntelligenceService {
                         role: "system",
                         content: `Analyze the user message JSON.
 Format: {"sentiment": number, "intent": string}
-Context: CRM for a business.
+Context: Food delivery / e-commerce support.
 - sentiment: -5 (Angry) to +5 (Happy). 0 is neutral.
-- intent: "BROWSING", "ORDERING", "SUPPORT", "COMPLAINT"
+- intent: "BROWSING", "ORDERING" (wants to buy), "SUPPORT" (help), "COMPLAINT" (angry/issue)
 `
                     },
                     { role: "user", content: text }
                 ],
                 model: "llama-3.1-8b-instant",
                 temperature: 0,
-                max_tokens: 50,
+                max_tokens: 60,
                 response_format: { type: "json_object" }
             });
 
             const content = response.choices[0]?.message?.content || "{}";
             const result = JSON.parse(content);
 
-            // Validate intent against enum values
             let safeIntent = result.intent?.toUpperCase();
             if (!["BROWSING", "ORDERING", "SUPPORT", "COMPLAINT"].includes(safeIntent)) {
                 safeIntent = "BROWSING";

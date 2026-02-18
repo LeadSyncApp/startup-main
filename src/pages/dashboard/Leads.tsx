@@ -8,7 +8,7 @@ import SectionSummary from "../../components/dashboard/SectionSummary";
 import { api } from "../../lib/api";
 
 export default function Leads() {
-  const { token, companyId } = useAuth();
+  const { token, companyId, user } = useAuth();
   const navigate = useNavigate();
   const { socket } = useSocket();
 
@@ -53,22 +53,56 @@ export default function Leads() {
     if (!socket) return;
 
     const onNewLead = (lead: any) => {
-      // If viewing "My Chats", we only add if assigned to me (handled by complex logic or just refresh)
-      // For simplicity, we append to "all" and "unassigned" lists for now (assuming new leads are unassigned)
       if (filter === "all" || filter === "unassigned") {
         setLeads((prev) => [lead, ...prev]);
       }
     };
 
-    socket.on("lead_created", onNewLead);
+    const onAssigned = (data: any) => {
+      // data: { conversationId, assignedTo: {id, name}, status }
+      setLeads((prev) => prev.map(lead => {
+        if (lead.conversationId === data.conversationId) {
+          // Determine if we should keep it in current filter view
+          if (filter === "unassigned" && data.assignedTo) return null; // Remove from unassigned
+          if (filter === "me" && data.assignedTo?.id !== user?.id) return null; // Verify filtering
 
-    // Logic: If I am assigned a conversation, I should technically refresh or receive a specific event.
-    // For now, we rely on manual navigation or refresh for assignments.
+          return {
+            ...lead,
+            agentAssigned: data.assignedTo?.name,
+            assignedTo: data.assignedTo,
+            status: data.status
+          };
+        }
+        return lead;
+      }).filter(Boolean) as any[]);
+    };
+
+    socket.on("lead_created", onNewLead);
+    socket.on("conversation_assigned", onAssigned);
 
     return () => {
       socket.off("lead_created", onNewLead);
+      socket.off("conversation_assigned", onAssigned);
     };
-  }, [socket, filter]);
+  }, [socket, filter, user]);
+
+  const handleClaim = async (conversationId: string, e: any) => {
+    e.stopPropagation();
+    if (!user?.id) return;
+
+    try {
+      await api.patch(`/conversations/${conversationId}/assign`, { assignedToId: user.id });
+      // Optimistic UI update
+      setLeads(prev => prev.map(l =>
+        l.conversationId === conversationId
+          ? { ...l, agentAssigned: user.name, assignedTo: { id: user.id, name: user.name } }
+          : l
+      ));
+    } catch (err) {
+      console.error("Failed to claim chat", err);
+      alert("Could not claim chat. Someone else might have taken it.");
+    }
+  };
 
   return (
     <motion.div
@@ -78,7 +112,7 @@ export default function Leads() {
     >
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <SectionSummary
-          title={filter === 'me' ? "My Inbox" : filter === 'unassigned' ? "Unassigned Team Inbox" : "All Leads"}
+          title={filter === 'me' ? "My Inbox" : filter === 'unassigned' ? "Team Inbox" : "All Leads"}
           description="Manage customer sales and support tickets."
           stats={[
             { label: "Visible", value: String(leads.length) },
@@ -114,6 +148,7 @@ export default function Leads() {
               );
             }
           }}
+          onClaim={handleClaim}
         />
       )}
     </motion.div>

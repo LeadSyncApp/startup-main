@@ -4,11 +4,11 @@ import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../context/SocketContext";
 import { api } from "../../lib/api";
 
-// CRM Order Interface
+// --- Types ---
 interface Order {
   id: string;
   summary: string;
-  status: string; // NEW, CONFIRMED, PREPARING, READY, DELIVERED, CANCELLED
+  status: string;
   approvalStatus: string;
   amount: number;
   priorityScore: number;
@@ -16,154 +16,302 @@ interface Order {
   lead: {
     name: string;
     contact: string;
-    segment: string; // VIP, NEW, etc.
+    segment: string;
     totalSpend: number;
   };
   processedBy?: { name: string };
   createdAt: string;
 }
 
+// --- Configuration ---
 const COLUMN_CONFIG = [
   { id: "NEW", title: "New Requests", color: "border-blue-200 bg-blue-50/50" },
-  { id: "PROCESSING", title: "In Kitchen / Processing", color: "border-indigo-200 bg-indigo-50/50", statuses: ["CONFIRMED", "PREPARING"] },
+  { id: "PROCESSING", title: "In Kitchen", color: "border-indigo-200 bg-indigo-50/50", statuses: ["CONFIRMED", "PREPARING"] },
   { id: "READY", title: "Ready for Pickup", color: "border-emerald-200 bg-emerald-50/50", statuses: ["READY"] },
-  { id: "COMPLETED", title: "Completed", color: "border-slate-200 bg-slate-50/50", statuses: ["DELIVERED"] },
 ];
 
 export default function Orders() {
   const { token } = useAuth();
   const { socket } = useSocket();
+
   const [orders, setOrders] = useState<Order[]>([]);
+  const [view, setView] = useState<'active' | 'history'>('active');
   const [loading, setLoading] = useState(true);
 
-  // Initial Fetch
+  // Modal State
+  const [actionOrder, setActionOrder] = useState<Order | null>(null);
+  const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
+
+  // Fetch Orders
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get(`/orders?view=${view}`);
+      setOrders(data);
+    } catch (err) {
+      console.error("Failed to load orders", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
-    const fetchOrders = async () => {
-      try {
-        const data = await api.get("/orders");
-        setOrders(data);
-      } catch (err) {
-        console.error("Failed to load orders", err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchOrders();
-  }, [token]);
+  }, [token, view]);
 
-  // Real-Time Listener
+  // Real-Time Listener (Only update if relevant to current view)
   useEffect(() => {
     if (!socket) return;
-
-    const handleCreate = (newOrder: Order) => {
-      setOrders(prev => [newOrder, ...prev]);
-    };
-
     const handleUpdate = (updated: Order) => {
-      setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
+      // If status changed to something not in current view, remove it?
+      // Or just re-fetch to be safe/lazy? Let's manually update for snappy feel.
+      if (view === 'active') {
+        if (['DELIVERED', 'CANCELLED', 'REJECTED'].includes(updated.status)) {
+          setOrders(prev => prev.filter(o => o.id !== updated.id));
+        } else {
+          setOrders(prev => {
+            const exists = prev.find(o => o.id === updated.id);
+            if (exists) return prev.map(o => o.id === updated.id ? updated : o);
+            return [updated, ...prev];
+          });
+        }
+      }
+    };
+    const handleCreate = (newOrder: Order) => {
+      if (view === 'active') setOrders(prev => [newOrder, ...prev]);
     };
 
     socket.on("order_created", handleCreate);
     socket.on("order_updated", handleUpdate);
-
     return () => {
       socket.off("order_created", handleCreate);
       socket.off("order_updated", handleUpdate);
     };
-  }, [socket]);
+  }, [socket, view]);
 
   // Actions
-  const handleApprove = async (id: string) => {
+  const handleConfirmAction = async () => {
+    if (!actionOrder || !actionType) return;
     try {
-      await api.post(`/orders/${id}/approve`);
-    } catch (e) { alert("Failed to approve"); }
-  };
-
-  const handleReject = async (id: string) => {
-    if (!confirm("Reject this order?")) return;
-    try {
-      await api.post(`/orders/${id}/reject`);
-    } catch (e) { alert("Failed to reject"); }
+      if (actionType === 'approve') {
+        await api.post(`/orders/${actionOrder.id}/approve`);
+      } else {
+        await api.post(`/orders/${actionOrder.id}/reject`);
+      }
+      // UI update handled by socket usually, but let's close modal
+      setActionOrder(null);
+      setActionType(null);
+    } catch (e) { alert("Action failed"); }
   };
 
   const handleMoveStatus = async (id: string, status: string) => {
-    try {
-      await api.patch(`/orders/${id}/status`, { status });
-    } catch (e) { console.error(e); }
+    try { await api.patch(`/orders/${id}/status`, { status }); } catch (e) { console.error(e); }
   };
 
-  // Derived State
+  // Stats
   const revenueToday = useMemo(() => orders
-    .filter(o => o.status !== "CANCELLED" && new Date(o.createdAt).toDateString() === new Date().toDateString())
+    .filter(o => !['CANCELLED', 'REJECTED'].includes(o.status))
     .reduce((acc, o) => acc + (o.amount || 0), 0), [orders]);
 
-  const pendingCount = orders.filter(o => o.status === "NEW").length;
-  const urgentCount = orders.filter(o => o.isUrgent || o.priorityScore > 50).length;
-
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center text-slate-400 animate-pulse">
-        Loading Live Operations Center...
-      </div>
-    );
-  }
-
   return (
-    <div className="h-[calc(100vh-6rem)] flex flex-col gap-6">
+    <div className="h-[calc(100vh-6rem)] flex flex-col gap-6 relative">
 
-      {/* Header Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0">
-        <StatCard title="Revenue Today" value={`₹${revenueToday.toLocaleString()}`} icon="💰" />
-        <StatCard title="Pending" value={pendingCount} icon="⏳" highlight={pendingCount > 0} />
-        <StatCard title="Urgent" value={urgentCount} icon="🔥" warn={urgentCount > 0} />
-        <StatCard title="Total Active" value={orders.filter(o => o.status !== "DELIVERED" && o.status !== "CANCELLED").length} icon="📦" />
-      </div>
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 flex-shrink-0">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full md:w-auto">
+          <StatCard title="Revenue (View)" value={`₹${revenueToday.toLocaleString()}`} icon="💰" />
+          <StatCard title="Total Orders" value={orders.length} icon="📦" />
+        </div>
 
-      {/* Board */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden">
-        <div className="h-full flex gap-4 min-w-[1000px]">
-          {COLUMN_CONFIG.map(col => (
-            <div key={col.id} className={`flex-1 flex flex-col rounded-xl border ${col.color} p-3`}>
-              <h3 className="font-bold text-slate-700 mb-3 flex justify-between items-center">
-                {col.title}
-                <span className="bg-white/50 px-2 py-0.5 rounded text-xs">
-                  {orders.filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id)).length}
-                </span>
-              </h3>
-
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
-                <AnimatePresence mode="popLayout">
-                  {orders
-                    .filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id))
-                    .sort((a, b) => b.priorityScore - a.priorityScore) // Sort by Priority
-                    .map(order => (
-                      <OrderCard
-                        key={order.id}
-                        order={order}
-                        onApprove={() => handleApprove(order.id)}
-                        onReject={() => handleReject(order.id)}
-                        onMove={(s: string) => handleMoveStatus(order.id, s)}
-                      />
-                    ))}
-                </AnimatePresence>
-                {orders.filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id)).length === 0 && (
-                  <div className="text-center py-10 opacity-40 text-sm italic">Empty</div>
-                )}
-              </div>
-            </div>
-          ))}
+        {/* View Toggle */}
+        <div className="bg-slate-100 p-1 rounded-lg flex self-end">
+          <button
+            onClick={() => setView('active')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition ${view === 'active' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
+          >
+            Live Board
+          </button>
+          <button
+            onClick={() => setView('history')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition ${view === 'history' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
+          >
+            History
+          </button>
         </div>
       </div>
+
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center text-slate-400">Loading...</div>
+      ) : view === 'active' ? (
+        /* --- KANBAN BOARD --- */
+        <div className="flex-1 overflow-x-auto overflow-y-hidden">
+          <div className="h-full flex gap-4 min-w-[1000px]">
+            {COLUMN_CONFIG.map(col => (
+              <div key={col.id} className={`flex-1 flex flex-col rounded-xl border ${col.color} p-3`}>
+                <h3 className="font-bold text-slate-700 mb-3 flex justify-between items-center">
+                  {col.title}
+                  <span className="bg-white/50 px-2 py-0.5 rounded text-xs opacity-70">
+                    {orders.filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id)).length}
+                  </span>
+                </h3>
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar pb-10">
+                  <AnimatePresence mode="popLayout">
+                    {orders
+                      .filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id))
+                      .sort((a, b) => b.priorityScore - a.priorityScore)
+                      .map(order => (
+                        <OrderCard
+                          key={order.id}
+                          order={order}
+                          onApprove={() => { setActionOrder(order); setActionType('approve'); }}
+                          onReject={() => { setActionOrder(order); setActionType('reject'); }}
+                          onMove={(s: string) => handleMoveStatus(order.id, s)}
+                        />
+                      ))}
+                  </AnimatePresence>
+                  {orders.filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id)).length === 0 && (
+                    <div className="text-center py-10 opacity-30 text-sm italic">No orders</div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Simplified Completed Column for Active View (Just for quick drag/drop target essentially) */}
+            <div className="w-1/5 opacity-60 hover:opacity-100 transition-opacity border-l border-dashed border-slate-300 pl-4 flex flex-col">
+              <h3 className="font-bold text-slate-400 mb-3">Completed (Recently)</h3>
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                {/* We don't really show them here in "active" view usually, 
+                                but if we updated status to DELIVERED, it vanishes. 
+                                User can find it in History. */}
+                <div className="text-xs text-slate-400 text-center italic mt-10">
+                  Delivered orders move to History tab automatically.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* --- HISTORY TABLE --- */
+        <div className="bg-white rounded-xl shadow border overflow-hidden flex-1 overflow-y-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-xs uppercase text-slate-600 font-semibold">
+              <tr>
+                <th className="px-6 py-3 text-left">Date</th>
+                <th className="px-6 py-3 text-left">Wait Time</th>
+                <th className="px-6 py-3 text-left">Customer</th>
+                <th className="px-6 py-3 text-left">Summary</th>
+                <th className="px-6 py-3 text-left">Amount</th>
+                <th className="px-6 py-3 text-left">Status</th>
+                <th className="px-6 py-3 text-left">Agent</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {orders.map(order => (
+                <tr key={order.id} className="hover:bg-slate-50">
+                  <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
+                    {new Date(order.createdAt).toLocaleDateString()} <br />
+                    <span className="text-xs opacity-70">{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </td>
+                  <td className="px-6 py-4 text-slate-500 text-xs">
+                    {/* Mock wait time calc */}
+                    {Math.floor((new Date().getTime() - new Date(order.createdAt).getTime()) / 60000)} min
+                  </td>
+                  <td className="px-6 py-4 font-medium text-slate-900">
+                    {order.lead?.name || "Guest"}
+                    <div className="text-xs text-slate-400">{order.lead?.contact}</div>
+                  </td>
+                  <td className="px-6 py-4 text-slate-600 truncate max-w-[200px]" title={order.summary}>
+                    {order.summary}
+                  </td>
+                  <td className="px-6 py-4 font-bold text-slate-700">₹{order.amount}</td>
+                  <td className="px-6 py-4">
+                    <StatusBadge status={order.status} />
+                  </td>
+                  <td className="px-6 py-4 text-xs text-slate-500">
+                    {order.processedBy?.name || "-"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* --- MODAL --- */}
+      <AnimatePresence>
+        {actionOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setActionOrder(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative z-10"
+            >
+              <div className={`h-2 w-full ${actionType === 'approve' ? 'bg-green-500' : 'bg-red-500'}`} />
+              <div className="p-6">
+                <h3 className="text-xl font-bold text-slate-900 mb-2">
+                  {actionType === 'approve' ? 'Accept Order?' : 'Reject Order?'}
+                </h3>
+                <p className="text-slate-600 mb-6">
+                  {actionType === 'approve'
+                    ? `Are you sure you want to accept this order for ₹${actionOrder.amount}? This will notify the customer.`
+                    : `Are you sure you want to reject this order? This action cannot be undone.`
+                  }
+                </p>
+
+                <div className="bg-slate-50 p-4 rounded-lg mb-6 text-sm border border-slate-100">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-slate-500">Customer:</span>
+                    <span className="font-medium">{actionOrder.lead.name}</span>
+                  </div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-slate-500">Items:</span>
+                    <span className="font-medium truncate max-w-[200px]">{actionOrder.summary}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Total:</span>
+                    <span className="font-bold text-slate-800">₹{actionOrder.amount}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setActionOrder(null)}
+                    className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmAction}
+                    className={`px-6 py-2 text-white font-bold rounded-lg shadow-lg transition transform active:scale-95 ${actionType === 'approve'
+                        ? 'bg-green-600 hover:bg-green-700 shadow-green-200'
+                        : 'bg-red-600 hover:bg-red-700 shadow-red-200'
+                      }`}
+                  >
+                    {actionType === 'approve' ? 'Confirm Accept' : 'Confirm Reject'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
 
-// Sub-components
+// --- SUB COMPONENTS ---
+
 function OrderCard({ order, onApprove, onReject, onMove }: any) {
   const isNew = order.status === "NEW";
   const isUrgent = order.isUrgent || order.priorityScore > 50;
-  const isVIP = order.lead?.segment === "VIP" || order.lead?.totalSpend > 5000;
 
   return (
     <motion.div
@@ -171,43 +319,35 @@ function OrderCard({ order, onApprove, onReject, onMove }: any) {
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      className={`bg-white p-4 rounded-xl shadow-sm border border-slate-200 relative group 
-                ${isUrgent ? "ring-2 ring-red-100" : ""}
-            `}
+      className={`bg-white p-4 rounded-xl shadow-sm border border-slate-200 relative group ${isUrgent ? "ring-2 ring-red-100" : ""}`}
     >
-      {/* Badges */}
-      <div className="flex gap-2 mb-2">
-        {isUrgent && <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded">URGENT</span>}
-        {isVIP && <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded">VIP</span>}
-        <span className="ml-auto text-xs text-slate-400 font-mono">
+      <div className="flex justify-between items-start mb-2">
+        <span className="font-bold text-indigo-600">₹{order.amount}</span>
+        <span className="text-[10px] text-slate-400 font-mono">
           {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>
 
-      {/* Content */}
-      <h4 className="font-semibold text-slate-800 text-sm leading-tight mb-1">{order.summary}</h4>
-      <div className="flex justify-between items-baseline mb-3">
-        <span className="text-xs text-slate-500">{order.lead?.name || "Guest"}</span>
-        <span className="font-bold text-slate-900">₹{order.amount}</span>
+      <h4 className="font-semibold text-slate-800 text-sm leading-tight mb-3">{order.summary}</h4>
+      <div className="text-xs text-slate-500 mb-3 block">
+        👤 {order.lead?.name}
       </div>
 
-      {/* Actions */}
       {isNew ? (
         <div className="grid grid-cols-2 gap-2">
-          <button onClick={onReject} className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50">Reject</button>
-          <button onClick={onApprove} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-sm">Confirm</button>
+          <button onClick={onReject} className="px-3 py-2 rounded-lg border border-red-200 text-red-600 text-xs font-bold hover:bg-red-50 transition">Reject</button>
+          <button onClick={onApprove} className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-md transition">Accept</button>
         </div>
       ) : (
-        // Workflow Buttons
-        <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-          {(order.status === "CONFIRMED" || order.status === "NEW") && (
-            <button onClick={() => onMove("PREPARING")} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded">Start Prep</button>
+        <div className="flex gap-2 justify-end">
+          {order.status === "CONFIRMED" && (
+            <button onClick={() => onMove("PREPARING")} className="w-full text-xs bg-indigo-50 text-indigo-700 px-3 py-2 rounded font-semibold hover:bg-indigo-100">Start Prep</button>
           )}
           {order.status === "PREPARING" && (
-            <button onClick={() => onMove("READY")} className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded">Mark Ready</button>
+            <button onClick={() => onMove("READY")} className="w-full text-xs bg-emerald-50 text-emerald-700 px-3 py-2 rounded font-semibold hover:bg-emerald-100">Mark Ready</button>
           )}
           {order.status === "READY" && (
-            <button onClick={() => onMove("DELIVERED")} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded">Deliver</button>
+            <button onClick={() => onMove("DELIVERED")} className="w-full text-xs bg-slate-800 text-white px-3 py-2 rounded font-semibold hover:bg-slate-700">Complete</button>
           )}
         </div>
       )}
@@ -215,13 +355,28 @@ function OrderCard({ order, onApprove, onReject, onMove }: any) {
   );
 }
 
-function StatCard({ title, value, icon, highlight, warn }: any) {
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    DELIVERED: "bg-emerald-100 text-emerald-700",
+    CANCELLED: "bg-red-100 text-red-700",
+    REJECTED: "bg-red-100 text-red-700",
+    NEW: "bg-blue-100 text-blue-700",
+    CONFIRMED: "bg-indigo-100 text-indigo-700",
+  };
   return (
-    <div className={`bg-white p-4 rounded-xl border shadow-sm flex items-center gap-3 ${warn ? 'border-red-200 bg-red-50' : highlight ? 'border-blue-200' : 'border-slate-100'}`}>
+    <span className={`px-2 py-1 rounded text-xs font-bold ${styles[status] || "bg-slate-100 text-slate-600"}`}>
+      {status}
+    </span>
+  );
+}
+
+function StatCard({ title, value, icon }: any) {
+  return (
+    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-3">
       <span className="text-2xl">{icon}</span>
       <div>
-        <p className="text-xs text-slate-500 uppercase font-medium">{title}</p>
-        <p className={`text-xl font-bold ${warn ? 'text-red-700' : 'text-slate-800'}`}>{value}</p>
+        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{title}</p>
+        <p className="text-xl font-bold text-slate-800">{value}</p>
       </div>
     </div>
   );

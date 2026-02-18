@@ -6,6 +6,7 @@ import {
   OrderStatus,
   OrderApprovalStatus,
   Role,
+  MessageSender,
 } from "@prisma/client";
 import { sendTelegramMessage } from "../bot/telegram.sender";
 import { emitToCompany } from "../lib/socket";
@@ -73,10 +74,19 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user!.companyId;
-    const filterUserId = req.user!.role === Role.AGENT ? req.user!.userId : undefined;
+    const view = req.query.view as string; // 'active' | 'history'
 
-    // Standard visibility: Everyone sees all relevant orders for now to enable "Shared Ops"
     let whereCondition: any = { companyId };
+
+    if (view === "history") {
+      whereCondition.status = { in: ["DELIVERED", "CANCELLED", "REJECTED"] };
+    } else {
+      // Default: Active
+      whereCondition.status = {
+        in: ["NEW", "CONFIRMED", "PREPARING", "READY"],
+        notIn: ["DELIVERED", "CANCELLED"] // Extra safety
+      };
+    }
 
     const orders = await (prisma.order as any).findMany({
       where: whereCondition,
@@ -134,13 +144,23 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
 
     const updated = updatedRaw as any;
 
+    // 1. Send Telegram Notification
     if (updated.company?.telegramBotToken && updated.lead?.contact) {
       sendTelegramMessage(
         updated.company.telegramBotToken,
         updated.lead.contact,
-        `✅ Your order has been confirmed!\n\n🛒 ${updated.summary}\n💰 Amount: ₹${updated.amount}`
+        `✅ *Order Accepted!*\n\n${updated.summary}\nTotal: ₹${updated.amount}\n\nWe are preparing it now!`
       ).catch(console.error);
     }
+
+    // 2. Log in Chat History (System Message)
+    await prisma.message.create({
+      data: {
+        conversationId: existing.conversationId,
+        sender: MessageSender.SYSTEM,
+        content: `Order accepted by ${req.user!.userId === updated.processedById ? 'Agent' : 'System'}. Status: PREPARING.`
+      }
+    });
 
     emitToCompany(companyId, "order_updated", updated);
 
@@ -169,6 +189,25 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
         status: OrderStatus.CANCELLED,
         processedById: req.user!.userId,
         priorityScore: 0,
+      },
+      include: { lead: true, company: true }
+    });
+
+    // 1. Send Telegram Notification
+    if (updated.company?.telegramBotToken && updated.lead?.contact) {
+      sendTelegramMessage(
+        updated.company.telegramBotToken,
+        updated.lead.contact,
+        `❌ *Order Update*\n\nUnfortunately, your order for ${updated.summary} could not be accepted at this time.`
+      ).catch(console.error);
+    }
+
+    // 2. Log in Chat History
+    await prisma.message.create({
+      data: {
+        conversationId: existing.conversationId,
+        sender: MessageSender.SYSTEM,
+        content: `Order was rejected/cancelled.`
       }
     });
 
