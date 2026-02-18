@@ -234,12 +234,11 @@ export class TelegramAdapter implements ChannelAdapter {
                 content: m.content
             }));
 
-            // Perceived latency improvement: Continuous typing indicator
-            const typingInterval = setInterval(() => {
-                this.sendTyping(chatId).catch(() => { });
-            }, 4000);
+            // SPEED OPTIMIZATION: Fire typing indicator immediately (fire-and-forget)
+            this.sendTyping(chatId).catch(() => { });
 
             try {
+                // Execute AI request with higher concurrency
                 const aiReply = await aiQueue.add(() => generateBotReply(
                     text,
                     company.botBusinessType || "general business",
@@ -250,8 +249,6 @@ export class TelegramAdapter implements ChannelAdapter {
                 await this.saveAndSendSystemMessage(chatId, conversation.id, aiReply, companyId);
             } catch (err) {
                 console.error("AI Queue Error:", err);
-            } finally {
-                clearInterval(typingInterval);
             }
 
         } catch (err) {

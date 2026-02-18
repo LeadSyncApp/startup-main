@@ -39,7 +39,7 @@ async function generateWithFallback(
           ],
           model: model.id,
           temperature: 0.3,
-          max_tokens: 200,
+          max_tokens: 120, // Short responses = faster
         });
         content = completion.choices[0]?.message?.content || "";
       } else {

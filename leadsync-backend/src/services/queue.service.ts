@@ -5,7 +5,7 @@ type Task = () => Promise<any>;
 class TaskQueue {
     private queue: Task[] = [];
     private processing = false;
-    private concurrency = 5; // Limit to 5 concurrent AI calls to be safe
+    private concurrency = 20; // Increased for Groq speed (was 5)
     private activeCount = 0;
 
     async add<T>(task: () => Promise<T>): Promise<T> {
