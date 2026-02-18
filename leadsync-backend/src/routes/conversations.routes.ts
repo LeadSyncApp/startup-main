@@ -284,4 +284,98 @@ router.delete("/:id/messages", authMiddleware, async (req: AuthRequest, res: Res
   }
 });
 
+
+/* =========================================
+   ASSIGN AGENT (Shared Inbox)
+========================================= */
+router.patch("/:id/assign", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { assignedToId } = req.body; // userId or null to unassign
+    const companyId = req.user!.companyId;
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: req.params.id, companyId },
+    });
+
+    if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+
+    // Update assignment - forceful cast to avoid IDE type errors
+    const updatedCalls = await (prisma.conversation as any).update({
+      where: { id: conversation.id },
+      data: {
+        assignedToId: assignedToId || null,
+        status: assignedToId ? "ASSIGNED" : "OPEN",
+        updatedAt: new Date(),
+      },
+      include: { assignedTo: { select: { id: true, name: true } } }
+    });
+
+    const updated = updatedCalls as any;
+
+    // Notify team
+    emitToCompany(companyId, "conversation_assigned", {
+      conversationId: conversation.id,
+      assignedTo: updated.assignedTo,
+      status: updated.status
+    });
+
+    // System message
+    const agentName = updated.assignedTo?.name || "System";
+    const statusText = assignedToId ? `assigned to ${agentName}` : "unassigned";
+
+    const sysMsg = await prisma.message.create({
+      data: {
+        content: `Conversation was ${statusText}.`,
+        sender: MessageSender.SYSTEM,
+        conversationId: conversation.id,
+      }
+    });
+    emitToConversation(conversation.id, "new_message", sysMsg);
+
+    res.json(updated);
+  } catch (error) {
+    console.error("Assign error:", error);
+    res.status(500).json({ message: "Assignment failed" });
+  }
+});
+
+/* =========================================
+   UPDATE STATUS (Resolved/Open)
+========================================= */
+router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { status } = req.body; // OPEN, RESOLVED, SNOOZED
+    const companyId = req.user!.companyId;
+
+    // Explicit valid statuses
+    const validStatuses = ["OPEN", "ASSIGNED", "RESOLVED", "SNOOZED"];
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: req.params.id, companyId },
+    });
+
+    if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+
+    // Forceful cast
+    const updated = await (prisma.conversation as any).update({
+      where: { id: conversation.id },
+      data: { status, updatedAt: new Date() }
+    });
+
+    emitToCompany(companyId, "status_changed", {
+      conversationId: conversation.id,
+      status
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error("Status update error:", error);
+    res.status(500).json({ message: "Failed to update status" });
+  }
+});
+
 export default router;

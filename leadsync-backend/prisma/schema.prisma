@@ -101,7 +101,8 @@ model User {
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  processedOrders Order[] @relation("ProcessedOrders")
+  processedOrders       Order[]        @relation("ProcessedOrders")
+  assignedConversations Conversation[] @relation("AssignedConversations") // New relation
 
   @@unique([email, companyId])
   @@index([companyId])
@@ -121,6 +122,13 @@ enum ConversationIntent {
   ORDERING
   SUPPORT
   COMPLAINT
+}
+
+enum ConversationStatus {
+  OPEN
+  ASSIGNED
+  RESOLVED
+  SNOOZED
 }
 
 // ... (Existing Enums)
@@ -145,8 +153,8 @@ model Lead {
 
   @@unique([contact, channel, companyId])
   @@index([companyId])
-  @@index([totalSpend])  // For sorting VIPs
-  @@index([lastActiveAt]) // For retention analysis
+  @@index([totalSpend])
+  @@index([lastActiveAt])
 }
 
 model Conversation {
@@ -159,10 +167,15 @@ model Conversation {
   updatedAt  DateTime @updatedAt
 
   // CRM Fields
-  summary        String?            // AI Summary of conversation
-  sentimentScore Int                @default(0) // -10 to +10
+  summary        String?
+  sentimentScore Int                @default(0)
   intent         ConversationIntent?
   aiHandled      Boolean            @default(true)
+  
+  // Multi-Agent Fields
+  status       ConversationStatus @default(OPEN)
+  assignedToId String?
+  assignedTo   User?   @relation("AssignedConversations", fields: [assignedToId], references: [id])
 
   lead    Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -173,7 +186,9 @@ model Conversation {
   @@index([companyId, updatedAt])
   @@index([leadId])
   @@index([createdAt])
-  @@index([sentimentScore]) // For prioritizing angry customers
+  @@index([sentimentScore])
+  @@index([assignedToId])
+  @@index([status])
 }
 
 model Message {
