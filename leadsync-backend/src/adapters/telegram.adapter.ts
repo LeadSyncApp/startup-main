@@ -175,7 +175,7 @@ export class TelegramAdapter implements ChannelAdapter {
 
             /* COMMAND HANDLING */
             if (text === "/start") {
-                await this.sendMessage(chatId, buildWelcomeMessage(company, name));
+                await this.saveAndSendSystemMessage(chatId, conversation.id, buildWelcomeMessage(company, name), companyId);
                 return;
             }
 
@@ -185,7 +185,7 @@ export class TelegramAdapter implements ChannelAdapter {
 
             if (text.toLowerCase() === "menu" || text.toLowerCase() === "/menu") {
                 if (!categories.length) {
-                    await this.sendMessage(chatId, "Menu is currently unavailable.");
+                    await this.saveAndSendSystemMessage(chatId, conversation.id, "Menu is currently unavailable.", companyId);
                     return;
                 }
                 let menuMsg = "📜 *Our Menu*\n\n";
@@ -196,7 +196,7 @@ export class TelegramAdapter implements ChannelAdapter {
                     });
                     menuMsg += "\n";
                 });
-                await this.sendMessage(chatId, menuMsg);
+                await this.saveAndSendSystemMessage(chatId, conversation.id, menuMsg, companyId);
                 return;
             }
 
@@ -246,6 +246,18 @@ export class TelegramAdapter implements ChannelAdapter {
                     historyContext
                 ));
 
+                // 🚨 CONCURRENCY FIX: Re-fetch conversation mode before sending!
+                // If an Agent took over while AI was thinking, DO NOT SEND.
+                const freshConv = await prisma.conversation.findUnique({
+                    where: { id: conversation.id },
+                    select: { mode: true }
+                });
+
+                if (freshConv?.mode === "HUMAN") {
+                    console.log(`⚠️ Skiping AI reply for ${chatId} - Mode switched to HUMAN during generation.`);
+                    return;
+                }
+
                 await this.saveAndSendSystemMessage(chatId, conversation.id, aiReply, companyId);
             } catch (err) {
                 console.error("AI Queue Error:", err);
@@ -257,21 +269,27 @@ export class TelegramAdapter implements ChannelAdapter {
     }
 
     private async saveAndSendSystemMessage(chatId: string, convId: string, text: string, companyId: string) {
-        const botMsg = await prisma.message.create({
-            data: {
-                content: text,
-                sender: MessageSender.SYSTEM,
+        // OPTIMIZATION: Run DB save and Telegram Send in Parallel
+        const dbPromise = (async () => {
+            const botMsg = await prisma.message.create({
+                data: {
+                    content: text,
+                    sender: MessageSender.SYSTEM,
+                    conversationId: convId,
+                },
+            });
+
+            emitToCompany(companyId, "conversation_updated", {
                 conversationId: convId,
-            },
-        });
+                lastMessage: text,
+                updatedAt: new Date(),
+            });
+            emitToConversation(convId, "new_message", botMsg);
+        })();
 
-        emitToCompany(companyId, "conversation_updated", {
-            conversationId: convId,
-            lastMessage: text,
-            updatedAt: new Date(),
-        });
-        emitToConversation(convId, "new_message", botMsg);
+        const telegramPromise = this.sendMessage(chatId, text);
 
-        await this.sendMessage(chatId, text);
+        // Await both to ensure completion, but they run concurrently
+        await Promise.all([dbPromise, telegramPromise]);
     }
 }
