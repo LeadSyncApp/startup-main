@@ -8,38 +8,39 @@ import {
   Role,
 } from "@prisma/client";
 import { sendTelegramMessage } from "../bot/telegram.sender";
+import { emitToCompany } from "../lib/socket";
 
 const router = Router();
 
 /* ===============================
-   CREATE MANUAL ORDER
-=============================== */
+   CREATE ORDER
+================================== */
 router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { conversationId, summary, priority, amount } = req.body;
+    const { conversationId, summary, priority, amount, isUrgent } = req.body;
 
     if (!conversationId || !summary) {
       return res.status(400).json({ message: "Missing fields" });
     }
 
-    if (!req.user) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    const companyId = req.user!.companyId;
 
     const conversation = await prisma.conversation.findFirst({
-      where: {
-        id: conversationId,
-        companyId: req.user.companyId,
-      },
+      where: { id: conversationId, companyId },
     });
 
     if (!conversation) {
       return res.status(404).json({ message: "Conversation not found" });
     }
 
-    const order = await prisma.order.create({
+    let initialScore = 0;
+    if (priority === "URGENT" || isUrgent) initialScore += 50;
+    if (amount && amount > 5000) initialScore += 30;
+
+    // Force cast to allow new fields
+    const order = await (prisma.order as any).create({
       data: {
-        companyId: req.user.companyId,
+        companyId,
         conversationId: conversation.id,
         leadId: conversation.leadId,
         summary,
@@ -47,8 +48,17 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         status: OrderStatus.NEW,
         amount: amount ?? 0,
         approvalStatus: OrderApprovalStatus.PENDING,
+
+        isUrgent: isUrgent || false,
+        priorityScore: initialScore,
+        predictedValue: amount,
       },
+      include: {
+        lead: { select: { name: true, contact: true } }
+      }
     });
+
+    emitToCompany(companyId, "order_created", order);
 
     return res.json(order);
   } catch (error) {
@@ -59,42 +69,37 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 
 /* ===============================
    GET ORDERS
-=============================== */
+================================== */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    const companyId = req.user!.companyId;
+    const filterUserId = req.user!.role === Role.AGENT ? req.user!.userId : undefined;
 
-    const companyId = req.user.companyId;
-
+    // Standard visibility: Everyone sees all relevant orders for now to enable "Shared Ops"
     let whereCondition: any = { companyId };
 
-    if (req.user.role === Role.AGENT) {
-      whereCondition = {
-        companyId,
-        OR: [
-          { approvalStatus: OrderApprovalStatus.PENDING },
-          { processedById: req.user.userId },
-        ],
-      };
-    }
-
-    const orders = await prisma.order.findMany({
+    const orders = await (prisma.order as any).findMany({
       where: whereCondition,
       include: {
-        lead: true,
-        conversation: true,
-        processedBy: {
+        lead: {
           select: {
             id: true,
             name: true,
-            role: true,
-          },
+            contact: true,
+            channel: true,
+            totalSpend: true,
+            segment: true,
+          }
+        },
+        processedBy: {
+          select: { id: true, name: true }
         },
       },
-      orderBy: { createdAt: "desc" },
-      take: 50, // Added limit
+      orderBy: [
+        { priorityScore: "desc" },
+        { createdAt: "desc" }
+      ],
+      take: 100,
     });
 
     return res.json(orders);
@@ -105,121 +110,107 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 /* ===============================
-   APPROVE ORDER (RACE SAFE)
-=============================== */
+   APPROVE ORDER
+================================== */
 router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const companyId = req.user!.companyId;
 
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    const existing = await prisma.order.findFirst({ where: { id, companyId } });
+    if (!existing) return res.status(404).json({ message: "Order not found" });
 
-    const updated = await prisma.order.updateMany({
-      where: {
-        id,
-        companyId: req.user.companyId,
-        approvalStatus: OrderApprovalStatus.PENDING,
-      },
+    // Force cast update
+    const updatedRaw = await (prisma.order as any).update({
+      where: { id },
       data: {
         approvalStatus: OrderApprovalStatus.APPROVED,
         status: OrderStatus.CONFIRMED,
-        processedById: req.user.userId,
+        processedById: req.user!.userId,
+        priorityScore: { increment: 10 },
       },
+      include: { lead: true, company: true }
     });
 
-    if (updated.count === 0) {
-      return res.status(400).json({ message: "Order already processed" });
+    const updated = updatedRaw as any;
+
+    if (updated.company?.telegramBotToken && updated.lead?.contact) {
+      sendTelegramMessage(
+        updated.company.telegramBotToken,
+        updated.lead.contact,
+        `✅ Your order has been confirmed!\n\n🛒 ${updated.summary}\n💰 Amount: ₹${updated.amount}`
+      ).catch(console.error);
     }
 
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: { lead: true, company: true },
-    });
+    emitToCompany(companyId, "order_updated", updated);
 
-    // Telegram send should NEVER break approval
-    if (order?.company.telegramBotToken && order.lead?.contact) {
-      try {
-        await sendTelegramMessage(
-          order.company.telegramBotToken,
-          order.lead.contact,
-          `✅ Your order has been approved!\n\n🛒 ${order.summary}\n\n💰 Total: ₹${order.amount}`
-        );
-      } catch (err) {
-        console.error("Telegram send failed:", err);
-      }
-    }
-
-    return res.json(order);
+    return res.json(updated);
   } catch (error) {
-    console.error("Approve order error:", error);
+    console.error("Approve error:", error);
     return res.status(500).json({ message: "Failed to approve order" });
   }
 });
 
 /* ===============================
-   REJECT ORDER (RACE SAFE)
-=============================== */
+   REJECT ORDER
+================================== */
 router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const companyId = req.user!.companyId;
 
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    const existing = await prisma.order.findFirst({ where: { id, companyId } });
+    if (!existing) return res.status(404).json({ message: "Order not found" });
 
-    const updated = await prisma.order.updateMany({
-      where: {
-        id,
-        companyId: req.user.companyId,
-        approvalStatus: OrderApprovalStatus.PENDING,
-      },
+    const updated = await (prisma.order as any).update({
+      where: { id },
       data: {
         approvalStatus: OrderApprovalStatus.REJECTED,
         status: OrderStatus.CANCELLED,
-        processedById: req.user.userId,
-      },
+        processedById: req.user!.userId,
+        priorityScore: 0,
+      }
     });
 
-    if (updated.count === 0) {
-      return res.status(400).json({ message: "Order already processed" });
-    }
+    emitToCompany(companyId, "order_updated", updated);
 
-    return res.json({ message: "Order rejected" });
+    return res.json(updated);
   } catch (error) {
-    console.error("Reject order error:", error);
+    console.error("Reject error:", error);
     return res.status(500).json({ message: "Failed to reject order" });
   }
 });
 
 /* ===============================
-   UPDATE ORDER STATUS (SAFE)
-=============================== */
+   UPDATE STATUS / PRIORITY
+================================== */
 router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { status, amount } = req.body;
+    const { status, priorityScore, isUrgent } = req.body;
     const { id } = req.params;
+    const companyId = req.user!.companyId;
 
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    const existing = await prisma.order.findFirst({ where: { id, companyId } });
+    if (!existing) return res.status(404).json({ message: "Order not found" });
 
-    const updated = await prisma.order.updateMany({
-      where: {
-        id,
-        companyId: req.user.companyId,
-      },
-      data: {
-        status,
-        ...(status === OrderStatus.DELIVERED && {
-          processedById: req.user.userId,
-          amount: amount ?? undefined,
-        }),
-      },
-    });
+    const updateData: any = { status };
+    if (priorityScore !== undefined) updateData.priorityScore = priorityScore;
+    if (isUrgent !== undefined) updateData.isUrgent = isUrgent;
 
-    if (updated.count === 0) {
-      return res.status(404).json({ message: "Order not found" });
+    if (status === "DELIVERED" || status === "READY") {
+      if (!existing.processedById) updateData.processedById = req.user!.userId;
     }
 
-    const order = await prisma.order.findUnique({ where: { id } });
-    return res.json(order);
+    const updated = await (prisma.order as any).update({
+      where: { id },
+      data: updateData
+    });
+
+    emitToCompany(companyId, "order_updated", updated);
+
+    return res.json(updated);
   } catch (error) {
-    console.error("Update order error:", error);
+    console.error("Update status error:", error);
     return res.status(500).json({ message: "Failed to update order" });
   }
 });
