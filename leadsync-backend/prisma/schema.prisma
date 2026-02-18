@@ -106,6 +106,7 @@ model User {
   @@unique([email, companyId])
   @@index([companyId])
   @@index([isActive])
+  @@index([createdAt])
 }
 
 model Lead {
@@ -141,6 +142,7 @@ model Conversation {
   @@unique([leadId, companyId, channel], name: "leadId_companyId_channel")
   @@index([companyId, updatedAt])
   @@index([leadId])
+  @@index([createdAt])
 }
 
 model Message {
@@ -153,6 +155,7 @@ model Message {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
+  @@index([conversationId])
 }
 
 model Order {

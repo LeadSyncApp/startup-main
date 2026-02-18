@@ -17,7 +17,8 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     const conversations = await prisma.conversation.findMany({
       where: { companyId },
       orderBy: { updatedAt: "desc" },
-      take: 20, // Reduced to 20 for faster initial load
+      take: 21, // Fetch 1 extra to determine if next page exists
+      cursor: req.query.cursor ? { id: String(req.query.cursor) } : undefined,
       select: {
         id: true,
         mode: true,
@@ -39,15 +40,20 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       }
     });
 
-    res.json(
-      conversations.map((c) => ({
+    const hasNextPage = conversations.length > 20;
+    const result = hasNextPage ? conversations.slice(0, 20) : conversations;
+    const nextCursor = hasNextPage ? result[result.length - 1].id : null;
+
+    res.json({
+      items: result.map((c) => ({
         id: c.id,
         mode: c.mode,
         lead: c.lead,
         updatedAt: c.updatedAt,
         lastMessage: c.messages[0]?.content || "",
-      }))
-    );
+      })),
+      nextCursor
+    });
   } catch (error) {
     console.error("Fetch conversations error:", error);
     res.status(500).json({ message: "Failed to fetch conversations" });
@@ -150,20 +156,7 @@ router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response)
       },
     });
 
-    // ✅ Auto-switch to HUMAN when agent replies
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: {
-        mode: ConversationMode.HUMAN,
-        updatedAt: new Date(),
-      },
-    });
-
-    // Notify about mode change
-    emitToCompany(companyId, "mode_changed", {
-      conversationId: conversation.id,
-      mode: ConversationMode.HUMAN
-    });
+    // NOTE: Auto-switch removed as per user request. Mode strictly manual.
 
     if (conversation.company.telegramBotToken) {
       // Fire-and-forget: Don't await

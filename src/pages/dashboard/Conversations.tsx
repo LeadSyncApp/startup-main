@@ -43,11 +43,12 @@ export default function Conversations() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loadingConv, setLoadingConv] = useState(true);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showMobileList, setShowMobileList] = useState(true);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const pollTimerRef = useRef<any>(null);
   const lastMsgCount = useRef(0);
   const { socket } = useSocket();
   const selectedRef = useRef(selected);
@@ -74,20 +75,36 @@ export default function Conversations() {
   const loadConversations = async (quiet = false) => {
     try {
       if (!quiet) setLoadingConv(true);
-      const data = await api.get("/conversations");
+      const data = await api.get("/conversations"); // First page
 
       // Only update if data changed to prevent jitter
       setConversations(prev => {
-        if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
+        if (JSON.stringify(prev) === JSON.stringify(data.items)) return prev;
         if (companyId) {
-          localStorage.setItem(`leadsync_conv_cache_${companyId}`, JSON.stringify(data));
+          localStorage.setItem(`leadsync_conv_cache_${companyId}`, JSON.stringify(data.items));
         }
-        return data;
+        return data.items;
       });
+      setNextCursor(data.nextCursor);
     } catch (err) {
       console.error("Failed to load list", err);
     } finally {
       setLoadingConv(false);
+    }
+  };
+
+  const loadMoreConversations = async () => {
+    if (!nextCursor || loadingMore) return;
+    try {
+      setLoadingMore(true);
+      const data = await api.get(`/conversations?cursor=${nextCursor}`);
+
+      setConversations(prev => [...prev, ...data.items]);
+      setNextCursor(data.nextCursor);
+    } catch (err) {
+      console.error("Failed to load more", err);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -178,41 +195,31 @@ export default function Conversations() {
     };
   }, [socket, selected?.id]);
 
-  /* FALLBACK POLLING (SLOW) */
-  useEffect(() => {
-    if (!token) return;
-    const poll = async () => {
-      if (document.visibilityState === "visible") {
-        await loadConversations(true);
-      }
-      pollTimerRef.current = setTimeout(poll, 15000);
-    };
-    pollTimerRef.current = setTimeout(poll, 15000);
-    return () => clearTimeout(pollTimerRef.current);
-  }, [token]);
-
   /* SELECT HANDLER */
   const handleSelect = (conv: Conversation) => {
     setSelected(conv);
+    setMessages([]); // Clear to avoid showing wrong chat
     setShowMobileList(false);
     fetchMessages(conv);
   };
 
-  /* AUTO SCROLL (STABLE & SMART) */
-  useEffect(() => {
+  /* SMART AUTO SCROLL */
+  const scrollToBottom = (smooth = true) => {
     if (scrollRef.current) {
-      const el = scrollRef.current;
-      const isNewMessage = messages.length > lastMsgCount.current;
-
-      // If messages length changed significantly (like history clear), or if it's a small increment
-      if (isNewMessage || messages.length === 0) {
-        el.scrollTo({
-          top: el.scrollHeight,
-          behavior: isNewMessage && lastMsgCount.current > 0 ? "smooth" : "auto"
-        });
-      }
-      lastMsgCount.current = messages.length;
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: smooth ? "smooth" : "auto"
+      });
     }
+  };
+
+  useEffect(() => {
+    // Scroll handling on messages update:
+    // Only scroll if we have new messages (appended) or if it's the first load
+    if (!scrollRef.current || messages.length === 0) return;
+
+    scrollToBottom(messages.length > lastMsgCount.current);
+    lastMsgCount.current = messages.length;
   }, [messages]);
 
   /* SEND MESSAGE */
@@ -374,6 +381,18 @@ export default function Conversations() {
                 </motion.div>
               ))}
             </AnimatePresence>
+          )}
+
+          {nextCursor && !loadingConv && (
+            <div className="p-4 flex justify-center">
+              <button
+                onClick={loadMoreConversations}
+                disabled={loadingMore}
+                className="text-xs font-bold text-slate-400 hover:text-indigo-500 uppercase tracking-widest disabled:opacity-50"
+              >
+                {loadingMore ? "Loading..." : "Load Older Chats"}
+              </button>
+            </div>
           )}
         </div>
       </div>

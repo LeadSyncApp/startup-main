@@ -33,6 +33,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         const newSocket = io(API_BASE, {
             auth: { token },
+            transports: ["websocket", "polling"], // Prefer WebSocket
             reconnection: true,             // Enable auto-reconnect
             reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,

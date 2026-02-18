@@ -11,6 +11,7 @@ import { sendTelegramMessage, sendChatAction } from "../../bot/telegram.sender";
 import { generateBotReply } from "../../services/geminiService";
 import { cacheService } from "../../services/cache.service";
 import { emitToCompany, emitToConversation } from "../../lib/socket";
+import { aiQueue } from "../../services/queue.service";
 
 
 /* ===============================
@@ -142,6 +143,9 @@ async function processTelegramMessage(body: any, companyId: string) {
           companyId,
         },
       });
+
+      // ✅ Emit new lead event
+      emitToCompany(companyId, "lead_created", lead);
     }
 
     /* -------------------------------
@@ -365,11 +369,12 @@ async function processTelegramMessage(body: any, companyId: string) {
     sendChatAction(botToken, chatId, "typing");
 
     try {
-      aiReply = await generateBotReply(
+      // Use Queue for AI Concurrency Control
+      aiReply = await aiQueue.add(() => generateBotReply(
         text,
         company.botBusinessType || "general business",
         structuredMenu
-      );
+      ));
     } catch (err) {
       console.error("AI reply failed:", err);
     } finally {

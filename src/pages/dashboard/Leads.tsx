@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useSocket } from "../../context/SocketContext";
 import LeadsTable from "../../components/leads/LeadsTable";
 import SectionSummary from "../../components/dashboard/SectionSummary";
 import { api } from "../../lib/api"; // ✅ centralized API
@@ -19,14 +20,14 @@ export default function Leads() {
 
   const [loading, setLoading] = useState(leads.length === 0);
 
+  const { socket } = useSocket();
+
   useEffect(() => {
     if (!token) return;
 
-    let timeoutId: any;
-
-    const fetchLeads = async (quiet = false) => {
+    const fetchLeads = async () => {
       try {
-        if (!quiet) setLoading(true);
+        setLoading(true);
         const data = await api.get("/leads");
         setLeads(data);
         if (companyId) {
@@ -36,15 +37,26 @@ export default function Leads() {
         console.error("❌ Failed to fetch leads:", err);
       } finally {
         setLoading(false);
-        // Poll every 30s
-        timeoutId = setTimeout(() => fetchLeads(true), 30000);
       }
     };
 
-    fetchLeads(leads.length > 0);
-
-    return () => clearTimeout(timeoutId);
+    fetchLeads();
   }, [token]);
+
+  // Real-time updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const onNewLead = (lead: any) => {
+      setLeads((prev) => [lead, ...prev]);
+    };
+
+    socket.on("lead_created", onNewLead);
+
+    return () => {
+      socket.off("lead_created", onNewLead);
+    };
+  }, [socket]);
 
   return (
     <motion.div

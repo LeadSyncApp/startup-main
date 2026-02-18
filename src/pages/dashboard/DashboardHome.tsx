@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
+import { useSocket } from "../../context/SocketContext";
 import { api } from "../../lib/api"; // ✅ centralized API
 
 interface KPIData {
@@ -75,6 +76,25 @@ export default function DashboardHome() {
       fetchKPIs(false);
     }
   }, [token, companyId]);
+
+  /* REAL-TIME UPDATES */
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    // Simple incremental updates
+    const onLead = () => setData(prev => ({ ...prev, leads: prev.leads + 1 }));
+
+    // For now, on any event, we can just re-fetch to be accurate (easiest way to ensure consistency)
+    // or just increment. Let's increment leads as we know that one is 1:1.
+
+    socket.on("lead_created", onLead);
+
+    return () => {
+      socket.off("lead_created", onLead);
+    };
+  }, [socket]);
 
   const cards = [
     {
