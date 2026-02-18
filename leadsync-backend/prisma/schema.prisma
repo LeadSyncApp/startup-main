@@ -109,6 +109,22 @@ model User {
   @@index([createdAt])
 }
 
+enum LeadSegment {
+  NEW
+  REGULAR
+  VIP
+  CHURN_RISK
+}
+
+enum ConversationIntent {
+  BROWSING
+  ORDERING
+  SUPPORT
+  COMPLAINT
+}
+
+// ... (Existing Enums)
+
 model Lead {
   id        String   @id @default(uuid())
   name      String?
@@ -117,12 +133,20 @@ model Lead {
   companyId String
   createdAt DateTime @default(now())
 
+  // CRM Fields
+  totalSpend   Float       @default(0)
+  orderCount   Int         @default(0)
+  lastActiveAt DateTime    @default(now())
+  segment      LeadSegment @default(NEW)
+
   company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversations Conversation[]
   orders        Order[]
 
   @@unique([contact, channel, companyId])
   @@index([companyId])
+  @@index([totalSpend])  // For sorting VIPs
+  @@index([lastActiveAt]) // For retention analysis
 }
 
 model Conversation {
@@ -134,6 +158,12 @@ model Conversation {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  // CRM Fields
+  summary        String?            // AI Summary of conversation
+  sentimentScore Int                @default(0) // -10 to +10
+  intent         ConversationIntent?
+  aiHandled      Boolean            @default(true)
+
   lead    Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   messages Message[]
@@ -143,6 +173,7 @@ model Conversation {
   @@index([companyId, updatedAt])
   @@index([leadId])
   @@index([createdAt])
+  @@index([sentimentScore]) // For prioritizing angry customers
 }
 
 model Message {
@@ -172,6 +203,11 @@ model Order {
   source         OrderSource         @default(MANUAL)
   approvalStatus OrderApprovalStatus @default(APPROVED)
 
+  // CRM / AI Fields
+  priorityScore  Int     @default(0) // Calculated score for sorting
+  predictedValue Float?              // AI estimated value
+  isUrgent       Boolean @default(false)
+
   processedById String?
   processedBy   User?    @relation("ProcessedOrders", fields: [processedById], references: [id])
 
@@ -191,4 +227,5 @@ model Order {
   @@index([processedById])
   @@index([approvalStatus])
   @@index([createdAt])
+  @@index([priorityScore]) // Critical for Real-Time Dashboard sorting
 }

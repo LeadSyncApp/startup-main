@@ -12,6 +12,7 @@ import { emitToCompany, emitToConversation } from "../lib/socket";
 import { generateBotReply } from "../services/geminiService";
 import { aiQueue } from "../services/queue.service";
 import { cacheService } from "../services/cache.service";
+import { intelligenceService } from "../services/intelligence.service";
 
 /* ===============================
    TYPES
@@ -170,6 +171,15 @@ export class TelegramAdapter implements ChannelAdapter {
                 updatedAt: new Date(),
             });
             emitToConversation(conversation.id, "new_message", clientMsg);
+
+            // 🧠 INTELLIGENCE: Analyze message in background (Fire-and-forget)
+            // This updates Sentiment, Intent, and LastActiveAt without blocking the bot reply.
+            intelligenceService.analyzeMessage(
+                companyId,
+                lead.id,
+                conversation.id,
+                text
+            ).catch((err: any) => console.error("Intelligence Error:", err));
 
             if (conversation.mode === ConversationMode.HUMAN) return;
 
