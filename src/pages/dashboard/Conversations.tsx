@@ -48,6 +48,10 @@ export default function Conversations() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showMobileList, setShowMobileList] = useState(true);
 
+  // LOCKING STATE
+  const [isLocked, setIsLocked] = useState(false);
+  const [assignedToAgent, setAssignedToAgent] = useState<{ name: string } | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastMsgCount = useRef(0);
   const { socket } = useSocket();
@@ -128,6 +132,11 @@ export default function Conversations() {
 
       // Sync selected mode
       setSelected(prev => prev?.id === conv.id ? { ...prev, mode: data.mode } : prev);
+
+      // Update Lock State
+      setIsLocked(!!data.isLocked);
+      setAssignedToAgent(data.assignedTo);
+
     } catch (err) {
       console.error("Failed message fetch", err);
     }
@@ -180,9 +189,17 @@ export default function Conversations() {
       });
     };
 
+    const onConversationAssigned = (data: { conversationId: string }) => {
+      // Refresh lock state if we are viewing this conversation
+      if (selectedRef.current?.id === data.conversationId) {
+        fetchMessages(selectedRef.current);
+      }
+    };
+
     socket.on("new_message", onNewMessage);
     socket.on("mode_changed", onModeChanged);
     socket.on("conversation_updated", onConversationUpdated);
+    socket.on("conversation_assigned", onConversationAssigned);
 
     if (selected) {
       socket.emit("join_conversation", selected.id);
@@ -192,6 +209,7 @@ export default function Conversations() {
       socket.off("new_message", onNewMessage);
       socket.off("mode_changed", onModeChanged);
       socket.off("conversation_updated", onConversationUpdated);
+      socket.off("conversation_assigned", onConversationAssigned);
     };
   }, [socket, selected?.id]);
 
@@ -439,9 +457,10 @@ export default function Conversations() {
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="hidden md:flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                <div className={`hidden md:flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 ${isLocked ? 'opacity-50 pointer-events-none' : ''}`}>
                   <button
                     onClick={() => toggleMode("BOT")}
+                    disabled={isLocked}
                     className={`
                       flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-black transition-all uppercase tracking-widest
                       ${selected.mode === "BOT" ? "bg-white text-indigo-600 shadow-xl shadow-indigo-200/50" : "text-slate-500 hover:text-slate-900"}
@@ -452,6 +471,7 @@ export default function Conversations() {
                   </button>
                   <button
                     onClick={() => toggleMode("HUMAN")}
+                    disabled={isLocked}
                     className={`
                       flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-black transition-all uppercase tracking-widest
                       ${selected.mode === "HUMAN" ? "bg-white text-rose-600 shadow-xl shadow-rose-200/50" : "text-slate-500 hover:text-slate-900"}
@@ -466,7 +486,8 @@ export default function Conversations() {
 
                 <button
                   onClick={clearHistory}
-                  className="p-3 bg-rose-50 text-rose-600 rounded-2xl hover:bg-rose-100 transition active:scale-90"
+                  disabled={isLocked}
+                  className={`p-3 bg-rose-50 text-rose-600 rounded-2xl hover:bg-rose-100 transition active:scale-90 ${isLocked ? 'opacity-50 pointer-events-none' : ''}`}
                   title="Clear history"
                 >
                   <Trash2 size={18} />
@@ -534,35 +555,49 @@ export default function Conversations() {
             </div>
 
             {/* CHAT INPUT AREA */}
-            <div className="p-8 bg-white border-t border-slate-100">
-              <div className="flex items-center gap-3 bg-slate-100/50 p-2.5 rounded-[2.5rem] border border-slate-200/60 shadow-inner focus-within:border-indigo-500/50 focus-within:bg-white transition-all">
-                <textarea
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendMessage();
-                    }
-                  }}
-                  rows={1}
-                  placeholder="ASSIST CUSTOMER..."
-                  className="flex-1 bg-transparent border-none resize-none py-3 px-6 text-sm focus:ring-0 max-h-32 custom-scrollbar font-bold text-slate-700 uppercase tracking-wide placeholder:opacity-50"
-                />
-                <button
-                  onClick={sendMessage}
-                  disabled={!newMessage.trim()}
-                  className={`
+            {isLocked ? (
+              <div className="p-8 bg-slate-50 border-t border-slate-200 text-center">
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 px-6 py-4 rounded-xl flex items-center justify-center gap-3 shadow-sm">
+                  <div className="bg-amber-100 p-2 rounded-full">
+                    <span className="font-bold text-xs">🔒</span>
+                  </div>
+                  <div className="text-left">
+                    <p className="font-black text-sm uppercase tracking-wide">Locked by {assignedToAgent?.name || "another agent"}</p>
+                    <p className="text-xs opacity-70">You can view but cannot reply.</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-8 bg-white border-t border-slate-100">
+                <div className="flex items-center gap-3 bg-slate-100/50 p-2.5 rounded-[2.5rem] border border-slate-200/60 shadow-inner focus-within:border-indigo-500/50 focus-within:bg-white transition-all">
+                  <textarea
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                      }
+                    }}
+                    rows={1}
+                    placeholder="ASSIST CUSTOMER..."
+                    className="flex-1 bg-transparent border-none resize-none py-3 px-6 text-sm focus:ring-0 max-h-32 custom-scrollbar font-bold text-slate-700 uppercase tracking-wide placeholder:opacity-50"
+                  />
+                  <button
+                    onClick={sendMessage}
+                    disabled={!newMessage.trim()}
+                    className={`
                     h-12 w-12 flex items-center justify-center rounded-full transition-all shadow-xl
                     ${newMessage.trim()
-                      ? "bg-indigo-600 text-white scale-100 hover:bg-indigo-700 hover:rotate-12"
-                      : "bg-slate-200 text-slate-400 scale-90 cursor-not-allowed"}
+                        ? "bg-indigo-600 text-white scale-100 hover:bg-indigo-700 hover:rotate-12"
+                        : "bg-slate-200 text-slate-400 scale-90 cursor-not-allowed"}
                   `}
-                >
-                  <Send size={20} />
-                </button>
+                  >
+                    <Send size={20} />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>

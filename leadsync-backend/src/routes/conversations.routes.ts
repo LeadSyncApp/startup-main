@@ -2,7 +2,7 @@ import { Router, Response } from "express";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { prisma } from "../lib/prisma";
 import { sendTelegramMessage } from "../bot/telegram.sender";
-import { ConversationMode, MessageSender } from "@prisma/client";
+import { ConversationMode, MessageSender, Role } from "@prisma/client";
 import { emitToCompany, emitToConversation } from "../lib/socket";
 
 const router = Router();
@@ -66,13 +66,18 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user!.companyId;
+    const userId = req.user!.userId; // Authenticated user
+    const userRole = req.user!.role; // Role
 
     const conversation = await prisma.conversation.findFirst({
       where: {
         id: req.params.id,
         companyId,
       },
-    });
+      include: {
+        assignedTo: { select: { id: true, name: true } }
+      } as any
+    }) as any;
 
     if (!conversation) {
       return res.status(404).json({ message: "Conversation not found" });
@@ -113,6 +118,8 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
       mode: conversation.mode,
       messages,
       order: latestOrder || null,
+      isLocked: conversation.assignedToId && conversation.assignedToId !== userId && userRole === "AGENT",
+      assignedTo: conversation.assignedTo
     });
 
   } catch (error) {
@@ -128,6 +135,8 @@ router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response)
   try {
     const { content } = req.body;
     const companyId = req.user!.companyId;
+    const userId = req.user!.userId;
+    const userRole = req.user!.role;
 
     if (!content || !content.trim()) {
       return res.status(400).json({ message: "Message content required" });
@@ -142,10 +151,15 @@ router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response)
         lead: true,
         company: true,
       },
-    });
+    }) as any;
 
     if (!conversation) {
       return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    // ENFORCE LOCK
+    if (conversation.assignedToId && conversation.assignedToId !== userId && userRole === "AGENT") {
+      return res.status(403).json({ message: "Conversation is locked by another agent." });
     }
 
     const message = await prisma.message.create({
