@@ -43,30 +43,36 @@ export default function Orders() {
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
 
   // Fetch Orders
-  const fetchOrders = async () => {
+  const fetchOrders = async (currentView: string) => {
     try {
       setLoading(true);
-      const data = await api.get(`/orders?view=${view}`);
-      setOrders(data);
+      // Add timestamp to prevent caching
+      const data = await api.get(`/orders?view=${currentView}&t=${Date.now()}`);
+
+      // Additional safety check: Ensure we only set data if view hasn't changed
+      if (currentView === view) {
+        setOrders(data);
+      }
     } catch (err) {
       console.error("Failed to load orders", err);
     } finally {
-      setLoading(false);
+      if (currentView === view) setLoading(false);
     }
   };
 
   useEffect(() => {
     if (!token) return;
-    fetchOrders();
+    setOrders([]); // CLEAR STATE immediately on view change
+    fetchOrders(view);
   }, [token, view]);
 
-  // Real-Time Listener (Only update if relevant to current view)
+  // Real-Time Listener
   useEffect(() => {
     if (!socket) return;
+
     const handleUpdate = (updated: Order) => {
-      // If status changed to something not in current view, remove it?
-      // Or just re-fetch to be safe/lazy? Let's manually update for snappy feel.
       if (view === 'active') {
+        // If status became terminal (Delivered/Cancelled), remove it
         if (['DELIVERED', 'CANCELLED', 'REJECTED'].includes(updated.status)) {
           setOrders(prev => prev.filter(o => o.id !== updated.id));
         } else {
@@ -76,8 +82,18 @@ export default function Orders() {
             return [updated, ...prev];
           });
         }
+      } else {
+        // History View: If order became HISTORY, add it?
+        if (['DELIVERED', 'CANCELLED', 'REJECTED'].includes(updated.status)) {
+          setOrders(prev => {
+            const exists = prev.find(o => o.id === updated.id);
+            if (exists) return prev.map(o => o.id === updated.id ? updated : o);
+            return [updated, ...prev];
+          });
+        }
       }
     };
+
     const handleCreate = (newOrder: Order) => {
       if (view === 'active') setOrders(prev => [newOrder, ...prev]);
     };
@@ -93,20 +109,55 @@ export default function Orders() {
   // Actions
   const handleConfirmAction = async () => {
     if (!actionOrder || !actionType) return;
-    try {
-      if (actionType === 'approve') {
-        await api.post(`/orders/${actionOrder.id}/approve`);
-      } else {
-        await api.post(`/orders/${actionOrder.id}/reject`);
+    const orderId = actionOrder.id;
+    const type = actionType;
+
+    // Optimistic UI Update
+    setOrders(prev => prev.map(o => {
+      if (o.id === orderId) {
+        if (type === 'approve') return { ...o, status: 'CONFIRMED' }; // Move to Kitchen
+        if (type === 'reject') return { ...o, status: 'REJECTED' }; // Will be filtered out
       }
-      // UI update handled by socket usually, but let's close modal
-      setActionOrder(null);
-      setActionType(null);
-    } catch (e) { alert("Action failed"); }
+      return o;
+    }).filter(o => {
+      // If rejected, remove from Active view immediately
+      if (view === 'active' && o.id === orderId && type === 'reject') return false;
+      return true;
+    }));
+
+    setActionOrder(null);
+    setActionType(null);
+
+    try {
+      if (type === 'approve') {
+        await api.post(`/orders/${orderId}/approve`);
+      } else {
+        await api.post(`/orders/${orderId}/reject`);
+      }
+    } catch (e) {
+      alert("Action failed, refreshing...");
+      fetchOrders(view);
+    }
   };
 
   const handleMoveStatus = async (id: string, status: string) => {
-    try { await api.patch(`/orders/${id}/status`, { status }); } catch (e) { console.error(e); }
+    // Optimistic Update
+    const oldOrders = [...orders];
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+
+    // Remove if moved to final state while in Active view
+    if (view === 'active' && ['DELIVERED', 'CANCELLED'].includes(status)) {
+      setTimeout(() => {
+        setOrders(prev => prev.filter(o => o.id !== id));
+      }, 500); // Small delay for animation
+    }
+
+    try {
+      await api.patch(`/orders/${id}/status`, { status });
+    } catch (e) {
+      console.error(e);
+      setOrders(oldOrders); // Revert on failure
+    }
   };
 
   // Stats
@@ -120,8 +171,8 @@ export default function Orders() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 flex-shrink-0">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full md:w-auto">
-          <StatCard title="Revenue (View)" value={`₹${revenueToday.toLocaleString()}`} icon="💰" />
-          <StatCard title="Total Orders" value={orders.length} icon="📦" />
+          <StatCard title={view === 'active' ? "Active Revenue" : "History Revenue"} value={`₹${revenueToday.toLocaleString()}`} icon="💰" />
+          <StatCard title="Orders (Visible)" value={orders.length} icon="📦" />
         </div>
 
         {/* View Toggle */}
@@ -142,7 +193,7 @@ export default function Orders() {
       </div>
 
       {loading ? (
-        <div className="flex-1 flex items-center justify-center text-slate-400">Loading...</div>
+        <div className="flex-1 flex items-center justify-center text-slate-400">Loading {view === 'active' ? 'Live' : 'History'}...</div>
       ) : view === 'active' ? (
         /* --- KANBAN BOARD --- */
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
@@ -177,16 +228,11 @@ export default function Orders() {
               </div>
             ))}
 
-            {/* Simplified Completed Column for Active View (Just for quick drag/drop target essentially) */}
+            {/* Simplified Completed Column Hint */}
             <div className="w-1/5 opacity-60 hover:opacity-100 transition-opacity border-l border-dashed border-slate-300 pl-4 flex flex-col">
-              <h3 className="font-bold text-slate-400 mb-3">Completed (Recently)</h3>
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                {/* We don't really show them here in "active" view usually, 
-                                but if we updated status to DELIVERED, it vanishes. 
-                                User can find it in History. */}
-                <div className="text-xs text-slate-400 text-center italic mt-10">
-                  Delivered orders move to History tab automatically.
-                </div>
+              <h3 className="font-bold text-slate-400 mb-3">Completed</h3>
+              <div className="text-xs text-slate-400 text-center italic mt-10">
+                Visual placeholder. Moved to History.
               </div>
             </div>
           </div>
@@ -195,7 +241,7 @@ export default function Orders() {
         /* --- HISTORY TABLE --- */
         <div className="bg-white rounded-xl shadow border overflow-hidden flex-1 overflow-y-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-600 font-semibold">
+            <thead className="bg-slate-50 text-xs uppercase text-slate-600 font-semibold sticky top-0 bg-slate-50 z-10">
               <tr>
                 <th className="px-6 py-3 text-left">Date</th>
                 <th className="px-6 py-3 text-left">Wait Time</th>
@@ -214,8 +260,9 @@ export default function Orders() {
                     <span className="text-xs opacity-70">{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </td>
                   <td className="px-6 py-4 text-slate-500 text-xs">
-                    {/* Mock wait time calc */}
-                    {Math.floor((new Date().getTime() - new Date(order.createdAt).getTime()) / 60000)} min
+                    {(new Date().getTime() - new Date(order.createdAt).getTime()) > 60000
+                      ? Math.floor((new Date().getTime() - new Date(order.createdAt).getTime()) / 60000) + " min"
+                      : "Just now"}
                   </td>
                   <td className="px-6 py-4 font-medium text-slate-900">
                     {order.lead?.name || "Guest"}
@@ -233,6 +280,13 @@ export default function Orders() {
                   </td>
                 </tr>
               ))}
+              {orders.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="text-center py-10 opacity-40 italic">
+                    No history yet. Delivered orders appear here.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -307,7 +361,7 @@ export default function Orders() {
   );
 }
 
-// --- SUB COMPONENTS ---
+// --- SUB COMPONENTS (UNCHANGED) ---
 
 function OrderCard({ order, onApprove, onReject, onMove }: any) {
   const isNew = order.status === "NEW";
