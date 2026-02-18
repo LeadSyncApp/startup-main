@@ -53,4 +53,22 @@ app.use("/api/orders", ordersRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/analytics", analyticsRoutes);
 
+/* 🩺 DIAGNOSTIC ROUTE */
+app.get("/api/debug/system", async (req, res) => {
+  const diagnostics = {
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    env: {
+      has_gemini_key: !!process.env.GEMINI_API_KEY,
+      gemini_key_prefix: process.env.GEMINI_API_KEY?.substring(0, 7),
+      has_groq_key: !!process.env.GROQ_API_KEY,
+      groq_key_prefix: process.env.GROQ_API_KEY?.substring(0, 7),
+      has_openrouter_key: !!process.env.OPENROUTER_API_KEY,
+      openrouter_key_prefix: process.env.OPENROUTER_API_KEY?.substring(0, 7),
+    }
+  };
+  res.json(diagnostics);
+});
+
 export default app;
