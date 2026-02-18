@@ -1,8 +1,14 @@
 import OpenAI from "openai";
 
+const apiKey = (process.env.OPENROUTER_API_KEY || "").trim();
+
 const openai = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY,
+  apiKey,
   baseURL: "https://openrouter.ai/api/v1",
+  defaultHeaders: {
+    "HTTP-Referer": "https://leadsync.vercel.app", // Required for some free models
+    "X-Title": "LeadSync AI",
+  }
 });
 
 // Cache for system prompts to avoid string rebuilding if possible (basic version)
@@ -24,8 +30,9 @@ async function retryWithBackoff<T>(
 
 const MODELS = [
   "google/gemini-2.0-flash-lite-preview-02-05:free",
-  "google/gemini-pro",
-  "meta-llama/llama-3-8b-instruct:free",
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "mistralai/mistral-7b-instruct:free",
+  "qwen/qwen-2.5-72b-instruct:free",
 ];
 
 async function generateWithFallback(
@@ -36,23 +43,27 @@ async function generateWithFallback(
 
   for (const model of MODELS) {
     try {
-      console.log(`🤖 Trying AI Model: ${model}`);
+      console.log(`🤖 [AI] Attempting ${model}...`);
+
       const completion = await openai.chat.completions.create({
         model,
         messages: [
           { role: "system", content: systemPrompt },
-          ...messages
+          ...messages.filter(m => m.content && m.content.trim()) // Sanitize
         ],
         temperature: 0.3,
         max_tokens: 150,
-      }, { timeout: 8000 }); // 8s timeout per model
+      }, { timeout: 7000 }); // 7s timeout per model
 
       const content = completion.choices?.[0]?.message?.content;
-      if (content) return content;
+      if (content) {
+        console.log(`✅ [AI] Success with ${model}`);
+        return content;
+      }
     } catch (err: any) {
-      console.error(`⚠️ Model ${model} failed:`, err.message);
+      const status = err.status || err.response?.status;
+      console.error(`⚠️ [AI] Model ${model} failed (Status: ${status}):`, err.message);
       lastError = err;
-      // Continue to next model
     }
   }
   throw lastError || new Error("All models failed");
