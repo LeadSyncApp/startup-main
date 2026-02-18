@@ -22,6 +22,42 @@ async function retryWithBackoff<T>(
   }
 }
 
+const MODELS = [
+  "google/gemini-2.0-flash-lite-preview-02-05:free",
+  "google/gemini-pro",
+  "meta-llama/llama-3-8b-instruct:free",
+];
+
+async function generateWithFallback(
+  messages: any[],
+  systemPrompt: string
+): Promise<string> {
+  let lastError;
+
+  for (const model of MODELS) {
+    try {
+      console.log(`🤖 Trying AI Model: ${model}`);
+      const completion = await openai.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messages
+        ],
+        temperature: 0.3,
+        max_tokens: 150,
+      }, { timeout: 8000 }); // 8s timeout per model
+
+      const content = completion.choices?.[0]?.message?.content;
+      if (content) return content;
+    } catch (err: any) {
+      console.error(`⚠️ Model ${model} failed:`, err.message);
+      lastError = err;
+      // Continue to next model
+    }
+  }
+  throw lastError || new Error("All models failed");
+}
+
 export async function generateBotReply(
   message: string,
   businessType: string,
@@ -32,8 +68,6 @@ export async function generateBotReply(
     let systemPrompt = `Role: Assistant for ${businessType}. strictly professional. Keep it short.`;
 
     if (structuredMenu?.categories?.length > 0) {
-      // Create a cache key based on businessType + stricture hash/length to simple detect changes
-      // For now, we rebuild. Optimization: Generate a compact menu representation.
       const formattedMenu = structuredMenu.categories
         .map(
           (cat: any) =>
@@ -47,27 +81,16 @@ export async function generateBotReply(
       systemPrompt += `\nMenu:\n${formattedMenu}\nRules: Suggest menu items if relevant.`;
     }
 
-    const completion = await retryWithBackoff(() =>
-      openai.chat.completions.create({
-        model: "google/gemini-2.0-flash-lite-preview-02-05:free",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...(history || []), // Inject history
-          { role: "user", content: message },
-        ],
-        temperature: 0.3,
-        max_tokens: 100, // Reduced as requested
-      }, { timeout: 10000 }) // 10s timeout
-    );
+    const conversation = [
+      ...(history || []),
+      { role: "user", content: message }
+    ];
 
-    return (
-      completion.choices?.[0]?.message?.content ||
-      "Our team will assist you shortly."
-    );
+    return await generateWithFallback(conversation, systemPrompt);
+
   } catch (error) {
-    console.error("Bot Reply Error:", error);
-    // Fail gracefully
-    return "Our assistant is temporarily unavailable.";
+    console.error("❌ Bot Reply Fatal Error:", error);
+    return "I apologize, but I'm having trouble connecting right now. Please try again in a moment.";
   }
 }
 
