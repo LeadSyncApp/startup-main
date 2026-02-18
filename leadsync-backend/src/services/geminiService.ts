@@ -25,7 +25,8 @@ async function retryWithBackoff<T>(
 export async function generateBotReply(
   message: string,
   businessType: string,
-  structuredMenu?: any
+  structuredMenu?: any,
+  history?: any[]
 ): Promise<string> {
   try {
     let systemPrompt = `Role: Assistant for ${businessType}. strictly professional. Keep it short.`;
@@ -51,6 +52,7 @@ export async function generateBotReply(
         model: "google/gemini-2.0-flash-lite-preview-02-05:free",
         messages: [
           { role: "system", content: systemPrompt },
+          ...(history || []), // Inject history
           { role: "user", content: message },
         ],
         temperature: 0.3,
