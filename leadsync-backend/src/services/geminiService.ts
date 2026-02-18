@@ -4,9 +4,9 @@ import { GoogleGenAI } from "@google/genai";
 // Initialize Groq (Primary)
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "dummy" });
 
-// Initialize Gemini (Backup)
+// Initialize Gemini (Backup) - Only if key exists to prevent crash
 const geminiApiKey = (process.env.GEMINI_API_KEY || "").trim();
-const genAI = new GoogleGenAI({ apiKey: geminiApiKey });
+const genAI = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 
 // Model Hierarchy: Fast -> Smart -> Backup
 const MODELS = [
@@ -24,7 +24,7 @@ async function generateWithFallback(
 
   for (const model of MODELS) {
     if (model.provider === "groq" && !useGroq) continue;
-    if (model.provider === "gemini" && !geminiApiKey) continue;
+    if (model.provider === "gemini" && (!geminiApiKey || !genAI)) continue;
 
     try {
       console.log(`🤖 [AI] Attempting ${model.provider.toUpperCase()}: ${model.id}...`);
@@ -44,6 +44,8 @@ async function generateWithFallback(
         content = completion.choices[0]?.message?.content || "";
       } else {
         // Gemini Fallback
+        if (!genAI) throw new Error("Gemini AI not initialized");
+
         const contents = messages.map((m: any) => ({
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.content }],
