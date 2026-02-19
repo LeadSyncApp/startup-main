@@ -69,22 +69,27 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 /* ===============================
-   GET ORDERS
+   GET ORDERS (Filtered)
 ================================== */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user!.companyId;
     const view = req.query.view as string; // 'active' | 'history'
 
-    let whereCondition: any = { companyId };
+    let whereCondition: any = { companyId, isDeleted: false };
 
     if (view === "history") {
-      whereCondition.status = { in: ["DELIVERED", "CANCELLED", "REJECTED"] };
+      // History: Completed, Delivered, Cancelled, Archived
+      whereCondition.status = { in: ["DELIVERED", "COMPLETED", "CANCELLED", "ARCHIVED", "REJECTED"] };
     } else {
-      // Default: Active
+      // Active Board: Confirmed, Preparing, Ready
+      // NOTE: We EXCLUDE 'PENDING' (Ghost orders) and 'NEW' (unless we want them on board immediately)
+      // The user Requirement: "Orders must NOT auto-enter pipeline before claim"
+      // So 'PENDING' orders are hidden here.
+      // 'NEW' might be used for "Accepted but not started"?
+      // Let's assume Active Board = [NEW, CONFIRMED, PREPARING, READY]
       whereCondition.status = {
-        in: ["NEW", "CONFIRMED", "PREPARING", "READY"],
-        notIn: ["DELIVERED", "CANCELLED"] // Extra safety
+        in: ["NEW", "CONFIRMED", "PREPARING", "READY"]
       };
     }
 
@@ -105,10 +110,9 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
           select: { id: true, name: true }
         },
       },
-      orderBy: [
-        { priorityScore: "desc" },
-        { createdAt: "desc" }
-      ],
+      orderBy: view === "history"
+        ? [{ completedAt: "desc" }, { createdAt: "desc" }]
+        : [{ priorityScore: "desc" }, { createdAt: "desc" }],
       take: 100,
     });
 
@@ -120,7 +124,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 /* ===============================
-   APPROVE ORDER
+   APPROVE ORDER (Activates Pending)
 ================================== */
 router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -130,19 +134,17 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
     const existing = await prisma.order.findFirst({ where: { id, companyId } });
     if (!existing) return res.status(404).json({ message: "Order not found" });
 
-    // Force cast update
-    const updatedRaw = await (prisma.order as any).update({
+    // Transition PENDING -> CONFIRMED (Active)
+    const updated = await (prisma.order as any).update({
       where: { id },
       data: {
         approvalStatus: OrderApprovalStatus.APPROVED,
-        status: OrderStatus.CONFIRMED,
+        status: OrderStatus.CONFIRMED, // Moves to Active Board
         processedById: req.user!.userId,
-        priorityScore: { increment: 10 },
+        priorityScore: { increment: 20 },
       },
       include: { lead: true, company: true, conversation: true }
     });
-
-    const updated = updatedRaw as any;
 
     // 1. Send Telegram Notification
     if (updated.company?.telegramBotToken && updated.lead?.contact) {
@@ -153,7 +155,7 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
       ).catch(console.error);
     }
 
-    // 2. Log in Chat History (System Message)
+    // 2. Log in Chat History
     await prisma.message.create({
       data: {
         conversationId: existing.conversationId,
@@ -162,7 +164,7 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
       }
     });
 
-    safeEmitConversationUpdate(updated.conversation, "order_updated", updated);
+    safeEmitConversationUpdate((updated as any).conversation, "order_updated", updated);
 
     return res.json(updated);
   } catch (error) {
@@ -172,7 +174,7 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
 });
 
 /* ===============================
-   REJECT ORDER
+   REJECT ORDER (Archives)
 ================================== */
 router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -187,6 +189,7 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
       data: {
         approvalStatus: OrderApprovalStatus.REJECTED,
         status: OrderStatus.CANCELLED,
+        completedAt: new Date(), // Mark as closed
         processedById: req.user!.userId,
         priorityScore: 0,
       },
@@ -211,7 +214,7 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
       }
     });
 
-    safeEmitConversationUpdate(updated.conversation, "order_updated", updated);
+    safeEmitConversationUpdate((updated as any).conversation, "order_updated", updated);
 
     return res.json(updated);
   } catch (error) {
@@ -221,7 +224,7 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
 });
 
 /* ===============================
-   UPDATE STATUS / PRIORITY
+   UPDATE STATUS (Lifecycle)
 ================================== */
 router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -236,7 +239,12 @@ router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Respon
     if (priorityScore !== undefined) updateData.priorityScore = priorityScore;
     if (isUrgent !== undefined) updateData.isUrgent = isUrgent;
 
-    if (status === "DELIVERED" || status === "READY") {
+    // Handle Completion
+    if (["DELIVERED", "COMPLETED", "CANCELLED"].includes(status)) {
+      updateData.completedAt = new Date();
+    }
+
+    if (["DELIVERED", "READY", "COMPLETED"].includes(status)) {
       if (!existing.processedById) updateData.processedById = req.user!.userId;
     }
 
@@ -253,6 +261,29 @@ router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Respon
   } catch (error) {
     console.error("Update status error:", error);
     return res.status(500).json({ message: "Failed to update order" });
+  }
+});
+
+/* ===============================
+   SOFT DELETE ORDER
+================================== */
+router.delete("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.user!.companyId;
+
+    // Soft delete
+    const updated = await prisma.order.updateMany({
+      where: { id, companyId },
+      data: { isDeleted: true } as any
+    });
+
+    if (updated.count === 0) return res.status(404).json({ message: "Order not found" });
+
+    return res.json({ message: "Order archived" });
+  } catch (error) {
+    console.error("Delete order error:", error);
+    return res.status(500).json({ message: "Failed to delete order" });
   }
 });
 

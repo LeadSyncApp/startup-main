@@ -55,7 +55,7 @@ class OrderParserService {
                     leadId,
                     summary,
                     amount: totalAmount,
-                    status: OrderStatus.NEW,
+                    status: OrderStatus.PENDING, // 🆕 Created as Pending/Ghost order
                     source: OrderSource.BOT_DETECTED,
                     priority: isUrgent ? OrderPriority.URGENT : OrderPriority.NORMAL,
                     priorityScore: isUrgent ? 100 : 50,

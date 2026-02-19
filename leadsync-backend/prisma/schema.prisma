@@ -37,78 +37,21 @@ enum MessageSender {
 }
 
 enum OrderStatus {
+  PENDING
   NEW
   CONFIRMED
   PREPARING
   READY
   DELIVERED
+  COMPLETED
   CANCELLED
+  ARCHIVED
 }
 
-enum OrderPriority {
-  NORMAL
-  URGENT
-}
-
-enum OrderSource {
-  MANUAL
-  BOT_DETECTED
-}
-
-enum OrderApprovalStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-/**
- * =====================
- * MODELS
- * =====================
- */
-
-model Company {
-  id                    String   @id @default(uuid())
-  name                  String
-
-  telegramBotToken      String?
-  telegramBotUsername   String?
-  telegramWebhookSecret String?  @unique
-  telegramConnected     Boolean  @default(false)
-
-  botWelcomeMessage     String?
-  botBusinessType       String?
-  botMenu               Json?
-  botStructuredMenu     Json?
-
-  createdAt             DateTime @default(now())
-
-  users         User[]
-  leads         Lead[]
-  conversations Conversation[]
-  orders        Order[]
-}
-model User {
-  id           String   @id @default(uuid())
-  email        String
-  name         String
-  passwordHash String
-  role         Role     @default(AGENT)
-  isActive     Boolean  @default(true)
-  companyId    String
-  staffId      String?
-  createdAt    DateTime @default(now())
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  processedOrders       Order[]        @relation("ProcessedOrders")
-  assignedConversations Conversation[] @relation("AssignedConversations") // New relation
-  notifications Notification[]
-
-  @@unique([email, companyId])
-  @@index([companyId])
-  @@index([isActive])
-  @@index([createdAt])
+enum LeadStatus {
+    NEW
+    CLAIMED
+    ARCHIVED
 }
 
 enum LeadSegment {
@@ -132,30 +75,93 @@ enum ConversationStatus {
   SNOOZED
 }
 
-// ... (Existing Enums)
+enum OrderPriority {
+  NORMAL
+  URGENT
+}
 
-model Lead {
-  id        String   @id @default(uuid())
-  name      String?
-  contact   String
-  channel   Channel
-  companyId String
-  createdAt DateTime @default(now())
+enum OrderSource {
+  MANUAL
+  BOT_DETECTED
+}
 
-  // CRM Fields
-  totalSpend   Float       @default(0)
-  orderCount   Int         @default(0)
-  lastActiveAt DateTime    @default(now())
-  segment      LeadSegment @default(NEW)
+enum OrderApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
 
-  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+model Company {
+  id                    String   @id @default(uuid())
+  name                  String
+
+  telegramBotToken      String?
+  telegramBotUsername   String?
+  telegramWebhookSecret String?  @unique
+  telegramConnected     Boolean  @default(false)
+
+  botWelcomeMessage     String?
+  botBusinessType       String?
+  botMenu               Json?
+  botStructuredMenu     Json?
+
+  createdAt             DateTime @default(now())
+
+  users         User[]
+  leads         Lead[]
   conversations Conversation[]
   orders        Order[]
+}
 
-  @@unique([contact, channel, companyId])
+model User {
+  id           String   @id @default(uuid())
+  email        String
+  name         String
+  passwordHash String
+  role         Role     @default(AGENT)
+  isActive     Boolean  @default(true)
+  companyId    String
+  staffId      String?
+  createdAt    DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  processedOrders       Order[]        @relation("ProcessedOrders")
+  assignedConversations Conversation[] @relation("AssignedConversations")
+  notifications Notification[]
+
+  @@unique([email, companyId])
   @@index([companyId])
-  @@index([totalSpend])
-  @@index([lastActiveAt])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model Message {
+  id             String        @id @default(uuid())
+  content        String
+  sender         MessageSender
+  conversationId String
+  createdAt      DateTime      @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  body      String
+  type      String   // ORDER, MESSAGE, ALERT
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
 }
 
 model Conversation {
@@ -193,36 +199,37 @@ model Conversation {
   @@index([sentimentScore])
   @@index([assignedToId])
   @@index([status])
-  @@index([priorityScore]) // Critical for Revenue-Based Sorting
+  @@index([priorityScore])
 }
 
-model Message {
-  id             String        @id @default(uuid())
-  content        String
-  sender         MessageSender
-  conversationId String
-  createdAt      DateTime      @default(now())
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  @@index([conversationId, createdAt])
-  @@index([conversationId])
-}
-
-model Notification {
+model Lead {
   id        String   @id @default(uuid())
-  userId    String
-  title     String
-  body      String
-  type      String   // ORDER, MESSAGE, ALERT
-  isRead    Boolean  @default(false)
+  name      String?
+  contact   String
+  channel   Channel
+  companyId String
   createdAt DateTime @default(now())
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([userId, isRead])
+  status LeadStatus @default(NEW)  // 🆕 Lifecycle Status
+
+  // CRM Fields
+  totalSpend   Float       @default(0)
+  orderCount   Int         @default(0)
+  lastActiveAt DateTime    @default(now())
+  segment      LeadSegment @default(NEW)
+
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  orders        Order[]
+
+  @@unique([contact, channel, companyId])
+  @@index([companyId])
+  @@index([totalSpend])
+  @@index([lastActiveAt])
+  @@index([status]) // 🆕 Index for filtering
 }
+
+// ... existing models ...
 
 model Order {
   id             String        @id @default(uuid())
@@ -233,7 +240,7 @@ model Order {
   summary  String
   amount   Float        @default(0)
   priority OrderPriority @default(NORMAL)
-  status   OrderStatus   @default(NEW)
+  status   OrderStatus   @default(PENDING) // 🆕 Default to PENDING (Ghost Order)
 
   source         OrderSource         @default(MANUAL)
   approvalStatus OrderApprovalStatus @default(APPROVED)
@@ -242,6 +249,10 @@ model Order {
   priorityScore  Int     @default(0) // Calculated score for sorting
   predictedValue Float?              // AI estimated value
   isUrgent       Boolean @default(false)
+  
+  // Lifecycle Fields
+  isDeleted   Boolean   @default(false) // 🆕 Soft Delete
+  completedAt DateTime?                 // 🆕 For History Sorting
 
   processedById String?
   processedBy   User?    @relation("ProcessedOrders", fields: [processedById], references: [id])
@@ -262,5 +273,7 @@ model Order {
   @@index([processedById])
   @@index([approvalStatus])
   @@index([createdAt])
-  @@index([priorityScore]) // Critical for Real-Time Dashboard sorting
+  @@index([priorityScore])
+  @@index([completedAt]) // 🆕 Index for History Page
+  @@index([isDeleted])   // 🆕 Index for cleanup
 }
