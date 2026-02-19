@@ -3,7 +3,7 @@ import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { prisma } from "../lib/prisma";
 import { sendTelegramMessage } from "../bot/telegram.sender";
 import { ConversationMode, MessageSender, Role } from "@prisma/client";
-import { emitToCompany, emitToConversation } from "../lib/socket";
+import { emitToCompany, emitToConversation, safeEmitConversationUpdate, emitToAgent, emitToCompanyAdmin } from "../lib/socket";
 
 const router = Router();
 
@@ -12,10 +12,19 @@ const router = Router();
 ========================================= */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user!.companyId;
+    const { companyId, userId, role } = req.user!;
+
+    // 🔒 PRIVACY FILTER: Agents only see Unclaimed OR Their Own
+    const whereClause: any = { companyId };
+    if (role === "AGENT") {
+      whereClause.OR = [
+        { assignedToId: null },
+        { assignedToId: userId }
+      ];
+    }
 
     const conversations = await prisma.conversation.findMany({
-      where: { companyId },
+      where: whereClause,
       orderBy: { updatedAt: "desc" },
       take: 21, // Fetch 1 extra to determine if next page exists
       cursor: req.query.cursor ? { id: String(req.query.cursor) } : undefined,
@@ -81,6 +90,11 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
 
     if (!conversation) {
       return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    // 🔒 STRICT PRIVACY: Prevent agents from peeking at others' conversations
+    if (userRole === "AGENT" && conversation.assignedToId && conversation.assignedToId !== userId) {
+      return res.status(403).json({ message: "⛔ Access Denied: This conversation is assigned to another agent." });
     }
 
     const messages = await prisma.message.findMany({
@@ -181,9 +195,9 @@ router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response)
       ).catch(console.error);
     }
 
-    // ✅ REAL-TIME SOCKET EMISSION
-    // 1. Notify company for list updates
-    emitToCompany(companyId, "conversation_updated", {
+    // ✅ SECURE REAL-TIME EMISSION
+    // Intelligent routing: Only to Assigned + Admins
+    safeEmitConversationUpdate(conversation, "conversation_updated", {
       conversationId: conversation.id,
       lastMessage: content.trim(),
       updatedAt: new Date(),
@@ -230,8 +244,8 @@ router.patch("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response
       },
     });
 
-    // ✅ REAL-TIME SOCKET EMISSION (Immediate Mode Sync)
-    emitToCompany(companyId, "mode_changed", {
+    // ✅ SECURE REAL-TIME EMISSION
+    safeEmitConversationUpdate(updated, "status_changed", { // Reuse status/mode event logic or generic update
       conversationId: conversation.id,
       mode
     });
@@ -314,24 +328,68 @@ router.patch("/:id/assign", authMiddleware, async (req: AuthRequest, res: Respon
     if (!conversation) return res.status(404).json({ message: "Conversation not found" });
 
     // Update assignment - forceful cast to avoid IDE type errors
-    const updatedCalls = await (prisma.conversation as any).update({
-      where: { id: conversation.id },
-      data: {
-        assignedToId: assignedToId || null,
-        status: assignedToId ? "ASSIGNED" : "OPEN",
-        updatedAt: new Date(),
-      },
-      include: { assignedTo: { select: { id: true, name: true } } }
-    });
+    let updatedCalls;
+
+    if (assignedToId) {
+      // ✅ ATOMIC CLAIM: Only update if assignedToId is currently NULL
+      const result = await prisma.conversation.updateMany({
+        where: {
+          id: conversation.id,
+          assignedToId: null // 🔒 Lock: Must be unclaimed
+        },
+        data: {
+          assignedToId,
+          status: "ASSIGNED",
+          updatedAt: new Date()
+        }
+      });
+
+      if (result.count === 0) {
+        // Claim failed. Check why.
+        const fresh = await prisma.conversation.findUnique({ where: { id: conversation.id } });
+        if (fresh?.assignedToId === assignedToId) {
+          // Already assigned to me (idempotent success)
+          updatedCalls = fresh;
+        } else {
+          return res.status(409).json({ message: "⚠️ Too late! This conversation was just claimed by another agent." });
+        }
+      } else {
+        // Fetch the updated record
+        updatedCalls = await prisma.conversation.findUnique({
+          where: { id: conversation.id },
+          include: { assignedTo: { select: { id: true, name: true } } }
+        });
+      }
+    } else {
+      // UNASSIGN (Release)
+      updatedCalls = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          assignedToId: null,
+          status: "OPEN",
+          updatedAt: new Date(),
+        },
+        include: { assignedTo: { select: { id: true, name: true } } }
+      });
+    }
 
     const updated = updatedCalls as any;
 
-    // Notify team
-    emitToCompany(companyId, "conversation_assigned", {
-      conversationId: conversation.id,
-      assignedTo: updated.assignedTo,
-      status: updated.status
-    });
+    if (assignedToId) {
+      // CASE: CLAIMING (Assigning)
+      // 1. Notify public channel to REMOVE it from their list (Privacy)
+      emitToCompany(companyId, "conversation_removed", { conversationId: conversation.id });
+
+      // 2. Notify specific agent that they got it
+      emitToAgent(assignedToId, "conversation_added", updated);
+    } else {
+      // CASE: UNASSIGNING (Releasing)
+      // 1. Notify public channel to ADD it back to everyone's list
+      emitToCompany(companyId, "conversation_added", updated);
+    }
+
+    // 3. Always notify Admins
+    emitToCompanyAdmin(companyId, "conversation_updated", updated);
 
     // System message
     const agentName = updated.assignedTo?.name || "System";
@@ -380,7 +438,7 @@ router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Respon
       data: { status, updatedAt: new Date() }
     });
 
-    emitToCompany(companyId, "status_changed", {
+    safeEmitConversationUpdate(updated, "status_changed", {
       conversationId: conversation.id,
       status
     });

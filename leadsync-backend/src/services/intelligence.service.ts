@@ -1,7 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { MessageSender } from "@prisma/client";
 import Groq from "groq-sdk";
-import { emitToCompany, emitToConversation } from "../lib/socket";
+import { emitToCompany, emitToConversation, emitToAgent, emitToCompanyAdmin } from "../lib/socket";
 
 // Initialize Groq
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "dummy" });
@@ -95,12 +95,15 @@ export class IntelligenceService {
                         }
                     });
 
-                    // Emit Socket Events (After transaction)
-                    emitToCompany(companyId, "conversation_assigned", {
-                        conversationId,
-                        assignedTo: updatedConversation.assignedTo,
-                        status: updatedConversation.status
-                    });
+                    // Emit Socket Events (Securely)
+                    // 1. Remove from Public Unclaimed List
+                    emitToCompany(companyId, "conversation_removed", { conversationId });
+
+                    // 2. Add to Agent's Private List
+                    emitToAgent(assignedUserId, "conversation_added", updatedConversation);
+
+                    // 3. Update Admin View
+                    emitToCompanyAdmin(companyId, "conversation_updated", updatedConversation);
 
                     emitToConversation(conversationId, "new_message", sysMsg);
                 }

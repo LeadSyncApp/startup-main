@@ -9,7 +9,7 @@ import {
   MessageSender,
 } from "@prisma/client";
 import { sendTelegramMessage } from "../bot/telegram.sender";
-import { emitToCompany } from "../lib/socket";
+import { safeEmitConversationUpdate } from "../lib/socket";
 
 const router = Router();
 
@@ -59,7 +59,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       }
     });
 
-    emitToCompany(companyId, "order_created", order);
+    safeEmitConversationUpdate(conversation, "order_created", order);
 
     return res.json(order);
   } catch (error) {
@@ -139,7 +139,7 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
         processedById: req.user!.userId,
         priorityScore: { increment: 10 },
       },
-      include: { lead: true, company: true }
+      include: { lead: true, company: true, conversation: true }
     });
 
     const updated = updatedRaw as any;
@@ -162,7 +162,7 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
       }
     });
 
-    emitToCompany(companyId, "order_updated", updated);
+    safeEmitConversationUpdate(updated.conversation, "order_updated", updated);
 
     return res.json(updated);
   } catch (error) {
@@ -190,7 +190,7 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
         processedById: req.user!.userId,
         priorityScore: 0,
       },
-      include: { lead: true, company: true }
+      include: { lead: true, company: true, conversation: true }
     });
 
     // 1. Send Telegram Notification
@@ -211,7 +211,7 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
       }
     });
 
-    emitToCompany(companyId, "order_updated", updated);
+    safeEmitConversationUpdate(updated.conversation, "order_updated", updated);
 
     return res.json(updated);
   } catch (error) {
@@ -242,10 +242,12 @@ router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Respon
 
     const updated = await (prisma.order as any).update({
       where: { id },
-      data: updateData
+      data: updateData,
+      include: { conversation: true }
     });
 
-    emitToCompany(companyId, "order_updated", updated);
+    const updatedWithConv = updated as any;
+    safeEmitConversationUpdate(updatedWithConv.conversation, "order_updated", updated);
 
     return res.json(updated);
   } catch (error) {

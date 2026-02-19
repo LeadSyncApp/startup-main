@@ -8,7 +8,7 @@ import {
     OrderApprovalStatus,
 } from "@prisma/client";
 import axios from "axios";
-import { emitToCompany, emitToConversation } from "../lib/socket";
+import { emitToCompany, emitToConversation, safeEmitConversationUpdate } from "../lib/socket";
 import { generateBotReply } from "../services/geminiService";
 import { aiQueue } from "../services/queue.service";
 import { cacheService } from "../services/cache.service";
@@ -165,7 +165,7 @@ export class TelegramAdapter implements ChannelAdapter {
                 },
             });
 
-            emitToCompany(companyId, "conversation_updated", {
+            safeEmitConversationUpdate(conversation, "conversation_updated", {
                 conversationId: conversation.id,
                 lastMessage: text,
                 updatedAt: new Date(),
@@ -185,7 +185,7 @@ export class TelegramAdapter implements ChannelAdapter {
 
             /* COMMAND HANDLING */
             if (text === "/start") {
-                await this.saveAndSendSystemMessage(chatId, conversation.id, buildWelcomeMessage(company, name), companyId);
+                await this.saveAndSendSystemMessage(chatId, conversation, buildWelcomeMessage(company, name));
                 return;
             }
 
@@ -195,7 +195,7 @@ export class TelegramAdapter implements ChannelAdapter {
 
             if (text.toLowerCase() === "menu" || text.toLowerCase() === "/menu") {
                 if (!categories.length) {
-                    await this.saveAndSendSystemMessage(chatId, conversation.id, "Menu is currently unavailable.", companyId);
+                    await this.saveAndSendSystemMessage(chatId, conversation, "Menu is currently unavailable.");
                     return;
                 }
                 let menuMsg = "📜 *Our Menu*\n\n";
@@ -206,7 +206,7 @@ export class TelegramAdapter implements ChannelAdapter {
                     });
                     menuMsg += "\n";
                 });
-                await this.saveAndSendSystemMessage(chatId, conversation.id, menuMsg, companyId);
+                await this.saveAndSendSystemMessage(chatId, conversation, menuMsg);
                 return;
             }
 
@@ -226,7 +226,7 @@ export class TelegramAdapter implements ChannelAdapter {
                     catMsg += `- ${item.name}: ₹${item.price}\n`;
                 });
 
-                await this.saveAndSendSystemMessage(chatId, conversation.id, catMsg, companyId);
+                await this.saveAndSendSystemMessage(chatId, conversation, catMsg);
                 return;
             }
 
@@ -268,7 +268,7 @@ export class TelegramAdapter implements ChannelAdapter {
                     return;
                 }
 
-                await this.saveAndSendSystemMessage(chatId, conversation.id, aiReply, companyId);
+                await this.saveAndSendSystemMessage(chatId, conversation, aiReply);
             } catch (err) {
                 console.error("AI Queue Error:", err);
             }
@@ -278,23 +278,23 @@ export class TelegramAdapter implements ChannelAdapter {
         }
     }
 
-    private async saveAndSendSystemMessage(chatId: string, convId: string, text: string, companyId: string) {
+    private async saveAndSendSystemMessage(chatId: string, conversation: any, text: string) {
         // OPTIMIZATION: Run DB save and Telegram Send in Parallel
         const dbPromise = (async () => {
             const botMsg = await prisma.message.create({
                 data: {
                     content: text,
                     sender: MessageSender.SYSTEM,
-                    conversationId: convId,
+                    conversationId: conversation.id,
                 },
             });
 
-            emitToCompany(companyId, "conversation_updated", {
-                conversationId: convId,
+            safeEmitConversationUpdate(conversation, "conversation_updated", {
+                conversationId: conversation.id,
                 lastMessage: text,
                 updatedAt: new Date(),
             });
-            emitToConversation(convId, "new_message", botMsg);
+            emitToConversation(conversation.id, "new_message", botMsg);
         })();
 
         const telegramPromise = this.sendMessage(chatId, text);
