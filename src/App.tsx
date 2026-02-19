@@ -14,6 +14,7 @@ import Reports from "./pages/dashboard/Reports";
 import Settings from "./pages/dashboard/Settings";
 
 import ProtectedRoute from "./components/ProtectedRoute";
+import PublicRoute from "./components/PublicRoute";
 
 // ✅ Staff Management Page
 import UserManagement from "./pages/dashboard/UserManagement";
@@ -22,9 +23,12 @@ export default function App() {
   return (
     <Routes>
       {/* ================= PUBLIC ROUTES ================= */}
-      <Route path="/" element={<Home />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
+      {/* 🔐 If logged in -> Redirect to Dashboard */}
+      <Route element={<PublicRoute />}>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+      </Route>
 
       {/* ================= DASHBOARD ================= */}
       <Route
