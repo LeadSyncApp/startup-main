@@ -1,19 +1,19 @@
 import Groq from "groq-sdk";
-import { GoogleGenAI } from "@google/genai";
 
 // Initialize Groq (Primary)
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "dummy" });
 
-// Initialize Gemini (Backup) - Only if key exists to prevent crash
-const geminiApiKey = (process.env.GEMINI_API_KEY || "").trim();
-const genAI = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
-
-// Model Hierarchy: Fast -> Smart -> Backup
+// Model Hierarchy: Fast (Only Groq)
 const MODELS = [
   { provider: "groq", id: "llama-3.1-8b-instant" },     // ⚡ ~0.3s latency
-  { provider: "groq", id: "llama-3.3-70b-versatile" },  // 🧠 Smarter
-  { provider: "gemini", id: "gemini-2.0-flash-lite" },  // 🛡️ Backup
 ];
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  const timeout = new Promise<T>((_, reject) =>
+    setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
 
 async function generateWithFallback(
   messages: any[],
@@ -24,38 +24,28 @@ async function generateWithFallback(
 
   for (const model of MODELS) {
     if (model.provider === "groq" && !useGroq) continue;
-    if (model.provider === "gemini" && (!geminiApiKey || !genAI)) continue;
 
     try {
       console.log(`🤖 [AI] Attempting ${model.provider.toUpperCase()}: ${model.id}...`);
 
       let content = "";
+      const timeoutMs = 8000; // 8s timeout per model
 
       if (model.provider === "groq") {
-        const completion = await groq.chat.completions.create({
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...messages.filter(m => m.content && m.content.trim())
-          ],
-          model: model.id,
-          temperature: 0.3,
-          max_tokens: 120, // Short responses = faster
-        });
+        const completion = await withTimeout(
+          groq.chat.completions.create({
+            messages: [
+              { role: "system", content: systemPrompt },
+              ...messages.filter(m => m.content && m.content.trim())
+            ],
+            model: model.id,
+            temperature: 0.3,
+            max_tokens: 150,
+          }),
+          timeoutMs,
+          `Groq ${model.id}`
+        );
         content = completion.choices[0]?.message?.content || "";
-      } else {
-        // Gemini Fallback
-        if (!genAI) throw new Error("Gemini AI not initialized");
-
-        const contents = messages.map((m: any) => ({
-          role: m.role === "assistant" ? "model" : "user",
-          parts: [{ text: m.content }],
-        }));
-        const response = await genAI.models.generateContent({
-          model: model.id,
-          contents,
-          config: { systemInstruction: systemPrompt },
-        });
-        content = response.text || "";
       }
 
       if (content.trim()) {
@@ -71,13 +61,19 @@ async function generateWithFallback(
 }
 
 export async function generateBotReply(
-  message: string,
+  message: string, // Unused but kept for signature compatibility if needed, though conversation includes it
   businessType: string,
   structuredMenu?: any,
   history?: any[]
 ): Promise<string> {
   try {
-    let systemPrompt = `You are a helpful assistant for a ${businessType}. Be concise and professional.`;
+    let systemPrompt = `You are a helpful assistant for a ${businessType}. 
+STRICT RULES:
+1. You ONLY know the menu items listed below.
+2. You DO NOT have access to other customers' orders or sales data. 
+3. If the user asks for "orders" (e.g., "what are your orders"), they mean "MENU". List the available menu items.
+4. NEVER make up fake orders or say "we have these orders" unless referring to the CURRENT user's confirmed items in the conversation history.
+5. Be concise and professional. Keep responses under 2 sentences unless listing the menu.`;
 
     if (structuredMenu?.categories?.length > 0) {
       const formattedMenu = structuredMenu.categories
@@ -90,13 +86,26 @@ export async function generateBotReply(
         )
         .join("\n");
 
-      systemPrompt += `\n\nMenu:\n${formattedMenu}\n\nIf the user asks about the menu or food, suggest relevant items.`;
+      systemPrompt += `\n\nOFFICIAL MENU:\n${formattedMenu}\n\nUse ONLY this menu. Do not hallucinate items.`;
+    } else {
+      systemPrompt += `\n\n(No menu is currently available. Apologize if asked for food items.)`;
     }
 
-    const conversation = [
-      ...(history || []),
-      { role: "user", content: message }
-    ];
+    // Ensure conversation struct is valid
+    const conversation = (history || []).map(m => ({
+      role: m.role,
+      content: m.content
+    }));
+
+    // Add current user message to conversation if not already there? 
+    // Wait, the adapter appends it. No, adapter passes `historyContext` which EXCLUDES the current message?
+    // Let's check `TelegramAdapter.ts`: `const historyContext = history.reverse().map(...)`
+    // Then `generateBotReply(text, ...)`
+    // But `generateBotReply` logic (old) was:
+    // const conversation = [ ...(history || []), { role: "user", content: message } ];
+    // So YES, we must append the current message here.
+
+    conversation.push({ role: "user", content: message });
 
     return await generateWithFallback(conversation, systemPrompt);
 

@@ -108,7 +108,7 @@ export class TelegramAdapter implements ChannelAdapter {
             // Update token if needed (though adapter instance might be short-lived)
             this.botToken = company.telegramBotToken;
 
-            await this.sendTyping(chatId);
+            this.sendTyping(chatId).catch(() => { });
 
             /* FIND / CREATE LEAD */
             let lead = await prisma.lead.findFirst({
