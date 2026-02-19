@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateBotReply = generateBotReply;
 exports.generateStructuredMenu = generateStructuredMenu;
+exports.generateStructuredOrder = generateStructuredOrder;
 const groq_sdk_1 = __importDefault(require("groq-sdk"));
 // Initialize Groq (Primary)
 const groq = new groq_sdk_1.default({ apiKey: process.env.GROQ_API_KEY || "dummy" });
@@ -156,4 +157,36 @@ ONLY JSON. No markdown.`;
     }
     // Fallback logic for original simple object return 
     return existingMenu || { categories: [] };
+}
+async function generateStructuredOrder(text, menu) {
+    if (!process.env.GROQ_API_KEY)
+        return { items: [] };
+    try {
+        console.log("🤖 [AI] Analyzing Structured Order...");
+        const menuContext = JSON.stringify(menu?.categories || []);
+        const prompt = `
+Context: A customer sent this message: "${text}".
+Task: Extract order items based strictly on the menu below.
+Menu: ${menuContext}
+
+Rules:
+1. Return JSON: { "items": [{ "name": "Item Name", "quantity": 1, "price": 100 }] }
+2. If exact price is unknown, estimate from menu or leave 0.
+3. If no items found, return { "items": [] }.
+4. Handle flexible inputs like "2 of the chicken ones".
+5. ONLY JSON. No markdown.
+`;
+        const completion = await groq.chat.completions.create({
+            messages: [{ role: "user", content: prompt }],
+            model: "llama-3.3-70b-versatile",
+            temperature: 0.1,
+            response_format: { type: "json_object" }
+        });
+        const result = JSON.parse(completion.choices[0]?.message?.content || "{}");
+        return result.items ? result : { items: [] };
+    }
+    catch (e) {
+        console.error("❌ AI Order Extraction Failed:", e);
+        return { items: [] };
+    }
 }

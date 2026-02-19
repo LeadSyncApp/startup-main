@@ -2,9 +2,52 @@ import { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { Menu } from "lucide-react";
+import { useSocket } from "../../context/SocketContext"; // Import Socket
+import toast from "react-hot-toast"; // Import Toast
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { socket } = useSocket();
+
+  // 🔔 Global Notification Listener
+  useEffect(() => {
+    if (!socket) return;
+
+    const onNotification = (data: { title: string, body: string, type: string }) => {
+      // Play sound?
+      const audio = new Audio('/notification.mp3'); // Assuming file exists or fails silently
+      audio.play().catch(() => { });
+
+      toast.custom((t) => (
+        <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}>
+          <div className="flex-1 w-0 p-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 pt-0.5">
+                <span className="text-2xl">{data.type === 'ORDER' ? '🍔' : '💬'}</span>
+              </div>
+              <div className="ml-3 flex-1">
+                <p className="text-sm font-medium text-gray-900">{data.title}</p>
+                <p className="mt-1 text-sm text-gray-500">{data.body}</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex border-l border-gray-200">
+            <button
+              onClick={() => toast.dismiss(t.id)}
+              className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      ), { duration: 5000 });
+    };
+
+    socket.on("notification_new", onNotification);
+    return () => {
+      socket.off("notification_new", onNotification);
+    };
+  }, [socket]);
 
   useEffect(() => {
     const handleResize = () => {

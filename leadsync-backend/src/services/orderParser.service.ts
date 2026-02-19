@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma";
 import { OrderSource, OrderStatus, OrderPriority, MessageSender } from "@prisma/client";
 import { emitToCompany, emitToConversation, emitToAgent, emitToCompanyAdmin, safeEmitConversationUpdate } from "../lib/socket";
 import { notificationService } from "./notification.service";
+import { generateStructuredOrder } from "./geminiService";
 
 interface ParsedItem {
     name: string;
@@ -22,19 +23,31 @@ class OrderParserService {
         menu?: any
     ) {
         try {
-            // 1. Parse content
-            const items = this.parseItems(text, menu);
+            // 1. Parse content (Regex First)
+            let items: ParsedItem[] = this.parseItemsRegex(text, menu);
+
+            // 2. AI Fallback (If Regex failed but text looks like an order)
+            if (items.length === 0 && this.looksLikeOrder(text)) {
+                const aiResult = await generateStructuredOrder(text, menu);
+                if (aiResult.items && aiResult.items.length > 0) {
+                    items = aiResult.items.map(i => ({
+                        name: i.name,
+                        quantity: i.quantity,
+                        price: i.price || 0
+                    }));
+                }
+            }
 
             if (items.length === 0) return; // No order detected
 
             console.log(`🍔 [OrderParser] Detected ${items.length} items for Conv ${conversationId}`);
 
-            // 2. Calculate Value
+            // 3. Calculate Value
             const totalAmount = items.reduce((sum, item) => sum + (item.price || 0) * item.quantity, 0);
             const summary = items.map(i => `${i.quantity} x ${i.name}`).join(", ");
-            const isUrgent = totalAmount > 500; // Example threshold
+            const isUrgent = totalAmount > 0; // Alert on ANY amount > 0, not just > 500
 
-            // 3. Create Order
+            // 4. Create Order
             const order = await prisma.order.create({
                 data: {
                     companyId,
@@ -45,19 +58,19 @@ class OrderParserService {
                     status: OrderStatus.NEW,
                     source: OrderSource.BOT_DETECTED,
                     priority: isUrgent ? OrderPriority.URGENT : OrderPriority.NORMAL,
-                    priorityScore: isUrgent ? 100 : 50, // Initial score
+                    priorityScore: isUrgent ? 100 : 50,
                     predictedValue: totalAmount
                 },
-                include: { conversation: { include: { lead: true } } } // Include lead for notification
+                include: { conversation: { include: { lead: true } } }
             });
 
-            // 4. Update Conversation Priority Calculation
-            await this.updateConversationPriority(conversationId, totalAmount);
+            // 5. Update Conversation & Lead Stats (CRITICAL FOR CRM VALUE)
+            await this.updateStats(conversationId, leadId, totalAmount);
 
-            // 5. Notify & Emit
+            // 6. Notify & Emit
             await this.notifyNewOrder(companyId, order);
 
-            // 6. System Message
+            // 7. System Message
             await prisma.message.create({
                 data: {
                     conversationId,
@@ -71,26 +84,31 @@ class OrderParserService {
         }
     }
 
+    private looksLikeOrder(text: string): boolean {
+        const lower = text.toLowerCase();
+        return lower.includes("order") || lower.includes("buy") || lower.includes("want") || lower.includes("amount") || lower.includes("rupees") || lower.match(/\d+/) !== null;
+    }
+
     /**
      * Regex + Menu Matching Logic
      */
-    private parseItems(text: string, menu: any): ParsedItem[] {
+    private parseItemsRegex(text: string, menu: any): ParsedItem[] {
         const items: ParsedItem[] = [];
         const normalize = (s: string) => s.toLowerCase().trim();
 
         // 1. Get Menu Items for fuzzy match
         const menuItems = menu?.categories?.flatMap((c: any) => c.items) || [];
 
-        // 2. Regex Pattern: "2 burgers", "1 x pizza", "two cokes"
-        // Simple numeric matcher first
+        // 2. Regex Pattern: "2 burgers", "1 x pizza"
         const regex = /(\d+)\s*(?:x\s*)?([a-zA-Z\s]+)/gi;
         let match;
 
         while ((match = regex.exec(text)) !== null) {
             const quantity = parseInt(match[1]);
             const rawName = match[2].trim();
+            // Filter out common non-item words if short
+            if (rawName.length < 3 && !['tea', 'pie'].includes(rawName.toLowerCase())) continue;
 
-            // 3. Validation against menu (if available)
             let matchedPrice = 0;
             let finalName = rawName;
 
@@ -103,9 +121,6 @@ class OrderParserService {
                 if (menuItem) {
                     finalName = menuItem.name;
                     matchedPrice = menuItem.price;
-                } else {
-                    // Skip unknown items if strict mode? No, capture potential custom items.
-                    // But for revenue calc, price is 0.
                 }
             }
 
@@ -116,15 +131,25 @@ class OrderParserService {
     }
 
     /**
-     * Recalculates and updates the conversation's priority score.
+     * Updates Conversation Priority AND Lead Stats
      */
-    async updateConversationPriority(conversationId: string, newOrderValue: number) {
-        // Simple formula: Existing Sentiment + New Order Value
+    async updateStats(conversationId: string, leadId: string, newOrderValue: number) {
+        // Conversation Priority
         await prisma.conversation.update({
             where: { id: conversationId },
             data: {
-                priorityScore: { increment: Math.floor(newOrderValue * 0.1) }, // 10% of value added to score
+                priorityScore: { increment: Math.floor(newOrderValue * 0.1) },
                 intent: "ORDERING"
+            }
+        });
+
+        // Lead Stats (Updates "Value (CRM)" column)
+        await prisma.lead.update({
+            where: { id: leadId },
+            data: {
+                totalSpend: { increment: newOrderValue },
+                orderCount: { increment: 1 },
+                lastActiveAt: new Date()
             }
         });
     }
@@ -136,8 +161,8 @@ class OrderParserService {
         // 2. ALERT: Create persistent notification for Admins
         await notificationService.notifyCompanyAdmins(
             companyId,
-            `New Order - ₹${order.amount}`,
-            `New order from ${order.conversation?.lead?.contact || 'Customer'} detected.`,
+            `New Order: ₹${order.amount}`,
+            `From ${order.conversation?.lead?.contact}: ${order.summary}`,
             "ORDER"
         );
 
@@ -147,8 +172,8 @@ class OrderParserService {
 
             await notificationService.notifyUser(
                 order.conversation.assignedToId,
-                `New Order Assigned - ₹${order.amount}`,
-                `You have a new order in your assigned conversation.`,
+                `New Order Assigned: ₹${order.amount}`,
+                `You have a new order: ${order.summary}`,
                 "ORDER"
             );
         }
