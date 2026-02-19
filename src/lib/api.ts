@@ -1,7 +1,7 @@
 // ✅ Safe environment loading
 const API_BASE =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
-  "http://localhost:4000/api";
+  "https://startup-production-77de.up.railway.app/api";
 
 // 🔍 Debug (remove later in production if you want)
 console.log("API BASE:", API_BASE);
