@@ -15,6 +15,7 @@ import {
   MoreVertical,
   Zap
 } from "lucide-react";
+import { getIndustryConfig } from "../../utils/industryConfig";
 
 interface Message {
   id: string;
@@ -37,7 +38,9 @@ interface Conversation {
 }
 
 export default function Conversations() {
-  const { token, companyId } = useAuth();
+  const { token, companyId, company } = useAuth();
+  const industry = useMemo(() => getIndustryConfig(company?.botBusinessType), [company]);
+  const IndustryIcon = industry.catalogIcon;
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -415,20 +418,20 @@ export default function Conversations() {
         </div>
       </div>
 
-      {/* RIGHT: CHAT WINDOW */}
       <div className={`
         ${!showMobileList ? "flex" : "hidden"}
         lg:flex flex-1 flex-col bg-slate-50 relative
       `}>
+        {/* EMPTY STATE */}
         {!selected ? (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
-            <div className="h-24 w-24 bg-white rounded-3xl shadow-xl flex items-center justify-center mb-6 relative">
-              <Zap className="h-10 w-10 text-indigo-500" />
-              <div className="absolute -top-2 -right-2 h-6 w-6 bg-indigo-500 rounded-full border-4 border-white" />
+            <div className={`h-24 w-24 bg-white rounded-3xl shadow-xl flex items-center justify-center mb-6 relative text-${industry.colors.primary}`}>
+              <IndustryIcon className="h-10 w-10" />
+              <div className={`absolute -top-2 -right-2 h-6 w-6 bg-${industry.colors.primary} rounded-full border-4 border-white`} />
             </div>
             <h2 className="text-2xl font-black text-slate-900">Select a Conversation</h2>
             <p className="text-slate-500 mt-2 max-w-xs leading-relaxed">
-              Your real-time inbox is active. Select a customer to start assisting or manage bot automation.
+              Your real-time inbox is active. Manage your {industry.catalogTerm.toLowerCase()} orders and customers here.
             </p>
           </div>
         ) : (
@@ -620,6 +623,6 @@ export default function Conversations() {
            letter-spacing: 0.1em;
         }
       `}</style>
-    </div>
+    </div >
   );
 }

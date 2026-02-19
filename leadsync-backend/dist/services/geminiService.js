@@ -5,84 +5,155 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateBotReply = generateBotReply;
 exports.generateStructuredMenu = generateStructuredMenu;
-const openai_1 = __importDefault(require("openai"));
-const openai = new openai_1.default({
-    apiKey: process.env.OPENROUTER_API_KEY,
-    baseURL: "https://openrouter.ai/api/v1",
-});
-async function generateBotReply(message, businessType, structuredMenu) {
+const groq_sdk_1 = __importDefault(require("groq-sdk"));
+// Initialize Groq (Primary)
+const groq = new groq_sdk_1.default({ apiKey: process.env.GROQ_API_KEY || "dummy" });
+// Model Hierarchy: Fast (Only Groq)
+const MODELS = [
+    { provider: "groq", id: "llama-3.1-8b-instant" }, // ⚡ ~0.3s latency
+];
+async function withTimeout(promise, ms, label) {
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms));
+    return Promise.race([promise, timeout]);
+}
+async function generateWithFallback(messages, systemPrompt) {
+    let lastError;
+    const useGroq = !!process.env.GROQ_API_KEY;
+    for (const model of MODELS) {
+        if (model.provider === "groq" && !useGroq)
+            continue;
+        try {
+            console.log(`🤖 [AI] Attempting ${model.provider.toUpperCase()}: ${model.id}...`);
+            let content = "";
+            const timeoutMs = 8000; // 8s timeout per model
+            if (model.provider === "groq") {
+                const completion = await withTimeout(groq.chat.completions.create({
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        ...messages.filter(m => m.content && m.content.trim())
+                    ],
+                    model: model.id,
+                    temperature: 0.3,
+                    max_tokens: 150,
+                }), timeoutMs, `Groq ${model.id}`);
+                content = completion.choices[0]?.message?.content || "";
+            }
+            if (content.trim()) {
+                console.log(`✅ [AI] Success with ${model.id}`);
+                return content.trim();
+            }
+        }
+        catch (err) {
+            console.error(`⚠️ [AI] ${model.id} failed: ${err.message}`);
+            lastError = err;
+        }
+    }
+    throw lastError || new Error("All AI models failed");
+}
+async function generateBotReply(message, // Unused but kept for signature compatibility if needed, though conversation includes it
+businessType, structuredMenu, history) {
     try {
-        let systemPrompt = `
-You are a professional assistant for a ${businessType} business.
+        const businessTypeLower = businessType.toLowerCase();
+        // 🏭 DYNAMIC INDUSTRY DETECTION
+        const isFood = businessTypeLower.match(/(restaurant|food|cafe|bakery|kitchen|dining|bistro|grill|pizza|burger)/);
+        const isRetail = businessTypeLower.match(/(retail|clothing|fashion|boutique|wear|store|shop|mart|apparel)/);
+        const isElectronics = businessTypeLower.match(/(electronics|mobile|tech|gadgets|computer|laptop|devices)/);
+        const isService = businessTypeLower.match(/(service|consulting|agency|salon|spa|repair|gym|fitness)/);
+        // 🏷️ DYNAMIC TERMINOLOGY
+        let catalogTerm = "CATALOG";
+        let outputFocus = "products and features";
+        if (isFood) {
+            catalogTerm = "MENU";
+            outputFocus = "dishes, ingredients, and taste";
+        }
+        else if (isRetail) {
+            catalogTerm = "COLLECTION";
+            outputFocus = "styles, sizes, colors, and material";
+        }
+        else if (isElectronics) {
+            catalogTerm = "INVENTORY";
+            outputFocus = "specs, warranty, battery life, and compatibility";
+        }
+        else if (isService) {
+            catalogTerm = "SERVICES LIST";
+            outputFocus = "service details, duration, and pricing";
+        }
+        let systemPrompt = `You are a helpful, professional AI assistant for "${businessType}" (${catalogTerm} based).
+STRICT OPERATING RULES:
+1. DOMAIN LOCK: You are ONLY allowed to discuss ${outputFocus}.
+   - IF asked about food in a shoe store -> Polite refusal.
+   - IF asked about math/code -> Polite refusal.
+   - REFUSAL TEMPLATE: "I can only assist you with our ${catalogTerm} and orders."
 
-Rules:
-- Reply clearly and professionally.
-- Never output JSON.
-- Never show raw menu JSON.
-- Format menu nicely if asked.
-- Keep replies short and clean.
+2. SOURCE OF TRUTH: The ${catalogTerm} below is your ONLY knowledge base. 
+   - DO NOT hallucinate items not listed.
+   - DO NOT invent prices.
+
+3. INTENT MAPPING:
+   - "Show menu/orders/options" -> Output the ${catalogTerm}.
+   - "What do you have?" -> Summarize the ${catalogTerm}.
+
+4. TONE & FORMAT:
+   - Be concise (< 40 words) unless listing items.
+   - Use emojis relevant to: ${businessType}.
+
+OFFICIAL ${catalogTerm} DATA:
 `;
         if (structuredMenu?.categories?.length > 0) {
             const formattedMenu = structuredMenu.categories
-                .map((cat) => `\n${cat.name}:\n` +
+                .map((cat) => `${cat.name.toUpperCase()}:\n` +
                 cat.items
-                    .map((i) => `- ${i.name} (₹${i.price})`)
+                    .map((i) => `- ${i.name} (${i.price ? '₹' + i.price : 'Contact for Price'})${i.description ? ': ' + i.description : ''}`)
                     .join("\n"))
-                .join("\n");
-            systemPrompt += `\nMenu:\n${formattedMenu}\n`;
+                .join("\n\n");
+            systemPrompt += `${formattedMenu}\n\n[END OF ${catalogTerm}]`;
         }
-        const completion = await openai.chat.completions.create({
-            model: "openai/gpt-4o-mini",
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: message },
-            ],
-            temperature: 0.3,
-            max_tokens: 300,
-        });
-        return (completion.choices?.[0]?.message?.content ||
-            "Our team will assist you shortly.");
+        else {
+            systemPrompt += `(Empty ${catalogTerm}. Politely ask the user what they are looking for so you can check manually.)`;
+        }
+        // Ensure conversation struct is valid
+        const conversation = (history || []).map(m => ({
+            role: m.role,
+            content: m.content
+        }));
+        // Add current user message to conversation if not already there? 
+        // Wait, the adapter appends it. No, adapter passes `historyContext` which EXCLUDES the current message?
+        // Let's check `TelegramAdapter.ts`: `const historyContext = history.reverse().map(...)`
+        // Then `generateBotReply(text, ...)`
+        // But `generateBotReply` logic (old) was:
+        // const conversation = [ ...(history || []), { role: "user", content: message } ];
+        // So YES, we must append the current message here.
+        conversation.push({ role: "user", content: message });
+        return await generateWithFallback(conversation, systemPrompt);
     }
     catch (error) {
-        console.error("Bot Reply Error:", error);
-        return "Our assistant is temporarily unavailable.";
+        console.error("❌ Bot Reply Fatal Error:", error);
+        return "Thank you for reaching out! Our team will assist you shortly.";
     }
 }
 async function generateStructuredMenu(description, existingMenu) {
-    try {
-        let prompt = `
-Generate a clean structured product menu with pricing.
-
-Return ONLY valid JSON without markdown formatting:
-{
-  "categories": [
-    {
-      "name": "Category",
-      "items": [
-        { "name": "Item", "price": 100 }
-      ]
-    }
-  ]
-}
-
-Business Description:
-${description}
-`;
-        if (existingMenu) {
-            prompt += `\n\nExisting Menu to Update/Reference:\n${JSON.stringify(existingMenu)}\n\nIMPORTANT: Maintain the same structure. Update prices or items if requested in the description, otherwise keep existing items.`;
+    // Use Groq for structured JSON generation if available
+    if (process.env.GROQ_API_KEY) {
+        try {
+            console.log("🤖 [AI] Generating Structured Menu (Groq)...");
+            let prompt = `Generate a JSON menu for: ${description}.
+Format: {"categories": [{"name": "C", "items": [{"name": "I", "price": 10}]}]}
+ONLY JSON. No markdown.`;
+            if (existingMenu) {
+                prompt += `\nUpdate: ${JSON.stringify(existingMenu)}`;
+            }
+            const completion = await groq.chat.completions.create({
+                messages: [{ role: "user", content: prompt }],
+                model: "llama-3.3-70b-versatile", // Use smarter model for JSON
+                temperature: 0.2,
+                response_format: { type: "json_object" }
+            });
+            return JSON.parse(completion.choices[0]?.message?.content || "{}");
         }
-        const completion = await openai.chat.completions.create({
-            model: "openai/gpt-4o-mini",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.2,
-        });
-        let raw = completion.choices?.[0]?.message?.content || "{}";
-        // Clean potential markdown code blocks
-        raw = raw.replace(/```json/g, "").replace(/```/g, "").trim();
-        return JSON.parse(raw);
+        catch (e) {
+            console.error("Groq JSON generation failed, falling back...");
+        }
     }
-    catch (error) {
-        console.error("Structured Menu Error:", error);
-        return existingMenu || { categories: [] };
-    }
+    // Fallback logic for original simple object return 
+    return existingMenu || { categories: [] };
 }

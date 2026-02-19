@@ -103,6 +103,7 @@ model User {
 
   processedOrders       Order[]        @relation("ProcessedOrders")
   assignedConversations Conversation[] @relation("AssignedConversations") // New relation
+  notifications Notification[]
 
   @@unique([email, companyId])
   @@index([companyId])
@@ -177,6 +178,9 @@ model Conversation {
   assignedToId String?
   assignedTo   User?   @relation("AssignedConversations", fields: [assignedToId], references: [id])
 
+  // Optimization
+  priorityScore Int @default(0)
+
   lead    Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   messages Message[]
@@ -189,6 +193,7 @@ model Conversation {
   @@index([sentimentScore])
   @@index([assignedToId])
   @@index([status])
+  @@index([priorityScore]) // Critical for Revenue-Based Sorting
 }
 
 model Message {
@@ -202,6 +207,21 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@index([conversationId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  body      String
+  type      String   // ORDER, MESSAGE, ALERT
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
 }
 
 model Order {

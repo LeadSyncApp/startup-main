@@ -67,28 +67,68 @@ export async function generateBotReply(
   history?: any[]
 ): Promise<string> {
   try {
-    let systemPrompt = `You are a helpful assistant for a ${businessType}. 
-STRICT RULES:
-1. You ONLY know the menu items listed below.
-2. You DO NOT have access to other customers' orders or sales data. 
-3. If the user asks for "orders" (e.g., "what are your orders"), they mean "MENU". List the available menu items.
-4. NEVER make up fake orders or say "we have these orders" unless referring to the CURRENT user's confirmed items in the conversation history.
-5. Be concise and professional. Keep responses under 2 sentences unless listing the menu.`;
+    const businessTypeLower = businessType.toLowerCase();
+
+    // 🏭 DYNAMIC INDUSTRY DETECTION
+    const isFood = businessTypeLower.match(/(restaurant|food|cafe|bakery|kitchen|dining|bistro|grill|pizza|burger)/);
+    const isRetail = businessTypeLower.match(/(retail|clothing|fashion|boutique|wear|store|shop|mart|apparel)/);
+    const isElectronics = businessTypeLower.match(/(electronics|mobile|tech|gadgets|computer|laptop|devices)/);
+    const isService = businessTypeLower.match(/(service|consulting|agency|salon|spa|repair|gym|fitness)/);
+
+    // 🏷️ DYNAMIC TERMINOLOGY
+    let catalogTerm = "CATALOG";
+    let outputFocus = "products and features";
+
+    if (isFood) {
+      catalogTerm = "MENU";
+      outputFocus = "dishes, ingredients, and taste";
+    } else if (isRetail) {
+      catalogTerm = "COLLECTION";
+      outputFocus = "styles, sizes, colors, and material";
+    } else if (isElectronics) {
+      catalogTerm = "INVENTORY";
+      outputFocus = "specs, warranty, battery life, and compatibility";
+    } else if (isService) {
+      catalogTerm = "SERVICES LIST";
+      outputFocus = "service details, duration, and pricing";
+    }
+
+    let systemPrompt = `You are a helpful, professional AI assistant for "${businessType}" (${catalogTerm} based).
+STRICT OPERATING RULES:
+1. DOMAIN LOCK: You are ONLY allowed to discuss ${outputFocus}.
+   - IF asked about food in a shoe store -> Polite refusal.
+   - IF asked about math/code -> Polite refusal.
+   - REFUSAL TEMPLATE: "I can only assist you with our ${catalogTerm} and orders."
+
+2. SOURCE OF TRUTH: The ${catalogTerm} below is your ONLY knowledge base. 
+   - DO NOT hallucinate items not listed.
+   - DO NOT invent prices.
+
+3. INTENT MAPPING:
+   - "Show menu/orders/options" -> Output the ${catalogTerm}.
+   - "What do you have?" -> Summarize the ${catalogTerm}.
+
+4. TONE & FORMAT:
+   - Be concise (< 40 words) unless listing items.
+   - Use emojis relevant to: ${businessType}.
+
+OFFICIAL ${catalogTerm} DATA:
+`;
 
     if (structuredMenu?.categories?.length > 0) {
       const formattedMenu = structuredMenu.categories
         .map(
           (cat: any) =>
-            `${cat.name}:\n` +
+            `${cat.name.toUpperCase()}:\n` +
             cat.items
-              .map((i: any) => `- ${i.name} (₹${i.price})`)
+              .map((i: any) => `- ${i.name} (${i.price ? '₹' + i.price : 'Contact for Price'})${i.description ? ': ' + i.description : ''}`)
               .join("\n")
         )
-        .join("\n");
+        .join("\n\n");
 
-      systemPrompt += `\n\nOFFICIAL MENU:\n${formattedMenu}\n\nUse ONLY this menu. Do not hallucinate items.`;
+      systemPrompt += `${formattedMenu}\n\n[END OF ${catalogTerm}]`;
     } else {
-      systemPrompt += `\n\n(No menu is currently available. Apologize if asked for food items.)`;
+      systemPrompt += `(Empty ${catalogTerm}. Politely ask the user what they are looking for so you can check manually.)`;
     }
 
     // Ensure conversation struct is valid

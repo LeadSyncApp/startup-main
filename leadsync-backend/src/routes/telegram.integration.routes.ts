@@ -50,12 +50,28 @@ router.post(
       );
 
       /* 4️⃣ Register bot commands (restore menu) */
+      /* 4️⃣ Register DYNAMIC bot commands */
+      const businessType = (req.body.businessType || "food").toLowerCase();
+      let mainCommand = "menu";
+      let mainDesc = "View Menu";
+
+      if (businessType.match(/(retail|clothing|fashion|shop|store)/)) {
+        mainCommand = "catalog";
+        mainDesc = "View Catalog";
+      } else if (businessType.match(/(electronics|tech|gadgets)/)) {
+        mainCommand = "inventory";
+        mainDesc = "View Products";
+      } else if (businessType.match(/(service|consulting|agency)/)) {
+        mainCommand = "services";
+        mainDesc = "View Services";
+      }
+
       await axios.post(
         `https://api.telegram.org/bot${token}/setMyCommands`,
         {
           commands: [
             { command: "start", description: "Start the bot" },
-            { command: "menu", description: "View menu" },
+            { command: mainCommand, description: mainDesc },
             { command: "help", description: "Get support" },
           ],
         }

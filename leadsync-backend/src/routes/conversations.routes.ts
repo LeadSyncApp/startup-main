@@ -25,13 +25,17 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 
     const conversations = await prisma.conversation.findMany({
       where: whereClause,
-      orderBy: { updatedAt: "desc" },
+      orderBy: [
+        { priorityScore: "desc" }, // 💰 High Value / Urgent First
+        { updatedAt: "desc" }      // Recent activity second
+      ],
       take: 21, // Fetch 1 extra to determine if next page exists
       cursor: req.query.cursor ? { id: String(req.query.cursor) } : undefined,
       select: {
         id: true,
         mode: true,
         updatedAt: true,
+        priorityScore: true, // Needed for UI badge
         lead: {
           select: {
             name: true,

@@ -16,7 +16,7 @@ const sendTelegramMessage = async (botToken, chatId, text, replyMarkup) => {
         if (replyMarkup) {
             payload.reply_markup = replyMarkup;
         }
-        await axios_1.default.post(url, payload);
+        await axios_1.default.post(url, payload, { timeout: 5000 });
     }
     catch (error) {
         console.error("❌ Telegram sendMessage error:", error.response?.data || error);
@@ -29,7 +29,7 @@ const sendChatAction = async (botToken, chatId, action = "typing") => {
         await axios_1.default.post(url, {
             chat_id: chatId,
             action,
-        });
+        }, { timeout: 5000 });
     }
     catch (error) {
         // Ignore chat action errors (not critical)

@@ -12,15 +12,28 @@ const router = (0, express_1.Router)();
 ========================================= */
 router.get("/", auth_middleware_1.authMiddleware, async (req, res) => {
     try {
-        const companyId = req.user.companyId;
+        const { companyId, userId, role } = req.user;
+        // 🔒 PRIVACY FILTER: Agents only see Unclaimed OR Their Own
+        const whereClause = { companyId };
+        if (role === "AGENT") {
+            whereClause.OR = [
+                { assignedToId: null },
+                { assignedToId: userId }
+            ];
+        }
         const conversations = await prisma_1.prisma.conversation.findMany({
-            where: { companyId },
-            orderBy: { updatedAt: "desc" },
-            take: 20, // Reduced to 20 for faster initial load
+            where: whereClause,
+            orderBy: [
+                { priorityScore: "desc" }, // 💰 High Value / Urgent First
+                { updatedAt: "desc" } // Recent activity second
+            ],
+            take: 21, // Fetch 1 extra to determine if next page exists
+            cursor: req.query.cursor ? { id: String(req.query.cursor) } : undefined,
             select: {
                 id: true,
                 mode: true,
                 updatedAt: true,
+                priorityScore: true, // Needed for UI badge
                 lead: {
                     select: {
                         name: true,
@@ -37,13 +50,19 @@ router.get("/", auth_middleware_1.authMiddleware, async (req, res) => {
                 }
             }
         });
-        res.json(conversations.map((c) => ({
-            id: c.id,
-            mode: c.mode,
-            lead: c.lead,
-            updatedAt: c.updatedAt,
-            lastMessage: c.messages[0]?.content || "",
-        })));
+        const hasNextPage = conversations.length > 20;
+        const result = hasNextPage ? conversations.slice(0, 20) : conversations;
+        const nextCursor = hasNextPage ? result[result.length - 1].id : null;
+        res.json({
+            items: result.map((c) => ({
+                id: c.id,
+                mode: c.mode,
+                lead: c.lead,
+                updatedAt: c.updatedAt,
+                lastMessage: c.messages[0]?.content || "",
+            })),
+            nextCursor
+        });
     }
     catch (error) {
         console.error("Fetch conversations error:", error);
@@ -56,14 +75,23 @@ router.get("/", auth_middleware_1.authMiddleware, async (req, res) => {
 router.get("/:id/messages", auth_middleware_1.authMiddleware, async (req, res) => {
     try {
         const companyId = req.user.companyId;
+        const userId = req.user.userId; // Authenticated user
+        const userRole = req.user.role; // Role
         const conversation = await prisma_1.prisma.conversation.findFirst({
             where: {
                 id: req.params.id,
                 companyId,
             },
+            include: {
+                assignedTo: { select: { id: true, name: true } }
+            }
         });
         if (!conversation) {
             return res.status(404).json({ message: "Conversation not found" });
+        }
+        // 🔒 STRICT PRIVACY: Prevent agents from peeking at others' conversations
+        if (userRole === "AGENT" && conversation.assignedToId && conversation.assignedToId !== userId) {
+            return res.status(403).json({ message: "⛔ Access Denied: This conversation is assigned to another agent." });
         }
         const messages = await prisma_1.prisma.message.findMany({
             where: { conversationId: conversation.id },
@@ -97,6 +125,8 @@ router.get("/:id/messages", auth_middleware_1.authMiddleware, async (req, res) =
             mode: conversation.mode,
             messages,
             order: latestOrder || null,
+            isLocked: conversation.assignedToId && conversation.assignedToId !== userId && userRole === "AGENT",
+            assignedTo: conversation.assignedTo
         });
     }
     catch (error) {
@@ -111,6 +141,8 @@ router.post("/:id/send", auth_middleware_1.authMiddleware, async (req, res) => {
     try {
         const { content } = req.body;
         const companyId = req.user.companyId;
+        const userId = req.user.userId;
+        const userRole = req.user.role;
         if (!content || !content.trim()) {
             return res.status(400).json({ message: "Message content required" });
         }
@@ -127,6 +159,10 @@ router.post("/:id/send", auth_middleware_1.authMiddleware, async (req, res) => {
         if (!conversation) {
             return res.status(404).json({ message: "Conversation not found" });
         }
+        // ENFORCE LOCK
+        if (conversation.assignedToId && conversation.assignedToId !== userId && userRole === "AGENT") {
+            return res.status(403).json({ message: "Conversation is locked by another agent." });
+        }
         const message = await prisma_1.prisma.message.create({
             data: {
                 content: content.trim(),
@@ -134,21 +170,14 @@ router.post("/:id/send", auth_middleware_1.authMiddleware, async (req, res) => {
                 conversationId: conversation.id,
             },
         });
-        // ✅ MODE REMOVED: Do not auto-switch to HUMAN.
-        // Respect the manual toggle from the site to allow 24/7 bot service.
-        await prisma_1.prisma.conversation.update({
-            where: { id: conversation.id },
-            data: {
-                updatedAt: new Date(),
-            },
-        });
+        // NOTE: Auto-switch removed as per user request. Mode strictly manual.
         if (conversation.company.telegramBotToken) {
             // Fire-and-forget: Don't await
             (0, telegram_sender_1.sendTelegramMessage)(conversation.company.telegramBotToken, conversation.lead.contact, content.trim()).catch(console.error);
         }
-        // ✅ REAL-TIME SOCKET EMISSION
-        // 1. Notify company for list updates
-        (0, socket_1.emitToCompany)(companyId, "conversation_updated", {
+        // ✅ SECURE REAL-TIME EMISSION
+        // Intelligent routing: Only to Assigned + Admins
+        (0, socket_1.safeEmitConversationUpdate)(conversation, "conversation_updated", {
             conversationId: conversation.id,
             lastMessage: content.trim(),
             updatedAt: new Date(),
@@ -188,8 +217,8 @@ router.patch("/:id/mode", auth_middleware_1.authMiddleware, async (req, res) => 
                 updatedAt: new Date(),
             },
         });
-        // ✅ REAL-TIME SOCKET EMISSION (Immediate Mode Sync)
-        (0, socket_1.emitToCompany)(companyId, "mode_changed", {
+        // ✅ SECURE REAL-TIME EMISSION
+        (0, socket_1.safeEmitConversationUpdate)(updated, "status_changed", {
             conversationId: conversation.id,
             mode
         });
@@ -244,6 +273,130 @@ router.delete("/:id/messages", auth_middleware_1.authMiddleware, async (req, res
     catch (error) {
         console.error("Clear history error:", error);
         res.status(500).json({ message: "Failed to clear history" });
+    }
+});
+/* =========================================
+   ASSIGN AGENT (Shared Inbox)
+========================================= */
+router.patch("/:id/assign", auth_middleware_1.authMiddleware, async (req, res) => {
+    try {
+        const { assignedToId } = req.body; // userId or null to unassign
+        const companyId = req.user.companyId;
+        const conversation = await prisma_1.prisma.conversation.findFirst({
+            where: { id: req.params.id, companyId },
+        });
+        if (!conversation)
+            return res.status(404).json({ message: "Conversation not found" });
+        // Update assignment - forceful cast to avoid IDE type errors
+        let updatedCalls;
+        if (assignedToId) {
+            // ✅ ATOMIC CLAIM: Only update if assignedToId is currently NULL
+            const result = await prisma_1.prisma.conversation.updateMany({
+                where: {
+                    id: conversation.id,
+                    assignedToId: null // 🔒 Lock: Must be unclaimed
+                },
+                data: {
+                    assignedToId,
+                    status: "ASSIGNED",
+                    updatedAt: new Date()
+                }
+            });
+            if (result.count === 0) {
+                // Claim failed. Check why.
+                const fresh = await prisma_1.prisma.conversation.findUnique({ where: { id: conversation.id } });
+                if (fresh?.assignedToId === assignedToId) {
+                    // Already assigned to me (idempotent success)
+                    updatedCalls = fresh;
+                }
+                else {
+                    return res.status(409).json({ message: "⚠️ Too late! This conversation was just claimed by another agent." });
+                }
+            }
+            else {
+                // Fetch the updated record
+                updatedCalls = await prisma_1.prisma.conversation.findUnique({
+                    where: { id: conversation.id },
+                    include: { assignedTo: { select: { id: true, name: true } } }
+                });
+            }
+        }
+        else {
+            // UNASSIGN (Release)
+            updatedCalls = await prisma_1.prisma.conversation.update({
+                where: { id: conversation.id },
+                data: {
+                    assignedToId: null,
+                    status: "OPEN",
+                    updatedAt: new Date(),
+                },
+                include: { assignedTo: { select: { id: true, name: true } } }
+            });
+        }
+        const updated = updatedCalls;
+        if (assignedToId) {
+            // CASE: CLAIMING (Assigning)
+            // 1. Notify public channel to REMOVE it from their list (Privacy)
+            (0, socket_1.emitToCompany)(companyId, "conversation_removed", { conversationId: conversation.id });
+            // 2. Notify specific agent that they got it
+            (0, socket_1.emitToAgent)(assignedToId, "conversation_added", updated);
+        }
+        else {
+            // CASE: UNASSIGNING (Releasing)
+            // 1. Notify public channel to ADD it back to everyone's list
+            (0, socket_1.emitToCompany)(companyId, "conversation_added", updated);
+        }
+        // 3. Always notify Admins
+        (0, socket_1.emitToCompanyAdmin)(companyId, "conversation_updated", updated);
+        // System message
+        const agentName = updated.assignedTo?.name || "System";
+        const statusText = assignedToId ? `assigned to ${agentName}` : "unassigned";
+        const sysMsg = await prisma_1.prisma.message.create({
+            data: {
+                content: `Conversation was ${statusText}.`,
+                sender: client_1.MessageSender.SYSTEM,
+                conversationId: conversation.id,
+            }
+        });
+        (0, socket_1.emitToConversation)(conversation.id, "new_message", sysMsg);
+        res.json(updated);
+    }
+    catch (error) {
+        console.error("Assign error:", error);
+        res.status(500).json({ message: "Assignment failed" });
+    }
+});
+/* =========================================
+   UPDATE STATUS (Resolved/Open)
+========================================= */
+router.patch("/:id/status", auth_middleware_1.authMiddleware, async (req, res) => {
+    try {
+        const { status } = req.body; // OPEN, RESOLVED, SNOOZED
+        const companyId = req.user.companyId;
+        // Explicit valid statuses
+        const validStatuses = ["OPEN", "ASSIGNED", "RESOLVED", "SNOOZED"];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ message: "Invalid status" });
+        }
+        const conversation = await prisma_1.prisma.conversation.findFirst({
+            where: { id: req.params.id, companyId },
+        });
+        if (!conversation)
+            return res.status(404).json({ message: "Conversation not found" });
+        // Forceful cast
+        const updated = await prisma_1.prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { status, updatedAt: new Date() }
+        });
+        (0, socket_1.safeEmitConversationUpdate)(updated, "status_changed", {
+            conversationId: conversation.id,
+            status
+        });
+        res.json(updated);
+    }
+    catch (error) {
+        console.error("Status update error:", error);
+        res.status(500).json({ message: "Failed to update status" });
     }
 });
 exports.default = router;

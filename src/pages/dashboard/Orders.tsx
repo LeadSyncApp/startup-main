@@ -24,15 +24,23 @@ interface Order {
 }
 
 // --- Configuration ---
-const COLUMN_CONFIG = [
-  { id: "NEW", title: "New Requests", color: "border-blue-200 bg-blue-50/50" },
-  { id: "PROCESSING", title: "In Kitchen", color: "border-indigo-200 bg-indigo-50/50", statuses: ["CONFIRMED", "PREPARING"] },
-  { id: "READY", title: "Ready for Pickup", color: "border-emerald-200 bg-emerald-50/50", statuses: ["READY"] },
-];
+import { getIndustryConfig } from "../../utils/industryConfig";
+
+// ...
 
 export default function Orders() {
-  const { token } = useAuth();
+  const { token, company } = useAuth(); // Correctly use company from context
   const { socket } = useSocket();
+
+  const industry = useMemo(() => getIndustryConfig(company?.botBusinessType), [company]);
+
+  const COLUMN_CONFIG = useMemo(() => [
+    { id: "NEW", title: industry.pipelineLabels.new, color: "border-blue-200 bg-blue-50/50" },
+    { id: "PROCESSING", title: industry.pipelineLabels.processing, color: "border-indigo-200 bg-indigo-50/50", statuses: ["CONFIRMED", "PREPARING", "PROCESSING"] },
+    { id: "READY", title: industry.pipelineLabels.ready, color: "border-emerald-200 bg-emerald-50/50", statuses: ["READY"] },
+  ], [industry]);
+
+  // ... rest of component
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [view, setView] = useState<'active' | 'history'>('active');
@@ -344,8 +352,8 @@ export default function Orders() {
                   <button
                     onClick={handleConfirmAction}
                     className={`px-6 py-2 text-white font-bold rounded-lg shadow-lg transition transform active:scale-95 ${actionType === 'approve'
-                        ? 'bg-green-600 hover:bg-green-700 shadow-green-200'
-                        : 'bg-red-600 hover:bg-red-700 shadow-red-200'
+                      ? 'bg-green-600 hover:bg-green-700 shadow-green-200'
+                      : 'bg-red-600 hover:bg-red-700 shadow-red-200'
                       }`}
                   >
                     {actionType === 'approve' ? 'Confirm Accept' : 'Confirm Reject'}
