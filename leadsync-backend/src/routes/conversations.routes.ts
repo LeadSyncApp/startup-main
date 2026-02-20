@@ -129,6 +129,9 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
         amount: true,
         approvalStatus: true,
         status: true,
+        version: true,
+        priority: true,
+        isUrgent: true,
       },
     });
 
