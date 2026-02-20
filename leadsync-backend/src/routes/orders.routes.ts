@@ -118,53 +118,35 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
+import { orderWorkflowService } from "../services/orderWorkflow.service";
+
 /* ===============================
    APPROVE ORDER (Activates Pending)
 ================================== */
 router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const { version } = req.body; // Optimistic Lock
     const companyId = req.user!.companyId;
 
-    const existing = await prisma.order.findFirst({ where: { id, companyId } });
-    if (!existing) return res.status(404).json({ message: "Order not found" });
-
-    // Transition PENDING -> CONFIRMED (Active)
-    const updated = await (prisma.order as any).update({
-      where: { id },
-      data: {
-        approvalStatus: OrderApprovalStatus.APPROVED,
-        status: OrderStatus.CONFIRMED, // Moves to Active Board
-        processedById: req.user!.userId,
-        priorityScore: { increment: 20 },
+    const result = await orderWorkflowService.transitionStatus(
+      id,
+      OrderStatus.CONFIRMED,
+      {
+        id: req.user!.userId,
+        name: "Agent",
+        role: req.user!.role
       },
-      include: { lead: true, company: true, conversation: true }
-    });
+      version
+    );
 
-    // 1. Send Telegram Notification
-    if (updated.company?.telegramBotToken && updated.lead?.contact) {
-      sendTelegramMessage(
-        updated.company.telegramBotToken,
-        updated.lead.contact,
-        `✅ *Order Accepted!*\n\n${updated.summary}\nTotal: ₹${updated.amount}\n\nWe are preparing it now!`
-      ).catch(console.error);
+    return res.json(result.order);
+  } catch (error: any) {
+    if (error.message?.includes("CONCURRENCY")) {
+      return res.status(409).json({ message: error.message });
     }
-
-    // 2. Log in Chat History
-    await prisma.message.create({
-      data: {
-        conversationId: existing.conversationId,
-        sender: MessageSender.SYSTEM,
-        content: `Order accepted by ${req.user!.userId === updated.processedById ? 'Agent' : 'System'}. Status: PREPARING.`
-      }
-    });
-
-    safeEmitConversationUpdate((updated as any).conversation, "order_updated", updated);
-
-    return res.json(updated);
-  } catch (error) {
     console.error("Approve error:", error);
-    return res.status(500).json({ message: "Failed to approve order" });
+    return res.status(500).json({ message: error.message || "Failed to approve order" });
   }
 });
 
@@ -174,47 +156,26 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
 router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const companyId = req.user!.companyId;
+    const { version } = req.body;
 
-    const existing = await prisma.order.findFirst({ where: { id, companyId } });
-    if (!existing) return res.status(404).json({ message: "Order not found" });
-
-    const updated = await (prisma.order as any).update({
-      where: { id },
-      data: {
-        approvalStatus: OrderApprovalStatus.REJECTED,
-        status: OrderStatus.CANCELLED,
-        completedAt: new Date(), // Mark as closed
-        processedById: req.user!.userId,
-        priorityScore: 0,
+    const result = await orderWorkflowService.transitionStatus(
+      id,
+      OrderStatus.REJECTED,
+      {
+        id: req.user!.userId,
+        name: "Agent",
+        role: req.user!.role
       },
-      include: { lead: true, company: true, conversation: true }
-    });
+      version
+    );
 
-    // 1. Send Telegram Notification
-    if (updated.company?.telegramBotToken && updated.lead?.contact) {
-      sendTelegramMessage(
-        updated.company.telegramBotToken,
-        updated.lead.contact,
-        `❌ *Order Update*\n\nUnfortunately, your order for ${updated.summary} could not be accepted at this time.`
-      ).catch(console.error);
+    return res.json(result.order);
+  } catch (error: any) {
+    if (error.message?.includes("CONCURRENCY")) {
+      return res.status(409).json({ message: error.message });
     }
-
-    // 2. Log in Chat History
-    await prisma.message.create({
-      data: {
-        conversationId: existing.conversationId,
-        sender: MessageSender.SYSTEM,
-        content: `Order was rejected/cancelled.`
-      }
-    });
-
-    safeEmitConversationUpdate((updated as any).conversation, "order_updated", updated);
-
-    return res.json(updated);
-  } catch (error) {
     console.error("Reject error:", error);
-    return res.status(500).json({ message: "Failed to reject order" });
+    return res.status(500).json({ message: error.message || "Failed to reject order" });
   }
 });
 
@@ -223,37 +184,28 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
 ================================== */
 router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { status, priorityScore, isUrgent } = req.body;
+    const { status, version } = req.body; // Now expects status AND version
     const { id } = req.params;
-    const companyId = req.user!.companyId;
 
-    const existing = await prisma.order.findFirst({ where: { id, companyId } });
-    if (!existing) return res.status(404).json({ message: "Order not found" });
+    const result = await orderWorkflowService.transitionStatus(
+      id,
+      status as OrderStatus,
+      {
+        id: req.user!.userId,
+        name: "Agent",
+        role: req.user!.role
+      },
+      version
+    );
 
-    const updateData: any = { status };
-    if (priorityScore !== undefined) updateData.priorityScore = priorityScore;
-    if (isUrgent !== undefined) updateData.isUrgent = isUrgent;
-
-    // Handle Completion
-    if (["DELIVERED", "COMPLETED", "CANCELLED"].includes(status)) {
-      updateData.completedAt = new Date();
+    return res.json(result.order);
+  } catch (error: any) {
+    if (error.message?.includes("Invalid transition")) {
+      return res.status(400).json({ message: error.message });
     }
-
-    if (["DELIVERED", "READY", "COMPLETED"].includes(status)) {
-      if (!existing.processedById) updateData.processedById = req.user!.userId;
+    if (error.message?.includes("CONCURRENCY")) {
+      return res.status(409).json({ message: error.message });
     }
-
-    const updated = await (prisma.order as any).update({
-      where: { id },
-      data: updateData,
-      include: { conversation: true }
-    });
-
-    const updatedWithConv = updated as any;
-    safeEmitConversationUpdate(updatedWithConv.conversation, "order_updated", updated);
-
-    return res.json(updated);
-  } catch (error) {
     console.error("Update status error:", error);
     return res.status(500).json({ message: "Failed to update order" });
   }

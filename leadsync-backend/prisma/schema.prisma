@@ -37,14 +37,17 @@ enum MessageSender {
 }
 
 enum OrderStatus {
+  BOT_DETECTED   // 🆕
   PENDING
   NEW
   CONFIRMED
   PREPARING
   READY
+  SHIPPED        // 🆕
   DELIVERED
   COMPLETED
   CANCELLED
+  REJECTED       // 🆕
   ARCHIVED
 }
 
@@ -276,4 +279,26 @@ model Order {
   @@index([priorityScore])
   @@index([completedAt]) // 🆕 Index for History Page
   @@index([isDeleted])   // 🆕 Index for cleanup
+
+  version         Int           @default(1) // Optimistic Locking
+  logs            OrderLog[]
+}
+
+model OrderLog {
+  id          String    @id @default(uuid())
+  orderId     String
+  
+  actorId     String?   // User ID. If null, it's System/Bot
+  actorName   String    // "Bot", "Rahul (Agent)" - Denormalized for history speed
+  actorRole   String    // "BOT", "AGENT", "OWNER"
+  
+  action      String    // STATUS_CHANGE, ASSIGNMENT_CHANGE, NOTE_ADDED
+  metadata    Json?     // { from: "BOT_DETECTED", to: "CONFIRMED" }
+  
+  timestamp   DateTime  @default(now())
+  
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  @@index([orderId])
+  @@index([timestamp])
 }
