@@ -6,6 +6,7 @@ import {
     ConversationMode,
     OrderSource,
     OrderApprovalStatus,
+    OrderStatus,
 } from "@prisma/client";
 import axios from "axios";
 import { emitToCompany, emitToConversation, safeEmitConversationUpdate } from "../lib/socket";
@@ -470,8 +471,14 @@ export class TelegramAdapter implements ChannelAdapter {
 
             try {
                 // Execute AI request with higher concurrency
+                // Fetch truly "Past" orders (not the one we just detected)
                 const orderHistory = await prisma.order.findMany({
-                    where: { leadId: lead.id, isDeleted: false },
+                    where: {
+                        leadId: lead.id,
+                        isDeleted: false,
+                        status: { not: OrderStatus.BOT_CREATED_ORDER },
+                        createdAt: { lt: new Date(Date.now() - 5000) } // At least 5 seconds old
+                    },
                     orderBy: { createdAt: "desc" },
                     take: 3,
                     select: { summary: true, amount: true, createdAt: true }
