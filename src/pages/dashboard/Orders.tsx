@@ -8,7 +8,6 @@ import { Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 // --- Types ---
-// --- Types ---
 interface Order {
   id: string;
   summary: string;
@@ -29,205 +28,285 @@ interface Order {
   version: number;
 }
 
-// ... existing code ...
+export default function Orders() {
+  const { token, company } = useAuth();
+  const { socket } = useSocket();
 
-// Actions
-const handleConfirmAction = async () => {
-  if (!actionOrder || !actionType) return;
-  const orderId = actionOrder.id;
-  const type = actionType;
+  const industry = useMemo(() => getIndustryConfig(company?.botBusinessType), [company]);
 
-  // Optimistic
-  setOrders(prev => prev.filter(o => {
-    if (view === 'active' && type === 'reject' && o.id === orderId) return false;
-    return true;
-  }));
+  const COLUMN_CONFIG = useMemo(() => [
+    { id: "NEW", title: industry.pipelineLabels.new, color: "border-blue-200 bg-blue-50/50", statuses: ["NEW", "PENDING"] },
+    { id: "PROCESSING", title: industry.pipelineLabels.processing, color: "border-indigo-200 bg-indigo-50/50", statuses: ["CONFIRMED", "PREPARING"] },
+    { id: "READY", title: industry.pipelineLabels.ready, color: "border-emerald-200 bg-emerald-50/50", statuses: ["READY"] },
+  ], [industry]);
 
-  setActionOrder(null);
-  setActionType(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [view, setView] = useState<'active' | 'history'>('active');
+  const [loading, setLoading] = useState(true);
 
-  try {
-    if (type === 'approve') {
-      await api.post(`/orders/${orderId}/approve`, { version: actionOrder.version });
-    } else {
-      await api.post(`/orders/${orderId}/reject`, { version: actionOrder.version });
+  // Modal State
+  const [actionOrder, setActionOrder] = useState<Order | null>(null);
+  const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
+
+  // Fetch Orders
+  const fetchOrders = async (currentView: string) => {
+    try {
+      setLoading(true);
+      const data = await api.get(`/orders?view=${currentView}&t=${Date.now()}`);
+      if (currentView === view) setOrders(data);
+    } catch (err) {
+      console.error("Failed to load orders", err);
+    } finally {
+      if (currentView === view) setLoading(false);
     }
-    toast.success(type === 'approve' ? "Order Accepted" : "Order Rejected");
-  } catch (e: any) {
-    if (e.response?.status === 409) {
-      toast.error("Order updated by another agent. Refreshing...");
-      fetchOrders(view);
-    } else {
-      toast.error("Action failed");
-      fetchOrders(view);
+  };
+
+  useEffect(() => {
+    if (!token) return;
+    setOrders([]);
+    fetchOrders(view);
+  }, [token, view]);
+
+  // Real-Time Listener
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUpdate = (updated: Order) => {
+      if (view === 'active') {
+        // If moved to completed state, remove from active board
+        if (['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(updated.status)) {
+          setOrders(prev => prev.filter(o => o.id !== updated.id));
+        } else {
+          // Update or Add (if newly confirmed)
+          setOrders(prev => {
+            const exists = prev.find(o => o.id === updated.id);
+            if (exists) return prev.map(o => o.id === updated.id ? updated : o);
+            return [updated, ...prev];
+          });
+        }
+      } else {
+        // History View: Add if completed
+        if (['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(updated.status)) {
+          setOrders(prev => {
+            const exists = prev.find(o => o.id === updated.id);
+            if (exists) return prev.map(o => o.id === updated.id ? updated : o);
+            return [updated, ...prev];
+          });
+        }
+      }
+    };
+
+    const handleCreate = (newOrder: Order) => {
+      if (view === 'active' && ['NEW', 'CONFIRMED', 'PREPARING', 'READY'].includes(newOrder.status)) {
+        setOrders(prev => [newOrder, ...prev]);
+      }
+    };
+
+    socket.on("order_created", handleCreate);
+    socket.on("order_updated", handleUpdate);
+    return () => {
+      socket.off("order_created", handleCreate);
+      socket.off("order_updated", handleUpdate);
+    };
+  }, [socket, view]);
+
+  // Actions
+  const handleConfirmAction = async () => {
+    if (!actionOrder || !actionType) return;
+    const orderId = actionOrder.id;
+    const type = actionType;
+
+    // Optimistic Update
+    setOrders(prev => prev.filter(o => {
+      if (view === 'active' && type === 'reject' && o.id === orderId) return false;
+      return true;
+    }));
+
+    setActionOrder(null);
+    setActionType(null);
+
+    try {
+      if (type === 'approve') {
+        await api.post(`/orders/${orderId}/approve`, { version: actionOrder.version });
+      } else {
+        await api.post(`/orders/${orderId}/reject`, { version: actionOrder.version });
+      }
+      toast.success(type === 'approve' ? "Order Accepted" : "Order Rejected");
+    } catch (e: any) {
+      if (e.response?.status === 409) {
+        toast.error("Order updated by another agent. Refreshing...");
+        fetchOrders(view);
+      } else {
+        toast.error("Action failed");
+        fetchOrders(view); // Revert optimistic
+      }
     }
-  }
-};
+  };
 
-const handleMoveStatus = async (id: string, status: string) => {
-  const orderToUpdate = orders.find(o => o.id === id);
-  if (!orderToUpdate) return;
+  const handleMoveStatus = async (id: string, status: string) => {
+    const orderToUpdate = orders.find(o => o.id === id);
+    if (!orderToUpdate) return;
 
-  const oldOrders = [...orders];
-  setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+    const oldOrders = [...orders];
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
 
-  if (view === 'active' && ['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(status)) {
-    setTimeout(() => setOrders(prev => prev.filter(o => o.id !== id)), 500);
-  }
-
-  try {
-    await api.patch(`/orders/${id}/status`, { status, version: orderToUpdate.version });
-  } catch (e: any) {
-    console.error(e);
-    setOrders(oldOrders);
-    if (e.response?.status === 409) {
-      toast.error("Order updated by another agent. Refreshing...");
-      fetchOrders(view);
-    } else if (e.response?.status === 400) {
-      toast.error(e.response.data.message || "Invalid status transition");
+    if (view === 'active' && ['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(status)) {
+      setTimeout(() => setOrders(prev => prev.filter(o => o.id !== id)), 500);
     }
-  }
-};
 
-const handleDelete = async (id: string) => {
-  if (!confirm("Are you sure you want to archive this order?")) return;
-  try {
-    await api.delete(`/orders/${id}`);
-    setOrders(prev => prev.filter(o => o.id !== id));
-    toast.success("Order Archive");
-  } catch (e) {
-    toast.error("Failed to archive");
-  }
-};
+    try {
+      await api.patch(`/orders/${id}/status`, { status, version: orderToUpdate.version });
+    } catch (e: any) {
+      console.error(e);
+      setOrders(oldOrders);
+      if (e.response?.status === 409) {
+        toast.error("Order updated by another agent. Refreshing...");
+        fetchOrders(view);
+      } else if (e.response?.status === 400) {
+        toast.error(e.response.data.message || "Invalid status transition");
+      }
+    }
+  };
 
-const revenueToday = useMemo(() => orders
-  .filter(o => !['CANCELLED', 'REJECTED', 'ARCHIVED'].includes(o.status))
-  .reduce((acc, o) => acc + (o.amount || 0), 0), [orders]);
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to archive this order?")) return;
+    try {
+      await api.delete(`/orders/${id}`);
+      setOrders(prev => prev.filter(o => o.id !== id));
+      toast.success("Order Archive");
+    } catch (e) {
+      toast.error("Failed to archive");
+    }
+  };
 
-// Group History
-const groupedOrders = useMemo(() => {
-  if (view !== 'history') return {};
-  const groups: Record<string, Order[]> = { 'Today': [], 'Yesterday': [], 'This Week': [], 'Older': [] };
+  const revenueToday = useMemo(() => orders
+    .filter(o => !['CANCELLED', 'REJECTED', 'ARCHIVED'].includes(o.status))
+    .reduce((acc, o) => acc + (o.amount || 0), 0), [orders]);
 
-  orders.forEach(order => {
-    const date = new Date(order.completedAt || order.createdAt);
-    const today = new Date();
-    const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+  // Group History
+  const groupedOrders = useMemo(() => {
+    if (view !== 'history') return {};
+    const groups: Record<string, Order[]> = { 'Today': [], 'Yesterday': [], 'This Week': [], 'Older': [] };
 
-    if (date.toDateString() === today.toDateString()) groups['Today'].push(order);
-    else if (date.toDateString() === yesterday.toDateString()) groups['Yesterday'].push(order);
-    else if (today.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) groups['This Week'].push(order);
-    else groups['Older'].push(order);
-  });
-  return groups;
-}, [orders, view]);
+    orders.forEach(order => {
+      const date = new Date(order.completedAt || order.createdAt);
+      const today = new Date();
+      const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
 
-return (
-  <div className="h-[calc(100vh-6rem)] flex flex-col gap-6 relative">
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 flex-shrink-0">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full md:w-auto">
-        <StatCard title={view === 'active' ? "Active Pipeline" : "Total Revenue"} value={`₹${revenueToday.toLocaleString()}`} icon="💰" />
-        <StatCard title="Orders" value={orders.length} icon="📦" />
+      if (date.toDateString() === today.toDateString()) groups['Today'].push(order);
+      else if (date.toDateString() === yesterday.toDateString()) groups['Yesterday'].push(order);
+      else if (today.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) groups['This Week'].push(order);
+      else groups['Older'].push(order);
+    });
+    return groups;
+  }, [orders, view]);
+
+  return (
+    <div className="h-[calc(100vh-6rem)] flex flex-col gap-6 relative">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 flex-shrink-0">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full md:w-auto">
+          <StatCard title={view === 'active' ? "Active Pipeline" : "Total Revenue"} value={`₹${revenueToday.toLocaleString()}`} icon="💰" />
+          <StatCard title="Orders" value={orders.length} icon="📦" />
+        </div>
+        <div className="bg-slate-100 p-1 rounded-lg flex self-end">
+          <button onClick={() => setView('active')} className={`px-4 py-2 text-sm font-medium rounded-md transition ${view === 'active' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>Live Board</button>
+          <button onClick={() => setView('history')} className={`px-4 py-2 text-sm font-medium rounded-md transition ${view === 'history' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>History</button>
+        </div>
       </div>
-      <div className="bg-slate-100 p-1 rounded-lg flex self-end">
-        <button onClick={() => setView('active')} className={`px-4 py-2 text-sm font-medium rounded-md transition ${view === 'active' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>Live Board</button>
-        <button onClick={() => setView('history')} className={`px-4 py-2 text-sm font-medium rounded-md transition ${view === 'history' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>History</button>
-      </div>
-    </div>
 
-    {loading ? (
-      <div className="flex-1 flex items-center justify-center text-slate-400">Loading...</div>
-    ) : view === 'active' ? (
-      <div className="flex-1 overflow-x-auto overflow-y-hidden">
-        <div className="h-full flex gap-4 min-w-[1000px]">
-          {COLUMN_CONFIG.map(col => (
-            <div key={col.id} className={`flex-1 flex flex-col rounded-xl border ${col.color} p-3`}>
-              <h3 className="font-bold text-slate-700 mb-3 flex justify-between items-center">
-                {col.title}
-                <span className="bg-white/50 px-2 py-0.5 rounded text-xs opacity-70">
-                  {orders.filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id)).length}
-                </span>
-              </h3>
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar pb-10">
-                <AnimatePresence mode="popLayout">
-                  {orders
-                    .filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id))
-                    .sort((a, b) => b.priorityScore - a.priorityScore)
-                    .map(order => (
-                      <OrderCard
-                        key={order.id}
-                        order={order}
-                        onApprove={() => { setActionOrder(order); setActionType('approve'); }}
-                        onReject={() => { setActionOrder(order); setActionType('reject'); }}
-                        onMove={(s: string) => handleMoveStatus(order.id, s)}
-                      />
-                    ))}
-                </AnimatePresence>
-                {orders.filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id)).length === 0 && (
-                  <div className="text-center py-10 opacity-30 text-sm italic">No orders</div>
-                )}
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center text-slate-400">Loading...</div>
+      ) : view === 'active' ? (
+        <div className="flex-1 overflow-x-auto overflow-y-hidden">
+          <div className="h-full flex gap-4 min-w-[1000px]">
+            {COLUMN_CONFIG.map(col => (
+              <div key={col.id} className={`flex-1 flex flex-col rounded-xl border ${col.color} p-3`}>
+                <h3 className="font-bold text-slate-700 mb-3 flex justify-between items-center">
+                  {col.title}
+                  <span className="bg-white/50 px-2 py-0.5 rounded text-xs opacity-70">
+                    {orders.filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id)).length}
+                  </span>
+                </h3>
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar pb-10">
+                  <AnimatePresence mode="popLayout">
+                    {orders
+                      .filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id))
+                      .sort((a, b) => b.priorityScore - a.priorityScore)
+                      .map(order => (
+                        <OrderCard
+                          key={order.id}
+                          order={order}
+                          onApprove={() => { setActionOrder(order); setActionType('approve'); }}
+                          onReject={() => { setActionOrder(order); setActionType('reject'); }}
+                          onMove={(s: string) => handleMoveStatus(order.id, s)}
+                        />
+                      ))}
+                  </AnimatePresence>
+                  {orders.filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id)).length === 0 && (
+                    <div className="text-center py-10 opacity-30 text-sm italic">No orders</div>
+                  )}
+                </div>
               </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow border overflow-hidden flex-1 overflow-y-auto">
+          {Object.entries(groupedOrders).map(([label, group]) => group.length > 0 && (
+            <div key={label}>
+              <div className="bg-slate-50 px-6 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10 border-b border-t border-slate-200">
+                {label} ({group.length})
+              </div>
+              <table className="min-w-full text-sm">
+                <tbody className="divide-y divide-slate-100">
+                  {group.map(order => (
+                    <tr key={order.id} className="hover:bg-indigo-50/30 transition">
+                      <td className="px-6 py-4 text-slate-500 w-32">
+                        {new Date(order.completedAt || order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td className="px-6 py-4 font-medium text-slate-900">
+                        {order.lead?.name || "Guest"}
+                        <div className="text-xs text-slate-400">{order.lead?.contact}</div>
+                      </td>
+                      <td className="px-6 py-4 text-slate-600 truncate max-w-[200px]" title={order.summary}>{order.summary}</td>
+                      <td className="px-6 py-4 font-bold text-slate-700">₹{order.amount}</td>
+                      <td className="px-6 py-4"><StatusBadge status={order.status} /></td>
+                      <td className="px-6 py-4 text-right">
+                        <button onClick={() => handleDelete(order.id)} className="text-slate-400 hover:text-red-500 p-2">
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ))}
-        </div>
-      </div>
-    ) : (
-      <div className="bg-white rounded-xl shadow border overflow-hidden flex-1 overflow-y-auto">
-        {Object.entries(groupedOrders).map(([label, group]) => group.length > 0 && (
-          <div key={label}>
-            <div className="bg-slate-50 px-6 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10 border-b border-t border-slate-200">
-              {label} ({group.length})
-            </div>
-            <table className="min-w-full text-sm">
-              <tbody className="divide-y divide-slate-100">
-                {group.map(order => (
-                  <tr key={order.id} className="hover:bg-indigo-50/30 transition">
-                    <td className="px-6 py-4 text-slate-500 w-32">
-                      {new Date(order.completedAt || order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="px-6 py-4 font-medium text-slate-900">
-                      {order.lead?.name || "Guest"}
-                      <div className="text-xs text-slate-400">{order.lead?.contact}</div>
-                    </td>
-                    <td className="px-6 py-4 text-slate-600 truncate max-w-[200px]" title={order.summary}>{order.summary}</td>
-                    <td className="px-6 py-4 font-bold text-slate-700">₹{order.amount}</td>
-                    <td className="px-6 py-4"><StatusBadge status={order.status} /></td>
-                    <td className="px-6 py-4 text-right">
-                      <button onClick={() => handleDelete(order.id)} className="text-slate-400 hover:text-red-500 p-2">
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
-        {orders.length === 0 && <div className="p-10 text-center text-slate-400">No history found.</div>}
-      </div>
-    )}
-
-    {/* --- MODAL --- */}
-    <AnimatePresence>
-      {actionOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setActionOrder(null)} />
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative z-10">
-            <div className={`h-2 w-full ${actionType === 'approve' ? 'bg-green-500' : 'bg-red-500'}`} />
-            <div className="p-6">
-              <h3 className="text-xl font-bold text-slate-900 mb-2">{actionType === 'approve' ? 'Accept Order?' : 'Reject Order?'}</h3>
-              <p className="text-slate-600 mb-6">{actionType === 'approve' ? `Accept order for ₹${actionOrder.amount}?` : `Reject this order?`}</p>
-              <div className="flex gap-3 justify-end">
-                <button onClick={() => setActionOrder(null)} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg">Cancel</button>
-                <button onClick={handleConfirmAction} className={`px-6 py-2 text-white font-bold rounded-lg shadow-lg ${actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>Confirm</button>
-              </div>
-            </div>
-          </motion.div>
+          {orders.length === 0 && <div className="p-10 text-center text-slate-400">No history found.</div>}
         </div>
       )}
-    </AnimatePresence>
-  </div>
-);
+
+      {/* --- MODAL --- */}
+      <AnimatePresence>
+        {actionOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setActionOrder(null)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative z-10">
+              <div className={`h-2 w-full ${actionType === 'approve' ? 'bg-green-500' : 'bg-red-500'}`} />
+              <div className="p-6">
+                <h3 className="text-xl font-bold text-slate-900 mb-2">{actionType === 'approve' ? 'Accept Order?' : 'Reject Order?'}</h3>
+                <p className="text-slate-600 mb-6">{actionType === 'approve' ? `Accept order for ₹${actionOrder.amount}?` : `Reject this order?`}</p>
+                <div className="flex gap-3 justify-end">
+                  <button onClick={() => setActionOrder(null)} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg">Cancel</button>
+                  <button onClick={handleConfirmAction} className={`px-6 py-2 text-white font-bold rounded-lg shadow-lg ${actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>Confirm</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 function OrderCard({ order, onApprove, onReject, onMove }: any) {
