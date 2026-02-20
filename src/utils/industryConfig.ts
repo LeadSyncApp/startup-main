@@ -11,6 +11,7 @@ interface IndustryConfig {
         new: string;
         processing: string;
         ready: string;
+        logistics: string;
         completed: string;
         cancelled: string;
     };
@@ -30,6 +31,7 @@ export const INDUSTRY_CONFIGS: Record<BusinessType, IndustryConfig> = {
             new: 'In Kitchen',
             processing: 'Cooking',
             ready: 'Ready for Pickup',
+            logistics: 'Out for Delivery',
             completed: 'Served/Delivered',
             cancelled: 'Cancelled'
         },
@@ -47,6 +49,7 @@ export const INDUSTRY_CONFIGS: Record<BusinessType, IndustryConfig> = {
             new: 'New Order',
             processing: 'Packing',
             ready: 'Ready to Ship',
+            logistics: 'In Transit',
             completed: 'Shipped',
             cancelled: 'Returned/Cancelled'
         },
@@ -64,6 +67,7 @@ export const INDUSTRY_CONFIGS: Record<BusinessType, IndustryConfig> = {
             new: 'New Order',
             processing: 'Verifying',
             ready: 'Ready to Dispatch',
+            logistics: 'Shipping',
             completed: 'Delivered',
             cancelled: 'Cancelled'
         },
@@ -81,6 +85,7 @@ export const INDUSTRY_CONFIGS: Record<BusinessType, IndustryConfig> = {
             new: 'New Inquiry',
             processing: 'In Progress',
             ready: 'Review',
+            logistics: 'Delivery',
             completed: 'Completed',
             cancelled: 'Cancelled'
         },
@@ -98,6 +103,7 @@ export const INDUSTRY_CONFIGS: Record<BusinessType, IndustryConfig> = {
             new: 'New',
             processing: 'Processing',
             ready: 'Ready',
+            logistics: 'Logistics',
             completed: 'Completed',
             cancelled: 'Cancelled'
         },

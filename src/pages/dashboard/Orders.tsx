@@ -37,7 +37,8 @@ export default function Orders() {
   const COLUMN_CONFIG = useMemo(() => [
     { id: "NEW", title: industry.pipelineLabels.new, color: "border-blue-200 bg-blue-50/50", statuses: ["NEW", "PENDING"] },
     { id: "PROCESSING", title: industry.pipelineLabels.processing, color: "border-indigo-200 bg-indigo-50/50", statuses: ["PROCESSING", "CONFIRMED", "PREPARING"] },
-    { id: "READY", title: industry.pipelineLabels.ready, color: "border-emerald-200 bg-emerald-50/50", statuses: ["READY", "SHIPPED"] },
+    { id: "READY", title: industry.pipelineLabels.ready, color: "border-emerald-200 bg-emerald-50/50", statuses: ["READY"] },
+    { id: "DELIVERY", title: industry.pipelineLabels.logistics, color: "border-amber-200 bg-amber-50/50", statuses: ["SHIPPED"] },
   ], [industry]);
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -81,7 +82,7 @@ export default function Orders() {
         if (['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(updated.status)) {
           setOrders(prev => prev.filter(o => o.id !== updated.id));
         } else {
-          // Update or Add (if newly confirmed)
+          // Update or Add (if newly confirmed or moved through pipeline)
           setOrders(prev => {
             const exists = prev.find(o => o.id === updated.id);
             if (exists) return prev.map(o => o.id === updated.id ? updated : o);
@@ -101,7 +102,7 @@ export default function Orders() {
     };
 
     const handleCreate = (newOrder: Order) => {
-      if (view === 'active' && ['NEW', 'CONFIRMED', 'PREPARING', 'READY'].includes(newOrder.status)) {
+      if (view === 'active' && ['NEW', 'CONFIRMED', 'PROCESSING', 'PREPARING', 'READY', 'SHIPPED'].includes(newOrder.status)) {
         setOrders(prev => [newOrder, ...prev]);
       }
     };
@@ -276,7 +277,7 @@ export default function Orders() {
         <div className="flex-1 flex items-center justify-center text-slate-400">Loading...</div>
       ) : view === 'active' ? (
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
-          <div className="h-full flex gap-4 min-w-[1000px]">
+          <div className="h-full flex gap-4 min-w-[1200px]">
             {COLUMN_CONFIG.map(col => (
               <div key={col.id} className={`flex-1 flex flex-col rounded-xl border ${col.color} p-3`}>
                 <h3 className="font-bold text-slate-700 mb-3 flex justify-between items-center">
@@ -400,10 +401,11 @@ function OrderCard({ order, onApprove, onReject, onMove }: any) {
         </div>
       ) : (
         <div className="flex gap-2 justify-end">
-          {order.status === "PROCESSING" && <button onClick={() => onMove("SHIPPED")} className="w-full text-xs bg-indigo-50 text-indigo-700 px-3 py-2 rounded font-semibold hover:bg-indigo-100">Mark Shipped</button>}
+          {order.status === "PROCESSING" && <button onClick={() => onMove("PREPARING")} className="w-full text-xs bg-indigo-50 text-indigo-700 px-3 py-2 rounded font-semibold hover:bg-indigo-100">Start Prep</button>}
           {order.status === "CONFIRMED" && <button onClick={() => onMove("PREPARING")} className="w-full text-xs bg-indigo-50 text-indigo-700 px-3 py-2 rounded font-semibold hover:bg-indigo-100">Start Prep</button>}
           {order.status === "PREPARING" && <button onClick={() => onMove("READY")} className="w-full text-xs bg-emerald-50 text-emerald-700 px-3 py-2 rounded font-semibold hover:bg-emerald-100">Mark Ready</button>}
-          {order.status === "READY" && <button onClick={() => onMove("DELIVERED")} className="w-full text-xs bg-slate-800 text-white px-3 py-2 rounded font-semibold hover:bg-slate-700">Complete</button>}
+          {order.status === "READY" && <button onClick={() => onMove("SHIPPED")} className="w-full text-xs bg-amber-50 text-amber-700 px-3 py-2 rounded font-semibold hover:bg-amber-100">Deliver</button>}
+          {order.status === "SHIPPED" && <button onClick={() => onMove("DELIVERED")} className="w-full text-xs bg-slate-800 text-white px-3 py-2 rounded font-semibold hover:bg-slate-700">Complete</button>}
         </div>
       )}
     </motion.div>
@@ -411,7 +413,17 @@ function OrderCard({ order, onApprove, onReject, onMove }: any) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = { DELIVERED: "bg-emerald-100 text-emerald-700", CANCELLED: "bg-red-100 text-red-700", REJECTED: "bg-red-100 text-red-700", NEW: "bg-blue-100 text-blue-700", CONFIRMED: "bg-indigo-100 text-indigo-700", COMPLETED: "bg-emerald-100 text-emerald-700" };
+  const styles: Record<string, string> = {
+    DELIVERED: "bg-emerald-100 text-emerald-700",
+    CANCELLED: "bg-red-100 text-red-700",
+    REJECTED: "bg-red-100 text-red-700",
+    NEW: "bg-blue-100 text-blue-700",
+    CONFIRMED: "bg-indigo-100 text-indigo-700",
+    COMPLETED: "bg-emerald-100 text-emerald-700",
+    SHIPPED: "bg-amber-100 text-amber-700",
+    PROCESSING: "bg-indigo-100 text-indigo-700",
+    PREPARING: "bg-indigo-100 text-indigo-700"
+  };
   return <span className={`px-2 py-1 rounded text-xs font-bold ${styles[status] || "bg-slate-100 text-slate-600"}`}>{status}</span>;
 }
 
