@@ -83,15 +83,15 @@ export class SarvamService {
             const response = await axios.post(
                 "https://api.sarvam.ai/text-to-speech",
                 {
-                    inputs: [text.slice(0, 500)], // Sarvam TTS limit
+                    inputs: [text.slice(0, 500)], // Sarvam TTS char limit
                     target_language_code: languageCode,
-                    speaker: "meera",                // Natural Indian female voice
+                    speaker: "anushka",              // Valid Indian female voice
                     pitch: 0,
                     pace: 1.0,
                     loudness: 1.5,
-                    speech_sample_rate: 8000,
+                    speech_sample_rate: 22050,       // Better quality for Telegram
                     enable_preprocessing: true,
-                    model: "bulbul:v1",
+                    model: "bulbul:v2",              // Latest stable Sarvam TTS model
                 },
                 {
                     headers: {
