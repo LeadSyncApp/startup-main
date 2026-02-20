@@ -152,7 +152,13 @@ export class TelegramAdapter implements ChannelAdapter {
                 const lastText = conversation?.messages?.[0]?.content;
                 if (lastText) {
                     await this.sendTyping(chatId);
-                    const audio = await sarvamService.textToSpeech(lastText, "en-IN");
+
+                    // Simple detection for fallback
+                    let langCode = "en-IN";
+                    if (/[\u0B80-\u0BFF]/.test(lastText)) langCode = "ta-IN";
+                    else if (/[\u0900-\u097F]/.test(lastText)) langCode = "hi-IN";
+
+                    const audio = await sarvamService.textToSpeech(lastText, langCode);
                     if (audio) await this.sendVoice(chatId, audio);
                 }
             } catch (err) {
@@ -229,6 +235,8 @@ export class TelegramAdapter implements ChannelAdapter {
             let text = message.text?.trim() || "";
             const isVoiceMsg = !!message.voice;
 
+            let detectedLanguage = "en-IN"; // Default
+
             // 🎙️ VOICE INPUT: Download and transcribe if voice message
             if (isVoiceMsg && message.voice) {
                 const { file_id, duration, mime_type } = message.voice;
@@ -237,10 +245,11 @@ export class TelegramAdapter implements ChannelAdapter {
                 const audioBuffer = await downloadTelegramVoice(this.botToken, file_id);
                 if (audioBuffer) {
                     console.log(`✅ Voice downloaded: ${audioBuffer.length} bytes`);
-                    const transcript = await sarvamService.speechToText(audioBuffer, "voice.ogg");
-                    if (transcript) {
-                        text = transcript;
-                        console.log(`✅ Voice transcribed for ${chatId}: "${text}"`);
+                    const sttResult = await sarvamService.speechToText(audioBuffer, "voice.ogg");
+                    if (sttResult) {
+                        text = sttResult.transcript;
+                        detectedLanguage = sttResult.languageCode;
+                        console.log(`✅ Voice transcribed for ${chatId}: "${text}" | Lang: ${detectedLanguage}`);
                     } else {
                         await this.sendMessage(chatId, "Sorry, I had trouble hearing that. Could you send the voice message again or type your message?");
                         return;
@@ -489,11 +498,11 @@ export class TelegramAdapter implements ChannelAdapter {
                 }
 
                 // 🎤 PRE-GENERATE VOICE IN PARALLEL (Fire-and-forget, cache for 2 min)
-                sarvamService.textToSpeech(displayMessage, "en-IN")
+                sarvamService.textToSpeech(displayMessage, detectedLanguage)
                     .then(audioBuffer => {
                         if (audioBuffer) {
                             cacheService.set(cacheService.getPendingVoiceKey(chatId), audioBuffer, 120);
-                            console.log(`🔊 Voice pre-cached for ${chatId}`);
+                            console.log(`🔊 Voice pre-cached for ${chatId} in ${detectedLanguage}`);
                         }
                     })
                     .catch(err => console.error("TTS pre-gen error:", err));
@@ -520,8 +529,12 @@ export class TelegramAdapter implements ChannelAdapter {
                         updatedAt: new Date(),
                     });
 
-                    // Send buttons with generic intro
-                    await this.sendMessageWithVoiceButtons(chatId, "I've prepared a reply for you:");
+                    // Send buttons with language-aware intro
+                    let intro = "I've prepared a reply for you:";
+                    if (detectedLanguage === "ta-IN") intro = "உங்களுக்கான பதில் இதோ:";
+                    else if (detectedLanguage === "hi-IN") intro = "आपके लिए एक जवाब तैयार है:";
+
+                    await this.sendMessageWithVoiceButtons(chatId, intro);
                 } else {
                     await this.saveAndSendSystemMessage(chatId, conversation, displayMessage);
                 }

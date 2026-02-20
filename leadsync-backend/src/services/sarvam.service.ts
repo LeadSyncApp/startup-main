@@ -24,7 +24,7 @@ export class SarvamService {
      * Sarvam API: https://api.sarvam.ai/speech-to-text
      * Model: saaras:v3 (supports 23 Indian languages + English, auto-detect)
      */
-    async speechToText(audioBuffer: Buffer, filename: string = "voice.ogg"): Promise<string | null> {
+    async speechToText(audioBuffer: Buffer, filename: string = "voice.ogg"): Promise<{ transcript: string, languageCode: string } | null> {
         if (!this.apiKey) {
             console.warn("⚠️ Sarvam API Key missing, cannot transcribe voice.");
             return null;
@@ -58,8 +58,10 @@ export class SarvamService {
             );
 
             const transcript = response.data?.transcript || "";
-            console.log(`✅ STT Result: "${transcript}" | Lang: ${response.data?.language_code}`);
-            return transcript.trim() || null;
+            const languageCode = response.data?.language_code || "en-IN";
+            console.log(`✅ STT Result: "${transcript}" | Lang: ${languageCode}`);
+
+            return { transcript: transcript.trim(), languageCode };
 
         } catch (err: any) {
             // Log the full error body for debugging on Railway
