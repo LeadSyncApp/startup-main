@@ -31,10 +31,17 @@ async function apiFetch(endpoint: string, options: ApiOptions = {}) {
 
     if (res.status === 401) {
       console.error("Unauthorized - Token missing or invalid");
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
       throw new Error("Unauthorized");
     }
 
     if (!res.ok) {
+      if (res.status === 401) {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+      }
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.message || "API Error");
     }
