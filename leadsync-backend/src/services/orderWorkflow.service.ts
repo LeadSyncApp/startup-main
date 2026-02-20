@@ -2,7 +2,9 @@
 import { prisma } from "../lib/prisma";
 import { OrderStatus, OrderApprovalStatus, OrderLog } from "@prisma/client";
 import { safeEmitConversationUpdate, emitToCompany, emitToCompanyAdmin } from "../lib/socket";
+import { safeEmitConversationUpdate, emitToCompany, emitToCompanyAdmin } from "../lib/socket";
 import { notificationService } from "./notification.service";
+import { customerMessagingService } from "./customerMessaging.service";
 
 /**
  * Strict State Machine for Order Processing
@@ -140,8 +142,8 @@ export class OrderWorkflowService {
             );
         }
 
-        // 3. Notify Agent if assigned and checked by someone else (Concurrency Alert)
-        // Skipping for now, UI handles optimistic lock error.
+        // 3. Notify Customer (Auto-Reply)
+        await customerMessagingService.sendStatusUpdate(order);
     }
 }
 
