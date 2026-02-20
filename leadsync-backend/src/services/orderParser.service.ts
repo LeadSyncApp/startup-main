@@ -55,7 +55,7 @@ class OrderParserService {
                     leadId,
                     summary,
                     amount: totalAmount,
-                    status: OrderStatus.PENDING, // 🆕 Created as Pending/Ghost order
+                    status: OrderStatus.BOT_CREATED_ORDER, // 🆕 Created as Ghost order
                     source: OrderSource.BOT_DETECTED,
                     priority: isUrgent ? OrderPriority.URGENT : OrderPriority.NORMAL,
                     priorityScore: isUrgent ? 100 : 50,
@@ -70,7 +70,8 @@ class OrderParserService {
             // 6. Notify & Emit
             await this.notifyNewOrder(companyId, order);
 
-            // 7. System Message
+            // 7. System Message (Order Card Indicator)
+            // We use a specific content marker or relying on the socket event to render the UI
             await prisma.message.create({
                 data: {
                     conversationId,
@@ -155,25 +156,26 @@ class OrderParserService {
     }
 
     async notifyNewOrder(companyId: string, order: any) {
-        // 1. DATA SYNC: Update Dashboard/Board immediately
-        emitToCompanyAdmin(companyId, "order_created", order);
+        // 1. DATA SYNC: Send 'order_detected' to conversation participants
+        // Use 'order_detected' so dashboard doesn't show it immediately
+        emitToCompanyAdmin(companyId, "order_detected", order); // Admins can audit
 
-        // 2. ALERT: Create persistent notification for Admins
-        await notificationService.notifyCompanyAdmins(
-            companyId,
-            `New Order: ₹${order.amount}`,
-            `From ${order.conversation?.lead?.contact}: ${order.summary}`,
-            "ORDER"
-        );
-
-        // 3. User Notification if assigned
+        // 2. ALERT: Notify Assigned Agent (Primary)
         if (order.conversation?.assignedToId) {
-            emitToAgent(order.conversation.assignedToId, "order_created", order);
+            emitToAgent(order.conversation.assignedToId, "order_detected", order);
 
             await notificationService.notifyUser(
                 order.conversation.assignedToId,
-                `New Order Assigned: ₹${order.amount}`,
-                `You have a new order: ${order.summary}`,
+                `New Order Detected: ₹${order.amount}`,
+                `Check conversation with ${order.conversation?.lead?.contact}`,
+                "ORDER"
+            );
+        } else {
+            // Fallback: Notify Admins if unassigned
+            await notificationService.notifyCompanyAdmins(
+                companyId,
+                `New Order (Unassigned): ₹${order.amount}`,
+                `From ${order.conversation?.lead?.contact}`,
                 "ORDER"
             );
         }

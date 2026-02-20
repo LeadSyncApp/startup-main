@@ -102,13 +102,14 @@ export class OrderWorkflowService {
 
         // Agent Valid Transitions
         const validTransitions: Record<string, OrderStatus[]> = {
-            [OrderStatus.BOT_DETECTED]: [OrderStatus.PENDING], // Internal move
-            [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.REJECTED, OrderStatus.CANCELLED],
-            [OrderStatus.NEW]: [OrderStatus.CONFIRMED, OrderStatus.REJECTED, OrderStatus.CANCELLED], // Legacy Support
-            [OrderStatus.CONFIRMED]: [OrderStatus.PREPARING, OrderStatus.CANCELLED],
-            [OrderStatus.PREPARING]: [OrderStatus.READY, OrderStatus.CANCELLED],
-            [OrderStatus.READY]: [OrderStatus.DELIVERED, OrderStatus.SHIPPED, OrderStatus.CANCELLED],
-            [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
+            [OrderStatus.BOT_CREATED_ORDER]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED, OrderStatus.REJECTED], // 🆕 Ghost -> Active
+            [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.REJECTED], // 🆕 Active -> Logistics
+            [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.CANCELLED, OrderStatus.REJECTED],
+            [OrderStatus.DELIVERED]: [OrderStatus.COMPLETED, OrderStatus.ARCHIVED],
+
+            // Legacy Support (Optional)
+            [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.REJECTED],
+            [OrderStatus.CONFIRMED]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
         };
 
         const allowed = validTransitions[current] || [];

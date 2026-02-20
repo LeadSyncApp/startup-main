@@ -37,17 +37,18 @@ enum MessageSender {
 }
 
 enum OrderStatus {
-  BOT_DETECTED   // 🆕
-  PENDING
-  NEW
-  CONFIRMED
-  PREPARING
-  READY
-  SHIPPED        // 🆕
+  BOT_CREATED_ORDER   // 🆕 AI Detected (Hidden)
+  PENDING             // Legacy
+  NEW                 // Legacy
+  CONFIRMED           // Legacy
+  PROCESSING          // 🆕 Active (Visible)
+  PREPARING           // Legacy
+  READY               // Legacy
+  SHIPPED
   DELIVERED
   COMPLETED
   CANCELLED
-  REJECTED       // 🆕
+  REJECTED
   ARCHIVED
 }
 
@@ -243,7 +244,7 @@ model Order {
   summary  String
   amount   Float        @default(0)
   priority OrderPriority @default(NORMAL)
-  status   OrderStatus   @default(PENDING) // 🆕 Default to PENDING (Ghost Order)
+  status   OrderStatus   @default(BOT_CREATED_ORDER) // 🆕 Default to Ghost Order
 
   source         OrderSource         @default(MANUAL)
   approvalStatus OrderApprovalStatus @default(APPROVED)

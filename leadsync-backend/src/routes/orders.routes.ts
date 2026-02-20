@@ -82,9 +82,10 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       // History: Completed, Delivered, Cancelled, Archived
       whereCondition.status = { in: ["DELIVERED", "COMPLETED", "CANCELLED", "ARCHIVED", "REJECTED"] };
     } else {
-      // Active Board: Include PENDING so Agents can claim/approve them
+      // Active Board: EXCLUDE 'BOT_CREATED_ORDER' (Ghost Orders)
+      // Only show Accepted/Processing orders
       whereCondition.status = {
-        in: ["PENDING", "NEW", "CONFIRMED", "PREPARING", "READY"]
+        in: ["PROCESSING", "SHIPPED", "CONFIRMED", "PREPARING", "READY"]
       };
     }
 
@@ -99,6 +100,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
             channel: true,
             totalSpend: true,
             segment: true,
+            // ...
           }
         },
         processedBy: {
@@ -131,7 +133,7 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
 
     const result = await orderWorkflowService.transitionStatus(
       id,
-      OrderStatus.CONFIRMED,
+      OrderStatus.PROCESSING, // 🆕 Move to PROCESSING (Active)
       {
         id: req.user!.userId,
         name: "Agent",
