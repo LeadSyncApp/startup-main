@@ -36,19 +36,35 @@ async function generateWithFallback(
       const timeoutMs = 8000; // 8s timeout per model
 
       if (model.provider === "sarvam") {
-        // Sarvam is very strict about message roles and format.
-        const chatMessages = [
-          {
-            role: "user",
-            content: `INSTRUCTION: ${systemPrompt}\n\nMaintain this persona and respond to the following conversation.`
-          },
-          ...messages
-            .filter(m => m.content && typeof m.content === 'string' && m.content.trim())
-            .map(m => ({
-              role: (m.role === "assistant" || m.role === "bot") ? "assistant" : "user",
-              content: m.content.trim()
-            }))
-        ];
+        // Sarvam.ai is extremely strict: No "system" role, and roles MUST alternate (User -> Assistant -> User).
+        const rawHistory = messages.filter(m => m.content && typeof m.content === 'string' && m.content.trim());
+
+        const chatMessages: { role: "user" | "assistant"; content: string }[] = [];
+
+        // Combine Instruction with first message if possible
+        const firstMsg = rawHistory[0];
+        const instructionPrefix = `[INSTRUCTION: ${systemPrompt}]\n\n`;
+
+        if (firstMsg && (firstMsg.role === "user" || firstMsg.role === "customer")) {
+          // Merge instruction into first user message
+          chatMessages.push({ role: "user", content: instructionPrefix + firstMsg.content.trim() });
+
+          // Add the rest, matching roles
+          for (let i = 1; i < rawHistory.length; i++) {
+            const m = rawHistory[i];
+            const role = (m.role === "assistant" || m.role === "bot") ? "assistant" : "user";
+
+            // Safety: Only add if it alternates
+            if (chatMessages.length > 0 && chatMessages[chatMessages.length - 1].role === role) {
+              chatMessages[chatMessages.length - 1].content += "\n" + m.content.trim();
+            } else {
+              chatMessages.push({ role, content: m.content.trim() });
+            }
+          }
+        } else {
+          // Fallback: Just start with instruction
+          chatMessages.push({ role: "user", content: instructionPrefix + "Please respond to the user based on the context above." });
+        }
 
         try {
           const response: any = await withTimeout(
@@ -57,7 +73,7 @@ async function generateWithFallback(
               {
                 model: model.id,
                 messages: chatMessages,
-                temperature: 0.1 // Lower temperature for more stable multilingual output
+                temperature: 0.1
               },
               {
                 headers: {
@@ -71,8 +87,9 @@ async function generateWithFallback(
           );
           content = response.data?.choices?.[0]?.message?.content || "";
         } catch (axiosError: any) {
-          console.error(`❌ Sarvam API Error Detail:`, axiosError.response?.data || axiosError.message);
-          throw axiosError; // Continue to fallback
+          const detail = axiosError.response?.data?.error?.message || axiosError.response?.data || axiosError.message;
+          console.error(`❌ Sarvam API Error Detail:`, detail);
+          throw axiosError;
         }
       }
       else if (model.provider === "groq") {
