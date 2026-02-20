@@ -36,15 +36,23 @@ async function generateWithFallback(
       const timeoutMs = 8000; // 8s timeout per model
 
       if (model.provider === "sarvam") {
+        // Sarvam.ai expects strictly {role, content}. Extra fields cause 400 errors.
+        const chatMessages = [
+          { role: "user", content: `System Instruction: ${systemPrompt}` },
+          ...messages
+            .filter(m => m.content && m.content.trim())
+            .map(m => ({
+              role: m.role === "system" ? "user" : m.role,
+              content: m.content
+            }))
+        ];
+
         const response: any = await withTimeout(
           axios.post(
             "https://api.sarvam.ai/v1/chat/completions",
             {
               model: model.id,
-              messages: [
-                { role: "system", content: systemPrompt },
-                ...messages.filter(m => m.content && m.content.trim())
-              ]
+              messages: chatMessages
             },
             {
               headers: {
