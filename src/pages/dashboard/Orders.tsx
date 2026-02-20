@@ -34,7 +34,7 @@ export default function Orders() {
   const industry = useMemo(() => getIndustryConfig(company?.botBusinessType), [company]);
 
   const COLUMN_CONFIG = useMemo(() => [
-    { id: "NEW", title: industry.pipelineLabels.new, color: "border-blue-200 bg-blue-50/50", statuses: ["NEW"] },
+    { id: "NEW", title: industry.pipelineLabels.new, color: "border-blue-200 bg-blue-50/50", statuses: ["NEW", "PENDING"] },
     { id: "PROCESSING", title: industry.pipelineLabels.processing, color: "border-indigo-200 bg-indigo-50/50", statuses: ["CONFIRMED", "PREPARING"] },
     { id: "READY", title: industry.pipelineLabels.ready, color: "border-emerald-200 bg-emerald-50/50", statuses: ["READY"] },
   ], [industry]);
