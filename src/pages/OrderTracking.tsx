@@ -120,7 +120,7 @@ export default function OrderTracking() {
                                 return (
                                     <motion.div
                                         key={step.key}
-                                        initial={{ exclude: true, opacity: 0, x: -10 }}
+                                        initial={{ opacity: 0, x: -10 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: index * 0.1 }}
                                         className={`flex items-center gap-4 ${isActive ? 'opacity-100' : 'opacity-40 grayscale'}`}
