@@ -47,7 +47,7 @@ export default function App() {
         <Route
           path="leads"
           element={
-            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+            <ProtectedRoute allowedRoles={["OWNER", "ADMIN", "AGENT"]}>
               <Leads />
             </ProtectedRoute>
           }
@@ -56,7 +56,7 @@ export default function App() {
         <Route
           path="orders"
           element={
-            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+            <ProtectedRoute allowedRoles={["OWNER", "ADMIN", "AGENT"]}>
               <Orders />
             </ProtectedRoute>
           }
