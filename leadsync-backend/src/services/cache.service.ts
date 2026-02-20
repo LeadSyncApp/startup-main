@@ -41,6 +41,11 @@ class MemoryCache {
     getPendingVoiceKey(chatId: string) {
         return `pending_voice:${chatId}`;
     }
+
+    // Helper for storing pending text replies (keyed by chat ID)
+    getPendingTextKey(chatId: string) {
+        return `pending_text:${chatId}`;
+    }
 }
 
 export const cacheService = new MemoryCache();

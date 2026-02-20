@@ -139,6 +139,7 @@ export class TelegramAdapter implements ChannelAdapter {
             const cachedAudio = cacheService.get<Buffer>(cacheService.getPendingVoiceKey(chatId));
             if (cachedAudio) {
                 cacheService.delete(cacheService.getPendingVoiceKey(chatId));
+                cacheService.delete(cacheService.getPendingTextKey(chatId)); // Clear sibling cache
                 await this.sendVoice(chatId, cachedAudio);
                 return;
             }
@@ -152,6 +153,7 @@ export class TelegramAdapter implements ChannelAdapter {
                 });
                 const lastText = conversation?.messages?.[0]?.content;
                 if (lastText) {
+                    cacheService.delete(cacheService.getPendingTextKey(chatId)); // Clear sibling cache
                     await this.sendTyping(chatId);
                     const audio = await sarvamService.textToSpeech(lastText, "en-IN");
                     if (audio) await this.sendVoice(chatId, audio);
@@ -161,8 +163,12 @@ export class TelegramAdapter implements ChannelAdapter {
             }
 
         } else if (data.startsWith("text_reply:")) {
-            // Text was already displayed above the buttons — nothing to do
-            cacheService.delete(cacheService.getPendingVoiceKey(chatId));
+            const pendingText = cacheService.get<string>(cacheService.getPendingTextKey(chatId));
+            if (pendingText) {
+                cacheService.delete(cacheService.getPendingTextKey(chatId));
+                cacheService.delete(cacheService.getPendingVoiceKey(chatId)); // Clear sibling cache
+                await this.sendMessage(chatId, pendingText);
+            }
         }
     }
 
@@ -477,9 +483,30 @@ export class TelegramAdapter implements ChannelAdapter {
                     })
                     .catch(err => console.error("TTS pre-gen error:", err));
 
-                // 🔘 If triggered by voice input, show buttons. Otherwise send clean text.
+                // 🔘 If triggered by voice input, hide text behind buttons. Otherwise send clean text.
                 if (isVoiceMsg) {
-                    await this.sendMessageWithVoiceButtons(chatId, displayMessage);
+                    // Cache the text for the callback button
+                    cacheService.set(cacheService.getPendingTextKey(chatId), displayMessage, 600);
+
+                    // Save to DB so CRM sees it, but don't send to Telegram yet
+                    await prisma.message.create({
+                        data: {
+                            content: displayMessage,
+                            sender: MessageSender.SYSTEM,
+                            conversationId: conversation.id,
+                            messageType: "TEXT",
+                        },
+                    });
+
+                    // Update CRM UI
+                    safeEmitConversationUpdate(conversation, "conversation_updated", {
+                        conversationId: conversation.id,
+                        lastMessage: displayMessage,
+                        updatedAt: new Date(),
+                    });
+
+                    // Send buttons with generic intro
+                    await this.sendMessageWithVoiceButtons(chatId, "I've prepared a reply for you:");
                 } else {
                     await this.saveAndSendSystemMessage(chatId, conversation, displayMessage);
                 }
