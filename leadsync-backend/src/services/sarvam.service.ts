@@ -19,10 +19,99 @@ export class SarvamService {
     }
 
     /**
+     * Converts a voice message audio buffer (OGG/MP3) to text using Sarvam STT.
+     * Returns transcribed text or null on failure.
+     */
+    async speechToText(audioBuffer: Buffer, filename: string = "voice.ogg"): Promise<string | null> {
+        if (!this.apiKey) {
+            console.warn("⚠️ Sarvam API Key missing, cannot transcribe voice.");
+            return null;
+        }
+
+        try {
+            const FormData = require("form-data");
+            const form = new FormData();
+            form.append("file", audioBuffer, {
+                filename,
+                contentType: "audio/ogg",
+            });
+            form.append("model", "saarika:v2"); // Sarvam's multilingual STT model
+            form.append("language_code", "unknown"); // Auto-detect
+
+            const response = await axios.post(
+                "https://api.sarvam.ai/speech-to-text",
+                form,
+                {
+                    headers: {
+                        ...form.getHeaders(),
+                        "api-subscription-key": this.apiKey,
+                    },
+                    timeout: 15000,
+                }
+            );
+
+            const transcript = response.data?.transcript || response.data?.text || "";
+            console.log(`🎙️ STT Transcript: "${transcript}"`);
+            return transcript || null;
+
+        } catch (err: any) {
+            console.error("❌ Sarvam STT Error:", err?.response?.data || err.message);
+            return null;
+        }
+    }
+
+    /**
+     * Converts text to a voice audio buffer using Sarvam TTS.
+     * Returns a Buffer of the audio or null on failure.
+     */
+    async textToSpeech(text: string, languageCode: string = "en-IN"): Promise<Buffer | null> {
+        if (!this.apiKey) {
+            console.warn("⚠️ Sarvam API Key missing, cannot generate voice reply.");
+            return null;
+        }
+
+        try {
+            const response = await axios.post(
+                "https://api.sarvam.ai/text-to-speech",
+                {
+                    inputs: [text.slice(0, 500)], // Sarvam TTS limit
+                    target_language_code: languageCode,
+                    speaker: "meera",                // Natural Indian female voice
+                    pitch: 0,
+                    pace: 1.0,
+                    loudness: 1.5,
+                    speech_sample_rate: 8000,
+                    enable_preprocessing: true,
+                    model: "bulbul:v1",
+                },
+                {
+                    headers: {
+                        "api-subscription-key": this.apiKey,
+                        "Content-Type": "application/json",
+                    },
+                    timeout: 15000,
+                }
+            );
+
+            // Response is base64 encoded audio
+            const base64Audio = response.data?.audios?.[0];
+            if (!base64Audio) return null;
+
+            console.log(`🔊 TTS Generated for: "${text.slice(0, 40)}..."`);
+            return Buffer.from(base64Audio, "base64");
+
+        } catch (err: any) {
+            console.error("❌ Sarvam TTS Error:", err?.response?.data || err.message);
+            return null;
+        }
+    }
+
+    /**
      * Analyzes text for order intent using Sarvam.ai (or similar).
      * Free-tier friendly: Checks specific keywords first to avoid unnecessary API calls.
      */
     async analyzeIntent(text: string): Promise<SarvamResponse | null> {
+
         if (!text) return null;
 
         // 1. Local Keyword Pre-check (Optimized for Indian Languages & Hinglish)

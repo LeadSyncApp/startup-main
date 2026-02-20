@@ -15,6 +15,7 @@ import { cacheService } from "../services/cache.service";
 import { intelligenceService } from "../services/intelligence.service";
 import { orderParserService } from "../services/orderParser.service";
 import { notificationService } from "../services/notification.service";
+import { sarvamService } from "../services/sarvam.service";
 
 /* ===============================
    TYPES
@@ -23,7 +24,12 @@ interface TelegramMessage {
     message_id: number;
     chat: { id: number };
     from: { first_name: string };
-    text: string;
+    text?: string;
+    voice?: {
+        file_id: string;
+        duration: number;
+        mime_type: string;
+    };
 }
 
 interface StructuredMenu {
@@ -57,6 +63,43 @@ const sendTelegramApi = async (url: string, payload: any) => {
     }
 }
 
+/** Detect if the user is choosing 'voice' reply */
+function isVoiceChoiceReply(text: string): boolean {
+    const t = text.toLowerCase().trim();
+    return [
+        "voice", "voice reply", "voice ah", "voice venuma", "voice mein",
+        "audio", "speak", "bolke do", "voice send karo", "voice panunga",
+        "voice pannunga", "2", "b"
+    ].some(k => t === k || t.includes(k));
+}
+
+/** Detect if the user is choosing 'text' reply */
+function isTextChoiceReply(text: string): boolean {
+    const t = text.toLowerCase().trim();
+    return [
+        "text", "text ah", "text reply", "text mein", "text venuma",
+        "type", "write", "1", "a"
+    ].some(k => t === k || t.includes(k));
+}
+
+/** Download a Telegram voice file into a Buffer */
+async function downloadTelegramVoice(botToken: string, fileId: string): Promise<Buffer | null> {
+    try {
+        const fileRes = await axios.get(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
+        const filePath = fileRes.data?.result?.file_path;
+        if (!filePath) return null;
+
+        const audioRes = await axios.get(
+            `https://api.telegram.org/file/bot${botToken}/${filePath}`,
+            { responseType: "arraybuffer", timeout: 15000 }
+        );
+        return Buffer.from(audioRes.data);
+    } catch (err: any) {
+        console.error("❌ Voice download error:", err.message);
+        return null;
+    }
+}
+
 
 /* ===============================
    TELEGRAM ADAPTER
@@ -80,6 +123,27 @@ export class TelegramAdapter implements ChannelAdapter {
         await sendTelegramApi(url, payload);
     }
 
+    /** Send a pre-generated voice audio buffer as a Telegram voice message */
+    async sendVoice(to: string, audioBuffer: Buffer) {
+        try {
+            const FormData = require("form-data");
+            const form = new FormData();
+            form.append("chat_id", to);
+            form.append("voice", audioBuffer, {
+                filename: "reply.ogg",
+                contentType: "audio/ogg",
+            });
+            await axios.post(
+                `https://api.telegram.org/bot${this.botToken}/sendVoice`,
+                form,
+                { headers: form.getHeaders(), timeout: 15000 }
+            );
+            console.log(`🔊 Voice message sent to ${to}`);
+        } catch (err: any) {
+            console.error("❌ sendVoice error:", err.message);
+        }
+    }
+
     async sendTyping(to: string) {
         const url = `https://api.telegram.org/bot${this.botToken}/sendChatAction`;
         await sendTelegramApi(url, { chat_id: to, action: "typing" });
@@ -95,7 +159,26 @@ export class TelegramAdapter implements ChannelAdapter {
 
             const chatId = String(message.chat.id);
             const name = message.from?.first_name || "Customer";
-            const text = message.text?.trim();
+            let text = message.text?.trim() || "";
+            const isVoiceMsg = !!message.voice;
+
+            // 🎙️ VOICE INPUT: Download and transcribe if voice message
+            if (isVoiceMsg && message.voice) {
+                const audioBuffer = await downloadTelegramVoice(this.botToken, message.voice.file_id);
+                if (audioBuffer) {
+                    const transcript = await sarvamService.speechToText(audioBuffer, "voice.ogg");
+                    if (transcript) {
+                        text = transcript;
+                        console.log(`🎙️ Voice transcribed for ${chatId}: "${text}"`);
+                    } else {
+                        await this.sendMessage(chatId, "Sorry, I couldn't understand your voice message. Could you type it instead?");
+                        return;
+                    }
+                } else {
+                    await this.sendMessage(chatId, "Voice message could not be downloaded. Please try again.");
+                    return;
+                }
+            }
 
             if (!text) return;
 
@@ -285,6 +368,26 @@ export class TelegramAdapter implements ChannelAdapter {
             }
 
             /* AI REPLY */
+            // 🔊 VOICE CHOICE INTERCEPTION:
+            // If this message is a 'voice' or 'text' choice reply after a pending dual-reply offer.
+            const pendingVoiceKey = cacheService.getPendingVoiceKey(chatId);
+            const pendingVoice = cacheService.get<Buffer>(pendingVoiceKey);
+
+            if (pendingVoice) {
+                if (isVoiceChoiceReply(text)) {
+                    // Deliver the pre-generated voice audio
+                    cacheService.delete(pendingVoiceKey);
+                    await this.sendVoice(chatId, pendingVoice);
+                    return;
+                } else if (isTextChoiceReply(text)) {
+                    // User wants text - already sent, just clear the cache
+                    cacheService.delete(pendingVoiceKey);
+                    await this.saveAndSendSystemMessage(chatId, conversation, "Got it! The text reply was already sent above.");
+                    return;
+                }
+                // If not a clear choice, continue with normal flow
+            }
+
             // 1. Fetch History (Last 5 messages)
             const history = await prisma.message.findMany({
                 where: { conversationId: conversation.id },
@@ -298,7 +401,7 @@ export class TelegramAdapter implements ChannelAdapter {
                 content: m.content
             }));
 
-            // SPEED OPTIMIZATION: Fire typing indicator immediately (fire-and-forget)
+            // SPEED OPTIMIZATION: Fire typing indicator immediately
             this.sendTyping(chatId).catch(() => { });
 
             try {
@@ -311,32 +414,40 @@ export class TelegramAdapter implements ChannelAdapter {
                     historyContext
                 ));
 
-                // 🚨 JSON HANDLING: If AI returned a structured order JSON, extract the display message
+                // 🔊 JSON HANDLING: Extract message_to_customer if AI returned structured JSON
                 let displayMessage = aiReply;
                 try {
-                    // Check if it looks like JSON before parsing to save resources
                     if (aiReply.trim().startsWith('{')) {
                         const parsed = JSON.parse(aiReply);
-                        if (parsed.message_to_customer) {
-                            displayMessage = parsed.message_to_customer;
-                        }
+                        if (parsed.message_to_customer) displayMessage = parsed.message_to_customer;
                     }
-                } catch (e) {
-                    // Fallback to raw string if parsing fails
-                }
+                } catch (e) { /* fallback to raw string */ }
 
-                // 🚨 CONCURRENCY FIX: Re-fetch conversation mode before sending!
+                // 🔊 CONCURRENCY CHECK: Skip if agent took over
                 const freshConv = await prisma.conversation.findUnique({
                     where: { id: conversation.id },
                     select: { mode: true }
                 });
-
                 if (freshConv?.mode === "HUMAN") {
-                    console.log(`⚠️ Skiping AI reply for ${chatId} - Mode switched to HUMAN during generation.`);
+                    console.log(`⚠️ AI reply skipped for ${chatId} - HUMAN mode active.`);
                     return;
                 }
 
-                await this.saveAndSendSystemMessage(chatId, conversation, displayMessage);
+                // 🎤 PRE-GENERATE VOICE IN PARALLEL (Fire-and-forget, cache result for 2 minutes)
+                sarvamService.textToSpeech(displayMessage, "en-IN")
+                    .then(audioBuffer => {
+                        if (audioBuffer) {
+                            cacheService.set(cacheService.getPendingVoiceKey(chatId), audioBuffer, 120);
+                            console.log(`🔊 Voice pre-cached for ${chatId}`);
+                        }
+                    })
+                    .catch(err => console.error("TTS pre-gen error:", err));
+
+                // Append natural voice/text choice prompt
+                const choicePrompt = "\n\nText ah venuma? illa voice ah reply pannava?";
+                const finalMessage = displayMessage + choicePrompt;
+
+                await this.saveAndSendSystemMessage(chatId, conversation, finalMessage);
             } catch (err) {
                 console.error("AI Queue Error:", err);
             }
