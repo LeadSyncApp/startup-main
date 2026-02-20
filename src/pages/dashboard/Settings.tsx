@@ -28,6 +28,12 @@ export default function Settings() {
   const [botWelcomeMessage, setBotWelcomeMessage] = useState("");
   const [shopDescription, setShopDescription] = useState("");
 
+  // Instagram State
+  const [instagramConnected, setInstagramConnected] = useState(false);
+  const [instagramPageId, setInstagramPageId] = useState("");
+  const [igPageIdInput, setIgPageIdInput] = useState("");
+  const [igTokenInput, setIgTokenInput] = useState("");
+
   const [generatedMenu, setGeneratedMenu] = useState<StructuredMenu | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,6 +54,8 @@ export default function Settings() {
         // Status
         setTelegramConnected(statusData.telegram?.connected || false);
         setTelegramUsername(statusData.telegram?.username || null);
+        setInstagramConnected(statusData.instagram?.connected || false);
+        setInstagramPageId(statusData.instagram?.pageId || "");
 
         // Config
         if (configData.company) {
@@ -101,6 +109,45 @@ export default function Settings() {
       toast.success("Telegram disconnected 👋");
     } catch (err: any) {
       toast.error("Failed to disconnect");
+    }
+  };
+
+  /* ===============================
+     CONNECT INSTAGRAM
+  =============================== */
+  const handleConnectInstagram = async () => {
+    if (!igPageIdInput.trim() || !igTokenInput.trim()) {
+      toast.error("Page ID and Access Token required");
+      return;
+    }
+
+    try {
+      await api.post("/integrations/instagram/connect", {
+        pageId: igPageIdInput,
+        accessToken: igTokenInput,
+      });
+
+      setInstagramConnected(true);
+      setInstagramPageId(igPageIdInput);
+      setIgPageIdInput("");
+      setIgTokenInput("");
+
+      toast.success("Instagram connected 📸");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to connect Instagram");
+    }
+  };
+
+  const handleDisconnectInstagram = async () => {
+    if (!window.confirm("Are you sure you want to disconnect Instagram?")) return;
+
+    try {
+      await api.post("/integrations/instagram/disconnect");
+      setInstagramConnected(false);
+      setInstagramPageId("");
+      toast.success("Instagram disconnected 👋");
+    } catch (err: any) {
+      toast.error("Failed to disconnect Instagram");
     }
   };
 
@@ -300,6 +347,68 @@ export default function Settings() {
 
         <p className="text-xs text-slate-500 mt-2">
           Paste your bot token from <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-blue-500 underline">BotFather</a> to connect.
+        </p>
+      </div>
+
+      {/* INSTAGRAM */}
+      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
+        <h2 className="text-lg font-semibold">
+          Instagram Integration
+        </h2>
+
+        {!instagramConnected ? (
+          <div className="space-y-3">
+            <input
+              type="text"
+              placeholder="Instagram Page ID"
+              value={igPageIdInput}
+              onChange={(e) => setIgPageIdInput(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2"
+            />
+            <div className="flex gap-3">
+              <input
+                type="password"
+                placeholder="Page Access Token"
+                value={igTokenInput}
+                onChange={(e) => setIgTokenInput(e.target.value)}
+                className="flex-1 border rounded-lg px-3 py-2"
+              />
+              <button
+                onClick={handleConnectInstagram}
+                disabled={!igPageIdInput || !igTokenInput}
+                className={`bg-pink-600 text-white px-4 py-2 rounded-lg ${(!igPageIdInput || !igTokenInput) ? "opacity-50 cursor-not-allowed" : "hover:bg-pink-700"}`}
+              >
+                Connect IG
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-between items-center bg-pink-50 p-4 rounded-xl border border-pink-100">
+            <div className="flex items-center gap-3">
+              <div className="bg-pink-100 p-2 rounded-full text-pink-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+              </div>
+              <div>
+                <p className="font-medium text-pink-900">
+                  Instagram Active
+                </p>
+                <p className="text-sm text-pink-700">
+                  Page ID: {instagramPageId}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleDisconnectInstagram}
+              className="text-red-500 text-sm hover:underline hover:text-red-600 px-3 py-1 bg-white border border-red-100 rounded-lg shadow-sm"
+            >
+              Disconnect
+            </button>
+          </div>
+        )}
+
+        <p className="text-xs text-slate-500 mt-2">
+          Connect your Instagram Business Page by providing the Page ID and a Long-lived Page Access Token.
         </p>
       </div>
 

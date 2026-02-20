@@ -32,6 +32,8 @@ router.get(
         select: {
           telegramConnected: true,
           telegramBotUsername: true,
+          instagramConnected: true,
+          instagramPageId: true,
         },
       });
 
@@ -39,6 +41,10 @@ router.get(
         telegram: {
           connected: company?.telegramConnected ?? false,
           username: company?.telegramBotUsername ?? null,
+        },
+        instagram: {
+          connected: company?.instagramConnected ?? false,
+          pageId: company?.instagramPageId ?? null,
         },
       });
     } catch (error) {

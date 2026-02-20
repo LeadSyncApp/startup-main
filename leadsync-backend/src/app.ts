@@ -12,6 +12,7 @@ import conversationRoutes from "./routes/conversations.routes";
 import publicRoutes from "./routes/public.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import telegramIntegrationRoutes from "./routes/telegram.integration.routes";
+import instagramIntegrationRoutes from "./routes/instagram.integration.routes";
 import ordersRoutes from "./routes/orders.routes";
 import usersRoutes from "./routes/users.routes";
 import analyticsRoutes from "./routes/analytics.routes";
@@ -43,6 +44,7 @@ app.use("/api/telegram", telegramRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/integrations", integrationsRoutes);
 app.use("/api/integrations", telegramIntegrationRoutes);
+app.use("/api/integrations", instagramIntegrationRoutes);
 
 /* 🔐 SECURE ROUTE */
 app.use("/api/secure", secureRoutes);

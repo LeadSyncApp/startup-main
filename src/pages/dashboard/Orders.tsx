@@ -48,6 +48,10 @@ export default function Orders() {
   const [actionOrder, setActionOrder] = useState<Order | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
 
+  // History Selection State
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [isDeletingBatch, setIsDeletingBatch] = useState(false);
+
   // Fetch Orders
   const fetchOrders = async (currentView: string) => {
     try {
@@ -173,9 +177,53 @@ export default function Orders() {
     try {
       await api.delete(`/orders/${id}`);
       setOrders(prev => prev.filter(o => o.id !== id));
-      toast.success("Order Archive");
+      setSelectedOrders(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      toast.success("Order Archived");
     } catch (e) {
       toast.error("Failed to archive");
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedOrders.size === 0) return;
+    if (!confirm(`Are you sure you want to archive ${selectedOrders.size} orders?`)) return;
+
+    setIsDeletingBatch(true);
+    const toastId = toast.loading(`Archiving ${selectedOrders.size} orders...`);
+
+    try {
+      // Assuming backend supports batch delete or we do it sequentially
+      // For now, let's do it sequentially to match existing API
+      await Promise.all(Array.from(selectedOrders).map(id => api.delete(`/orders/${id}`)));
+
+      setOrders(prev => prev.filter(o => !selectedOrders.has(o.id)));
+      setSelectedOrders(new Set());
+      toast.success(`${selectedOrders.size} orders archived`, { id: toastId });
+    } catch (e) {
+      toast.error("Failed to archive some orders", { id: toastId });
+    } finally {
+      setIsDeletingBatch(false);
+    }
+  };
+
+  const toggleSelectOrder = (id: string) => {
+    setSelectedOrders(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (ids: string[]) => {
+    if (selectedOrders.size === ids.length) {
+      setSelectedOrders(new Set());
+    } else {
+      setSelectedOrders(new Set(ids));
     }
   };
 
@@ -212,6 +260,16 @@ export default function Orders() {
           <button onClick={() => setView('active')} className={`px-4 py-2 text-sm font-medium rounded-md transition ${view === 'active' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>Live Board</button>
           <button onClick={() => setView('history')} className={`px-4 py-2 text-sm font-medium rounded-md transition ${view === 'history' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>History</button>
         </div>
+        {view === 'history' && selectedOrders.size > 0 && (
+          <button
+            onClick={handleBatchDelete}
+            disabled={isDeletingBatch}
+            className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition shadow-lg animate-in fade-in slide-in-from-right-2"
+          >
+            <Trash2 size={16} />
+            Archive Selected ({selectedOrders.size})
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -254,13 +312,27 @@ export default function Orders() {
         <div className="bg-white rounded-xl shadow border overflow-hidden flex-1 overflow-y-auto">
           {Object.entries(groupedOrders).map(([label, group]) => group.length > 0 && (
             <div key={label}>
-              <div className="bg-slate-50 px-6 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10 border-b border-t border-slate-200">
+              <div className="bg-slate-50 px-6 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10 border-b border-t border-slate-200 flex items-center gap-4">
+                <input
+                  type="checkbox"
+                  checked={group.every(o => selectedOrders.has(o.id))}
+                  onChange={() => toggleSelectAll(group.map(o => o.id))}
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                />
                 {label} ({group.length})
               </div>
               <table className="min-w-full text-sm">
                 <tbody className="divide-y divide-slate-100">
                   {group.map(order => (
-                    <tr key={order.id} className="hover:bg-indigo-50/30 transition">
+                    <tr key={order.id} className={`hover:bg-indigo-50/30 transition ${selectedOrders.has(order.id) ? 'bg-indigo-50/50' : ''}`}>
+                      <td className="px-6 py-4 w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedOrders.has(order.id)}
+                          onChange={() => toggleSelectOrder(order.id)}
+                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                        />
+                      </td>
                       <td className="px-6 py-4 text-slate-500 w-32">
                         {new Date(order.completedAt || order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </td>
@@ -328,6 +400,7 @@ function OrderCard({ order, onApprove, onReject, onMove }: any) {
         </div>
       ) : (
         <div className="flex gap-2 justify-end">
+          {order.status === "PROCESSING" && <button onClick={() => onMove("SHIPPED")} className="w-full text-xs bg-indigo-50 text-indigo-700 px-3 py-2 rounded font-semibold hover:bg-indigo-100">Mark Shipped</button>}
           {order.status === "CONFIRMED" && <button onClick={() => onMove("PREPARING")} className="w-full text-xs bg-indigo-50 text-indigo-700 px-3 py-2 rounded font-semibold hover:bg-indigo-100">Start Prep</button>}
           {order.status === "PREPARING" && <button onClick={() => onMove("READY")} className="w-full text-xs bg-emerald-50 text-emerald-700 px-3 py-2 rounded font-semibold hover:bg-emerald-100">Mark Ready</button>}
           {order.status === "READY" && <button onClick={() => onMove("DELIVERED")} className="w-full text-xs bg-slate-800 text-white px-3 py-2 rounded font-semibold hover:bg-slate-700">Complete</button>}
