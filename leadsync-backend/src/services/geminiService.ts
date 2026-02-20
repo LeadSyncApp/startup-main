@@ -1,11 +1,13 @@
+import axios from "axios";
 import Groq from "groq-sdk";
 
-// Initialize Groq (Primary)
+// Initialize Groq
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "dummy" });
 
-// Model Hierarchy: Fast (Only Groq)
+// Model Hierarchy: Sarvam for Multilingual, Groq for Speed
 const MODELS = [
-  { provider: "groq", id: "llama-3.1-8b-instant" },     // ⚡ ~0.3s latency
+  { provider: "sarvam", id: "sarvam-m" },              // 🇮🇳 Best for Indian Languages
+  { provider: "groq", id: "llama-3.1-8b-instant" },     // ⚡ ~0.3s latency fallback
 ];
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -21,9 +23,11 @@ async function generateWithFallback(
 ): Promise<string> {
   let lastError;
   const useGroq = !!process.env.GROQ_API_KEY;
+  const useSarvam = !!process.env.SARVAM_API_KEY;
 
   for (const model of MODELS) {
     if (model.provider === "groq" && !useGroq) continue;
+    if (model.provider === "sarvam" && !useSarvam) continue;
 
     try {
       console.log(`🤖 [AI] Attempting ${model.provider.toUpperCase()}: ${model.id}...`);
@@ -31,8 +35,31 @@ async function generateWithFallback(
       let content = "";
       const timeoutMs = 8000; // 8s timeout per model
 
-      if (model.provider === "groq") {
-        const completion = await withTimeout(
+      if (model.provider === "sarvam") {
+        const response: any = await withTimeout(
+          axios.post(
+            "https://api.sarvam.ai/v1/chat/completions",
+            {
+              model: model.id,
+              messages: [
+                { role: "system", content: systemPrompt },
+                ...messages.filter(m => m.content && m.content.trim())
+              ]
+            },
+            {
+              headers: {
+                "api-subscription-key": process.env.SARVAM_API_KEY,
+                "Content-Type": "application/json"
+              }
+            }
+          ),
+          timeoutMs,
+          `Sarvam ${model.id}`
+        );
+        content = response.data?.choices?.[0]?.message?.content || "";
+      }
+      else if (model.provider === "groq") {
+        const completion: any = await withTimeout(
           groq.chat.completions.create({
             messages: [
               { role: "system", content: systemPrompt },
@@ -95,22 +122,25 @@ export async function generateBotReply(
 
     let systemPrompt = `You are a helpful, professional AI assistant for "${businessType}" (${catalogTerm} based).
 STRICT OPERATING RULES:
-1. DOMAIN LOCK: You are ONLY allowed to discuss ${outputFocus}.
-   - IF asked about food in a shoe store -> Polite refusal.
-   - IF asked about math/code -> Polite refusal.
+1. DOMAIN EXPERT: You are a friendly expert in ${outputFocus}. 
+   - Feel free to recommend items based on the user's preferences.
+   - You can describe tastes, features, and help the user decide.
+   - IF asked about completely unrelated topics (like math/code/politics) -> Polite refusal.
    - REFUSAL TEMPLATE: "I can only assist you with our ${catalogTerm} and orders."
 
-2. SOURCE OF TRUTH: The ${catalogTerm} below is your ONLY knowledge base. 
+2. SOURCE OF TRUTH: The ${catalogTerm} below is your ONLY knowledge base for pricing and availability. 
    - DO NOT hallucinate items not listed.
    - DO NOT invent prices.
 
-3. INTENT MAPPING:
+3. LANGUAGE & TONE:
+   - Identify the user's language (Tamil, Hindi, Hinglish, English, etc.).
+   - ALWAYS respond in the SAME language/script the user is using.
+   - Example: If the user asks in Tamil Roman ("Yevlo price?"), respond in Tamil Roman or Script.
+   - Be concise (< 50 words) but helpful. Use emojis!
+
+4. INTENT MAPPING:
    - "Show menu/orders/options" -> Output the ${catalogTerm}.
    - "What do you have?" -> Summarize the ${catalogTerm}.
-
-4. TONE & FORMAT:
-   - Be concise (< 40 words) unless listing items.
-   - Use emojis relevant to: ${businessType}.
 
 OFFICIAL ${catalogTerm} DATA:
 `;
