@@ -185,10 +185,24 @@ export class InstagramAdapter implements ChannelAdapter {
             try {
                 const aiReply = await aiQueue.add(() => generateBotReply(
                     text,
+                    company.name,
                     company.botBusinessType || "general business",
                     company.botStructuredMenu,
                     historyContext
                 ));
+
+                // 🚨 JSON HANDLING: If AI returned a structured order JSON, extract the display message
+                let displayMessage = aiReply;
+                try {
+                    if (aiReply.trim().startsWith('{')) {
+                        const parsed = JSON.parse(aiReply);
+                        if (parsed.message_to_customer) {
+                            displayMessage = parsed.message_to_customer;
+                        }
+                    }
+                } catch (e) {
+                    // Fallback to raw string
+                }
 
                 // Final mode check
                 const freshConv = await prisma.conversation.findUnique({
@@ -198,7 +212,7 @@ export class InstagramAdapter implements ChannelAdapter {
 
                 if (freshConv?.mode === "HUMAN") return;
 
-                await this.saveAndSendMessage(psid, conversation, aiReply);
+                await this.saveAndSendMessage(psid, conversation, displayMessage);
             } catch (err) {
                 console.error("AI Error (IG):", err);
             }

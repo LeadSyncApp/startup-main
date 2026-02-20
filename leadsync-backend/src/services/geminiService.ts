@@ -122,92 +122,77 @@ async function generateWithFallback(
 }
 
 export async function generateBotReply(
-  message: string, // Unused but kept for signature compatibility if needed, though conversation includes it
+  message: string,
+  businessName: string,
   businessType: string,
   structuredMenu?: any,
   history?: any[]
 ): Promise<string> {
   try {
-    const businessTypeLower = businessType.toLowerCase();
+    const businessTypeLower = (businessType || "business").toLowerCase();
 
-    // 🏭 DYNAMIC INDUSTRY DETECTION
-    const isFood = businessTypeLower.match(/(restaurant|food|cafe|bakery|kitchen|dining|bistro|grill|pizza|burger)/);
-    const isRetail = businessTypeLower.match(/(retail|clothing|fashion|boutique|wear|store|shop|mart|apparel)/);
-    const isElectronics = businessTypeLower.match(/(electronics|mobile|tech|gadgets|computer|laptop|devices)/);
-    const isService = businessTypeLower.match(/(service|consulting|agency|salon|spa|repair|gym|fitness)/);
-
-    // 🏷️ DYNAMIC TERMINOLOGY
-    let catalogTerm = "CATALOG";
-    let outputFocus = "products and features";
-
-    if (isFood) {
-      catalogTerm = "MENU";
-      outputFocus = "dishes, ingredients, and taste";
-    } else if (isRetail) {
-      catalogTerm = "COLLECTION";
-      outputFocus = "styles, sizes, colors, and material";
-    } else if (isElectronics) {
-      catalogTerm = "INVENTORY";
-      outputFocus = "specs, warranty, battery life, and compatibility";
-    } else if (isService) {
-      catalogTerm = "SERVICES LIST";
-      outputFocus = "service details, duration, and pricing";
-    }
-
-    let systemPrompt = `You are a helpful, professional AI assistant for "${businessType}" (${catalogTerm} based).
-STRICT OPERATING RULES:
-1. DOMAIN EXPERT: You are a friendly expert in ${outputFocus}. 
-   - Feel free to recommend items based on the user's preferences.
-   - You can describe tastes, features, and help the user decide.
-   - IF asked about completely unrelated topics (like math/code/politics) -> Polite refusal.
-   - REFUSAL TEMPLATE: "I can only assist you with our ${catalogTerm} and orders."
-
-2. SOURCE OF TRUTH: The ${catalogTerm} below is your ONLY knowledge base for pricing and availability. 
-   - DO NOT hallucinate items not listed.
-   - DO NOT invent prices.
-
-3. LANGUAGE & TONE:
-   - Identify the user's language (Tamil, Hindi, Hinglish, English, etc.).
-   - ALWAYS respond in the SAME language/script the user is using.
-   - Example: If the user asks in Tamil Roman ("Yevlo price?"), respond in Tamil Roman or Script.
-   - Be concise (< 50 words) but helpful. Use emojis!
-
-4. INTENT MAPPING:
-   - "Show menu/orders/options" -> Output the ${catalogTerm}.
-   - "What do you have?" -> Summarize the ${catalogTerm}.
-
-OFFICIAL ${catalogTerm} DATA:
-`;
-
+    // 🏷️ Format Product List for Prompt
+    let productList = "NO PRODUCTS LISTED";
     if (structuredMenu?.categories?.length > 0) {
-      const formattedMenu = structuredMenu.categories
-        .map(
-          (cat: any) =>
-            `${cat.name.toUpperCase()}:\n` +
-            cat.items
-              .map((i: any) => `- ${i.name} (${i.price ? '₹' + i.price : 'Contact for Price'})${i.description ? ': ' + i.description : ''}`)
-              .join("\n")
+      productList = structuredMenu.categories
+        .map((cat: any) =>
+          `--- ${cat.name.toUpperCase()} ---\n` +
+          cat.items.map((i: any) => `- ${i.name}: ₹${i.price}${i.description ? ' (' + i.description + ')' : ''}`).join("\n")
         )
         .join("\n\n");
-
-      systemPrompt += `${formattedMenu}\n\n[END OF ${catalogTerm}]`;
-    } else {
-      systemPrompt += `(Empty ${catalogTerm}. Politely ask the user what they are looking for so you can check manually.)`;
     }
 
-    // Ensure conversation struct is valid
+    const systemPrompt = `
+You are a professional AI Commerce Assistant for "${businessName}", an MSME in the "${businessTypeLower}" sector.
+
+--------------------------------------------------
+BUSINESS CONTEXT:
+Business Name: ${businessName}
+Business Type: ${businessTypeLower}
+Available Products:
+${productList}
+--------------------------------------------------
+
+CORE OPERATING RULES:
+
+1. ORDER INTENT DETECTION
+Treat as ORDER INTENT if message includes:
+- Quantity + product name (e.g., "2 idli", "one biryani")
+- Purchase verbs: order, buy, send, book, venum, chahiye, kavali
+- Transliterated quantities (Tamil: rendu=2, moonu=3, onnu=1, naalu=4 | Hindi: ek=1, do=2, teen=3)
+- Direct product matches from the catalog.
+
+2. PRODUCT VALIDATION
+- ONLY accept/discuss items in the "Available Products" list above.
+- Never hallucinate new products or prices.
+- If item is missing, politely ask for clarification.
+
+3. STRUCTURED OUTPUT (CRITICAL)
+If order intent is detected, respond ONLY in this JSON format:
+{
+  "intent": "create_order",
+  "items": [{ "product_name": "", "quantity": 0, "unit_price": 0, "total_price": 0 }],
+  "grand_total": 0,
+  "currency": "INR",
+  "message_to_customer": "✅ Order Summary:\\n{quantity} x {product_name}\\n\\nTotal: ₹{grand_total}\\n\\nReply CONFIRM to proceed or CANCEL to cancel."
+}
+
+4. DIALOGUE FLOWS:
+- User says "CONFIRM" -> Output JSON with intent "confirm_order" and message "🎉 Your order has been confirmed and is being processed!"
+- User says "CANCEL" -> Output JSON with intent "cancel_order" and message "❌ Your order has been cancelled."
+- Information Incomplete (e.g., "I want oil") -> Output JSON with intent "clarification_needed" and message asking "Which oil would you like? Available options: ..."
+
+5. MULTILINGUAL & TONE:
+- Respond in the SAME language/script as the user (Hinglish/Tamil Roman/etc.).
+- Maintain a professional, corporate support tone.
+- Avoid repeating the full catalog unless explicitly asked.
+- Keep non-order messages concise and helpful. Use emojis logically.
+`;
+
     const conversation = (history || []).map(m => ({
       role: m.role,
       content: m.content
     }));
-
-    // Add current user message to conversation if not already there? 
-    // Wait, the adapter appends it. No, adapter passes `historyContext` which EXCLUDES the current message?
-    // Let's check `TelegramAdapter.ts`: `const historyContext = history.reverse().map(...)`
-    // Then `generateBotReply(text, ...)`
-    // But `generateBotReply` logic (old) was:
-    // const conversation = [ ...(history || []), { role: "user", content: message } ];
-    // So YES, we must append the current message here.
 
     conversation.push({ role: "user", content: message });
 

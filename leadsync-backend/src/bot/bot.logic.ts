@@ -41,11 +41,13 @@ export async function handleBotMessage(
   const company = await prisma.company.findUnique({
     where: { id: conversation.companyId },
     select: {
+      name: true,
       botBusinessType: true,
       botStructuredMenu: true,
     },
   });
 
+  const businessName = company?.name || "our company";
   const businessType =
     company?.botBusinessType || "general business";
 
@@ -54,6 +56,7 @@ export async function handleBotMessage(
   // 3️⃣ Generate AI reply grounded to structured menu
   const reply = await generateBotReply(
     userMessage,
+    businessName,
     businessType,
     structuredMenu
   );

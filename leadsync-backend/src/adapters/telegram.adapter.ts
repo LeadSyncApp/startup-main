@@ -303,15 +303,29 @@ export class TelegramAdapter implements ChannelAdapter {
 
             try {
                 // Execute AI request with higher concurrency
-                const aiReply = await aiQueue.add(() => generateBotReply(
+                let aiReply = await aiQueue.add(() => generateBotReply(
                     text,
+                    company.name,
                     company.botBusinessType || "general business",
                     structuredMenu,
                     historyContext
                 ));
 
+                // 🚨 JSON HANDLING: If AI returned a structured order JSON, extract the display message
+                let displayMessage = aiReply;
+                try {
+                    // Check if it looks like JSON before parsing to save resources
+                    if (aiReply.trim().startsWith('{')) {
+                        const parsed = JSON.parse(aiReply);
+                        if (parsed.message_to_customer) {
+                            displayMessage = parsed.message_to_customer;
+                        }
+                    }
+                } catch (e) {
+                    // Fallback to raw string if parsing fails
+                }
+
                 // 🚨 CONCURRENCY FIX: Re-fetch conversation mode before sending!
-                // If an Agent took over while AI was thinking, DO NOT SEND.
                 const freshConv = await prisma.conversation.findUnique({
                     where: { id: conversation.id },
                     select: { mode: true }
@@ -322,7 +336,7 @@ export class TelegramAdapter implements ChannelAdapter {
                     return;
                 }
 
-                await this.saveAndSendSystemMessage(chatId, conversation, aiReply);
+                await this.saveAndSendSystemMessage(chatId, conversation, displayMessage);
             } catch (err) {
                 console.error("AI Queue Error:", err);
             }
