@@ -442,9 +442,12 @@ export class TelegramAdapter implements ChannelAdapter {
             /* AI REPLY */
             // 1. Fetch History (Last 5 messages)
             const history = await prisma.message.findMany({
-                where: { conversationId: conversation.id },
+                where: {
+                    conversationId: conversation.id,
+                    id: { not: clientMsg.id } // 🔕 IMPORTANT: Exclude current message from chat history context to prevent double-processing
+                },
                 orderBy: { createdAt: "desc" },
-                take: 5,
+                take: 6, // Fetch a few more for better context
             });
 
             // Reverse history for AI context
