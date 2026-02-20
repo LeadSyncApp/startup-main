@@ -25,8 +25,9 @@ app.use(compression()); // ✅ GZIP Compression
 
 app.use(
   cors({
-    origin: true,
-    credentials: true,
+    origin: "*", // 🌍 Allow ANY device/origin
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
