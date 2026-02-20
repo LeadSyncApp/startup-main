@@ -155,7 +155,7 @@ export default function Orders() {
     const oldOrders = [...orders];
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
 
-    if (view === 'active' && ['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(status)) {
+    if (view === 'active' && ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(status)) {
       setTimeout(() => setOrders(prev => prev.filter(o => o.id !== id)), 500);
     }
 
@@ -228,6 +228,10 @@ export default function Orders() {
     }
   };
 
+  const activeOrdersCount = useMemo(() => orders.filter(o =>
+    !['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(o.status)
+  ).length, [orders]);
+
   const revenueToday = useMemo(() => orders
     .filter(o => !['CANCELLED', 'REJECTED', 'ARCHIVED'].includes(o.status))
     .reduce((acc, o) => acc + (o.amount || 0), 0), [orders]);
@@ -255,11 +259,11 @@ export default function Orders() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 flex-shrink-0">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full md:w-auto">
           <StatCard title={view === 'active' ? "Active Pipeline" : "Total Revenue"} value={`₹${revenueToday.toLocaleString()}`} icon="💰" />
-          <StatCard title="Orders" value={orders.length} icon="📦" />
+          <StatCard title="Orders" value={view === 'active' ? activeOrdersCount : orders.length} icon="📦" />
         </div>
         <div className="bg-slate-100 p-1 rounded-lg flex self-end">
-          <button onClick={() => setView('active')} className={`px-4 py-2 text-sm font-medium rounded-md transition ${view === 'active' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>Live Board</button>
-          <button onClick={() => setView('history')} className={`px-4 py-2 text-sm font-medium rounded-md transition ${view === 'history' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>History</button>
+          <button onClick={() => setView('active')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${view === 'active' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>Live Board</button>
+          <button onClick={() => setView('history')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${view === 'history' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>History</button>
         </div>
         {view === 'history' && selectedOrders.size > 0 && (
           <button
@@ -280,29 +284,18 @@ export default function Orders() {
           <div className="h-full flex gap-4 min-w-[1200px]">
             {COLUMN_CONFIG.map(col => (
               <div key={col.id} className={`flex-1 flex flex-col rounded-xl border ${col.color} p-3`}>
-                <h3 className="font-bold text-slate-700 mb-3 flex justify-between items-center">
+                <h3 className="font-bold text-slate-700 mb-3 flex justify-between items-center text-sm">
                   {col.title}
-                  <span className="bg-white/50 px-2 py-0.5 rounded text-xs opacity-70">
-                    {orders.filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id)).length}
+                  <span className="bg-white/50 px-2 py-0.5 rounded text-[10px] tabular-nums">
+                    {orders.filter(o => col.statuses.includes(o.status)).length}
                   </span>
                 </h3>
-                <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar pb-10">
-                  <AnimatePresence mode="popLayout">
-                    {orders
-                      .filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id))
-                      .sort((a, b) => b.priorityScore - a.priorityScore)
-                      .map(order => (
-                        <OrderCard
-                          key={order.id}
-                          order={order}
-                          onApprove={() => { setActionOrder(order); setActionType('approve'); }}
-                          onReject={() => { setActionOrder(order); setActionType('reject'); }}
-                          onMove={(s: string) => handleMoveStatus(order.id, s)}
-                        />
-                      ))}
-                  </AnimatePresence>
-                  {orders.filter(o => (col.statuses ? col.statuses.includes(o.status) : o.status === col.id)).length === 0 && (
-                    <div className="text-center py-10 opacity-30 text-sm italic">No orders</div>
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+                  {orders.filter(o => col.statuses.includes(o.status)).map(order => (
+                    <OrderCard key={order.id} order={order} onApprove={() => { setActionOrder(order); setActionType('approve'); }} onReject={() => { setActionOrder(order); setActionType('reject'); }} onMove={(s: string) => handleMoveStatus(order.id, s)} />
+                  ))}
+                  {orders.filter(o => col.statuses.includes(o.status)).length === 0 && (
+                    <div className="h-40 flex items-center justify-center text-slate-400 text-xs italic border-2 border-dashed border-slate-200/50 rounded-xl">No orders</div>
                   )}
                 </div>
               </div>
@@ -318,7 +311,7 @@ export default function Orders() {
                   type="checkbox"
                   checked={group.every(o => selectedOrders.has(o.id))}
                   onChange={() => toggleSelectAll(group.map(o => o.id))}
-                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 pointer-events-auto"
                 />
                 {label} ({group.length})
               </div>
@@ -331,21 +324,23 @@ export default function Orders() {
                           type="checkbox"
                           checked={selectedOrders.has(order.id)}
                           onChange={() => toggleSelectOrder(order.id)}
-                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 pointer-events-auto"
                         />
                       </td>
                       <td className="px-6 py-4 text-slate-500 w-32">
                         {new Date(order.completedAt || order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </td>
-                      <td className="px-6 py-4 font-medium text-slate-900">
-                        {order.lead?.name || "Guest"}
-                        <div className="text-xs text-slate-400">{order.lead?.contact}</div>
+                      <td className="px-6 py-4 font-medium text-slate-800">
+                        {order.lead?.name || 'Unknown'}
+                        <div className="text-[10px] text-slate-400">{order.lead?.contact}</div>
                       </td>
-                      <td className="px-6 py-4 text-slate-600 truncate max-w-[200px]" title={order.summary}>{order.summary}</td>
-                      <td className="px-6 py-4 font-bold text-slate-700">₹{order.amount}</td>
-                      <td className="px-6 py-4"><StatusBadge status={order.status} /></td>
+                      <td className="px-6 py-4 text-slate-600 line-clamp-1 max-w-[200px]">{order.summary}</td>
+                      <td className="px-6 py-4 font-bold text-slate-900">₹{order.amount}</td>
+                      <td className="px-6 py-4">
+                        <StatusBadge status={order.status} />
+                      </td>
                       <td className="px-6 py-4 text-right">
-                        <button onClick={() => handleDelete(order.id)} className="text-slate-400 hover:text-red-500 p-2">
+                        <button onClick={() => handleDelete(order.id)} className="p-2 text-slate-400 hover:text-rose-600 transition">
                           <Trash2 size={16} />
                         </button>
                       </td>
@@ -400,12 +395,31 @@ function OrderCard({ order, onApprove, onReject, onMove }: any) {
           <button onClick={onApprove} className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-md transition">Accept</button>
         </div>
       ) : (
-        <div className="flex gap-2 justify-end">
-          {order.status === "PROCESSING" && <button onClick={() => onMove("PREPARING")} className="w-full text-xs bg-indigo-50 text-indigo-700 px-3 py-2 rounded font-semibold hover:bg-indigo-100">Start Prep</button>}
-          {order.status === "CONFIRMED" && <button onClick={() => onMove("PREPARING")} className="w-full text-xs bg-indigo-50 text-indigo-700 px-3 py-2 rounded font-semibold hover:bg-indigo-100">Start Prep</button>}
-          {order.status === "PREPARING" && <button onClick={() => onMove("READY")} className="w-full text-xs bg-emerald-50 text-emerald-700 px-3 py-2 rounded font-semibold hover:bg-emerald-100">Mark Ready</button>}
-          {order.status === "READY" && <button onClick={() => onMove("SHIPPED")} className="w-full text-xs bg-amber-50 text-amber-700 px-3 py-2 rounded font-semibold hover:bg-amber-100">Deliver</button>}
-          {order.status === "SHIPPED" && <button onClick={() => onMove("DELIVERED")} className="w-full text-xs bg-slate-800 text-white px-3 py-2 rounded font-semibold hover:bg-slate-700">Complete</button>}
+        <div className="flex flex-col gap-2">
+          {(order.status === "PROCESSING" || order.status === "CONFIRMED") && (
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
+              <button onClick={() => onMove("PREPARING")} className="flex-1 text-xs bg-indigo-50 text-indigo-700 px-3 py-2 rounded font-semibold hover:bg-indigo-100 italic">Start Prep</button>
+            </div>
+          )}
+          {order.status === "PREPARING" && (
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
+              <button onClick={() => onMove("READY")} className="flex-1 text-xs bg-emerald-50 text-emerald-700 px-3 py-2 rounded font-semibold hover:bg-emerald-100">Mark Ready</button>
+            </div>
+          )}
+          {order.status === "READY" && (
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
+              <button onClick={() => onMove("SHIPPED")} className="flex-1 text-xs bg-amber-50 text-amber-700 px-3 py-2 rounded font-semibold hover:bg-amber-100">Deliver</button>
+            </div>
+          )}
+          {order.status === "SHIPPED" && (
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
+              <button onClick={() => onMove("DELIVERED")} className="flex-1 text-xs bg-slate-800 text-white px-3 py-2 rounded font-semibold hover:bg-slate-700">Complete</button>
+            </div>
+          )}
         </div>
       )}
     </motion.div>
