@@ -292,7 +292,7 @@ export default function Orders() {
 }
 
 function OrderCard({ order, onApprove, onReject, onMove }: any) {
-  const isNew = order.status === "NEW";
+  const isNew = order.status === "NEW" || order.status === "PENDING";
   const isUrgent = order.isUrgent || order.priorityScore > 50;
 
   return (
