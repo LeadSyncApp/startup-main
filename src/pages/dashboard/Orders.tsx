@@ -108,7 +108,7 @@ export default function Orders() {
 
     const handleCreate = (newOrder: Order) => {
       const currentStatus = (newOrder.status || "NEW").toUpperCase();
-      const activeStatuses = ['NEW', 'PENDING', 'CONFIRMED', 'PROCESSING', 'PREPARING', 'READY', 'SHIPPED'];
+      const activeStatuses = ['NEW', 'PENDING', 'BOT_CREATED_ORDER', 'CONFIRMED', 'PROCESSING', 'PREPARING', 'READY', 'SHIPPED'];
 
       if (view === 'active' && activeStatuses.includes(currentStatus)) {
         setOrders(prev => [newOrder, ...prev]);
@@ -161,9 +161,11 @@ export default function Orders() {
     if (!orderToUpdate) return;
 
     const oldOrders = [...orders];
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+    const nextVersion = (orderToUpdate.version || 0) + 1;
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status, version: nextVersion } : o));
 
-    if (view === 'active' && ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(status)) {
+    const terminalStatuses = ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'];
+    if (view === 'active' && terminalStatuses.includes(status.toUpperCase())) {
       setTimeout(() => setOrders(prev => prev.filter(o => o.id !== id)), 500);
     }
 
@@ -173,7 +175,7 @@ export default function Orders() {
       console.error(e);
       setOrders(oldOrders);
       if (e.response?.status === 409) {
-        toast.error("Order updated by another agent. Refreshing...");
+        toast.error("Concurrency Conflict. Refreshing...");
         fetchOrders(view);
       } else if (e.response?.status === 400) {
         toast.error(e.response.data.message || "Invalid status transition");
@@ -393,7 +395,7 @@ export default function Orders() {
 
 function OrderCard({ order, onApprove, onReject, onMove }: any) {
   const currentStatus = (order.status || "").toUpperCase();
-  const isNew = currentStatus === "NEW" || currentStatus === "PENDING";
+  const isNew = currentStatus === "NEW" || currentStatus === "PENDING" || currentStatus === "BOT_CREATED_ORDER";
   const isUrgent = order.isUrgent || order.priorityScore > 50;
 
   return (

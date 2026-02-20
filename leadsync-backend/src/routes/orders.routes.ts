@@ -82,10 +82,9 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       // History: Completed, Delivered, Cancelled, Archived
       whereCondition.status = { in: ["DELIVERED", "COMPLETED", "CANCELLED", "ARCHIVED", "REJECTED"] };
     } else {
-      // Active Board: EXCLUDE 'BOT_CREATED_ORDER' (Ghost Orders)
-      // Only show Accepted/Processing orders
+      // Active Board: Include all non-terminal stages
       whereCondition.status = {
-        in: ["PROCESSING", "SHIPPED", "CONFIRMED", "PREPARING", "READY"]
+        in: ["NEW", "PENDING", "BOT_CREATED_ORDER", "CONFIRMED", "PROCESSING", "PREPARING", "READY", "SHIPPED"]
       };
     }
 
