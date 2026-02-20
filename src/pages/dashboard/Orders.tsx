@@ -76,58 +76,59 @@ export default function Orders() {
   useEffect(() => {
     if (!socket) return;
 
+    const RANKS: Record<string, number> = {
+      'BOT_CREATED_ORDER': 0, 'PENDING': 1, 'NEW': 1, 'CONFIRMED': 2, 'PROCESSING': 3,
+      'PREPARING': 4, 'READY': 5, 'SHIPPED': 6, 'DELIVERED': 7,
+      'COMPLETED': 8, 'CANCELLED': 9, 'REJECTED': 9, 'ARCHIVED': 10
+    };
+    const TERMINAL = ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'];
+
     const handleUpdate = (updated: Order) => {
-      const STATUS_RANK_MAP: Record<string, number> = {
-        'BOT_CREATED_ORDER': 0, 'PENDING': 1, 'NEW': 1, 'CONFIRMED': 2, 'PROCESSING': 3,
-        'PREPARING': 4, 'READY': 5, 'SHIPPED': 6, 'DELIVERED': 7,
-        'COMPLETED': 8, 'CANCELLED': 9, 'REJECTED': 9, 'ARCHIVED': 10
-      };
+      const status = (updated.status || "NEW").toUpperCase();
+      const isTerminal = TERMINAL.includes(status);
 
-      const currentStatus = (updated.status || "NEW").toUpperCase();
-      const terminalStatuses = ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'];
-      const isTerminal = terminalStatuses.includes(currentStatus);
+      setOrders(prev => {
+        const index = prev.findIndex(o => o.id === updated.id);
 
-      if (view === 'active') {
-        setOrders(prev => {
-          const exists = prev.find(o => o.id === updated.id);
-          if (!exists) {
-            // Only add genuinely NEW orders to active board.
-            // If it doesn't exist locally, and it's already past NEW stage, it was likely filtered out purposely.
-            const isGenuinelyNew = ['NEW', 'PENDING', 'BOT_CREATED_ORDER'].includes(currentStatus);
+        if (view === 'active') {
+          if (isTerminal) return prev.filter(o => o.id !== updated.id);
+
+          if (index === -1) {
+            // Re-addition guard
+            const isGenuinelyNew = ['NEW', 'PENDING', 'BOT_CREATED_ORDER'].includes(status);
             if (isGenuinelyNew) return [updated, ...prev];
             return prev;
           }
 
-          // 🛡️ PREVENT REGRESSION: Only update if the new status is the same or "forward" in rank
-          const currentRank = STATUS_RANK_MAP[exists.status.toUpperCase()] || 0;
-          const newRank = STATUS_RANK_MAP[currentStatus] || 0;
+          // Regression guard
+          const currentRank = RANKS[prev[index].status.toUpperCase()] || 0;
+          const newRank = RANKS[status] || 0;
+          if (newRank < currentRank) return prev;
 
-          if (newRank < currentRank) {
-            console.warn(`🛑 Stale Socket Event Dropped: Transition ${exists.status} -> ${currentStatus} rejected.`);
-            return prev;
-          }
+          const next = [...prev];
+          next[index] = updated;
+          return next;
+        } else {
+          // History View
+          if (!isTerminal) return prev.filter(o => o.id !== updated.id);
+          if (index === -1) return [updated, ...prev];
 
-          if (isTerminal) return prev.filter(o => o.id !== updated.id);
-          return prev.map(o => o.id === updated.id ? updated : o);
-        });
-      } else {
-        // History View: Only show terminal states
-        if (isTerminal) {
-          setOrders(prev => {
-            const exists = prev.find(o => o.id === updated.id);
-            if (exists) return prev.map(o => o.id === updated.id ? updated : o);
-            return [updated, ...prev];
-          });
+          const next = [...prev];
+          next[index] = updated;
+          return next;
         }
-      }
+      });
     };
 
     const handleCreate = (newOrder: Order) => {
-      const currentStatus = (newOrder.status || "NEW").toUpperCase();
-      const activeStatuses = ['NEW', 'PENDING', 'BOT_CREATED_ORDER', 'CONFIRMED', 'PROCESSING', 'PREPARING', 'READY', 'SHIPPED'];
+      const status = (newOrder.status || "NEW").toUpperCase();
+      const isTerminal = TERMINAL.includes(status);
 
-      if (view === 'active' && activeStatuses.includes(currentStatus)) {
-        setOrders(prev => [newOrder, ...prev]);
+      if (view === 'active' && !isTerminal) {
+        setOrders(prev => {
+          if (prev.some(o => o.id === newOrder.id)) return prev;
+          return [newOrder, ...prev];
+        });
       }
     };
 
@@ -180,9 +181,9 @@ export default function Orders() {
     const nextVersion = (orderToUpdate.version || 0) + 1;
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status, version: nextVersion } : o));
 
-    const terminalStatuses = ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'];
-    if (view === 'active' && terminalStatuses.includes(status.toUpperCase())) {
-      setTimeout(() => setOrders(prev => prev.filter(o => o.id !== id)), 500);
+    const TERMINAL = ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'];
+    if (view === 'active' && TERMINAL.includes(status.toUpperCase())) {
+      setOrders(prev => prev.filter(o => o.id !== id));
     }
 
     try {
