@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
 import { Check, Package, Truck, AlertCircle } from "lucide-react";
 import Confetti from "react-confetti";
 import { motion } from "framer-motion";
