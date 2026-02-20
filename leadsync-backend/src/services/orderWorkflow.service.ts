@@ -1,7 +1,5 @@
-
 import { prisma } from "../lib/prisma";
 import { OrderStatus, OrderApprovalStatus, OrderLog } from "@prisma/client";
-import { safeEmitConversationUpdate, emitToCompany, emitToCompanyAdmin } from "../lib/socket";
 import { safeEmitConversationUpdate, emitToCompany, emitToCompanyAdmin } from "../lib/socket";
 import { notificationService } from "./notification.service";
 import { customerMessagingService } from "./customerMessaging.service";
