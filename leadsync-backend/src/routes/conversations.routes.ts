@@ -457,4 +457,52 @@ router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Respon
   }
 });
 
+/* =========================================
+   VOICE REPLY — Agent triggers TTS voice message to customer
+   POST /conversations/:id/voice-reply
+   Body: { messageId?: string }  (optional: for context)
+========================================= */
+router.post("/:id/voice-reply", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { companyId } = req.user!;
+
+    // Fetch conversation + lead contact + company token
+    const conversation = await prisma.conversation.findFirst({
+      where: { id, companyId },
+      include: {
+        lead: { select: { contact: true } },
+        company: { select: { telegramBotToken: true } },
+      },
+    });
+
+    if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+    if (!conversation.company.telegramBotToken) return res.status(400).json({ message: "Telegram not connected" });
+
+    // Get last SYSTEM (bot) reply to convert to voice
+    const lastBotMsg = await prisma.message.findFirst({
+      where: { conversationId: id, sender: MessageSender.SYSTEM },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!lastBotMsg) return res.status(404).json({ message: "No bot reply found to convert to voice" });
+
+    const { sarvamService } = await import("../services/sarvam.service");
+    const { TelegramAdapter } = await import("../adapters/telegram.adapter");
+
+    const audioBuffer = await sarvamService.textToSpeech(lastBotMsg.content, "en-IN");
+    if (!audioBuffer) return res.status(503).json({ message: "TTS generation failed. Try again." });
+
+    const adapter = new TelegramAdapter(conversation.company.telegramBotToken);
+    await adapter.sendVoice(conversation.lead.contact, audioBuffer);
+
+    console.log(`🔊 Agent voice reply sent to ${conversation.lead.contact}`);
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error("Voice reply error:", error);
+    res.status(500).json({ message: "Failed to send voice reply" });
+  }
+});
+
 export default router;

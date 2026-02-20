@@ -13,7 +13,8 @@ import {
   User as UserIcon,
   Check,
   MoreVertical,
-  Zap
+  Zap,
+  Mic
 } from "lucide-react";
 import { getIndustryConfig } from "../../utils/industryConfig";
 
@@ -21,6 +22,7 @@ interface Message {
   id: string;
   content: string;
   sender: "CLIENT" | "AGENT" | "SYSTEM";
+  messageType?: "TEXT" | "VOICE" | "IMAGE" | "FILE";
   createdAt: string;
   conversationId?: string; // Added for socket routing
 }
@@ -329,6 +331,17 @@ export default function Conversations() {
     }
   };
 
+  /* VOICE REPLY */
+  const handleVoiceReply = async (messageId: string, conversationId: string) => {
+    const toastId = toast.loading("Sending voice reply...");
+    try {
+      await api.post(`/conversations/${conversationId}/voice-reply`, { messageId });
+      toast.success("Voice reply sent!", { id: toastId });
+    } catch (err) {
+      toast.error("Voice reply failed. Try again.", { id: toastId });
+    }
+  };
+
   const filteredConversations = useMemo(() => {
     return conversations.filter(c =>
       c.lead.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -537,6 +550,13 @@ export default function Conversations() {
                   messages.map((msg) => {
                     const isAgent = msg.sender === "AGENT";
                     const isSystem = msg.sender === "SYSTEM";
+                    const isClient = msg.sender === "CLIENT";
+                    const isVoiceOrMedia = isClient && (
+                      msg.messageType === "VOICE" ||
+                      msg.messageType === "IMAGE" ||
+                      msg.messageType === "FILE"
+                    );
+
                     if (isSystem) {
                       return (
                         <div key={msg.id} className="flex justify-center">
@@ -554,12 +574,34 @@ export default function Conversations() {
                         className={`flex ${isAgent ? "justify-end" : "justify-start"}`}
                       >
                         <div className="flex flex-col max-w-[80%]">
-                          <div className={`px-5 py-3.5 rounded-[2rem] text-sm leading-relaxed font-medium shadow-sm transition-all ${isAgent ? "bg-indigo-600 text-white rounded-br-none" : "bg-white text-slate-800 rounded-bl-none border border-slate-100"}`}>
-                            {msg.content}
+                          <div className={`px-5 py-3.5 rounded-[2rem] text-sm leading-relaxed font-medium shadow-sm transition-all ${isAgent
+                            ? "bg-indigo-600 text-white rounded-br-none"
+                            : "bg-white text-slate-800 rounded-bl-none border border-slate-100"
+                            }`}>
+                            {/* Voice badge for voice messages */}
+                            {msg.messageType === "VOICE" && isClient && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-1.5 bg-indigo-50 px-2 py-0.5 rounded-full">
+                                <Mic size={8} /> Voice
+                              </span>
+                            )}
+                            <span className="block">{msg.content}</span>
                           </div>
-                          <div className={`flex items-center gap-1.5 mt-2 text-[10px] font-bold uppercase tracking-tighter ${isAgent ? "justify-end text-indigo-400" : "text-slate-400"}`}>
-                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            {isAgent && <Check size={10} />}
+                          <div className={`flex items-center gap-2 mt-2 ${isAgent ? "justify-end" : "justify-start"
+                            }`}>
+                            <span className={`text-[10px] font-bold uppercase tracking-tighter ${isAgent ? "text-indigo-400" : "text-slate-400"
+                              }`}>
+                              {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {isAgent && <Check size={10} className="text-indigo-400" />}
+                            {/* Voice Reply button — only for voice/media client messages */}
+                            {isVoiceOrMedia && selected && (
+                              <button
+                                onClick={() => handleVoiceReply(msg.id, selected.id)}
+                                className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 px-2 py-1 rounded-full transition-all"
+                              >
+                                <Mic size={9} /> Voice Reply
+                              </button>
+                            )}
                           </div>
                         </div>
                       </motion.div>

@@ -281,6 +281,7 @@ export class TelegramAdapter implements ChannelAdapter {
                 data: {
                     content: text,
                     sender: MessageSender.CLIENT,
+                    messageType: isVoiceMsg ? "VOICE" : "TEXT",
                     conversationId: conversation.id,
                 },
             });

@@ -37,6 +37,7 @@ enum MessageSender {
   SYSTEM
 }
 
+
 enum OrderStatus {
   BOT_CREATED_ORDER   // 🆕 AI Detected (Hidden)
   PENDING             // Legacy
@@ -149,6 +150,7 @@ model Message {
   id             String        @id @default(uuid())
   content        String
   sender         MessageSender
+  messageType    String        @default("TEXT")  // TEXT | VOICE | IMAGE | FILE
   conversationId String
   createdAt      DateTime      @default(now())
 
