@@ -40,21 +40,53 @@ export class SarvamService {
         }
 
         try {
-            // Mocking the call structure for Railway free tier safety
-            // In production, use axios.post(this.apiUrl, { text }, { headers: ... })
+            const response = await axios.post(
+                "https://api.sarvam.ai/v1/chat/completions",
+                {
+                    model: "sarvam-m",
+                    messages: [
+                        {
+                            role: "system",
+                            content: `You are an intent extraction agent for an Indian e-commerce CRM. 
+Analyze the user message and extract order details in JSON format.
+Identify if the user wants to buy something.
+Languages: English, Hindi, and Hinglish.
 
-            // Simulating a response for now to demonstrate structure
-            return {
-                intent: "ORDER",
-                entities: {
-                    product: "Unknown Product", // AI would extract this
-                    quantity: 1
+Return ONLY a JSON object:
+{
+  "intent": "ORDER" | "INQUIRY" | "COMPLAINT" | "OTHER",
+  "entities": {
+    "product": "name of product",
+    "quantity": number
+  },
+  "confidence": number (0 to 1)
+}`
+                        },
+                        { role: "user", content: text }
+                    ]
                 },
-                confidence: 0.85
-            };
+                {
+                    headers: {
+                        "api-subscription-key": this.apiKey,
+                        "Content-Type": "application/json"
+                    }
+                }
+            );
 
-        } catch (error) {
-            console.error("Sarvam AI Error:", error);
+            const aiResult = response.data?.choices?.[0]?.message?.content;
+            if (!aiResult) return null;
+
+            // Parse JSON from response
+            try {
+                const parsed = JSON.parse(aiResult.replace(/```json|```/g, "").trim());
+                return parsed as SarvamResponse;
+            } catch (e) {
+                console.error("Failed to parse Sarvam JSON:", aiResult);
+                return null;
+            }
+
+        } catch (error: any) {
+            console.error("Sarvam AI Error:", error?.response?.data || error.message);
             return null; // Fail safe
         }
     }
