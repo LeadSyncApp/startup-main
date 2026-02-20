@@ -53,11 +53,28 @@ class OrderParserService {
 
             if (items.length === 0) return; // No order detected
 
+            if (items.length === 0) return; // No order detected
+
+            const summary = items.map(i => `${i.quantity} x ${i.name}`).join(", ");
+            const totalAmount = items.reduce((sum, item) => sum + (item.price || 0) * item.quantity, 0);
+
+            // 🍔 DE-DUPLICATION: Check if identical GHOST order exists in last 15 mins
+            const recentOrder = await prisma.order.findFirst({
+                where: {
+                    conversationId,
+                    summary,
+                    status: OrderStatus.BOT_CREATED_ORDER,
+                    createdAt: { gt: new Date(Date.now() - 15 * 60 * 1000) }
+                }
+            });
+
+            if (recentOrder) {
+                console.log(`🚫 [OrderParser] Duplicate detected for Conv ${conversationId}. Skipping.`);
+                return;
+            }
+
             console.log(`🍔 [OrderParser] Detected ${items.length} items for Conv ${conversationId}`);
 
-            // 3. Calculate Value
-            const totalAmount = items.reduce((sum, item) => sum + (item.price || 0) * item.quantity, 0);
-            const summary = items.map(i => `${i.quantity} x ${i.name}`).join(", ");
             const isUrgent = totalAmount > 0; // Alert on ANY amount > 0, not just > 500
 
             // 4. Create Order

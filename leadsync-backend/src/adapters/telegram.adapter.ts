@@ -470,12 +470,20 @@ export class TelegramAdapter implements ChannelAdapter {
 
             try {
                 // Execute AI request with higher concurrency
+                const orderHistory = await prisma.order.findMany({
+                    where: { leadId: lead.id, isDeleted: false },
+                    orderBy: { createdAt: "desc" },
+                    take: 3,
+                    select: { summary: true, amount: true, createdAt: true }
+                });
+
                 let aiReply = await aiQueue.add(() => generateBotReply(
                     text,
                     company.name,
                     company.botBusinessType || "general business",
                     structuredMenu,
-                    historyContext
+                    historyContext,
+                    orderHistory
                 ));
 
                 // 🔊 JSON HANDLING: Extract message_to_customer if AI returned structured JSON

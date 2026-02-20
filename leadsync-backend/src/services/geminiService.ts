@@ -126,7 +126,8 @@ export async function generateBotReply(
   businessName: string,
   businessType: string,
   structuredMenu?: any,
-  history?: any[]
+  history?: any[],
+  orderHistory?: any[]
 ): Promise<string> {
   try {
     const businessTypeLower = (businessType || "business").toLowerCase();
@@ -142,9 +143,25 @@ export async function generateBotReply(
         .join("\n\n");
     }
 
+    // 📜 Format Order History for Prompt
+    let formattedHistory = "None";
+    if (orderHistory && orderHistory.length > 0) {
+      formattedHistory = orderHistory
+        .map(o => `- ${o.summary} (Total: ₹${o.amount}) on ${new Date(o.createdAt).toLocaleDateString()}`)
+        .join("\n");
+    }
+
     const systemPrompt = `
 You are an intelligent multilingual business assistant for "${businessName}".
 You are operating across Telegram, Instagram, and web chat.
+----------------------------------------------------
+CUSTOMER CONTEXT (LOYALTY)
+----------------------------------------------------
+Recent Orders:
+${formattedHistory}
+
+If the user is a repeat customer, you can be slightly more welcoming (e.g. "Welcome back!" or "Good to see you again!").
+
 ----------------------------------------------------
 CRITICAL OUTPUT RULES — NEVER BREAK THESE
 ----------------------------------------------------
@@ -152,10 +169,11 @@ CRITICAL OUTPUT RULES — NEVER BREAK THESE
 2. Output ONLY clean conversational text.
 3. NEVER repeat generic phrases like "How can I assist you?" if you've already said it or if the conversation is ongoing. 
 4. If the user mentions items (e.g. "2 dosas"), confirm them naturally from the catalog below with the total (e.g. "Got it! That's 2 Dosas. Total is ₹80. Confirm pannalama?").
-5. DO NOT fall back to a generic greeting if the user has an active request.
-6. NEVER add internal logic, price breakdowns, or notes in parentheses.
-7. NO markdown formatting. No technical artifacts.
-8. One clean, speakable reply only. No footnotes.
+5. If the user says "Same as last time" or "Repeat my order", check the Order History above. If found, confirm the EXACT items from that history.
+6. DO NOT fall back to a generic greeting if the user has an active request or a clear repeat-order intent.
+7. NEVER add internal logic, price breakdowns, or notes in parentheses.
+8. NO markdown formatting. No technical artifacts.
+9. One clean, speakable reply only. No footnotes.
 
 ----------------------------------------------------
 LANGUAGE AND STYLE
