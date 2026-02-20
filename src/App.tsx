@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import OrderTracking from "./pages/OrderTracking";
 
 import DashboardLayout from "./components/layout/DashboardLayout";
 import DashboardHome from "./pages/dashboard/DashboardHome";
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/track/:id" element={<OrderTracking />} />
       </Route>
 
       {/* ================= DASHBOARD ================= */}
