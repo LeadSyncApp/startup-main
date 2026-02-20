@@ -77,12 +77,17 @@ export default function Orders() {
     if (!socket) return;
 
     const handleUpdate = (updated: Order) => {
+      // 🔒 DEFENSIVE: Ensure status exists and is normalized
+      const currentStatus = (updated.status || "NEW").toUpperCase();
+      const terminalStatuses = ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'];
+      const isTerminal = terminalStatuses.includes(currentStatus);
+
       if (view === 'active') {
-        // If moved to completed state, remove from active board
-        if (['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(updated.status)) {
+        if (isTerminal) {
+          // Immediately purge from active pipeline
           setOrders(prev => prev.filter(o => o.id !== updated.id));
         } else {
-          // Update or Add (if newly confirmed or moved through pipeline)
+          // Update existing or add if valid active state
           setOrders(prev => {
             const exists = prev.find(o => o.id === updated.id);
             if (exists) return prev.map(o => o.id === updated.id ? updated : o);
@@ -90,8 +95,8 @@ export default function Orders() {
           });
         }
       } else {
-        // History View: Add if completed
-        if (['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(updated.status)) {
+        // History View: Only show terminal states
+        if (isTerminal) {
           setOrders(prev => {
             const exists = prev.find(o => o.id === updated.id);
             if (exists) return prev.map(o => o.id === updated.id ? updated : o);
@@ -102,7 +107,10 @@ export default function Orders() {
     };
 
     const handleCreate = (newOrder: Order) => {
-      if (view === 'active' && ['NEW', 'CONFIRMED', 'PROCESSING', 'PREPARING', 'READY', 'SHIPPED'].includes(newOrder.status)) {
+      const currentStatus = (newOrder.status || "NEW").toUpperCase();
+      const activeStatuses = ['NEW', 'PENDING', 'CONFIRMED', 'PROCESSING', 'PREPARING', 'READY', 'SHIPPED'];
+
+      if (view === 'active' && activeStatuses.includes(currentStatus)) {
         setOrders(prev => [newOrder, ...prev]);
       }
     };
@@ -229,11 +237,11 @@ export default function Orders() {
   };
 
   const activeOrdersCount = useMemo(() => orders.filter(o =>
-    !['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(o.status)
+    !['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(o.status.toUpperCase())
   ).length, [orders]);
 
   const revenueToday = useMemo(() => orders
-    .filter(o => !['CANCELLED', 'REJECTED', 'ARCHIVED'].includes(o.status))
+    .filter(o => !['CANCELLED', 'REJECTED', 'ARCHIVED'].includes(o.status.toUpperCase()))
     .reduce((acc, o) => acc + (o.amount || 0), 0), [orders]);
 
   // Group History
@@ -287,14 +295,14 @@ export default function Orders() {
                 <h3 className="font-bold text-slate-700 mb-3 flex justify-between items-center text-sm">
                   {col.title}
                   <span className="bg-white/50 px-2 py-0.5 rounded text-[10px] tabular-nums">
-                    {orders.filter(o => col.statuses.includes(o.status)).length}
+                    {orders.filter(o => col.statuses.includes((o.status || "").toUpperCase())).length}
                   </span>
                 </h3>
                 <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
-                  {orders.filter(o => col.statuses.includes(o.status)).map(order => (
+                  {orders.filter(o => col.statuses.includes((o.status || "").toUpperCase())).map(order => (
                     <OrderCard key={order.id} order={order} onApprove={() => { setActionOrder(order); setActionType('approve'); }} onReject={() => { setActionOrder(order); setActionType('reject'); }} onMove={(s: string) => handleMoveStatus(order.id, s)} />
                   ))}
-                  {orders.filter(o => col.statuses.includes(o.status)).length === 0 && (
+                  {orders.filter(o => col.statuses.includes((o.status || "").toUpperCase())).length === 0 && (
                     <div className="h-40 flex items-center justify-center text-slate-400 text-xs italic border-2 border-dashed border-slate-200/50 rounded-xl">No orders</div>
                   )}
                 </div>
@@ -384,7 +392,8 @@ export default function Orders() {
 }
 
 function OrderCard({ order, onApprove, onReject, onMove }: any) {
-  const isNew = order.status === "NEW" || order.status === "PENDING";
+  const currentStatus = (order.status || "").toUpperCase();
+  const isNew = currentStatus === "NEW" || currentStatus === "PENDING";
   const isUrgent = order.isUrgent || order.priorityScore > 50;
 
   return (
@@ -402,25 +411,25 @@ function OrderCard({ order, onApprove, onReject, onMove }: any) {
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {(order.status === "PROCESSING" || order.status === "CONFIRMED") && (
+          {(currentStatus === "PROCESSING" || currentStatus === "CONFIRMED") && (
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
               <button onClick={() => onMove("PREPARING")} className="flex-1 text-xs bg-indigo-50 text-indigo-700 px-3 py-2 rounded font-semibold hover:bg-indigo-100 italic">Start Prep</button>
             </div>
           )}
-          {order.status === "PREPARING" && (
+          {currentStatus === "PREPARING" && (
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
               <button onClick={() => onMove("READY")} className="flex-1 text-xs bg-emerald-50 text-emerald-700 px-3 py-2 rounded font-semibold hover:bg-emerald-100">Mark Ready</button>
             </div>
           )}
-          {order.status === "READY" && (
+          {currentStatus === "READY" && (
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
               <button onClick={() => onMove("SHIPPED")} className="flex-1 text-xs bg-amber-50 text-amber-700 px-3 py-2 rounded font-semibold hover:bg-amber-100">Deliver</button>
             </div>
           )}
-          {order.status === "SHIPPED" && (
+          {currentStatus === "SHIPPED" && (
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
               <button onClick={() => onMove("DELIVERED")} className="flex-1 text-xs bg-slate-800 text-white px-3 py-2 rounded font-semibold hover:bg-slate-700">Complete</button>

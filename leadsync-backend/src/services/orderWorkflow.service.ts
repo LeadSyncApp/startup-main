@@ -46,30 +46,20 @@ export class OrderWorkflowService {
         // Transaction: Update Order + Create Log
         // Note: Prisma interactive transactions ($transaction) are best here.
         try {
-            const [updatedOrder, log] = await prisma.$transaction([
+            const [_, log] = await prisma.$transaction([
                 // Update Order
                 prisma.order.update({
                     where: whereClause,
                     data: {
                         status: newStatus,
                         version: nextVersion,
-                        // Set/Keep processedBy for active and completion states
-                        processedById: ([OrderStatus.PROCESSING, OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED] as OrderStatus[]).includes(newStatus)
-                            ? actor.id
-                            : undefined, // undefined means "leave unchanged" in Prisma update
-                        // If moving to completed states
+                        processedById: actor.id,
                         completedAt: ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED'].includes(newStatus)
                             ? new Date()
                             : (oldStatus === OrderStatus.BOT_CREATED_ORDER ? null : order.completedAt),
-                        // If Accepted/Rejected, update approval
                         approvalStatus: newStatus === OrderStatus.CONFIRMED ? OrderApprovalStatus.APPROVED
                             : newStatus === OrderStatus.REJECTED ? OrderApprovalStatus.REJECTED
                                 : order.approvalStatus
-                    },
-                    include: {
-                        conversation: { include: { lead: true } },
-                        lead: true,
-                        processedBy: { select: { id: true, name: true } }
                     }
                 }),
                 // Create Audit Log
@@ -84,6 +74,18 @@ export class OrderWorkflowService {
                     }
                 })
             ]);
+
+            // ⛔ STRICT PERSISTENCE: Re-fetch fresh state to ensure no race conditions
+            const updatedOrder = await prisma.order.findUnique({
+                where: { id: orderId },
+                include: {
+                    conversation: { include: { lead: true } },
+                    lead: true,
+                    processedBy: { select: { id: true, name: true } }
+                }
+            });
+
+            if (!updatedOrder) throw new Error("Order lost after update");
 
             // 4. Emit Events & Notifications
             this.handlePostTransition(updatedOrder, oldStatus, newStatus, actor);

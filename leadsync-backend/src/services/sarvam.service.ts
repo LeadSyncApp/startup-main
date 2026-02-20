@@ -25,15 +25,26 @@ export class SarvamService {
     async analyzeIntent(text: string): Promise<SarvamResponse | null> {
         if (!text) return null;
 
-        // 1. Local Keyword Pre-check (Save API calls)
-        const orderKeywords = ["buy", "order", "price", "want", "khareedna", "chahiye", "book"];
+        // 1. Local Keyword Pre-check (Optimized for Indian Languages & Hinglish)
+        const orderKeywords = [
+            // Standard
+            "buy", "order", "price", "want", "book", "cash",
+            // Hindi / North (Hinglish)
+            "khareedna", "chahiye", "mangwana", "lene", "daam",
+            // Tamil
+            "vendum", "kodu", "venum", "vaanganum", "vilai",
+            // Telugu
+            "kavali", "konali", "ivvandi", "dhara",
+            // Kannada
+            "beku", "idiyalla", "kodona", "bele"
+        ];
         const hasKeyword = orderKeywords.some(k => text.toLowerCase().includes(k));
 
-        if (!hasKeyword) {
+        if (!hasKeyword && !text.match(/\d+/)) { // Also check if numbers are present (counts)
             return { intent: "OTHER", entities: {}, confidence: 1.0 };
         }
 
-        // 2. Call AI API (Only if keyword matches)
+        // 2. Call AI API (Only if keyword or quantity present)
         if (!this.apiKey) {
             console.warn("Sarvam API Key missing, skipping AI.");
             return null;
@@ -47,19 +58,25 @@ export class SarvamService {
                     messages: [
                         {
                             role: "system",
-                            content: `You are an intent extraction agent for an Indian e-commerce CRM. 
-Analyze the user message and extract order details in JSON format.
-Identify if the user wants to buy something.
-Languages: English, Hindi, and Hinglish.
+                            content: `You are a professional sales intelligence agent for a corporate CRM.
+Analyze the Indian user message to extract order intent and entities.
+Supported Languages: English, Hindi, Tamil, Telugu, Malayalam, Kannada, Hinglish.
 
-Return ONLY a JSON object:
+Extraction Rules:
+1. Detect Intent: ORDER (wants to buy), INQUIRY (asking price/detail), COMPLAINT, or OTHER.
+2. Extract Product Name & Quantity.
+3. Language Detection: Identify the dominant language.
+4. Tone: The extracted data must support a formal business response.
+
+Return ONLY valid JSON:
 {
   "intent": "ORDER" | "INQUIRY" | "COMPLAINT" | "OTHER",
   "entities": {
-    "product": "name of product",
+    "product": "string",
     "quantity": number
   },
-  "confidence": number (0 to 1)
+  "language": "string",
+  "confidence": number
 }`
                         },
                         { role: "user", content: text }
