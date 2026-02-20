@@ -32,6 +32,11 @@ export const initSocket = (httpServer: HttpServer) => {
             console.log(`👤 Socket ${socket.id} joined user room: user:${userId}`);
         });
 
+        socket.on("join_conversation", (conversationId: string) => {
+            socket.join(conversationId);
+            console.log(`💬 Socket ${socket.id} joined conversation: ${conversationId}`);
+        });
+
         // ✅ NEW: Join admin room
         socket.on("join_admin", (companyId: string) => {
             socket.join(`company:${companyId}:admin`);

@@ -112,16 +112,18 @@ class OrderParserService {
 
             // 6. Notify & Emit
             await this.notifyNewOrder(companyId, order);
+            // 🚨 Use safeEmit to reach both Admin and available Agents (or the specific assigned agent)
+            safeEmitConversationUpdate(order.conversation, "order_detected", order);
 
             // 7. System Message (Order Card Indicator)
-            // We use a specific content marker or relying on the socket event to render the UI
-            await prisma.message.create({
+            const sysMsg = await prisma.message.create({
                 data: {
                     conversationId,
                     sender: MessageSender.SYSTEM,
                     content: `📝 Order Detected: ${summary} (Total: ₹${totalAmount}). Waiting for confirmation.`
                 }
             });
+            emitToConversation(conversationId, "new_message", sysMsg);
 
         } catch (error) {
             console.error("❌ Order Parser Error:", error);
