@@ -63,24 +63,6 @@ const sendTelegramApi = async (url: string, payload: any) => {
     }
 }
 
-/** Detect if the user is choosing 'voice' reply */
-function isVoiceChoiceReply(text: string): boolean {
-    const t = text.toLowerCase().trim();
-    return [
-        "voice", "voice reply", "voice ah", "voice venuma", "voice mein",
-        "audio", "speak", "bolke do", "voice send karo", "voice panunga",
-        "voice pannunga", "2", "b"
-    ].some(k => t === k || t.includes(k));
-}
-
-/** Detect if the user is choosing 'text' reply */
-function isTextChoiceReply(text: string): boolean {
-    const t = text.toLowerCase().trim();
-    return [
-        "text", "text ah", "text reply", "text mein", "text venuma",
-        "type", "write", "1", "a"
-    ].some(k => t === k || t.includes(k));
-}
 
 /** Download a Telegram voice file into a Buffer */
 async function downloadTelegramVoice(botToken: string, fileId: string): Promise<Buffer | null> {
@@ -108,9 +90,7 @@ export class TelegramAdapter implements ChannelAdapter {
     constructor(private botToken: string) { }
 
     async verifyWebhook(req: any): Promise<boolean> {
-        // Verification is done in controller via secret_token header usually, 
-        // but adapter could validate payload structure.
-        return !!(req.body && req.body.message);
+        return !!(req.body && (req.body.message || req.body.callback_query));
     }
 
     async sendMessage(to: string, text: string, options?: any) {
@@ -121,6 +101,51 @@ export class TelegramAdapter implements ChannelAdapter {
             parse_mode: "HTML",
         };
         await sendTelegramApi(url, payload);
+    }
+
+    /** Send message with inline Voice/Text reply choice buttons */
+    async sendMessageWithVoiceButtons(to: string, text: string) {
+        const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
+        await sendTelegramApi(url, {
+            chat_id: to,
+            text,
+            reply_markup: {
+                inline_keyboard: [[
+                    { text: "🔊 Voice Reply", callback_data: `voice_reply:${to}` },
+                    { text: "💬 Text Reply", callback_data: `text_reply:${to}` },
+                ]]
+            }
+        });
+    }
+
+    /** Dismiss Telegram button loading spinner */
+    async answerCallbackQuery(callbackQueryId: string) {
+        await sendTelegramApi(
+            `https://api.telegram.org/bot${this.botToken}/answerCallbackQuery`,
+            { callback_query_id: callbackQueryId }
+        );
+    }
+
+    /** Handle button press from inline keyboard */
+    async handleCallbackQuery(callbackQuery: any) {
+        const chatId = String(callbackQuery.message?.chat?.id);
+        const data = callbackQuery.data as string;
+        const queryId = callbackQuery.id;
+
+        await this.answerCallbackQuery(queryId); // dismiss spinner immediately
+
+        if (data.startsWith("voice_reply:")) {
+            const pendingVoice = cacheService.get<Buffer>(cacheService.getPendingVoiceKey(chatId));
+            if (pendingVoice) {
+                cacheService.delete(cacheService.getPendingVoiceKey(chatId));
+                await this.sendVoice(chatId, pendingVoice);
+            } else {
+                await this.sendMessage(chatId, "The voice reply has expired. Please send your message again.");
+            }
+        } else if (data.startsWith("text_reply:")) {
+            cacheService.delete(cacheService.getPendingVoiceKey(chatId));
+            // Text was already delivered above the buttons — nothing extra needed
+        }
     }
 
     /** Send a pre-generated voice audio buffer as a Telegram voice message */
@@ -154,6 +179,12 @@ export class TelegramAdapter implements ChannelAdapter {
     -------------------------------- */
     async processWebhook(body: any, companyId: string) {
         try {
+            // 🔘 ROUTE: Handle inline button presses (callback queries)
+            if (body.callback_query) {
+                await this.handleCallbackQuery(body.callback_query);
+                return;
+            }
+
             const message = body.message as TelegramMessage;
             if (!message || !message.message_id) return;
 
@@ -372,26 +403,6 @@ export class TelegramAdapter implements ChannelAdapter {
             }
 
             /* AI REPLY */
-            // 🔊 VOICE CHOICE INTERCEPTION:
-            // If this message is a 'voice' or 'text' choice reply after a pending dual-reply offer.
-            const pendingVoiceKey = cacheService.getPendingVoiceKey(chatId);
-            const pendingVoice = cacheService.get<Buffer>(pendingVoiceKey);
-
-            if (pendingVoice) {
-                if (isVoiceChoiceReply(text)) {
-                    // Deliver the pre-generated voice audio
-                    cacheService.delete(pendingVoiceKey);
-                    await this.sendVoice(chatId, pendingVoice);
-                    return;
-                } else if (isTextChoiceReply(text)) {
-                    // User wants text - already sent, just clear the cache
-                    cacheService.delete(pendingVoiceKey);
-                    await this.saveAndSendSystemMessage(chatId, conversation, "Got it! The text reply was already sent above.");
-                    return;
-                }
-                // If not a clear choice, continue with normal flow
-            }
-
             // 1. Fetch History (Last 5 messages)
             const history = await prisma.message.findMany({
                 where: { conversationId: conversation.id },
@@ -405,7 +416,7 @@ export class TelegramAdapter implements ChannelAdapter {
                 content: m.content
             }));
 
-            // SPEED OPTIMIZATION: Fire typing indicator immediately
+            // Fire typing indicator
             this.sendTyping(chatId).catch(() => { });
 
             try {
@@ -437,7 +448,7 @@ export class TelegramAdapter implements ChannelAdapter {
                     return;
                 }
 
-                // 🎤 PRE-GENERATE VOICE IN PARALLEL (Fire-and-forget, cache result for 2 minutes)
+                // 🎤 PRE-GENERATE VOICE IN PARALLEL (Fire-and-forget, cache for 2 min)
                 sarvamService.textToSpeech(displayMessage, "en-IN")
                     .then(audioBuffer => {
                         if (audioBuffer) {
@@ -447,11 +458,12 @@ export class TelegramAdapter implements ChannelAdapter {
                     })
                     .catch(err => console.error("TTS pre-gen error:", err));
 
-                // Append natural voice/text choice prompt
-                const choicePrompt = "\n\nText ah venuma? illa voice ah reply pannava?";
-                const finalMessage = displayMessage + choicePrompt;
-
-                await this.saveAndSendSystemMessage(chatId, conversation, finalMessage);
+                // 🔘 If triggered by voice input, show buttons. Otherwise send clean text.
+                if (isVoiceMsg) {
+                    await this.sendMessageWithVoiceButtons(chatId, displayMessage);
+                } else {
+                    await this.saveAndSendSystemMessage(chatId, conversation, displayMessage);
+                }
             } catch (err) {
                 console.error("AI Queue Error:", err);
             }
