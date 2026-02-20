@@ -36,35 +36,44 @@ async function generateWithFallback(
       const timeoutMs = 8000; // 8s timeout per model
 
       if (model.provider === "sarvam") {
-        // Sarvam.ai expects strictly {role, content}. Extra fields cause 400 errors.
+        // Sarvam is very strict about message roles and format.
         const chatMessages = [
-          { role: "user", content: `System Instruction: ${systemPrompt}` },
+          {
+            role: "user",
+            content: `INSTRUCTION: ${systemPrompt}\n\nMaintain this persona and respond to the following conversation.`
+          },
           ...messages
-            .filter(m => m.content && m.content.trim())
+            .filter(m => m.content && typeof m.content === 'string' && m.content.trim())
             .map(m => ({
-              role: m.role === "system" ? "user" : m.role,
-              content: m.content
+              role: (m.role === "assistant" || m.role === "bot") ? "assistant" : "user",
+              content: m.content.trim()
             }))
         ];
 
-        const response: any = await withTimeout(
-          axios.post(
-            "https://api.sarvam.ai/v1/chat/completions",
-            {
-              model: model.id,
-              messages: chatMessages
-            },
-            {
-              headers: {
-                "api-subscription-key": process.env.SARVAM_API_KEY,
-                "Content-Type": "application/json"
+        try {
+          const response: any = await withTimeout(
+            axios.post(
+              "https://api.sarvam.ai/v1/chat/completions",
+              {
+                model: model.id,
+                messages: chatMessages,
+                temperature: 0.1 // Lower temperature for more stable multilingual output
+              },
+              {
+                headers: {
+                  "api-subscription-key": process.env.SARVAM_API_KEY,
+                  "Content-Type": "application/json"
+                }
               }
-            }
-          ),
-          timeoutMs,
-          `Sarvam ${model.id}`
-        );
-        content = response.data?.choices?.[0]?.message?.content || "";
+            ),
+            timeoutMs,
+            `Sarvam ${model.id}`
+          );
+          content = response.data?.choices?.[0]?.message?.content || "";
+        } catch (axiosError: any) {
+          console.error(`❌ Sarvam API Error Detail:`, axiosError.response?.data || axiosError.message);
+          throw axiosError; // Continue to fallback
+        }
       }
       else if (model.provider === "groq") {
         const completion: any = await withTimeout(
