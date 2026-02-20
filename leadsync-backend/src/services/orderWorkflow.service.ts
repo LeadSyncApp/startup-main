@@ -5,6 +5,25 @@ import { notificationService } from "./notification.service";
 import { customerMessagingService } from "./customerMessaging.service";
 
 /**
+ * Strict Rank for Forward-Only Lifecycle
+ */
+const STATUS_RANK: Record<OrderStatus, number> = {
+    [OrderStatus.BOT_CREATED_ORDER]: 0,
+    [OrderStatus.PENDING]: 1,
+    [OrderStatus.NEW]: 1,
+    [OrderStatus.CONFIRMED]: 2,
+    [OrderStatus.PROCESSING]: 3,
+    [OrderStatus.PREPARING]: 4,
+    [OrderStatus.READY]: 5,
+    [OrderStatus.SHIPPED]: 6,
+    [OrderStatus.DELIVERED]: 7,
+    [OrderStatus.COMPLETED]: 8,
+    [OrderStatus.CANCELLED]: 9,
+    [OrderStatus.REJECTED]: 9,
+    [OrderStatus.ARCHIVED]: 10,
+};
+
+/**
  * Strict State Machine for Order Processing
  */
 export class OrderWorkflowService {
@@ -18,9 +37,9 @@ export class OrderWorkflowService {
         orderId: string,
         newStatus: OrderStatus,
         actor: { id: string; name: string; role: string },
-        expectedVersion?: number
+        expectedVersion?: number // CRITICAL: This must come from the UI's current state
     ) {
-        // 1. Fetch Current State
+        // 1. Fetch Current State (Fresh from DB)
         const order = await prisma.order.findUnique({
             where: { id: orderId },
             include: { conversation: true, lead: true }
@@ -30,7 +49,13 @@ export class OrderWorkflowService {
 
         const oldStatus = order.status;
 
-        // 2. Validate Transition
+        // 2. STRICTOR VALIDATION
+        // a) Prevent Regression (Ranking check)
+        if (STATUS_RANK[newStatus] < STATUS_RANK[oldStatus]) {
+            throw new Error(`STATE_REGRESSION: Cannot move order from ${oldStatus} back to ${newStatus}. Transition rejected.`);
+        }
+
+        // b) Business Logic Transition check
         this.validateTransition(oldStatus, newStatus, actor.role);
 
         // 3. Perform Update with Optimistic Locking

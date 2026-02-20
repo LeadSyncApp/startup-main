@@ -77,23 +77,33 @@ export default function Orders() {
     if (!socket) return;
 
     const handleUpdate = (updated: Order) => {
-      // 🔒 DEFENSIVE: Ensure status exists and is normalized
+      const STATUS_RANK_MAP: Record<string, number> = {
+        'BOT_CREATED_ORDER': 0, 'PENDING': 1, 'NEW': 1, 'CONFIRMED': 2, 'PROCESSING': 3,
+        'PREPARING': 4, 'READY': 5, 'SHIPPED': 6, 'DELIVERED': 7,
+        'COMPLETED': 8, 'CANCELLED': 9, 'REJECTED': 9, 'ARCHIVED': 10
+      };
+
       const currentStatus = (updated.status || "NEW").toUpperCase();
       const terminalStatuses = ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'];
       const isTerminal = terminalStatuses.includes(currentStatus);
 
       if (view === 'active') {
-        if (isTerminal) {
-          // Immediately purge from active pipeline
-          setOrders(prev => prev.filter(o => o.id !== updated.id));
-        } else {
-          // Update existing or add if valid active state
-          setOrders(prev => {
-            const exists = prev.find(o => o.id === updated.id);
-            if (exists) return prev.map(o => o.id === updated.id ? updated : o);
-            return [updated, ...prev];
-          });
-        }
+        setOrders(prev => {
+          const exists = prev.find(o => o.id === updated.id);
+          if (!exists) return isTerminal ? prev : [updated, ...prev];
+
+          // 🛡️ PREVENT REGRESSION: Only update if the new status is the same or "forward" in rank
+          const currentRank = STATUS_RANK_MAP[exists.status.toUpperCase()] || 0;
+          const newRank = STATUS_RANK_MAP[currentStatus] || 0;
+
+          if (newRank < currentRank) {
+            console.warn(`🛑 Stale Socket Event Dropped: Transition ${exists.status} -> ${currentStatus} rejected.`);
+            return prev;
+          }
+
+          if (isTerminal) return prev.filter(o => o.id !== updated.id);
+          return prev.map(o => o.id === updated.id ? updated : o);
+        });
       } else {
         // History View: Only show terminal states
         if (isTerminal) {
