@@ -30,6 +30,9 @@ class NotificationService {
     /**
      * Creates a notification for all company admins and emits socket events.
      */
+    /**
+     * Creates a notification for all company admins and emits socket events with IDs.
+     */
     async notifyCompanyAdmins(companyId, title, body, type) {
         try {
             // 1. Find all admins/owners
@@ -43,36 +46,26 @@ class NotificationService {
             });
             if (admins.length === 0)
                 return;
-            // 2. Batch Create Notifications
-            await prisma_1.prisma.notification.createMany({
-                data: admins.map(admin => ({
-                    userId: admin.id,
-                    title,
-                    body,
-                    type,
-                    isRead: false
-                }))
-            });
-            // 3. Emit Real-time Events (Bulk Emit not supported by simple socket function, loop for now)
-            // Ideally should use a room `company:{id}:admin` but persistent notifications are per user.
-            // We can emit to room "company:{id}:admin" with a generic payload, 
-            // but the client needs the specific notification ID to mark as read.
-            // So we emit "notification_sync" signal to prompt fetch, OR just push data.
-            // For simplicity and to match `emitToCompanyAdmin` wrapper:
-            // We just fetch the latest for each admin? No, too heavy.
-            // Let's just emit the event payload to the admin room.
-            // The client will receive it. If they want to mark as read, they'll need the ID.
-            // But `createMany` doesn't return IDs easily in all DBs.
-            // So for now, we'll iterate and create individually to get IDs if needed, 
-            // OR we accept that the socket event is for "Toast" and the DB is for "History".
-            // Actually, `emitToCompanyAdmin` broadcasts to room `company:${companyId}:admin`.
-            // So we can send one event.
-            // But the *DB records* are individual.
-            // Let's just create records and then emit one event.
-            (0, socket_1.emitToCompanyAdmin)(companyId, "notification_new", { title, body, type, createdAt: new Date() });
+            // 2. Create and Emit Individually
+            await Promise.all(admins.map(async (admin) => this.notifyUser(admin.id, title, body, type)));
         }
         catch (error) {
             console.error(`❌ Failed to notify admins of company ${companyId}:`, error);
+        }
+    }
+    /**
+     * Creates a notification for ALL active users in a company.
+     */
+    async notifyCompany(companyId, title, body, type) {
+        try {
+            const users = await prisma_1.prisma.user.findMany({
+                where: { companyId, isActive: true },
+                select: { id: true }
+            });
+            await Promise.all(users.map(u => this.notifyUser(u.id, title, body, type)));
+        }
+        catch (error) {
+            console.error(`❌ Failed to notify company ${companyId}:`, error);
         }
     }
     /**

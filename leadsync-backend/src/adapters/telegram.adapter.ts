@@ -14,6 +14,7 @@ import { aiQueue } from "../services/queue.service";
 import { cacheService } from "../services/cache.service";
 import { intelligenceService } from "../services/intelligence.service";
 import { orderParserService } from "../services/orderParser.service";
+import { notificationService } from "../services/notification.service";
 
 /* ===============================
    TYPES
@@ -181,6 +182,14 @@ export class TelegramAdapter implements ChannelAdapter {
                 conversation.id,
                 text
             ).catch((err: any) => console.error("Intelligence Error:", err));
+
+            // 🔔 NOTIFICATION: Notify Assigned Agent & Admins
+            const notifyBody = `${name}: ${text.length > 50 ? text.slice(0, 50) + "..." : text}`;
+            if (conversation.assignedToId) {
+                notificationService.notifyUser(conversation.assignedToId, "New Message", notifyBody, "MESSAGE");
+            } else {
+                notificationService.notifyCompanyAdmins(companyId, "New Unassigned Message", notifyBody, "MESSAGE");
+            }
 
             // 🍔 ORDER DETECTION: Check for orders in background
             orderParserService.processPotentialOrder(

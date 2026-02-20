@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Check, Package, Truck, AlertCircle } from "lucide-react";
-import Confetti from "react-confetti";
+// import Confetti from "react-confetti";
 import { motion } from "framer-motion";
 
 const STATUS_STEPS = [
@@ -75,7 +75,7 @@ export default function OrderTracking() {
 
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
-            {order.status === "DELIVERED" && <Confetti numberOfPieces={200} recycle={false} />}
+            {/* {order.status === "DELIVERED" && <Confetti numberOfPieces={200} recycle={false} />} */}
 
             <div className="max-w-md mx-auto bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
 

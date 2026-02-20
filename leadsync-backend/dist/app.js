@@ -24,8 +24,9 @@ console.log("🔥 app.ts loaded");
 const app = (0, express_1.default)();
 app.use((0, compression_1.default)()); // ✅ GZIP Compression
 app.use((0, cors_1.default)({
-    origin: true,
-    credentials: true,
+    origin: "*", // 🌍 Allow ANY device/origin
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
 }));
 app.use(express_1.default.json());
 app.get("/health", (_req, res) => {

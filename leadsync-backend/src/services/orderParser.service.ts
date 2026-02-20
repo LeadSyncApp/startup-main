@@ -3,6 +3,7 @@ import { OrderSource, OrderStatus, OrderPriority, MessageSender } from "@prisma/
 import { emitToCompany, emitToConversation, emitToAgent, emitToCompanyAdmin, safeEmitConversationUpdate } from "../lib/socket";
 import { notificationService } from "./notification.service";
 import { generateStructuredOrder } from "./geminiService";
+import { sarvamService } from "./sarvam.service";
 
 interface ParsedItem {
     name: string;
@@ -26,7 +27,19 @@ class OrderParserService {
             // 1. Parse content (Regex First)
             let items: ParsedItem[] = this.parseItemsRegex(text, menu);
 
-            // 2. AI Fallback (If Regex failed but text looks like an order)
+            // 2. AI Fallback: Sarvam.ai (Optimized for Hindi/Mixed & Intent)
+            if (items.length === 0) {
+                const sarvamResult = await sarvamService.analyzeIntent(text);
+                if (sarvamResult && sarvamResult.intent === "ORDER" && sarvamResult.entities.product) {
+                    items.push({
+                        name: sarvamResult.entities.product,
+                        quantity: sarvamResult.entities.quantity || 1,
+                        price: 0 // Will be matched by catalog or agent
+                    });
+                }
+            }
+
+            // 3. AI Deep extraction (Groq) if still no items but looks like order
             if (items.length === 0 && this.looksLikeOrder(text)) {
                 const aiResult = await generateStructuredOrder(text, menu);
                 if (aiResult.items && aiResult.items.length > 0) {

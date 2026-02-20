@@ -36,8 +36,8 @@ export default function Orders() {
 
   const COLUMN_CONFIG = useMemo(() => [
     { id: "NEW", title: industry.pipelineLabels.new, color: "border-blue-200 bg-blue-50/50", statuses: ["NEW", "PENDING"] },
-    { id: "PROCESSING", title: industry.pipelineLabels.processing, color: "border-indigo-200 bg-indigo-50/50", statuses: ["CONFIRMED", "PREPARING"] },
-    { id: "READY", title: industry.pipelineLabels.ready, color: "border-emerald-200 bg-emerald-50/50", statuses: ["READY"] },
+    { id: "PROCESSING", title: industry.pipelineLabels.processing, color: "border-indigo-200 bg-indigo-50/50", statuses: ["PROCESSING", "CONFIRMED", "PREPARING"] },
+    { id: "READY", title: industry.pipelineLabels.ready, color: "border-emerald-200 bg-emerald-50/50", statuses: ["READY", "SHIPPED"] },
   ], [industry]);
 
   const [orders, setOrders] = useState<Order[]>([]);

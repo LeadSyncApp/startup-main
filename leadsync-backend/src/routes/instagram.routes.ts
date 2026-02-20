@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
-import { processInstagramWebhook } from "../services/instagram.service"; // We will create this next/placeholder or keep simplistic
-// For now, let's keep the logic inline or minimal as requested: "Instagram Webhook -> Normalize -> Save -> Trigger AI"
+import { InstagramAdapter } from "../adapters/instagram.adapter";
 
 const router = Router();
 
@@ -24,41 +23,45 @@ router.get("/webhook", (req, res) => {
     }
 });
 
-/**
- * POST /api/integrations/instagram/webhook
- * Event Handling
- */
 router.post("/webhook", async (req, res) => {
     try {
         const body = req.body;
 
         if (body.object === "instagram") {
-            // Process each entry
-            for (const entry of body.entry) {
-                // Entry contains messaging events
-                if (entry.messaging) {
-                    for (const webhookEvent of entry.messaging) {
-                        // Determine Company based on page_id (entry.id or recipient.id)
-                        // This requires a mapping of Instagram Page ID -> Company ID in our DB
-                        // For now, logging the event structure as per requirement
-                        console.log("Instagram Event:", JSON.stringify(webhookEvent));
+            // Respond immediately to avoid retries
+            res.status(200).send("EVENT_RECEIVED");
 
-                        // TODO: 
-                        // 1. Normalize (extract sender_id, text)
-                        // 2. Find Company by Page ID
-                        // 3. Find/Create Lead by sender_id (IG PSID)
-                        // 4. Save Message
-                        // 5. Trigger AI Order Detection
+            // Process async
+            (async () => {
+                for (const entry of body.entry) {
+                    const pageId = entry.id; // page_id
+
+                    // Find Company by Instagram Page ID
+                    const company = await prisma.company.findUnique({
+                        where: { instagramPageId: pageId }
+                    });
+
+                    if (!company || !company.instagramPageAccessToken) {
+                        console.warn(`⚠️ Received Instagram event for unknown page: ${pageId}`);
+                        continue;
+                    }
+
+                    if (entry.messaging) {
+                        const adapter = new InstagramAdapter(company.instagramPageAccessToken);
+                        for (const webhookEvent of entry.messaging) {
+                            // processWebhook handles lead creation, orders, AI, etc.
+                            await adapter.processWebhook(webhookEvent, company.id);
+                        }
                     }
                 }
-            }
-            res.status(200).send("EVENT_RECEIVED");
+            })().catch(err => console.error("Instagram Async Error:", err));
+
         } else {
             res.sendStatus(404);
         }
     } catch (error) {
         console.error("Instagram Webhook Error:", error);
-        res.sendStatus(500);
+        if (!res.headersSent) res.sendStatus(500);
     }
 });
 

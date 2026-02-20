@@ -21,6 +21,7 @@ enum ConversationMode {
 enum Channel {
   WEBSITE
   TELEGRAM
+  INSTAGRAM
   WHATSAPP
 }
 
@@ -103,6 +104,10 @@ model Company {
   telegramBotUsername   String?
   telegramWebhookSecret String?  @unique
   telegramConnected     Boolean  @default(false)
+  
+  instagramPageId       String?  @unique
+  instagramPageAccessToken String?
+  instagramConnected    Boolean  @default(false)
 
   botWelcomeMessage     String?
   botBusinessType       String?
