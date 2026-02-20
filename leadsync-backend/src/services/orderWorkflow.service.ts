@@ -53,18 +53,23 @@ export class OrderWorkflowService {
                     data: {
                         status: newStatus,
                         version: nextVersion,
-                        // If moving to active states, set processedBy
-                        processedById: ([OrderStatus.PROCESSING, OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.SHIPPED] as OrderStatus[]).includes(newStatus)
+                        // Set/Keep processedBy for active and completion states
+                        processedById: ([OrderStatus.PROCESSING, OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED] as OrderStatus[]).includes(newStatus)
                             ? actor.id
-                            : undefined,
+                            : undefined, // undefined means "leave unchanged" in Prisma update
                         // If moving to completed states
                         completedAt: ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED'].includes(newStatus)
                             ? new Date()
-                            : null,
+                            : (oldStatus === OrderStatus.BOT_CREATED_ORDER ? null : order.completedAt),
                         // If Accepted/Rejected, update approval
                         approvalStatus: newStatus === OrderStatus.CONFIRMED ? OrderApprovalStatus.APPROVED
                             : newStatus === OrderStatus.REJECTED ? OrderApprovalStatus.REJECTED
                                 : order.approvalStatus
+                    },
+                    include: {
+                        conversation: { include: { lead: true } },
+                        lead: true,
+                        processedBy: { select: { id: true, name: true } }
                     }
                 }),
                 // Create Audit Log
