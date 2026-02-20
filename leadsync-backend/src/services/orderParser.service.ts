@@ -58,12 +58,25 @@ class OrderParserService {
             const summary = items.map(i => `${i.quantity} x ${i.name}`).join(", ");
             const totalAmount = items.reduce((sum, item) => sum + (item.price || 0) * item.quantity, 0);
 
-            // 🍔 DE-DUPLICATION: Check if identical GHOST order exists in last 15 mins
+            // 🍔 DE-DUPLICATION: Check if ANY active order with the same summary exists in last 15 mins
+            // This prevents duplicate cards if the customer repeats themselves or AI re-triggers.
             const recentOrder = await prisma.order.findFirst({
                 where: {
                     conversationId,
                     summary,
-                    status: OrderStatus.BOT_CREATED_ORDER,
+                    status: {
+                        in: [
+                            OrderStatus.BOT_CREATED_ORDER,
+                            OrderStatus.PROCESSING,
+                            OrderStatus.PREPARING,
+                            OrderStatus.READY,
+                            OrderStatus.SHIPPED,
+                            OrderStatus.NEW,
+                            OrderStatus.PENDING,
+                            OrderStatus.CONFIRMED
+                        ]
+                    },
+                    isDeleted: false,
                     createdAt: { gt: new Date(Date.now() - 15 * 60 * 1000) }
                 }
             });

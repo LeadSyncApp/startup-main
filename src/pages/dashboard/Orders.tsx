@@ -90,7 +90,13 @@ export default function Orders() {
       if (view === 'active') {
         setOrders(prev => {
           const exists = prev.find(o => o.id === updated.id);
-          if (!exists) return isTerminal ? prev : [updated, ...prev];
+          if (!exists) {
+            // Only add genuinely NEW orders to active board.
+            // If it doesn't exist locally, and it's already past NEW stage, it was likely filtered out purposely.
+            const isGenuinelyNew = ['NEW', 'PENDING', 'BOT_CREATED_ORDER'].includes(currentStatus);
+            if (isGenuinelyNew) return [updated, ...prev];
+            return prev;
+          }
 
           // 🛡️ PREVENT REGRESSION: Only update if the new status is the same or "forward" in rank
           const currentRank = STATUS_RANK_MAP[exists.status.toUpperCase()] || 0;
