@@ -238,7 +238,103 @@ export default function Conversations() {
     }
   };
 
-  // ... (rest of filtering code)
+  /* SELECT HANDLER */
+  const handleSelect = (conv: Conversation) => {
+    setSelected(conv);
+    setMessages([]); // Clear to avoid showing wrong chat
+    setShowMobileList(false);
+    fetchMessages(conv);
+  };
+
+  /* SMART AUTO SCROLL */
+  const scrollToBottom = (smooth = true) => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: smooth ? "smooth" : "auto"
+      });
+    }
+  };
+
+  useEffect(() => {
+    // Scroll handling on messages update:
+    // Only scroll if we have new messages (appended) or if it's the first load
+    if (!scrollRef.current || messages.length === 0) return;
+
+    scrollToBottom(messages.length > lastMsgCount.current);
+    lastMsgCount.current = messages.length;
+  }, [messages]);
+
+  /* SEND MESSAGE */
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !selected) return;
+
+    const content = newMessage;
+    const tempMsg: Message = {
+      id: `temp-${Date.now()}`,
+      content,
+      sender: "AGENT",
+      createdAt: new Date().toISOString()
+    };
+
+    setMessages(prev => [...prev, tempMsg]);
+    setNewMessage("");
+
+    try {
+      await api.post(`/conversations/${selected.id}/send`, { content });
+      fetchMessages(selected);
+    } catch (err) {
+      setMessages(prev => prev.filter(m => m.id !== tempMsg.id));
+      toast.error("Network error");
+    }
+  };
+
+  /* TOGGLE MODE */
+  const toggleMode = async (mode: "BOT" | "HUMAN") => {
+    if (!selected) return;
+    const prevMode = selected.mode;
+
+    // OPTIMISTIC UPDATE
+    const optimisticUpdated = { ...selected, mode };
+    setSelected(optimisticUpdated);
+    setConversations(prev => prev.map(c =>
+      c.id === selected.id ? { ...c, mode } : c
+    ));
+
+    try {
+      await api.patch(`/conversations/${selected.id}/mode`, { mode });
+      toast.success(`Switched to ${mode} mode`);
+    } catch (err) {
+      // REVERT ON FAILURE
+      setSelected({ ...selected, mode: prevMode });
+      setConversations(prev => prev.map(c =>
+        c.id === selected.id ? { ...c, mode: prevMode } : c
+      ));
+      toast.error("Mode switch failed");
+    }
+  };
+
+  /* CLEAR HISTORY */
+  const clearHistory = async () => {
+    if (!selected) return;
+    if (!window.confirm("Clear all messages? This action cannot be reversed.")) return;
+
+    try {
+      await api.delete(`/conversations/${selected.id}/messages`);
+      toast.success("Messages cleared");
+      setMessages([]);
+      fetchMessages(selected);
+    } catch (err) {
+      toast.error("Delete failed");
+    }
+  };
+
+  const filteredConversations = useMemo(() => {
+    return conversations.filter(c =>
+      c.lead.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.lead.contact.includes(searchQuery)
+    );
+  }, [conversations, searchQuery]);
 
   return (
     <div className="flex bg-white rounded-3xl overflow-hidden shadow-2xl h-[calc(100vh-160px)] min-h-[500px]">
