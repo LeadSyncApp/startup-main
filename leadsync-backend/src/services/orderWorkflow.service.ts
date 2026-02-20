@@ -50,7 +50,12 @@ export class OrderWorkflowService {
         const oldStatus = order.status;
 
         // 2. STRICTOR VALIDATION
-        // a) Prevent Regression (Ranking check)
+        // a) Skip if no change (Prevent repetitive notifications)
+        if (newStatus === oldStatus) {
+            return { order, log: null };
+        }
+
+        // b) Prevent Regression (Ranking check)
         if (STATUS_RANK[newStatus] < STATUS_RANK[oldStatus]) {
             throw new Error(`STATE_REGRESSION: Cannot move order from ${oldStatus} back to ${newStatus}. Transition rejected.`);
         }
