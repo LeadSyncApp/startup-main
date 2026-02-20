@@ -129,9 +129,9 @@ export class OrderWorkflowService {
         // Conversation Update (Chat View)
         safeEmitConversationUpdate(order.conversation, "order_updated", order);
 
-        // 2. Notify Admins if critical
+        // 2. Notify ALL Company Users (Admins + Agents)
         if (next === OrderStatus.PENDING || next === OrderStatus.NEW) {
-            await notificationService.notifyCompanyAdmins(
+            await notificationService.notifyCompany(
                 order.companyId,
                 "New Order detected",
                 `Value: ${order.amount} - ${order.summary}`,

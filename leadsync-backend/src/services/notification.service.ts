@@ -58,28 +58,32 @@ export class NotificationService {
 
             if (admins.length === 0) return;
 
-            // 2. Create and Emit Individually to ensure valid IDs
-            await Promise.all(admins.map(async (admin) => {
-                try {
-                    const notification = await prisma.notification.create({
-                        data: {
-                            userId: admin.id,
-                            title,
-                            body,
-                            type,
-                            isRead: false
-                        }
-                    });
-
-                    // Emit to specific admin's socket room
-                    emitToAgent(admin.id, "notification_new", notification);
-                } catch (err) {
-                    console.error(`Failed to notify admin ${admin.id}`, err);
-                }
-            }));
+            // 2. Create and Emit Individually
+            await Promise.all(admins.map(async (admin) => this.notifyUser(admin.id, title, body, type)));
 
         } catch (error) {
             console.error(`❌ Failed to notify admins of company ${companyId}:`, error);
+        }
+    }
+
+    /**
+     * Creates a notification for ALL active users in a company.
+     */
+    async notifyCompany(
+        companyId: string,
+        title: string,
+        body: string,
+        type: "ORDER" | "MESSAGE" | "ALERT" | "SYSTEM"
+    ) {
+        try {
+            const users = await prisma.user.findMany({
+                where: { companyId, isActive: true },
+                select: { id: true }
+            });
+
+            await Promise.all(users.map(u => this.notifyUser(u.id, title, body, type)));
+        } catch (error) {
+            console.error(`❌ Failed to notify company ${companyId}:`, error);
         }
     }
 
