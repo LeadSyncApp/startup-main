@@ -135,16 +135,34 @@ export class TelegramAdapter implements ChannelAdapter {
         await this.answerCallbackQuery(queryId); // dismiss spinner immediately
 
         if (data.startsWith("voice_reply:")) {
-            const pendingVoice = cacheService.get<Buffer>(cacheService.getPendingVoiceKey(chatId));
-            if (pendingVoice) {
+            // Fast path: use pre-cached audio
+            const cachedAudio = cacheService.get<Buffer>(cacheService.getPendingVoiceKey(chatId));
+            if (cachedAudio) {
                 cacheService.delete(cacheService.getPendingVoiceKey(chatId));
-                await this.sendVoice(chatId, pendingVoice);
-            } else {
-                await this.sendMessage(chatId, "The voice reply has expired. Please send your message again.");
+                await this.sendVoice(chatId, cachedAudio);
+                return;
             }
+
+            // Slow path: cache expired — regenerate TTS from last bot message in DB
+            try {
+                const conversation = await prisma.conversation.findFirst({
+                    where: { lead: { contact: chatId } },
+                    orderBy: { updatedAt: "desc" },
+                    include: { messages: { where: { sender: MessageSender.SYSTEM }, orderBy: { createdAt: "desc" }, take: 1 } }
+                });
+                const lastText = conversation?.messages?.[0]?.content;
+                if (lastText) {
+                    await this.sendTyping(chatId);
+                    const audio = await sarvamService.textToSpeech(lastText, "en-IN");
+                    if (audio) await this.sendVoice(chatId, audio);
+                }
+            } catch (err) {
+                console.error("❌ Voice reply regeneration failed:", err);
+            }
+
         } else if (data.startsWith("text_reply:")) {
+            // Text was already displayed above the buttons — nothing to do
             cacheService.delete(cacheService.getPendingVoiceKey(chatId));
-            // Text was already delivered above the buttons — nothing extra needed
         }
     }
 
