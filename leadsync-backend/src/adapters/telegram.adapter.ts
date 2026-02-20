@@ -138,8 +138,6 @@ export class TelegramAdapter implements ChannelAdapter {
             // Fast path: use pre-cached audio
             const cachedAudio = cacheService.get<Buffer>(cacheService.getPendingVoiceKey(chatId));
             if (cachedAudio) {
-                cacheService.delete(cacheService.getPendingVoiceKey(chatId));
-                cacheService.delete(cacheService.getPendingTextKey(chatId)); // Clear sibling cache
                 await this.sendVoice(chatId, cachedAudio);
                 return;
             }
@@ -153,7 +151,6 @@ export class TelegramAdapter implements ChannelAdapter {
                 });
                 const lastText = conversation?.messages?.[0]?.content;
                 if (lastText) {
-                    cacheService.delete(cacheService.getPendingTextKey(chatId)); // Clear sibling cache
                     await this.sendTyping(chatId);
                     const audio = await sarvamService.textToSpeech(lastText, "en-IN");
                     if (audio) await this.sendVoice(chatId, audio);
@@ -163,11 +160,26 @@ export class TelegramAdapter implements ChannelAdapter {
             }
 
         } else if (data.startsWith("text_reply:")) {
+            // Fast path: use cached text
             const pendingText = cacheService.get<string>(cacheService.getPendingTextKey(chatId));
             if (pendingText) {
-                cacheService.delete(cacheService.getPendingTextKey(chatId));
-                cacheService.delete(cacheService.getPendingVoiceKey(chatId)); // Clear sibling cache
                 await this.sendMessage(chatId, pendingText);
+                return;
+            }
+
+            // Slow path: fallback to DB
+            try {
+                const conversation = await prisma.conversation.findFirst({
+                    where: { lead: { contact: chatId } },
+                    orderBy: { updatedAt: "desc" },
+                    include: { messages: { where: { sender: MessageSender.SYSTEM }, orderBy: { createdAt: "desc" }, take: 1 } }
+                });
+                const lastText = conversation?.messages?.[0]?.content;
+                if (lastText) {
+                    await this.sendMessage(chatId, lastText);
+                }
+            } catch (err) {
+                console.error("❌ Text reply fallback failed:", err);
             }
         }
     }
