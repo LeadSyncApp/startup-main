@@ -29,7 +29,7 @@ interface Order {
 }
 
 export default function Orders() {
-  const { token, company } = useAuth();
+  const { token, company, isOwner, isAdmin } = useAuth();
   const { socket } = useSocket();
 
   const industry = useMemo(() => getIndustryConfig(company?.botBusinessType), [company]);
@@ -265,7 +265,7 @@ export default function Orders() {
           <button onClick={() => setView('active')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${view === 'active' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>Live Board</button>
           <button onClick={() => setView('history')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${view === 'history' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>History</button>
         </div>
-        {view === 'history' && selectedOrders.size > 0 && (
+        {view === 'history' && (isOwner || isAdmin) && selectedOrders.size > 0 && (
           <button
             onClick={handleBatchDelete}
             disabled={isDeletingBatch}
@@ -307,12 +307,14 @@ export default function Orders() {
           {Object.entries(groupedOrders).map(([label, group]) => group.length > 0 && (
             <div key={label}>
               <div className="bg-slate-50 px-6 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10 border-b border-t border-slate-200 flex items-center gap-4">
-                <input
-                  type="checkbox"
-                  checked={group.every(o => selectedOrders.has(o.id))}
-                  onChange={() => toggleSelectAll(group.map(o => o.id))}
-                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 pointer-events-auto"
-                />
+                {(isOwner || isAdmin) && (
+                  <input
+                    type="checkbox"
+                    checked={group.every(o => selectedOrders.has(o.id))}
+                    onChange={() => toggleSelectAll(group.map(o => o.id))}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 pointer-events-auto"
+                  />
+                )}
                 {label} ({group.length})
               </div>
               <table className="min-w-full text-sm">
@@ -320,12 +322,14 @@ export default function Orders() {
                   {group.map(order => (
                     <tr key={order.id} className={`hover:bg-indigo-50/30 transition ${selectedOrders.has(order.id) ? 'bg-indigo-50/50' : ''}`}>
                       <td className="px-6 py-4 w-10">
-                        <input
-                          type="checkbox"
-                          checked={selectedOrders.has(order.id)}
-                          onChange={() => toggleSelectOrder(order.id)}
-                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 pointer-events-auto"
-                        />
+                        {(isOwner || isAdmin) && (
+                          <input
+                            type="checkbox"
+                            checked={selectedOrders.has(order.id)}
+                            onChange={() => toggleSelectOrder(order.id)}
+                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 pointer-events-auto"
+                          />
+                        )}
                       </td>
                       <td className="px-6 py-4 text-slate-500 w-32">
                         {new Date(order.completedAt || order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -340,9 +344,11 @@ export default function Orders() {
                         <StatusBadge status={order.status} />
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button onClick={() => handleDelete(order.id)} className="p-2 text-slate-400 hover:text-rose-600 transition">
-                          <Trash2 size={16} />
-                        </button>
+                        {(isOwner || isAdmin) && (
+                          <button onClick={() => handleDelete(order.id)} className="p-2 text-slate-400 hover:text-rose-600 transition">
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

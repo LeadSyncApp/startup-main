@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma";
-import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
+import { authMiddleware, authorizeRoles, AuthRequest } from "../middleware/auth.middleware";
 import {
   OrderPriority,
   OrderStatus,
@@ -214,9 +214,10 @@ router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Respon
 });
 
 /* ===============================
-   SOFT DELETE ORDER
+   SOFT DELETE ORDER (History Archive)
+   🔒 Restricted to: OWNER, ADMIN
 ================================== */
-router.delete("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
+router.delete("/:id", authMiddleware, authorizeRoles("OWNER", "ADMIN"), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const companyId = req.user!.companyId;
