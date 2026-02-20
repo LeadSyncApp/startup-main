@@ -27,12 +27,16 @@ export class CustomerMessagingService {
                     await sendTelegramMessage(company.telegramBotToken, lead.contact, message);
                 }
             }
-            else if (lead.channel === Channel.INSTAGRAM) {
-                if (company?.instagramPageAccessToken) {
+            else if (lead.channel === (Channel as any).INSTAGRAM) {
+                const igCompany = company as any;
+                if (igCompany?.instagramPageAccessToken) {
                     const GRAPH_URL = "https://graph.facebook.com/v17.0";
-                    await axios.post(`${GRAPH_URL}/me/messages?access_token=${company.instagramPageAccessToken}`, {
+                    await axios.post(`${GRAPH_URL}/me/messages?access_token=${igCompany.instagramPageAccessToken}`, {
                         recipient: { id: lead.contact },
-                        message: { text: message }
+                        message: { text: message },
+                        // 🔒 COMPLIANCE: Use Message Tags for delivery outside 24h window
+                        messaging_type: "MESSAGE_TAG",
+                        tag: "POST_PURCHASE_UPDATE"
                     });
                 }
             }

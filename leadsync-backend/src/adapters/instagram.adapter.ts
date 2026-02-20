@@ -79,22 +79,22 @@ export class InstagramAdapter implements ChannelAdapter {
                 company = await prisma.company.findUnique({ where: { id: companyId } });
                 if (company) cacheService.set(cacheService.getCompanyKey(companyId), company);
             }
-            if (!company || !company.instagramPageAccessToken) return;
+            if (!company || !(company as any).instagramPageAccessToken) return;
 
-            this.pageAccessToken = company.instagramPageAccessToken;
+            this.pageAccessToken = (company as any).instagramPageAccessToken;
 
             this.sendTyping(psid).catch(() => { });
 
             /* FIND / CREATE LEAD */
             let lead = await prisma.lead.findFirst({
-                where: { contact: psid, channel: Channel.INSTAGRAM, companyId },
+                where: { contact: psid, channel: (Channel as any).INSTAGRAM, companyId },
             });
 
             if (!lead) {
                 // For Instagram, we might need a separate call to FB Graph API to get the user's name
                 // For now, defaulting to "Instagram User"
                 lead = await prisma.lead.create({
-                    data: { name: "Instagram User", contact: psid, channel: Channel.INSTAGRAM, companyId },
+                    data: { name: "Instagram User", contact: psid, channel: (Channel as any).INSTAGRAM, companyId },
                 });
                 emitToCompany(companyId, "lead_created", lead);
             }
@@ -105,7 +105,7 @@ export class InstagramAdapter implements ChannelAdapter {
                     leadId_companyId_channel: {
                         leadId: lead.id,
                         companyId,
-                        channel: Channel.INSTAGRAM,
+                        channel: (Channel as any).INSTAGRAM,
                     },
                 },
             });
@@ -115,7 +115,7 @@ export class InstagramAdapter implements ChannelAdapter {
                     data: {
                         leadId: lead.id,
                         companyId,
-                        channel: Channel.INSTAGRAM,
+                        channel: (Channel as any).INSTAGRAM,
                         mode: ConversationMode.BOT,
                     },
                 });

@@ -15,7 +15,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ closeSidebar }: SidebarProps) {
-  const { logout, user, isOwner, isAdmin } = useAuth();
+  const { logout, user, isOwner, isAdmin, isAgent } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -34,7 +34,7 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
       label: "Leads",
       icon: Users,
       path: "/dashboard/leads",
-      show: isOwner || isAdmin,
+      show: isOwner || isAdmin || isAgent,
     },
     {
       label: "Conversations",
@@ -46,7 +46,7 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
       label: "Orders",
       icon: ShoppingCart,
       path: "/dashboard/orders",
-      show: isOwner || isAdmin,
+      show: isOwner || isAdmin || isAgent,
     },
     {
       label: "Team",
@@ -86,10 +86,9 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
               end={path === "/dashboard"}
               onClick={closeSidebar}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                  isActive
-                    ? "bg-slate-900 text-white shadow-md"
-                    : "text-slate-700 hover:bg-slate-100"
+                `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${isActive
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "text-slate-700 hover:bg-slate-100"
                 }`
               }
             >
