@@ -82,14 +82,9 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       // History: Completed, Delivered, Cancelled, Archived
       whereCondition.status = { in: ["DELIVERED", "COMPLETED", "CANCELLED", "ARCHIVED", "REJECTED"] };
     } else {
-      // Active Board: Confirmed, Preparing, Ready
-      // NOTE: We EXCLUDE 'PENDING' (Ghost orders) and 'NEW' (unless we want them on board immediately)
-      // The user Requirement: "Orders must NOT auto-enter pipeline before claim"
-      // So 'PENDING' orders are hidden here.
-      // 'NEW' might be used for "Accepted but not started"?
-      // Let's assume Active Board = [NEW, CONFIRMED, PREPARING, READY]
+      // Active Board: Include PENDING so Agents can claim/approve them
       whereCondition.status = {
-        in: ["NEW", "CONFIRMED", "PREPARING", "READY"]
+        in: ["PENDING", "NEW", "CONFIRMED", "PREPARING", "READY"]
       };
     }
 
