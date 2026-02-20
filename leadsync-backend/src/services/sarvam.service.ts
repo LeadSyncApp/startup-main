@@ -21,6 +21,8 @@ export class SarvamService {
     /**
      * Converts a voice message audio buffer (OGG/MP3) to text using Sarvam STT.
      * Returns transcribed text or null on failure.
+     * Sarvam API: https://api.sarvam.ai/speech-to-text
+     * Model: saaras:v3 (supports 23 Indian languages + English, auto-detect)
      */
     async speechToText(audioBuffer: Buffer, filename: string = "voice.ogg"): Promise<string | null> {
         if (!this.apiKey) {
@@ -31,12 +33,17 @@ export class SarvamService {
         try {
             const FormData = require("form-data");
             const form = new FormData();
+
+            // 'file' is the required field name per Sarvam API docs
             form.append("file", audioBuffer, {
                 filename,
-                contentType: "audio/ogg",
+                contentType: "audio/ogg", // Telegram voice files are OGG/Opus
             });
-            form.append("model", "saarika:v2"); // Sarvam's multilingual STT model
-            form.append("language_code", "unknown"); // Auto-detect
+            form.append("model", "saaras:v3");       // Latest recommended model
+            form.append("language_code", "unknown"); // Auto-detect language
+            form.append("mode", "transcribe");       // Standard transcription mode
+
+            console.log(`🎙️ STT: Sending ${audioBuffer.length} bytes to Sarvam...`);
 
             const response = await axios.post(
                 "https://api.sarvam.ai/speech-to-text",
@@ -46,16 +53,18 @@ export class SarvamService {
                         ...form.getHeaders(),
                         "api-subscription-key": this.apiKey,
                     },
-                    timeout: 15000,
+                    timeout: 20000,
                 }
             );
 
-            const transcript = response.data?.transcript || response.data?.text || "";
-            console.log(`🎙️ STT Transcript: "${transcript}"`);
-            return transcript || null;
+            const transcript = response.data?.transcript || "";
+            console.log(`✅ STT Result: "${transcript}" | Lang: ${response.data?.language_code}`);
+            return transcript.trim() || null;
 
         } catch (err: any) {
-            console.error("❌ Sarvam STT Error:", err?.response?.data || err.message);
+            // Log the full error body for debugging on Railway
+            const errBody = err?.response?.data ?? err.message;
+            console.error("❌ Sarvam STT Error:", JSON.stringify(errBody));
             return null;
         }
     }

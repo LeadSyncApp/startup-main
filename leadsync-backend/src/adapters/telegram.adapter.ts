@@ -164,18 +164,22 @@ export class TelegramAdapter implements ChannelAdapter {
 
             // 🎙️ VOICE INPUT: Download and transcribe if voice message
             if (isVoiceMsg && message.voice) {
-                const audioBuffer = await downloadTelegramVoice(this.botToken, message.voice.file_id);
+                const { file_id, duration, mime_type } = message.voice;
+                console.log(`🎙️ Voice received: file_id=${file_id}, duration=${duration}s, mime=${mime_type}`);
+
+                const audioBuffer = await downloadTelegramVoice(this.botToken, file_id);
                 if (audioBuffer) {
+                    console.log(`✅ Voice downloaded: ${audioBuffer.length} bytes`);
                     const transcript = await sarvamService.speechToText(audioBuffer, "voice.ogg");
                     if (transcript) {
                         text = transcript;
-                        console.log(`🎙️ Voice transcribed for ${chatId}: "${text}"`);
+                        console.log(`✅ Voice transcribed for ${chatId}: "${text}"`);
                     } else {
-                        await this.sendMessage(chatId, "Sorry, I couldn't understand your voice message. Could you type it instead?");
+                        await this.sendMessage(chatId, "Sorry, I had trouble hearing that. Could you send the voice message again or type your message?");
                         return;
                     }
                 } else {
-                    await this.sendMessage(chatId, "Voice message could not be downloaded. Please try again.");
+                    await this.sendMessage(chatId, "The voice message couldn't be received. Please try again in a moment.");
                     return;
                 }
             }
