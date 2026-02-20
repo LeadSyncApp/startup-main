@@ -30,6 +30,12 @@ async function apiFetch(endpoint: string, options: ApiOptions = {}) {
     });
 
     if (res.status === 401) {
+      // 🚨 IGNORE LOGIN ENDPOINT (Wrong Password)
+      if (endpoint.includes("/auth/login")) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Invalid credentials");
+      }
+
       console.error("Unauthorized - Token missing or invalid");
       localStorage.removeItem("token");
       localStorage.removeItem("user");
