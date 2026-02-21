@@ -112,18 +112,22 @@ class OrderParserService {
 
             // 6. Notify & Emit
             await this.notifyNewOrder(companyId, order);
-            // 🚨 Use safeEmit to reach both Admin and available Agents (or the specific assigned agent)
             safeEmitConversationUpdate(order.conversation, "order_detected", order);
 
-            // 7. System Message (Order Card Indicator)
-            const sysMsg = await prisma.message.create({
-                data: {
-                    conversationId,
-                    sender: MessageSender.SYSTEM,
-                    content: `📝 Order Detected: ${summary} (Total: ₹${totalAmount}). Waiting for confirmation.`
-                }
-            });
-            emitToConversation(conversationId, "new_message", sysMsg);
+            // 7. System Message (Order Card Indicator) - ONLY for Human agents or if not in BOT mode
+            // Stop redundant "Order Detected" messages if the BOT is already handling the conversation
+            if (order.conversation.mode !== "BOT") {
+                const sysMsg = await prisma.message.create({
+                    data: {
+                        conversationId,
+                        sender: MessageSender.SYSTEM,
+                        content: `📝 Order Detected: ${summary} (Total: ₹${totalAmount}). Waiting for confirmation.`
+                    }
+                });
+                emitToConversation(conversationId, "new_message", sysMsg);
+            } else {
+                console.log(`🤖 [OrderParser] Bot is active. Skipping redundant system message for Conv ${conversationId}.`);
+            }
 
         } catch (error) {
             console.error("❌ Order Parser Error:", error);

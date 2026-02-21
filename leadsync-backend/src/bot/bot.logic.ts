@@ -28,7 +28,8 @@ export async function switchToHuman(conversationId: string) {
 export async function handleBotMessage(
   conversationId: string,
   userMessage: string,
-  modality: "text" | "voice" = "text"
+  modality: "text" | "voice" = "text",
+  detectedLanguage: string = "en-IN"
 ): Promise<string | null> {
   // 1️⃣ Get conversation with Lead (Customer Profile)
   const conversation = await prisma.conversation.findUnique({
@@ -108,7 +109,8 @@ export async function handleBotMessage(
     orderHistory as any,
     conversation.lead,
     modality,
-    controlFlags
+    controlFlags,
+    detectedLanguage
   );
 
   return reply;

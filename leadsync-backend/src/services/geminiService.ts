@@ -133,11 +133,18 @@ export async function generateBotReply(
     force_mode?: "AUTO" | "CONFIRM_ORDER" | "BROWSE_MENU" | "SUPPORT_ONLY";
     menu_allowed?: boolean;
     history_allowed?: boolean;
-  } = { force_mode: "AUTO", menu_allowed: true, history_allowed: true }
+  } = { force_mode: "AUTO", menu_allowed: true, history_allowed: true },
+  detectedLanguage: string = "en-IN"
 ): Promise<string> {
   try {
     const businessTypeLower = (businessType || "business").toLowerCase();
     const { force_mode = "AUTO", menu_allowed = true, history_allowed = true } = controlFlags;
+
+    // Detect hard language code for enforcement
+    let hardLanguageRule = "";
+    if (detectedLanguage.startsWith("ta")) hardLanguageRule = "HARD RULE: You MUST reply in TAMIL/TANGLISH ONLY.";
+    else if (detectedLanguage.startsWith("hi")) hardLanguageRule = "HARD RULE: You MUST reply in HINDI/HINGLISH ONLY.";
+    else if (detectedLanguage.startsWith("en")) hardLanguageRule = "HARD RULE: You MUST reply in ENGLISH ONLY.";
 
     // 🏷️ Format Product List
     let productList = "NO PRODUCTS LISTED";
@@ -167,27 +174,30 @@ Tags: ${customerProfile.tags || "None"}
 `.trim() : "New Customer";
 
     const systemPrompt = `
-You are LeadSync’s customer-facing assistant for "${businessName}" (Type: ${businessTypeLower}).
-Replies must be professional, polite, natural, and context-aware.
+You are a professional, action-oriented, platform-agnostic business assistant for "${businessName}" (Type: ${businessTypeLower}).
+You handle customer interactions via Telegram, Instagram, and Web Chat.
+
+${hardLanguageRule}
 
 ----------------------------------------------------
-ABSOLUTE OUTPUT RULES (NON-NEGOTIABLE)
+ABSOLUTE OUTPUT RULES & MODALITY
 ----------------------------------------------------
-1) NEVER output JSON, markdown, code blocks, backticks, schemas, or internal notes.
-2) Output MUST be plain text only.
-3) If input_modality="text": return EXACTLY ONE LINE starting with:
-   TEXT_REPLY: <your conversational reply here>
-4) If input_modality="voice": return EXACTLY TWO LINES:
-   TEXT_REPLY: <your conversational reply with emojis if casual>
-   VOICE_TTS: <voice-friendly version of reply; NO emojis, NO symbols, naturally speakable>
-5) Do not output anything else besides those required lines.
+
+If input_modality="voice":
+- return VALID JSON ONLY: { "response_text": "<clean reply>", "allow_voice_choice": true }
+- "response_text" must be naturally speakable (no emojis, no markdown).
+
+If input_modality="text":
+- return clean, conversational PLAIN TEXT only.
+- ZERO markdown, ZERO symbols like ✅/❓ unless specifically needed for clarity.
+- No backticks, no code blocks.
 
 ----------------------------------------------------
-LANGUAGE MIRRORING (CRITICAL)
+LANGUAGE & MIRRORING
 ----------------------------------------------------
-- Detect user's language style: English / Hindi / Tamil / Hinglish / Tanglish / Mixed.
-- Mirror the SAME style exactly. If they mix Tamil+English, you MUST respond in Tanglish.
-- Use natural, simple phrasing. No overly formal vocabulary unless they use it.
+- Detect user's language style (English/Hindi/Tamil/Hinglish/Tanglish).
+- Mirror the exact same style. If they mix Tamil+English, you MUST respond in Tanglish.
+- Natural, professional human tone. Do not sound corporate or robotic.
 
 ----------------------------------------------------
 BUSINESS INTELLIGENCE & CONTEXT
@@ -197,35 +207,59 @@ ${menu_allowed ? productList : "HIDDEN"}
 
 Customer Context:
 ${profileText}
+
 Past Orders:
 ${history_allowed ? formattedOrderHistory : "HIDDEN"}
 
 Rules:
 - Respond to latest_customer_message first.
-- If they order/book, CONFIRM IMMEDIATELY in one short line and ask ONE next required question.
-- Example: "✅ 1 Idly noted. Delivery or pickup? ❓"
-- Do NOT repeat menu after an order is placed.
-- Do NOT reveal past order details unless explicitly asked.
-
-Input Modality: ${inputModality}
-Force Mode: ${force_mode}
+- If they order/book, confirm immediately and ask ONE next required question.
+- Multilingual Quantity Detection: Detect 1, 2, 3, ek, do, teen, onnu, rendu, etc.
+- If quantity or item is unclear, ask for clarification.
+- Do NOT repeat the menu after an order is placed.
 `;
 
     const conversation = (history || []).map(m => ({
       role: m.role,
       content: m.content
     }));
-
     conversation.push({ role: "user", content: message });
 
-    return await generateWithFallback(conversation, systemPrompt);
+    let aiOutput = await generateWithFallback(conversation, systemPrompt);
+
+    // 🛡️ SANITIZATION LAYER: Guarantee correct modality formatting
+    if (inputModality === "voice") {
+      // Force JSON structure if AI returns plain text
+      if (!aiOutput.trim().startsWith("{")) {
+        aiOutput = JSON.stringify({
+          response_text: aiOutput.replace(/response_text:|allow_voice_choice:|{|}|\"/gi, "").trim(),
+          allow_voice_choice: true
+        });
+      }
+    } else {
+      // TEXT MODE: Strictly remove any markdown or JSON leftovers
+      aiOutput = aiOutput.replace(/```[a-z]*\n?|```/gi, "").trim();
+      if (aiOutput.startsWith("{") && aiOutput.includes("response_text")) {
+        try {
+          const parsed = JSON.parse(aiOutput);
+          aiOutput = parsed.response_text || aiOutput;
+        } catch (e) { }
+      }
+      // Final strip of any lingering JSON-like artifacts if we are in text mode
+      aiOutput = aiOutput.replace(/^[^{]*{\s*\"response_text\"\s*:\s*\"|\"\s*,\s*\"allow_voice_choice\".*$/gi, "").trim();
+    }
+
+    return aiOutput;
 
   } catch (error) {
     console.error("❌ Bot Reply Fatal Error:", error);
-    const fallback = inputModality === "text"
-      ? "TEXT_REPLY: I'm sorry, I'm having trouble right now. Our team will help you soon!"
-      : "TEXT_REPLY: I'm sorry, I'm having trouble right now. Our team will help you soon!\nVOICE_TTS: I am sorry, I am having trouble right now. Our team will help you soon.";
-    return fallback;
+    if (inputModality === "text") {
+      return "I'm sorry, I'm having trouble right now. Our team will help you soon!";
+    }
+    return JSON.stringify({
+      response_text: "I am sorry, I am having trouble right now. Our team will help you soon.",
+      allow_voice_choice: true
+    });
   }
 }
 

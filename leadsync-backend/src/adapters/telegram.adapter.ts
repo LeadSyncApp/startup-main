@@ -232,6 +232,16 @@ export class TelegramAdapter implements ChannelAdapter {
             if (!message || !message.message_id) return;
 
             const chatId = String(message.chat.id);
+            const messageId = String(message.message_id);
+
+            // 🛡️ IDEMPOTENCY: Stop duplicate processing of the same message (retries)
+            const idempotencyKey = `tg_msg_${chatId}_${messageId}`;
+            if (cacheService.get(idempotencyKey)) {
+                console.log(`🛡️ Duplicate Telegram message ${messageId} skipped for ${chatId}`);
+                return;
+            }
+            cacheService.set(idempotencyKey, true, 300); // Lock for 5 mins
+
             const name = message.from?.first_name || "Customer";
             let text = message.text?.trim() || "";
             const isVoiceMsg = !!message.voice;
@@ -241,29 +251,25 @@ export class TelegramAdapter implements ChannelAdapter {
             // 🎙️ VOICE INPUT: Download and transcribe if voice message
             if (isVoiceMsg && message.voice) {
                 const { file_id, duration, mime_type } = message.voice;
-                console.log(`🎙️ Voice received: file_id=${file_id}, duration=${duration}s, mime=${mime_type}`);
-
                 const audioBuffer = await downloadTelegramVoice(this.botToken, file_id);
                 if (audioBuffer) {
-                    console.log(`✅ Voice downloaded: ${audioBuffer.length} bytes`);
                     const sttResult = await sarvamService.speechToText(audioBuffer, "voice.ogg");
                     if (sttResult) {
                         text = sttResult.transcript;
                         detectedLanguage = sttResult.languageCode;
-                        console.log(`✅ Voice transcribed for ${chatId}: "${text}" | Lang: ${detectedLanguage}`);
                     } else {
-                        await this.sendMessage(chatId, "Sorry, I had trouble hearing that. Could you send the voice message again or type your message?");
+                        await this.sendMessage(chatId, "Sorry, I had trouble hearing that. Could you try again?");
                         return;
                     }
                 } else {
-                    await this.sendMessage(chatId, "The voice message couldn't be received. Please try again in a moment.");
+                    await this.sendMessage(chatId, "The voice message couldn't be received. Please try again.");
                     return;
                 }
             }
 
             if (!text) return;
 
-            // 1. Try Cache
+            // ... (cache and token logic) ...
             let company: any = cacheService.get(cacheService.getCompanyKey(companyId));
             if (!company) {
                 company = await prisma.company.findUnique({ where: { id: companyId } });
@@ -271,9 +277,7 @@ export class TelegramAdapter implements ChannelAdapter {
             }
             if (!company || !company.telegramBotToken) return;
 
-            // Update token if needed (though adapter instance might be short-lived)
             this.botToken = company.telegramBotToken;
-
             this.sendTyping(chatId).catch(() => { });
 
             /* FIND / CREATE LEAD (Safe against race conditions) */
@@ -307,13 +311,13 @@ export class TelegramAdapter implements ChannelAdapter {
                 },
             });
 
-            /* DEDUPLICATE CLIENT MESSAGE */
+            /* DEDUPLICATE CLIENT MESSAGE (Logic DB check) */
             const existingMessage = await prisma.message.findFirst({
                 where: {
                     conversationId: conversation.id,
                     content: text,
                     sender: MessageSender.CLIENT,
-                    createdAt: { gt: new Date(Date.now() - 1000 * 60) }
+                    createdAt: { gt: new Date(Date.now() - 1000 * 30) }
                 },
             });
             if (existingMessage) return;
@@ -335,7 +339,7 @@ export class TelegramAdapter implements ChannelAdapter {
             });
             emitToConversation(conversation.id, "new_message", clientMsg);
 
-            // 🧠 BACKGROUND TASKS: Intelligence + Order Parsing
+            // 🧠 BACKGROUND TASKS
             const { orderParserService } = await import("../services/orderParser.service");
             intelligenceService.analyzeMessage(companyId, lead.id, conversation.id, text).catch(() => { });
             orderParserService.processPotentialOrder(companyId, conversation.id, lead.id, text, company.botStructuredMenu).catch(() => { });
@@ -362,23 +366,23 @@ export class TelegramAdapter implements ChannelAdapter {
             try {
                 const { handleBotMessage } = await import("../bot/bot.logic");
                 const modality = isVoiceMsg ? "voice" : "text";
-                const aiReply = await handleBotMessage(conversation.id, text, modality);
+                const aiReply = await handleBotMessage(conversation.id, text, modality, detectedLanguage);
 
                 if (!aiReply) return;
 
-                // 🔊 PARSE TEXT_REPLY & VOICE_TTS (No JSON)
+                // 🔊 PARSE NEW MODALITY-BASED RESPONSE
                 let displayMessage = aiReply;
-                let spokenMessage = "";
+                let spokenMessage = aiReply;
+                let isVoiceChoiceAllowed = false;
 
-                const textMatch = aiReply.match(/TEXT_REPLY:\s*(.*)/i);
-                const voiceMatch = aiReply.match(/VOICE_TTS:\s*(.*)/i);
-
-                if (textMatch) {
-                    displayMessage = textMatch[1].split(/\nVOICE_TTS:/i)[0].trim();
-                } else {
-                    displayMessage = aiReply.replace(/VOICE_TTS:.*$/is, "").trim();
-                }
-                spokenMessage = voiceMatch ? voiceMatch[1].trim() : displayMessage;
+                try {
+                    if (aiReply.trim().startsWith('{')) {
+                        const parsed = JSON.parse(aiReply);
+                        displayMessage = parsed.response_text || aiReply;
+                        spokenMessage = displayMessage;
+                        isVoiceChoiceAllowed = !!parsed.allow_voice_choice;
+                    }
+                } catch (e) { /* Fallback to raw text */ }
 
                 // 🔊 CONCURRENCY CHECK
                 const freshConv = await prisma.conversation.findUnique({
@@ -387,15 +391,17 @@ export class TelegramAdapter implements ChannelAdapter {
                 });
                 if (freshConv?.mode === "HUMAN") return;
 
-                // 🎤 PRE-GENERATE VOICE (Cache for 2 min)
-                sarvamService.textToSpeech(spokenMessage, detectedLanguage)
-                    .then(audioBuffer => {
-                        if (audioBuffer) cacheService.set(cacheService.getPendingVoiceKey(chatId), audioBuffer, 120);
-                    })
-                    .catch(err => console.error("TTS error:", err));
+                // 🎤 PRE-GENERATE VOICE (If voice input or JSON output indicated voice preference)
+                if (isVoiceMsg || isVoiceChoiceAllowed) {
+                    sarvamService.textToSpeech(spokenMessage, detectedLanguage)
+                        .then(audioBuffer => {
+                            if (audioBuffer) cacheService.set(cacheService.getPendingVoiceKey(chatId), audioBuffer, 120);
+                        })
+                        .catch(err => console.error("TTS error:", err));
+                }
 
                 // 🔘 OUTPUT
-                if (isVoiceMsg) {
+                if (isVoiceMsg || isVoiceChoiceAllowed) {
                     cacheService.set(cacheService.getPendingTextKey(chatId), displayMessage, 600);
                     const botMsg = await prisma.message.create({
                         data: { content: displayMessage, sender: MessageSender.SYSTEM, conversationId: conversation.id },
