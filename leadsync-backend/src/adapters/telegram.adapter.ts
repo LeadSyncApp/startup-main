@@ -370,19 +370,34 @@ export class TelegramAdapter implements ChannelAdapter {
 
                 if (!aiReply) return;
 
-                // 🔊 PARSE NEW MODALITY-BASED RESPONSE
+                // 🔊 PARSE NEW MODALITY-BASED RESPONSE (TEXT_REPLY: / VOICE_TTS:)
                 let displayMessage = aiReply;
                 let spokenMessage = aiReply;
                 let isVoiceChoiceAllowed = false;
 
-                try {
-                    if (aiReply.trim().startsWith('{')) {
+                if (aiReply.includes("TEXT_REPLY:")) {
+                    const lines = aiReply.split("\n");
+                    const textLine = lines.find(l => l.startsWith("TEXT_REPLY:"));
+                    const voiceLine = lines.find(l => l.startsWith("VOICE_TTS:"));
+
+                    if (textLine) {
+                        displayMessage = textLine.replace("TEXT_REPLY:", "").trim();
+                    }
+                    if (voiceLine) {
+                        spokenMessage = voiceLine.replace("VOICE_TTS:", "").trim();
+                        isVoiceChoiceAllowed = true;
+                    } else {
+                        spokenMessage = displayMessage;
+                    }
+                } else if (aiReply.startsWith('{')) {
+                    // Legacy JSON fallback
+                    try {
                         const parsed = JSON.parse(aiReply);
                         displayMessage = parsed.response_text || aiReply;
                         spokenMessage = displayMessage;
                         isVoiceChoiceAllowed = !!parsed.allow_voice_choice;
-                    }
-                } catch (e) { /* Fallback to raw text */ }
+                    } catch (e) { }
+                }
 
                 // 🔊 CONCURRENCY CHECK
                 const freshConv = await prisma.conversation.findUnique({

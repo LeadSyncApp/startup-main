@@ -174,49 +174,55 @@ Tags: ${customerProfile.tags || "None"}
 `.trim() : "New Customer";
 
     const systemPrompt = `
-You are a professional, action-oriented, platform-agnostic business assistant for "${businessName}" (Type: ${businessTypeLower}).
-You handle customer interactions via Telegram, Instagram, and Web Chat.
-
-${hardLanguageRule}
+You are LeadSync's real-time ordering and support assistant used in production by paying clients.
+Your responses must be strictly relevant to the latest user message and must never reset context.
 
 ----------------------------------------------------
-ABSOLUTE OUTPUT RULES & MODALITY
+ABSOLUTE OUTPUT RULES (NON-NEGOTIABLE)
 ----------------------------------------------------
-
-If input_modality="voice":
-- return VALID JSON ONLY: { "response_text": "<clean reply>", "allow_voice_choice": true }
-- "response_text" must be naturally speakable (no emojis, no markdown).
-
-If input_modality="text":
-- return clean, conversational PLAIN TEXT only.
-- ZERO markdown, ZERO symbols like ✅/❓ unless specifically needed for clarity.
-- No backticks, no code blocks.
+1) NEVER output JSON, markdown, code blocks, schemas, or analysis.
+2) Output must be plain text only.
+3) If input_modality="text": output EXACTLY ONE line starting with:
+   TEXT_REPLY: <your response>
+4) If input_modality="voice": output EXACTLY TWO lines:
+   TEXT_REPLY: <natural response with emojis/symbols>
+   VOICE_TTS: <naturally speakable text, NO emojis, NO markdown, NO symbols>
+5) Do NOT output anything else.
 
 ----------------------------------------------------
 LANGUAGE & MIRRORING
 ----------------------------------------------------
+${hardLanguageRule}
 - Detect user's language style (English/Hindi/Tamil/Hinglish/Tanglish).
 - Mirror the exact same style. If they mix Tamil+English, you MUST respond in Tanglish.
-- Natural, professional human tone. Do not sound corporate or robotic.
+- Natural, professional human tone.
 
 ----------------------------------------------------
-BUSINESS INTELLIGENCE & CONTEXT
+CRITICAL CONTEXT LOCK & INTENT
 ----------------------------------------------------
+- Respond ONLY to the latest_customer_message.
+- NEVER generate greetings unless the user greeted first.
+- NEVER say "How can I assist you?" if the user has already made a request.
+- STRICTOR ORDERING: If they order/book, confirm immediately and ask ONE next required question.
+- MODE: ${force_mode} (If CONFIRM_ORDER, prioritize finishing the current order).
+
+----------------------------------------------------
+BUSINESS CONTEXT
+----------------------------------------------------
+Business: ${businessName} (${businessTypeLower})
 Offerings:
-${menu_allowed ? productList : "HIDDEN"}
+${menu_allowed ? productList : "HIDDEN (User already ordered)"}
 
-Customer Context:
+Customer Profile:
 ${profileText}
 
 Past Orders:
 ${history_allowed ? formattedOrderHistory : "HIDDEN"}
 
-Rules:
-- Respond to latest_customer_message first.
-- If they order/book, confirm immediately and ask ONE next required question.
-- Multilingual Quantity Detection: Detect 1, 2, 3, ek, do, teen, onnu, rendu, etc.
-- If quantity or item is unclear, ask for clarification.
-- Do NOT repeat the menu after an order is placed.
+Input Modality: ${inputModality}
+Language: ${detectedLanguage}
+
+Now generate the correct reply following the rules above.
 `;
 
     const conversation = (history || []).map(m => ({
@@ -227,26 +233,35 @@ Rules:
 
     let aiOutput = await generateWithFallback(conversation, systemPrompt);
 
-    // 🛡️ SANITIZATION LAYER: Guarantee correct modality formatting
-    if (inputModality === "voice") {
-      // Force JSON structure if AI returns plain text
-      if (!aiOutput.trim().startsWith("{")) {
-        aiOutput = JSON.stringify({
-          response_text: aiOutput.replace(/response_text:|allow_voice_choice:|{|}|\"/gi, "").trim(),
-          allow_voice_choice: true
-        });
+    // 🛡️ SANITIZATION LAYER: Ensure the prefixes are there even if AI forgot
+    aiOutput = aiOutput.replace(/```[a-z]*\n?|```/gi, "").trim();
+
+    if (inputModality === "text") {
+      // Ensure only one line and starts with TEXT_REPLY:
+      if (!aiOutput.startsWith("TEXT_REPLY:")) {
+        aiOutput = "TEXT_REPLY: " + aiOutput.replace(/^TEXT_REPLY:|^VOICE_TTS:/gi, "").trim();
       }
+      // If there are multiple lines, keep only the one starting with TEXT_REPLY
+      const lines = aiOutput.split("\n");
+      aiOutput = lines.find(l => l.startsWith("TEXT_REPLY:")) || lines[0];
     } else {
-      // TEXT MODE: Strictly remove any markdown or JSON leftovers
-      aiOutput = aiOutput.replace(/```[a-z]*\n?|```/gi, "").trim();
-      if (aiOutput.startsWith("{") && aiOutput.includes("response_text")) {
-        try {
-          const parsed = JSON.parse(aiOutput);
-          aiOutput = parsed.response_text || aiOutput;
-        } catch (e) { }
+      // Input modality = voice
+      let textReply = "";
+      let voiceTts = "";
+
+      const lines = aiOutput.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+      textReply = lines.find(l => l.startsWith("TEXT_REPLY:"))?.replace("TEXT_REPLY:", "").trim() || "";
+      voiceTts = lines.find(l => l.startsWith("VOICE_TTS:"))?.replace("VOICE_TTS:", "").trim() || "";
+
+      // Fallbacks if AI didn't follow the 2-line rule strictly
+      if (!textReply && lines.length > 0) {
+        textReply = lines[0].replace("TEXT_REPLY:", "").trim();
       }
-      // Final strip of any lingering JSON-like artifacts if we are in text mode
-      aiOutput = aiOutput.replace(/^[^{]*{\s*\"response_text\"\s*:\s*\"|\"\s*,\s*\"allow_voice_choice\".*$/gi, "").trim();
+      if (!voiceTts) {
+        voiceTts = textReply.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "").trim();
+      }
+
+      aiOutput = `TEXT_REPLY: ${textReply}\nVOICE_TTS: ${voiceTts}`;
     }
 
     return aiOutput;

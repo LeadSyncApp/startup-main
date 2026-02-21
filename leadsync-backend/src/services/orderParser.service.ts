@@ -136,7 +136,12 @@ class OrderParserService {
 
     private looksLikeOrder(text: string): boolean {
         const lower = text.toLowerCase();
-        return lower.includes("order") || lower.includes("buy") || lower.includes("want") || lower.includes("amount") || lower.includes("rupees") || lower.match(/\d+/) !== null;
+        const orderKeywords = ["order", "buy", "want", "amount", "rupees", "venum", "chahiye", "book", "dena", "vangi"];
+        const hasKeyword = orderKeywords.some(kw => lower.includes(kw));
+        const hasQuantity = /\d+/.test(lower);
+
+        // Strict Priority: Quantity + keyword or just keyword
+        return hasKeyword || (hasQuantity && lower.length > 3);
     }
 
     /**

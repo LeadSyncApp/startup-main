@@ -191,17 +191,21 @@ export class InstagramAdapter implements ChannelAdapter {
                     historyContext
                 ));
 
-                // 🚨 JSON HANDLING: If AI returned a structured order JSON, extract the display message
+                // 🚨 PARSE RESPONSE (TEXT_REPLY: / VOICE_TTS:)
                 let displayMessage = aiReply;
-                try {
-                    if (aiReply.trim().startsWith('{')) {
-                        const parsed = JSON.parse(aiReply);
-                        if (parsed.message_to_customer) {
-                            displayMessage = parsed.message_to_customer;
-                        }
+
+                if (aiReply.includes("TEXT_REPLY:")) {
+                    const lines = aiReply.split("\n");
+                    const textLine = lines.find(l => l.startsWith("TEXT_REPLY:"));
+                    if (textLine) {
+                        displayMessage = textLine.replace("TEXT_REPLY:", "").trim();
                     }
-                } catch (e) {
-                    // Fallback to raw string
+                } else if (aiReply.trim().startsWith('{')) {
+                    // Legacy JSON fallback
+                    try {
+                        const parsed = JSON.parse(aiReply);
+                        displayMessage = parsed.message_to_customer || parsed.response_text || aiReply;
+                    } catch (e) { }
                 }
 
                 // Final mode check
