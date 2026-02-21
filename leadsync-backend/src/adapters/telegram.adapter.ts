@@ -17,6 +17,7 @@ import { intelligenceService } from "../services/intelligence.service";
 import { orderParserService } from "../services/orderParser.service";
 import { notificationService } from "../services/notification.service";
 import { sarvamService } from "../services/sarvam.service";
+import { handleBotMessage } from "../bot/bot.logic";
 
 /* ===============================
    TYPES
@@ -351,7 +352,6 @@ export class TelegramAdapter implements ChannelAdapter {
             emitToConversation(conversation.id, "new_message", clientMsg);
 
             // 🧠 BACKGROUND TASKS
-            const { orderParserService } = await import("../services/orderParser.service");
             intelligenceService.analyzeMessage(companyId, lead.id, conversation.id, text).catch(() => { });
             orderParserService.processPotentialOrder(companyId, conversation.id, lead.id, text, company.botStructuredMenu).catch(() => { });
 
@@ -375,7 +375,6 @@ export class TelegramAdapter implements ChannelAdapter {
             this.sendTyping(chatId).catch(() => { });
 
             try {
-                const { handleBotMessage } = await import("../bot/bot.logic");
                 const modality = isVoiceMsg ? "voice" : "text";
                 const aiReply = await handleBotMessage(conversation.id, text, modality, detectedLanguage);
 

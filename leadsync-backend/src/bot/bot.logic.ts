@@ -96,7 +96,7 @@ export async function handleBotMessage(
   const controlFlags: any = {
     force_mode: pendingOrder ? "CONFIRM_ORDER" : "AUTO",
     menu_allowed: true,
-    history_allowed: true
+    history_allowed: !pendingOrder // 🛡️ HIDE history when confirming new order to prevent confusion
   };
 
   // 6️⃣ Generate AI reply grounded to structured menu

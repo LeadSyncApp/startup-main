@@ -65,7 +65,7 @@ export class IntelligenceService {
 
                 // CRITICAL: Don't overwrite ORDERING intent with BROWSING/SUPPORT
                 // This prevents Intelligence from wiping out what OrderParser detected
-                const conversation = await tx.conversation.findUnique({ where: { id: conversationId } });
+                const conversation = await (tx.conversation as any).findUnique({ where: { id: conversationId } });
                 if (analysis.intent === 'ORDERING' || (conversation && conversation.intent !== 'ORDERING')) {
                     updateData.intent = analysis.intent;
                 }
