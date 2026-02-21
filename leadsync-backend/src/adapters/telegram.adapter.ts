@@ -257,6 +257,17 @@ export class TelegramAdapter implements ChannelAdapter {
                     if (sttResult) {
                         text = sttResult.transcript;
                         detectedLanguage = sttResult.languageCode;
+
+                        // 🔍 Local Language Correction (Sarvam auto-detect is sometimes wrong for Tanglish/Hinglish)
+                        const lowerText = text.toLowerCase();
+                        const tamilKeywords = ["venum", "vendum", "moonu", "naalu", "onnu", "rendu", "kodu", "engo", "eppo"];
+                        const hindiKeywords = ["chahiye", "kitna", "dena", "lelo", "mangwana", "khareedna"];
+
+                        if (tamilKeywords.some(kw => lowerText.includes(kw))) {
+                            detectedLanguage = "ta-IN";
+                        } else if (hindiKeywords.some(kw => lowerText.includes(kw))) {
+                            detectedLanguage = "hi-IN";
+                        }
                     } else {
                         await this.sendMessage(chatId, "Sorry, I had trouble hearing that. Could you try again?");
                         return;

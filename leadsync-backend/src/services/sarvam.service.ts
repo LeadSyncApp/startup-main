@@ -128,11 +128,11 @@ export class SarvamService {
         // 1. Local Keyword Pre-check (Optimized for Indian Languages & Hinglish)
         const orderKeywords = [
             // Standard
-            "buy", "order", "price", "want", "book", "cash",
+            "buy", "order", "price", "want", "book", "cash", "total", "bill",
             // Hindi / North (Hinglish)
-            "khareedna", "chahiye", "mangwana", "lene", "daam",
+            "khareedna", "chahiye", "mangwana", "lene", "daam", "kitna", "dena", "lelo",
             // Tamil
-            "vendum", "kodu", "venum", "vaanganum", "vilai",
+            "vendum", "kodu", "venum", "vaanganum", "vilai", "evvalavu", "onnu", "rendu", "moonu", "naalu", "anju",
             // Telugu
             "kavali", "konali", "ivvandi", "dhara",
             // Kannada

@@ -61,7 +61,7 @@ export async function handleBotMessage(
   const history = await prisma.message.findMany({
     where: { conversationId },
     orderBy: { createdAt: "desc" },
-    take: 6,
+    take: 15,
   });
 
   const historyContext = history
@@ -109,7 +109,10 @@ export async function handleBotMessage(
     orderHistory as any,
     conversation.lead,
     modality,
-    controlFlags,
+    {
+      ...controlFlags,
+      pendingOrder: pendingOrder ? { summary: pendingOrder.summary, amount: pendingOrder.amount } : undefined
+    },
     detectedLanguage
   );
 

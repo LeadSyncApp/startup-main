@@ -133,12 +133,13 @@ export async function generateBotReply(
     force_mode?: "AUTO" | "CONFIRM_ORDER" | "BROWSE_MENU" | "SUPPORT_ONLY";
     menu_allowed?: boolean;
     history_allowed?: boolean;
+    pendingOrder?: { summary: string; amount: number };
   } = { force_mode: "AUTO", menu_allowed: true, history_allowed: true },
   detectedLanguage: string = "en-IN"
 ): Promise<string> {
   try {
     const businessTypeLower = (businessType || "business").toLowerCase();
-    const { force_mode = "AUTO", menu_allowed = true, history_allowed = true } = controlFlags;
+    const { force_mode = "AUTO", menu_allowed = true, history_allowed = true, pendingOrder } = controlFlags;
 
     // Detect hard language code for enforcement
     let hardLanguageRule = "";
@@ -173,45 +174,47 @@ Address: ${customerProfile.address || "Not provided"}
 Tags: ${customerProfile.tags || "None"}
 `.trim() : "New Customer";
 
+    // 🛒 Current Draft Order
+    const currentDraft = pendingOrder
+      ? `CURRENT DRAFT: ${pendingOrder.summary} (Total: ₹${pendingOrder.amount}).`
+      : "No items currently being ordered.";
+
     const systemPrompt = `
-You are LeadSync's real-time ordering and support assistant used in production by paying clients.
-Your responses must be strictly relevant to the latest user message and must never reset context.
+You are LeadSync's real-time ordering and support assistant.
+Your goal is to be a fast, helpful, and natural clerk for ${businessName}.
 
 ----------------------------------------------------
-ABSOLUTE OUTPUT RULES (NON-NEGOTIABLE)
+STRICT RESPONSE PRIORITIES
 ----------------------------------------------------
-1) NEVER output JSON, markdown, code blocks, schemas, or analysis.
-2) Output must be plain text only.
-3) If input_modality="text": output EXACTLY ONE line starting with:
-   TEXT_REPLY: <your response>
-4) If input_modality="voice": output EXACTLY TWO lines:
-   TEXT_REPLY: <natural response with emojis/symbols>
-   VOICE_TTS: <naturally speakable text, NO emojis, NO markdown, NO symbols>
-5) Do NOT output anything else.
+1) ANSWER THE LATEST MESSAGE: Your priority is the "latest_customer_message".
+2) CONFIRM ORDERS: ${force_mode === "CONFIRM_ORDER" ? `The system detected a new order: "${pendingOrder?.summary}". You MUST ask the customer to confirm this specific order: "${pendingOrder?.summary} for ₹${pendingOrder?.amount}".` : "If they express intent to buy, acknowledge and confirm."}
+3) MENU REQUESTS: If they ask for "menu", "list", "what do you have", or "show items", you MUST list the items from the "Offerings" section below. Do NOT ignore this to talk about history.
+4) NO REPETITIVE GREETINGS: Do NOT say "Welcome back" or "Hello" if the conversation is already ongoing.
+5) NO HISTORY SPAM: Do NOT summarize past orders unless the user asks "what did I order before?" or you are specifically asking if they want to repeat a past order.
+6) NO JSON/MARKDOWN: Output plain text ONLY.
 
 ----------------------------------------------------
-LANGUAGE & MIRRORING
+ABSOLUTE OUTPUT RULES
+----------------------------------------------------
+- If input_modality="text": output EXACTLY ONE line starting with: TEXT_REPLY: <response>
+- If input_modality="voice": output EXACTLY TWO lines:
+  TEXT_REPLY: <natural with emojis>
+  VOICE_TTS: <speakable text only, no emojis/symbols>
+
+----------------------------------------------------
+LANGUAGE & STYLE
 ----------------------------------------------------
 ${hardLanguageRule}
-- Detect user's language style (English/Hindi/Tamil/Hinglish/Tanglish).
-- Mirror the exact same style. If they mix Tamil+English, you MUST respond in Tanglish.
-- Natural, professional human tone.
+- Mirror the user's language (Hinglish/Tanglish/etc). Natural and conversational.
 
 ----------------------------------------------------
-CRITICAL CONTEXT LOCK & INTENT
-----------------------------------------------------
-- Respond ONLY to the latest_customer_message.
-- NEVER generate greetings unless the user greeted first.
-- NEVER say "How can I assist you?" if the user has already made a request.
-- STRICTOR ORDERING: If they order/book, confirm immediately and ask ONE next required question.
-- MODE: ${force_mode} (If CONFIRM_ORDER, prioritize finishing the current order).
-
-----------------------------------------------------
-BUSINESS CONTEXT
+DATA CONTEXT
 ----------------------------------------------------
 Business: ${businessName} (${businessTypeLower})
+Draft Order: ${currentDraft}
+
 Offerings:
-${menu_allowed ? productList : "HIDDEN (User already ordered)"}
+${menu_allowed ? productList : "HIDDEN (Order in progress)"}
 
 Customer Profile:
 ${profileText}
@@ -219,10 +222,7 @@ ${profileText}
 Past Orders:
 ${history_allowed ? formattedOrderHistory : "HIDDEN"}
 
-Input Modality: ${inputModality}
-Language: ${detectedLanguage}
-
-Now generate the correct reply following the rules above.
+Now generate the reply. Be direct and helpful.
 `;
 
     const conversation = (history || []).map(m => ({

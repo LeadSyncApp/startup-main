@@ -60,9 +60,15 @@ export class IntelligenceService {
                 // Update Conversation
                 const updateData: any = {
                     sentimentScore: { increment: analysis.sentimentDelta },
-                    intent: analysis.intent, // String literal fine
                     updatedAt: new Date(),
                 };
+
+                // CRITICAL: Don't overwrite ORDERING intent with BROWSING/SUPPORT
+                // This prevents Intelligence from wiping out what OrderParser detected
+                const conversation = await tx.conversation.findUnique({ where: { id: conversationId } });
+                if (analysis.intent === 'ORDERING' || (conversation && conversation.intent !== 'ORDERING')) {
+                    updateData.intent = analysis.intent;
+                }
 
                 // Apply Auto-Assignment if triggered
                 if (assignedUserId) {
