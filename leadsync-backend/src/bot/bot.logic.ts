@@ -26,11 +26,13 @@ export async function switchToHuman(conversationId: string) {
 ===================================================== */
 export async function handleBotMessage(
   conversationId: string,
-  userMessage: string
+  userMessage: string,
+  modality: "text" | "voice" = "text"
 ): Promise<string | null> {
-  // 1️⃣ Get conversation
+  // 1️⃣ Get conversation with Lead (Customer Profile)
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
+    include: { lead: true }
   });
 
   if (!conversation || conversation.mode !== "BOT") {
@@ -86,7 +88,9 @@ export async function handleBotMessage(
     businessType,
     structuredMenu,
     historyContext,
-    orderHistory as any
+    orderHistory as any,
+    conversation.lead,
+    modality
   );
 
   return reply;

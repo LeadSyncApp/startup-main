@@ -7,7 +7,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "dummy" });
 // Model Hierarchy: Sarvam for Multilingual, Groq for Speed
 const MODELS = [
   { provider: "sarvam", id: "sarvam-m" },              // 🇮🇳 Best for Indian Languages
-  { provider: "groq", id: "llama-3.1-8b-instant" },     // ⚡ ~0.3s latency fallback
+  { provider: "groq", id: "llama-3.3-70b-versatile" }, // 🔥 State-of-the-art fallback
 ];
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -100,8 +100,9 @@ async function generateWithFallback(
               ...messages.filter(m => m.content && m.content.trim())
             ],
             model: model.id,
-            temperature: 0.3,
-            max_tokens: 150,
+            temperature: 0.1, // Lower temperature for JSON accuracy
+            max_tokens: 400,  // Increased for large JSON blocks
+            response_format: { type: "json_object" }
           }),
           timeoutMs,
           `Groq ${model.id}`
@@ -127,12 +128,14 @@ export async function generateBotReply(
   businessType: string,
   structuredMenu?: any,
   history?: any[],
-  orderHistory?: any[]
+  orderHistory?: any[],
+  customerProfile?: any,
+  inputModality: "text" | "voice" = "text"
 ): Promise<string> {
   try {
     const businessTypeLower = (businessType || "business").toLowerCase();
 
-    // 🏷️ Format Product List for Prompt
+    // 🏷️ Format Product List
     let productList = "NO PRODUCTS LISTED";
     if (structuredMenu?.categories?.length > 0) {
       productList = structuredMenu.categories
@@ -143,79 +146,78 @@ export async function generateBotReply(
         .join("\n\n");
     }
 
-    // 📜 Format Order History for Prompt
-    let formattedHistory = "None";
+    // 📜 Format Order History
+    let formattedOrderHistory = "None";
     if (orderHistory && orderHistory.length > 0) {
-      formattedHistory = orderHistory
+      formattedOrderHistory = orderHistory
         .map(o => `- ${o.summary} (Total: ₹${o.amount}) on ${new Date(o.createdAt).toLocaleDateString()}`)
         .join("\n");
     }
 
+    // 👤 Format Customer Profile
+    const profileText = customerProfile ? `
+Name: ${customerProfile.name || "Unknown"}
+Phone: ${customerProfile.contact || "Unknown"}
+Address: ${customerProfile.address || "Not provided"}
+Tags: ${customerProfile.tags || "None"}
+Past Orders:
+${formattedOrderHistory}
+`.trim() : "New Customer (No profile yet)";
+
     const systemPrompt = `
-You are an intelligent, human-like sales representative for "${businessName}". 
-You are NOT a "bot". You are a staff member. Speak naturally.
+You are a multilingual, multi-platform commerce assistant for "${businessName}" operating across Telegram, Instagram, and web chat.
 
 ----------------------------------------------------
-LANGUAGE & TONE MIRRORING (HIGHEST PRIORITY)
+CRITICAL OUTPUT RULES
 ----------------------------------------------------
-- ALWAYS mirror the customer's language and style exactly.
-- If they speak English, use English.
-- If they speak Tamil, use Tamil.
-- If they speak Tanglish (mix), use Tanglish. (e.g. "Yenna orders irruku?" -> "Namma kitta idly, dosa ellame irruku...")
-- Match their slang and level of formality. If they are casual/broken, you be casual and direct.
-- 🚫 NEVER switch to English if they use a native language. 
-- 🚫 NEVER sound like a generic service assistant.
+1. Never display JSON to the user.
+2. Output must be clean conversational text only.
+3. No markdown, no code blocks, no symbols like backticks.
+4. Return exactly what is requested based on incoming message type.
 
 ----------------------------------------------------
-CONTEXT & GREETING RULES
+MODALITY HANDLING (STRICT)
 ----------------------------------------------------
-- 🚫 NO GREETINGS (Hi/Hello/Welcome) if there is any previous message in the chat history.
-- 🚫 NEVER say "How can I assist you today?" or "How can I help you?".
-- 🚫 NEVER say "Got it!" unless followed by a specific confirmation of items.
-- If the history has messages, JUMP STRAIGHT to the answer or confirmation.
-- If they ask what's available, list the items briefly.
+Incoming Message Type: ${inputModality}
+
+If type is "voice":
+Return ONLY a valid JSON object (for backend processing):
+{
+  "response_text": "<your clean conversational reply>",
+  "allow_voice_choice": true
+}
+
+If type is "text":
+Return ONLY the plain conversational text. NO JSON.
 
 ----------------------------------------------------
-PRODUCT CONTEXT
+LANGUAGE & STYLE
+----------------------------------------------------
+- Detect user's language and reply in the SAME language.
+- Mirror user's tone (casual/formal) and mixing (Hinglish/Tanglish/etc.).
+- Short, clear, natural, and speakable.
+- No "Reply CONFIRM to proceed" or robotic phrases.
+
+----------------------------------------------------
+BUSINESS INTELLIGENCE
 ----------------------------------------------------
 Domain: ${businessTypeLower}
-Catalog / Available Items:
+Available Offerings:
 ${productList}
 
-Recent History of Orders:
-${formattedHistory}
+Customer Context:
+${profileText}
 
-If they ask for items, check the list above. If missing, say you don't have it.
-If they say "same as last time", check the History of Orders.
-
-----------------------------------------------------
-ACTION HANDLING
-----------------------------------------------------
-When a user places an order, books a service, asks pricing, or makes an inquiry:
-Understand the intent internally.
-Extract the relevant details internally.
-Do not display structured data.
-Respond naturally like a real business representative.
-
-When confirming, keep it short and sound human.
-Never say "Reply CONFIRM to proceed".
-Ask naturally based on the user's style.
-
-Examples:
-"Shall I proceed?" (English)
-"Confirm pannalama?" (Tamil style)
-"Proceed karu?" (Hindi style)
-"Okay to book this?" (casual English)
+- Extract quantities and items internally (ek, do, moonu, rendu, 1, 2).
+- Understand intent: Ordering, Booking, Inquiry, Support.
+- Respond like a real human business representative.
+- If quantity or product is unclear, ask clarification instead of guessing.
 
 ----------------------------------------------------
-PLATFORM SAFETY
+VOICE PLAYBACK SAFETY
 ----------------------------------------------------
-No markdown formatting.
-No special symbols.
-No technical artifacts.
-Clean, readable, and speakable on all platforms.
+Responses must be easy to read out loud. Avoid complex punctuation or emojis if they disrupt text-to-speech flow.
 `;
-
 
     const conversation = (history || []).map(m => ({
       role: m.role,
@@ -228,7 +230,13 @@ Clean, readable, and speakable on all platforms.
 
   } catch (error) {
     console.error("❌ Bot Reply Fatal Error:", error);
-    return "Thank you for reaching out! Our team will assist you shortly.";
+    if (inputModality === "voice") {
+      return JSON.stringify({
+        response_text: "I'm sorry, I'm having trouble right now. Our team will assist you shortly!",
+        allow_voice_choice: true
+      });
+    }
+    return "I'm sorry, I'm having trouble right now. Our team will assist you shortly!";
   }
 }
 

@@ -455,16 +455,18 @@ export class TelegramAdapter implements ChannelAdapter {
 
             try {
                 const { handleBotMessage } = await import("../bot/bot.logic");
-                const aiReply = await handleBotMessage(conversation.id, text);
+                const modality = isVoiceMsg ? "voice" : "text";
+                const aiReply = await handleBotMessage(conversation.id, text, modality);
 
                 if (!aiReply) return;
 
-                // 🔊 JSON HANDLING: Extract message_to_customer if AI returned structured JSON
+                // 🔊 JSON HANDLING: Extract fields from the refined agnostic schema
                 let displayMessage = aiReply;
+
                 try {
                     if (aiReply.trim().startsWith('{')) {
                         const parsed = JSON.parse(aiReply);
-                        if (parsed.message_to_customer) displayMessage = parsed.message_to_customer;
+                        displayMessage = parsed.response_text || aiReply;
                     }
                 } catch (e) { /* fallback to raw string */ }
 
@@ -488,21 +490,25 @@ export class TelegramAdapter implements ChannelAdapter {
                     })
                     .catch(err => console.error("TTS pre-gen error:", err));
 
-                // 🔘 If triggered by voice input, hide text behind buttons.
+                // 🔘 Handling Modality Output
                 if (isVoiceMsg) {
+                    // Cache the text and voice versions for the buttons
                     cacheService.set(cacheService.getPendingTextKey(chatId), displayMessage, 600);
-                    await prisma.message.create({
+
+                    const botMsg = await prisma.message.create({
                         data: {
                             content: displayMessage,
                             sender: MessageSender.SYSTEM,
                             conversationId: conversation.id,
                         },
                     });
+
                     safeEmitConversationUpdate(conversation, "conversation_updated", {
                         conversationId: conversation.id,
                         lastMessage: displayMessage,
                         updatedAt: new Date(),
                     });
+                    emitToConversation(conversation.id, "new_message", botMsg);
 
                     let intro = "I've prepared a reply for you:";
                     if (detectedLanguage === "ta-IN") intro = "உங்களுக்கான பதில் இதோ:";
