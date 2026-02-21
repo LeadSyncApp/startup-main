@@ -157,29 +157,14 @@ export class SarvamService {
                     model: "sarvam-m",
                     messages: [
                         {
-                            role: "system",
-                            content: `You are a professional sales intelligence agent for a corporate CRM.
-Analyze the Indian user message to extract order intent and entities.
-Supported Languages: English, Hindi, Tamil, Telugu, Malayalam, Kannada, Hinglish.
+                            role: "user",
+                            content: `INSTRUCTION: Extract order intent and entities.
+Intent: ORDER (wants to buy), INQUIRY (asking price), COMPLAINT, or OTHER.
+Extract Product Name & Quantity.
+Return ONLY JSON.
 
-Extraction Rules:
-1. Detect Intent: ORDER (wants to buy), INQUIRY (asking price/detail), COMPLAINT, or OTHER.
-2. Extract Product Name & Quantity.
-3. Language Detection: Identify the dominant language.
-4. Tone: The extracted data must support a formal business response.
-
-Return ONLY valid JSON:
-{
-  "intent": "ORDER" | "INQUIRY" | "COMPLAINT" | "OTHER",
-  "entities": {
-    "product": "string",
-    "quantity": number
-  },
-  "language": "string",
-  "confidence": number
-}`
-                        },
-                        { role: "user", content: text }
+User Message: "${text}"`
+                        }
                     ]
                 },
                 {

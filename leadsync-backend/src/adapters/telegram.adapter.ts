@@ -402,6 +402,9 @@ export class TelegramAdapter implements ChannelAdapter {
                 input.includes("services") ||
                 input.includes("collection") || // Retail
                 input.includes("inventory") || // Electronics
+                input.includes("enna") ||        // Tamil "What"
+                input.includes("irruku") ||      // Tamil "is there"
+                input.includes("sapadu") ||      // Tamil "food"
                 (input.includes("orders") && (input.includes("have") || input.includes("list") || input.includes("show") || input.includes("what"))) ||
                 input.includes("options") ||
                 input.includes("available");
@@ -430,9 +433,6 @@ export class TelegramAdapter implements ChannelAdapter {
                 return;
             }
 
-            // Keyword detection ... (Truncated for brevity, focusing on structure. Can add back if requested. 
-            // Actually, user wants FULL plan implementation. I should include it.)
-
             const matchedCategory = categories.find(cat =>
                 input === cat.name.toLowerCase() ||
                 input === cat.name.toLowerCase() + "s" ||
@@ -449,49 +449,15 @@ export class TelegramAdapter implements ChannelAdapter {
                 return;
             }
 
-            /* AI REPLY */
-            // 1. Fetch History (Last 5 messages)
-            const history = await prisma.message.findMany({
-                where: {
-                    conversationId: conversation.id,
-                    id: { not: clientMsg.id } // 🔕 IMPORTANT: Exclude current message from chat history context to prevent double-processing
-                },
-                orderBy: { createdAt: "desc" },
-                take: 6, // Fetch a few more for better context
-            });
-
-            // Reverse history for AI context
-            const historyContext = history.reverse().map(m => ({
-                role: m.sender === MessageSender.CLIENT ? "user" : "assistant",
-                content: m.content
-            }));
-
+            /* AI REPLY (Unified via Bot Logic) */
             // Fire typing indicator
             this.sendTyping(chatId).catch(() => { });
 
             try {
-                // Execute AI request with higher concurrency
-                // Fetch truly "Past" orders (not the one we just detected)
-                const orderHistory = await prisma.order.findMany({
-                    where: {
-                        leadId: lead.id,
-                        isDeleted: false,
-                        status: { not: OrderStatus.BOT_CREATED_ORDER },
-                        createdAt: { lt: new Date(Date.now() - 5000) } // At least 5 seconds old
-                    },
-                    orderBy: { createdAt: "desc" },
-                    take: 3,
-                    select: { summary: true, amount: true, createdAt: true }
-                });
+                const { handleBotMessage } = await import("../bot/bot.logic");
+                const aiReply = await handleBotMessage(conversation.id, text);
 
-                let aiReply = await aiQueue.add(() => generateBotReply(
-                    text,
-                    company.name,
-                    company.botBusinessType || "general business",
-                    structuredMenu,
-                    historyContext,
-                    orderHistory
-                ));
+                if (!aiReply) return;
 
                 // 🔊 JSON HANDLING: Extract message_to_customer if AI returned structured JSON
                 let displayMessage = aiReply;
@@ -512,7 +478,7 @@ export class TelegramAdapter implements ChannelAdapter {
                     return;
                 }
 
-                // 🎤 PRE-GENERATE VOICE IN PARALLEL (Fire-and-forget, cache for 2 min)
+                // 🎤 PRE-GENERATE VOICE IN PARALLEL (Cache for 2 min)
                 sarvamService.textToSpeech(displayMessage, detectedLanguage)
                     .then(audioBuffer => {
                         if (audioBuffer) {
@@ -522,29 +488,22 @@ export class TelegramAdapter implements ChannelAdapter {
                     })
                     .catch(err => console.error("TTS pre-gen error:", err));
 
-                // 🔘 If triggered by voice input, hide text behind buttons. Otherwise send clean text.
+                // 🔘 If triggered by voice input, hide text behind buttons.
                 if (isVoiceMsg) {
-                    // Cache the text for the callback button
                     cacheService.set(cacheService.getPendingTextKey(chatId), displayMessage, 600);
-
-                    // Save to DB so CRM sees it, but don't send to Telegram yet
                     await prisma.message.create({
                         data: {
                             content: displayMessage,
                             sender: MessageSender.SYSTEM,
                             conversationId: conversation.id,
-                            messageType: "TEXT",
                         },
                     });
-
-                    // Update CRM UI
                     safeEmitConversationUpdate(conversation, "conversation_updated", {
                         conversationId: conversation.id,
                         lastMessage: displayMessage,
                         updatedAt: new Date(),
                     });
 
-                    // Send buttons with language-aware intro
                     let intro = "I've prepared a reply for you:";
                     if (detectedLanguage === "ta-IN") intro = "உங்களுக்கான பதில் இதோ:";
                     else if (detectedLanguage === "hi-IN") intro = "आपके लिए एक जवाब तैयार है:";
@@ -554,7 +513,7 @@ export class TelegramAdapter implements ChannelAdapter {
                     await this.saveAndSendSystemMessage(chatId, conversation, displayMessage);
                 }
             } catch (err) {
-                console.error("AI Queue Error:", err);
+                console.error("Unified Bot Message Error:", err);
             }
 
         } catch (err) {
