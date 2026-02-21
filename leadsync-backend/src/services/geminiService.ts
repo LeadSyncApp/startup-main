@@ -49,29 +49,28 @@ async function generateWithFallback(
 
         const chatMessages: { role: "user" | "assistant"; content: string }[] = [];
 
-        // Combine Instruction with first message if possible
-        const firstMsg = rawHistory[0];
+        // Instruction
         const instructionPrefix = `[INSTRUCTION: ${systemPrompt}]\n\n`;
 
-        if (firstMsg && (firstMsg.role === "user" || firstMsg.role === "customer")) {
-          // Merge instruction into first user message
-          chatMessages.push({ role: "user", content: instructionPrefix + firstMsg.content.trim() });
+        for (let i = 0; i < rawHistory.length; i++) {
+          const m = rawHistory[i];
+          const role = (m.role === "assistant" || m.role === "bot") ? "assistant" : "user";
+          const isLastUserMsg = i === rawHistory.length - 1 && role === "user";
 
-          // Add the rest, matching roles
-          for (let i = 1; i < rawHistory.length; i++) {
-            const m = rawHistory[i];
-            const role = (m.role === "assistant" || m.role === "bot") ? "assistant" : "user";
-
-            // Safety: Only add if it alternates
-            if (chatMessages.length > 0 && chatMessages[chatMessages.length - 1].role === role) {
-              chatMessages[chatMessages.length - 1].content += "\n" + m.content.trim();
-            } else {
-              chatMessages.push({ role, content: m.content.trim() });
-            }
+          // Safety: Only add if it alternates
+          if (chatMessages.length > 0 && chatMessages[chatMessages.length - 1].role === role) {
+            chatMessages[chatMessages.length - 1].content += "\n" + m.content.trim();
+          } else {
+            chatMessages.push({
+              role,
+              content: isLastUserMsg ? instructionPrefix + m.content.trim() : m.content.trim()
+            });
           }
-        } else {
-          // Fallback: Just start with instruction
-          chatMessages.push({ role: "user", content: instructionPrefix + "Please respond to the user based on the context above." });
+        }
+
+        // If history was empty OR last message was assistant, ensure we end with an instruction
+        if (chatMessages.length === 0 || chatMessages[chatMessages.length - 1].role === "assistant") {
+          chatMessages.push({ role: "user", content: instructionPrefix + "Please respond to the latest request." });
         }
 
         try {
@@ -188,49 +187,49 @@ Tags: ${customerProfile.tags || "None"}
       : "No items currently being ordered.";
 
     const systemPrompt = `
-You are LeadSync's real-time ordering and support assistant.
-Your goal is to be a fast, helpful, and natural clerk for ${businessName}.
+You are LeadSync's local clerk for ${businessName}.
 
 ----------------------------------------------------
-STRICT RESPONSE PRIORITIES
+STRICT OPERATING MODES
 ----------------------------------------------------
-1) ANSWER THE LATEST MESSAGE: Your priority is the "latest_customer_message".
-2) CONFIRM ORDERS: ${force_mode === "CONFIRM_ORDER" ? `The system detected a new order: "${pendingOrder?.summary}". You MUST ask the customer to confirm this specific order: "${pendingOrder?.summary} for ₹${pendingOrder?.amount}".` : "If they express intent to buy, acknowledge and confirm."}
-3) MENU REQUESTS: If they ask for "menu", "list", "what do you have", or "show items", you MUST list the items from the "Offerings" section below. Do NOT ignore this to talk about history.
-4) NO REPETITIVE GREETINGS: Do NOT say "Welcome back" or "Hello" if the conversation is already ongoing.
-5) NO HISTORY SPAM: Do NOT summarize past orders unless the user asks "what did I order before?" or you are specifically asking if they want to repeat a past order.
-6) NO JSON/MARKDOWN: Output plain text ONLY.
+MODE: ${force_mode}
+${force_mode === "BROWSE_MENU" ? `CRITICAL: The user wants to see the MENU. You MUST list ALL products from the "Offerings" section below immediately. Do NOT mention past orders.` : ""}
+${force_mode === "CONFIRM_ORDER" ? `CRITICAL: System detected: "${pendingOrder?.summary}". You MUST ask them to confirm this specifically: "${pendingOrder?.summary} for ₹${pendingOrder?.amount}".` : ""}
+
+----------------------------------------------------
+STRICT RESPONSE RULES
+----------------------------------------------------
+1) IGNORE HISTORY: If history_allowed=false, do NOT mention past orders or use "Welcome back".
+2) NO GREETINGS: Do not say "Hello" or "How can I help" if they've already asked for something.
+3) LISTINGS: When listing items, use a clean list: "Dosa - ₹30, Idly - ₹20".
+4) NO JSON/MARKDOWN: Output plain text ONLY.
 
 ----------------------------------------------------
 ABSOLUTE OUTPUT RULES
 ----------------------------------------------------
-- If input_modality="text": output EXACTLY ONE line starting with: TEXT_REPLY: <response>
-- If input_modality="voice": output EXACTLY TWO lines:
+- input_modality="text": output EXACTLY ONE line: TEXT_REPLY: <response>
+- input_modality="voice": output EXACTLY TWO lines:
   TEXT_REPLY: <natural with emojis>
-  VOICE_TTS: <speakable text only, no emojis/symbols>
+  VOICE_TTS: <spoken text only, no emojis>
 
 ----------------------------------------------------
-LANGUAGE & STYLE
+LANGUAGE (${detectedLanguage})
 ----------------------------------------------------
 ${hardLanguageRule}
-- Mirror the user's language (Hinglish/Tanglish/etc). Natural and conversational.
+- Mirror user's style (Tanglish / Hinglish / etc).
 
 ----------------------------------------------------
-DATA CONTEXT
+DATA
 ----------------------------------------------------
-Business: ${businessName} (${businessTypeLower})
-Draft Order: ${currentDraft}
-
+Business: ${businessName}
 Offerings:
-${menu_allowed ? productList : "HIDDEN (Order in progress)"}
-
-Customer Profile:
-${profileText}
+${menu_allowed ? productList : "HIDDEN"}
 
 Past Orders:
 ${history_allowed ? formattedOrderHistory : "HIDDEN"}
 
-Now generate the reply. Be direct and helpful.
+LATEST CUSTOMER MESSAGE: 
+"${message}"
 `;
 
     const conversation = (history || []).map(m => ({

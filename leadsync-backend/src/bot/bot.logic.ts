@@ -93,10 +93,12 @@ export async function handleBotMessage(
     }
   });
 
+  const isMenuRequest = /menu|list|items|show|what|product|porutkal|patti/i.test(userMessage.toLowerCase());
+
   const controlFlags: any = {
-    force_mode: pendingOrder ? "CONFIRM_ORDER" : "AUTO",
+    force_mode: pendingOrder ? "CONFIRM_ORDER" : (isMenuRequest ? "BROWSE_MENU" : "AUTO"),
     menu_allowed: true,
-    history_allowed: !pendingOrder // 🛡️ HIDE history when confirming new order to prevent confusion
+    history_allowed: !pendingOrder && !isMenuRequest // 🛡️ CRITICAL: Disable history if ordering or asking for menu
   };
 
   // 6️⃣ Generate AI reply grounded to structured menu
