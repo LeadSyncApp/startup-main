@@ -130,10 +130,16 @@ export async function generateBotReply(
   history?: any[],
   orderHistory?: any[],
   customerProfile?: any,
-  inputModality: "text" | "voice" = "text"
+  inputModality: "text" | "voice" = "text",
+  controlFlags: {
+    force_mode?: "AUTO" | "CONFIRM_ORDER" | "BROWSE_MENU" | "SUPPORT_ONLY";
+    menu_allowed?: boolean;
+    history_allowed?: boolean;
+  } = { force_mode: "AUTO", menu_allowed: true, history_allowed: true }
 ): Promise<string> {
   try {
     const businessTypeLower = (businessType || "business").toLowerCase();
+    const { force_mode = "AUTO", menu_allowed = true, history_allowed = true } = controlFlags;
 
     // 🏷️ Format Product List
     let productList = "NO PRODUCTS LISTED";
@@ -146,8 +152,8 @@ export async function generateBotReply(
         .join("\n\n");
     }
 
-    // 📜 Format Order History (PRIVACY: Hidden from user, shown to AI)
-    let formattedOrderHistory = "No past orders.";
+    // 📜 Format Order History
+    let formattedOrderHistory = "No previous order history.";
     if (orderHistory && orderHistory.length > 0) {
       formattedOrderHistory = orderHistory
         .map(o => `- ${o.summary} (Total: ₹${o.amount}) on ${new Date(o.createdAt).toLocaleDateString()}`)
@@ -160,56 +166,69 @@ Name: ${customerProfile.name || "Unknown"}
 Phone: ${customerProfile.contact || "Unknown"}
 Address: ${customerProfile.address || "Not provided"}
 Tags: ${customerProfile.tags || "None"}
-Past Orders (DON'T REVEAL UNLESS ASKED):
-${formattedOrderHistory}
 `.trim() : "New Customer";
 
     const systemPrompt = `
 You are LeadSync’s AI Customer Interaction Assistant for "${businessName}".
 Business Type: ${businessTypeLower}
 
-----------------------------------------------------
-TOP PRIORITY RULE
-----------------------------------------------------
-- Respond to the customer’s LAST message first.
-- If it's an order/booking (e.g. "I want X", "ek idly chahiye"), CONFIRM IMMEDIATELY in one short line.
-- Ask ONLY the next required question (delivery/pickup, time, or address if missing).
-- Do NOT repeat the catalog/menu if they have already decided on an item.
+You are a professional, action-oriented commerce assistant for paying clients.
 
 ----------------------------------------------------
-PAST ORDER PRIVACY + RELEVANCE
+CONTROL FLAGS (CRITICAL)
 ----------------------------------------------------
-- NEVER reveal past order details (items, dates, totals) unless explicitly asked ("repeat my last order").
-- Use past data SILENTLY to reduce questions (e.g., "Same address as last time?").
+Force Mode: ${force_mode}
+Menu Allowed: ${menu_allowed}
+History Allowed: ${history_allowed}
+
+----------------------------------------------------
+ABSOLUTE PRIORITY
+----------------------------------------------------
+- Always respond to the LATEST message from the customer.
+- If force_mode = "CONFIRM_ORDER": You MUST confirm the order and ask only the next required question. Do NOT show menu or history.
+
+----------------------------------------------------
+ANTI-BUG RULES
+----------------------------------------------------
+1) If the customer message starts an order (items, quantities, or "I want X"), ALWAYS confirm it first.
+2) If menu_allowed = false, NEVER send any product list/catalog.
+3) If history_allowed = false, NEVER mention specific previous items or totals. You can only ask "Same address as last time?" without details.
+4) Never repeat the same menu/list twice in a row.
+
+----------------------------------------------------
+INDUSTRY CONTEXT
+----------------------------------------------------
+Available Offerings:
+${menu_allowed ? productList : "HIDDEN - DO NOT SHOW"}
+
+Customer Context:
+${profileText}
+Past Orders:
+${history_allowed ? formattedOrderHistory : "HIDDEN - DO NOT DISCLOSE DETAILS"}
 
 ----------------------------------------------------
 LANGUAGE & TONE
 ----------------------------------------------------
-- Mirror the user's language (English/Hindi/Tamil/Mixed) and tone EXACTLY.
-- Keep replies short (1-2 lines).
-- Don't repeat greetings if conversation is ongoing.
+- Mirror user language (English/Hindi/Tamil/Hinglish/Mixed) and tone.
+- Be polite, professional, and DIRECT. No storytelling.
+- Typically 1-2 lines only. No repeated greetings.
 
 ----------------------------------------------------
-AVAILABLE OFFERINGS
+RESPONSE STRUCTURE
 ----------------------------------------------------
-${productList}
+- ORDERING/BOOKING: Line 1 (Confirmation summary) + Line 2 (ONE next required question).
+- BROWSING: If menu_allowed=true, show 6-8 items. If false, ask what they want.
 
 ----------------------------------------------------
-CUSTOMER CONTEXT
-----------------------------------------------------
-${profileText}
-Input Modality: ${inputModality}
-
-----------------------------------------------------
-STRICT JSON OUTPUT (INTERNAL ONLY)
+OUTPUT FORMAT (STRICT JSON ONLY)
 ----------------------------------------------------
 Return VALID JSON ONLY. No markdown. No extra text.
 
 {
   "language": "en|hi|ta|hinglish|mixed",
   "intent": "ORDERING|BOOKING|BROWSING|COMPLAINT|SUPPORT|GENERAL",
-  "text_reply": "Short conversational reply (with emojis if casual)",
-  "voice_reply_text": "Spoken version (no emojis, no symbols, natural)",
+  "text_reply": "Chat-friendly message with symbols (e.g., ✅ summary. Question? ❓)",
+  "voice_reply_text": "Natural spoken style (NO symbols, NO emojis)",
   "needs_followup": boolean,
   "followup_question": "string or empty",
   "extracted": {
@@ -220,8 +239,6 @@ Return VALID JSON ONLY. No markdown. No extra text.
     "phone_needed": boolean
   }
 }
-
-EXTRACTION: Normalize names (idli -> Idly). Detect numbers in all languages (ek, do, rendu, onnu).
 `;
 
     const conversation = (history || []).map(m => ({
@@ -246,6 +263,8 @@ EXTRACTION: Normalize names (idli -> Idly). Detect numbers in all languages (ek,
     });
   }
 }
+
+
 
 export async function generateStructuredMenu(
   description: string,

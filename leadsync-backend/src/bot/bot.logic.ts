@@ -1,3 +1,4 @@
+import { OrderStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { generateBotReply } from "../services/geminiService";
 
@@ -81,7 +82,23 @@ export async function handleBotMessage(
     select: { summary: true, amount: true, createdAt: true }
   });
 
-  // 5️⃣ Generate AI reply grounded to structured menu
+  // 5️⃣ Check for recent unconfirmed orders (Ghost orders)
+  const pendingOrder = await prisma.order.findFirst({
+    where: {
+      conversationId,
+      status: OrderStatus.BOT_CREATED_ORDER,
+      isDeleted: false,
+      createdAt: { gt: new Date(Date.now() - 5 * 60 * 1000) } // Last 5 mins
+    }
+  });
+
+  const controlFlags: any = {
+    force_mode: pendingOrder ? "CONFIRM_ORDER" : "AUTO",
+    menu_allowed: true,
+    history_allowed: true
+  };
+
+  // 6️⃣ Generate AI reply grounded to structured menu
   const reply = await generateBotReply(
     userMessage,
     businessName,
@@ -90,7 +107,8 @@ export async function handleBotMessage(
     historyContext,
     orderHistory as any,
     conversation.lead,
-    modality
+    modality,
+    controlFlags
   );
 
   return reply;

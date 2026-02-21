@@ -30,7 +30,7 @@ class OrderParserService {
             // 2. AI Fallback: Sarvam.ai (Optimized for Hindi/Mixed & Intent)
             if (items.length === 0) {
                 const sarvamResult = await sarvamService.analyzeIntent(text);
-                if (sarvamResult && sarvamResult.intent === "ORDER" && sarvamResult.entities.product) {
+                if (sarvamResult && sarvamResult.intent === "ORDER" && sarvamResult.entities?.product) {
                     items.push({
                         name: sarvamResult.entities.product,
                         quantity: sarvamResult.entities.quantity || 1,
