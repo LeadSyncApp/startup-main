@@ -460,13 +460,15 @@ export class TelegramAdapter implements ChannelAdapter {
 
                 if (!aiReply) return;
 
-                // 🔊 JSON HANDLING: Extract fields from the refined agnostic schema
+                // 🔊 JSON HANDLING: Extract fields from the new specific schema
                 let displayMessage = aiReply;
+                let spokenMessage = aiReply;
 
                 try {
                     if (aiReply.trim().startsWith('{')) {
                         const parsed = JSON.parse(aiReply);
-                        displayMessage = parsed.response_text || aiReply;
+                        displayMessage = parsed.text_reply || aiReply;
+                        spokenMessage = parsed.voice_reply_text || displayMessage;
                     }
                 } catch (e) { /* fallback to raw string */ }
 
@@ -481,7 +483,8 @@ export class TelegramAdapter implements ChannelAdapter {
                 }
 
                 // 🎤 PRE-GENERATE VOICE IN PARALLEL (Cache for 2 min)
-                sarvamService.textToSpeech(displayMessage, detectedLanguage)
+                // Use the spoken version for cleaner TTS
+                sarvamService.textToSpeech(spokenMessage, detectedLanguage)
                     .then(audioBuffer => {
                         if (audioBuffer) {
                             cacheService.set(cacheService.getPendingVoiceKey(chatId), audioBuffer, 120);

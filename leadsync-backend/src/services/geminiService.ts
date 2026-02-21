@@ -146,8 +146,8 @@ export async function generateBotReply(
         .join("\n\n");
     }
 
-    // 📜 Format Order History
-    let formattedOrderHistory = "None";
+    // 📜 Format Order History (PRIVACY: Hidden from user, shown to AI)
+    let formattedOrderHistory = "No past orders.";
     if (orderHistory && orderHistory.length > 0) {
       formattedOrderHistory = orderHistory
         .map(o => `- ${o.summary} (Total: ₹${o.amount}) on ${new Date(o.createdAt).toLocaleDateString()}`)
@@ -160,63 +160,68 @@ Name: ${customerProfile.name || "Unknown"}
 Phone: ${customerProfile.contact || "Unknown"}
 Address: ${customerProfile.address || "Not provided"}
 Tags: ${customerProfile.tags || "None"}
-Past Orders:
+Past Orders (DON'T REVEAL UNLESS ASKED):
 ${formattedOrderHistory}
-`.trim() : "New Customer (No profile yet)";
+`.trim() : "New Customer";
 
     const systemPrompt = `
-You are a multilingual, multi-platform commerce assistant for "${businessName}" operating across Telegram, Instagram, and web chat.
+You are LeadSync’s AI Customer Interaction Assistant for "${businessName}".
+Business Type: ${businessTypeLower}
 
 ----------------------------------------------------
-CRITICAL OUTPUT RULES
+TOP PRIORITY RULE
 ----------------------------------------------------
-1. Never display JSON to the user.
-2. Output must be clean conversational text only.
-3. No markdown, no code blocks, no symbols like backticks.
-4. Return exactly what is requested based on incoming message type.
+- Respond to the customer’s LAST message first.
+- If it's an order/booking (e.g. "I want X", "ek idly chahiye"), CONFIRM IMMEDIATELY in one short line.
+- Ask ONLY the next required question (delivery/pickup, time, or address if missing).
+- Do NOT repeat the catalog/menu if they have already decided on an item.
 
 ----------------------------------------------------
-MODALITY HANDLING (STRICT)
+PAST ORDER PRIVACY + RELEVANCE
 ----------------------------------------------------
-Incoming Message Type: ${inputModality}
-
-If type is "voice":
-Return ONLY a valid JSON object (for backend processing):
-{
-  "response_text": "<your clean conversational reply>",
-  "allow_voice_choice": true
-}
-
-If type is "text":
-Return ONLY the plain conversational text. NO JSON.
+- NEVER reveal past order details (items, dates, totals) unless explicitly asked ("repeat my last order").
+- Use past data SILENTLY to reduce questions (e.g., "Same address as last time?").
 
 ----------------------------------------------------
-LANGUAGE & STYLE
+LANGUAGE & TONE
 ----------------------------------------------------
-- Detect user's language and reply in the SAME language.
-- Mirror user's tone (casual/formal) and mixing (Hinglish/Tanglish/etc.).
-- Short, clear, natural, and speakable.
-- No "Reply CONFIRM to proceed" or robotic phrases.
+- Mirror the user's language (English/Hindi/Tamil/Mixed) and tone EXACTLY.
+- Keep replies short (1-2 lines).
+- Don't repeat greetings if conversation is ongoing.
 
 ----------------------------------------------------
-BUSINESS INTELLIGENCE
+AVAILABLE OFFERINGS
 ----------------------------------------------------
-Domain: ${businessTypeLower}
-Available Offerings:
 ${productList}
 
-Customer Context:
+----------------------------------------------------
+CUSTOMER CONTEXT
+----------------------------------------------------
 ${profileText}
-
-- Extract quantities and items internally (ek, do, moonu, rendu, 1, 2).
-- Understand intent: Ordering, Booking, Inquiry, Support.
-- Respond like a real human business representative.
-- If quantity or product is unclear, ask clarification instead of guessing.
+Input Modality: ${inputModality}
 
 ----------------------------------------------------
-VOICE PLAYBACK SAFETY
+STRICT JSON OUTPUT (INTERNAL ONLY)
 ----------------------------------------------------
-Responses must be easy to read out loud. Avoid complex punctuation or emojis if they disrupt text-to-speech flow.
+Return VALID JSON ONLY. No markdown. No extra text.
+
+{
+  "language": "en|hi|ta|hinglish|mixed",
+  "intent": "ORDERING|BOOKING|BROWSING|COMPLAINT|SUPPORT|GENERAL",
+  "text_reply": "Short conversational reply (with emojis if casual)",
+  "voice_reply_text": "Spoken version (no emojis, no symbols, natural)",
+  "needs_followup": boolean,
+  "followup_question": "string or empty",
+  "extracted": {
+    "items_or_services": [{"name":"string","qty":number,"variant":"string"}],
+    "datetime": "string",
+    "delivery_or_mode": "string",
+    "address_needed": boolean,
+    "phone_needed": boolean
+  }
+}
+
+EXTRACTION: Normalize names (idli -> Idly). Detect numbers in all languages (ek, do, rendu, onnu).
 `;
 
     const conversation = (history || []).map(m => ({
@@ -230,13 +235,15 @@ Responses must be easy to read out loud. Avoid complex punctuation or emojis if 
 
   } catch (error) {
     console.error("❌ Bot Reply Fatal Error:", error);
-    if (inputModality === "voice") {
-      return JSON.stringify({
-        response_text: "I'm sorry, I'm having trouble right now. Our team will assist you shortly!",
-        allow_voice_choice: true
-      });
-    }
-    return "I'm sorry, I'm having trouble right now. Our team will assist you shortly!";
+    return JSON.stringify({
+      language: "en",
+      intent: "GENERAL",
+      text_reply: "I'm sorry, I'm having trouble right now. Our team will help you soon!",
+      voice_reply_text: "I am sorry, I am having trouble right now. Our team will help you soon.",
+      needs_followup: false,
+      followup_question: "",
+      extracted: { items_or_services: [] }
+    });
   }
 }
 
