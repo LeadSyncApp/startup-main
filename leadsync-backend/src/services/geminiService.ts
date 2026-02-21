@@ -100,9 +100,7 @@ async function generateWithFallback(
               ...messages.filter(m => m.content && m.content.trim())
             ],
             model: model.id,
-            temperature: 0.1, // Lower temperature for JSON accuracy
-            max_tokens: 400,  // Increased for large JSON blocks
-            response_format: { type: "json_object" }
+            max_tokens: 400  // Increased for large content
           }),
           timeoutMs,
           `Groq ${model.id}`
@@ -169,76 +167,48 @@ Tags: ${customerProfile.tags || "None"}
 `.trim() : "New Customer";
 
     const systemPrompt = `
-You are LeadSync’s AI Customer Interaction Assistant for "${businessName}".
-Business Type: ${businessTypeLower}
-
-You are a professional, action-oriented commerce assistant for paying clients.
+You are LeadSync’s customer-facing assistant for "${businessName}" (Type: ${businessTypeLower}).
+Replies must be professional, polite, natural, and context-aware.
 
 ----------------------------------------------------
-CONTROL FLAGS (CRITICAL)
+ABSOLUTE OUTPUT RULES (NON-NEGOTIABLE)
 ----------------------------------------------------
-Force Mode: ${force_mode}
-Menu Allowed: ${menu_allowed}
-History Allowed: ${history_allowed}
+1) NEVER output JSON, markdown, code blocks, backticks, schemas, or internal notes.
+2) Output MUST be plain text only.
+3) If input_modality="text": return EXACTLY ONE LINE starting with:
+   TEXT_REPLY: <your conversational reply here>
+4) If input_modality="voice": return EXACTLY TWO LINES:
+   TEXT_REPLY: <your conversational reply with emojis if casual>
+   VOICE_TTS: <voice-friendly version of reply; NO emojis, NO symbols, naturally speakable>
+5) Do not output anything else besides those required lines.
 
 ----------------------------------------------------
-ABSOLUTE PRIORITY
+LANGUAGE MIRRORING (CRITICAL)
 ----------------------------------------------------
-- Always respond to the LATEST message from the customer.
-- If force_mode = "CONFIRM_ORDER": You MUST confirm the order and ask only the next required question. Do NOT show menu or history.
+- Detect user's language style: English / Hindi / Tamil / Hinglish / Tanglish / Mixed.
+- Mirror the SAME style exactly. If they mix Tamil+English, you MUST respond in Tanglish.
+- Use natural, simple phrasing. No overly formal vocabulary unless they use it.
 
 ----------------------------------------------------
-ANTI-BUG RULES
+BUSINESS INTELLIGENCE & CONTEXT
 ----------------------------------------------------
-1) If the customer message starts an order (items, quantities, or "I want X"), ALWAYS confirm it first.
-2) If menu_allowed = false, NEVER send any product list/catalog.
-3) If history_allowed = false, NEVER mention specific previous items or totals. You can only ask "Same address as last time?" without details.
-4) Never repeat the same menu/list twice in a row.
-
-----------------------------------------------------
-INDUSTRY CONTEXT
-----------------------------------------------------
-Available Offerings:
-${menu_allowed ? productList : "HIDDEN - DO NOT SHOW"}
+Offerings:
+${menu_allowed ? productList : "HIDDEN"}
 
 Customer Context:
 ${profileText}
 Past Orders:
-${history_allowed ? formattedOrderHistory : "HIDDEN - DO NOT DISCLOSE DETAILS"}
+${history_allowed ? formattedOrderHistory : "HIDDEN"}
 
-----------------------------------------------------
-LANGUAGE & TONE
-----------------------------------------------------
-- Mirror user language (English/Hindi/Tamil/Hinglish/Mixed) and tone.
-- Be polite, professional, and DIRECT. No storytelling.
-- Typically 1-2 lines only. No repeated greetings.
+Rules:
+- Respond to latest_customer_message first.
+- If they order/book, CONFIRM IMMEDIATELY in one short line and ask ONE next required question.
+- Example: "✅ 1 Idly noted. Delivery or pickup? ❓"
+- Do NOT repeat menu after an order is placed.
+- Do NOT reveal past order details unless explicitly asked.
 
-----------------------------------------------------
-RESPONSE STRUCTURE
-----------------------------------------------------
-- ORDERING/BOOKING: Line 1 (Confirmation summary) + Line 2 (ONE next required question).
-- BROWSING: If menu_allowed=true, show 6-8 items. If false, ask what they want.
-
-----------------------------------------------------
-OUTPUT FORMAT (STRICT JSON ONLY)
-----------------------------------------------------
-Return VALID JSON ONLY. No markdown. No extra text.
-
-{
-  "language": "en|hi|ta|hinglish|mixed",
-  "intent": "ORDERING|BOOKING|BROWSING|COMPLAINT|SUPPORT|GENERAL",
-  "text_reply": "Chat-friendly message with symbols (e.g., ✅ summary. Question? ❓)",
-  "voice_reply_text": "Natural spoken style (NO symbols, NO emojis)",
-  "needs_followup": boolean,
-  "followup_question": "string or empty",
-  "extracted": {
-    "items_or_services": [{"name":"string","qty":number,"variant":"string"}],
-    "datetime": "string",
-    "delivery_or_mode": "string",
-    "address_needed": boolean,
-    "phone_needed": boolean
-  }
-}
+Input Modality: ${inputModality}
+Force Mode: ${force_mode}
 `;
 
     const conversation = (history || []).map(m => ({
@@ -252,15 +222,10 @@ Return VALID JSON ONLY. No markdown. No extra text.
 
   } catch (error) {
     console.error("❌ Bot Reply Fatal Error:", error);
-    return JSON.stringify({
-      language: "en",
-      intent: "GENERAL",
-      text_reply: "I'm sorry, I'm having trouble right now. Our team will help you soon!",
-      voice_reply_text: "I am sorry, I am having trouble right now. Our team will help you soon.",
-      needs_followup: false,
-      followup_question: "",
-      extracted: { items_or_services: [] }
-    });
+    const fallback = inputModality === "text"
+      ? "TEXT_REPLY: I'm sorry, I'm having trouble right now. Our team will help you soon!"
+      : "TEXT_REPLY: I'm sorry, I'm having trouble right now. Our team will help you soon!\nVOICE_TTS: I am sorry, I am having trouble right now. Our team will help you soon.";
+    return fallback;
   }
 }
 

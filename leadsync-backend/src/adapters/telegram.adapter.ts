@@ -276,20 +276,21 @@ export class TelegramAdapter implements ChannelAdapter {
 
             this.sendTyping(chatId).catch(() => { });
 
-            /* FIND / CREATE LEAD */
-            let lead = await prisma.lead.findFirst({
-                where: { contact: chatId, channel: Channel.TELEGRAM, companyId },
+            /* FIND / CREATE LEAD (Safe against race conditions) */
+            const lead = await prisma.lead.upsert({
+                where: {
+                    contact_channel_companyId: {
+                        contact: chatId,
+                        channel: Channel.TELEGRAM,
+                        companyId
+                    }
+                },
+                update: { name },
+                create: { name, contact: chatId, channel: Channel.TELEGRAM, companyId },
             });
 
-            if (!lead) {
-                lead = await prisma.lead.create({
-                    data: { name, contact: chatId, channel: Channel.TELEGRAM, companyId },
-                });
-                emitToCompany(companyId, "lead_created", lead);
-            }
-
-            /* FIND / CREATE CONVERSATION */
-            let conversation = await prisma.conversation.findUnique({
+            /* FIND / CREATE CONVERSATION (Safe against race conditions) */
+            const conversation = await prisma.conversation.upsert({
                 where: {
                     leadId_companyId_channel: {
                         leadId: lead.id,
@@ -297,26 +298,21 @@ export class TelegramAdapter implements ChannelAdapter {
                         channel: Channel.TELEGRAM,
                     },
                 },
+                update: {},
+                create: {
+                    leadId: lead.id,
+                    companyId,
+                    channel: Channel.TELEGRAM,
+                    mode: ConversationMode.BOT,
+                },
             });
 
-            if (!conversation) {
-                conversation = await prisma.conversation.create({
-                    data: {
-                        leadId: lead.id,
-                        companyId,
-                        channel: Channel.TELEGRAM,
-                        mode: ConversationMode.BOT,
-                    },
-                });
-            }
-
-            /* DEDUPLICATE */
+            /* DEDUPLICATE CLIENT MESSAGE */
             const existingMessage = await prisma.message.findFirst({
                 where: {
                     conversationId: conversation.id,
                     content: text,
                     sender: MessageSender.CLIENT,
-                    // Check recently created to dedupe retries
                     createdAt: { gt: new Date(Date.now() - 1000 * 60) }
                 },
             });
@@ -339,14 +335,10 @@ export class TelegramAdapter implements ChannelAdapter {
             });
             emitToConversation(conversation.id, "new_message", clientMsg);
 
-            // 🧠 INTELLIGENCE: Analyze message in background (Fire-and-forget)
-            // This updates Sentiment, Intent, and LastActiveAt without blocking the bot reply.
-            intelligenceService.analyzeMessage(
-                companyId,
-                lead.id,
-                conversation.id,
-                text
-            ).catch((err: any) => console.error("Intelligence Error:", err));
+            // 🧠 BACKGROUND TASKS: Intelligence + Order Parsing
+            const { orderParserService } = await import("../services/orderParser.service");
+            intelligenceService.analyzeMessage(companyId, lead.id, conversation.id, text).catch(() => { });
+            orderParserService.processPotentialOrder(companyId, conversation.id, lead.id, text, company.botStructuredMenu).catch(() => { });
 
             // 🔔 NOTIFICATION: Notify Assigned Agent & Admins
             const notifyBody = `${name}: ${text.length > 50 ? text.slice(0, 50) + "..." : text}`;
@@ -356,15 +348,6 @@ export class TelegramAdapter implements ChannelAdapter {
                 notificationService.notifyCompanyAdmins(companyId, "New Unassigned Message", notifyBody, "MESSAGE");
             }
 
-            // 🍔 ORDER DETECTION: Check for orders in background
-            orderParserService.processPotentialOrder(
-                companyId,
-                conversation.id,
-                lead.id,
-                text,
-                company.botStructuredMenu
-            ).catch((err: any) => console.error("OrderParser Error:", err));
-
             if (conversation.mode === ConversationMode.HUMAN) return;
 
             /* COMMAND HANDLING */
@@ -373,84 +356,7 @@ export class TelegramAdapter implements ChannelAdapter {
                 return;
             }
 
-            /* MENU LOGIC */
-            /* DYNAMIC TERMINOLOGY (Industry Aware) */
-            const businessType = (company.botBusinessType || "business").toLowerCase();
-
-            // Regex Matchers
-            const isFood = businessType.match(/(restaurant|food|cafe|bakery|kitchen|dining|bistro|grill|pizza|burger)/);
-            const isRetail = businessType.match(/(retail|clothing|fashion|boutique|wear|store|shop|mart|apparel)/);
-            const isElectronics = businessType.match(/(electronics|mobile|tech|gadgets|computer|laptop|devices)/);
-            const isService = businessType.match(/(service|consulting|agency|salon|spa|repair|gym|fitness)/);
-
-            let catalogTerm = "Catalog";
-            if (isFood) catalogTerm = "Menu";
-            else if (isRetail) catalogTerm = "Collection";
-            else if (isElectronics) catalogTerm = "Inventory";
-            else if (isService) catalogTerm = "Services";
-
-            const structuredMenu = company.botStructuredMenu as StructuredMenu | null;
-            const categories = structuredMenu?.categories || [];
-
-            const input = text.toLowerCase();
-            const isMenuRequest =
-                input === "menu" ||
-                input === "/menu" ||
-                input.includes("menu") ||
-                input.includes("catalog") ||
-                input.includes("products") ||
-                input.includes("services") ||
-                input.includes("collection") || // Retail
-                input.includes("inventory") || // Electronics
-                input.includes("enna") ||        // Tamil "What"
-                input.includes("irruku") ||      // Tamil "is there"
-                input.includes("sapadu") ||      // Tamil "food"
-                (input.includes("orders") && (input.includes("have") || input.includes("list") || input.includes("show") || input.includes("what"))) ||
-                input.includes("options") ||
-                input.includes("available");
-
-            if (isMenuRequest) {
-                if (!categories.length) {
-                    await this.saveAndSendSystemMessage(chatId, conversation, `⚠️ Our ${catalogTerm} is currently empty.`);
-                    return;
-                }
-
-                let menuMsg = `📜 *Our ${catalogTerm}*\n\n`;
-
-                categories.forEach((cat) => {
-                    menuMsg += `*${cat.name.toUpperCase()}*\n`;
-                    cat.items.forEach((item: any) => {
-                        const price = item.price ? `₹${item.price}` : "Contact for Price";
-                        menuMsg += `- ${item.name}: ${price}\n`;
-                        if (item.description && item.description.length < 50) {
-                            menuMsg += `  _${item.description}_\n`;
-                        }
-                    });
-                    menuMsg += "\n";
-                });
-
-                await this.saveAndSendSystemMessage(chatId, conversation, menuMsg);
-                return;
-            }
-
-            const matchedCategory = categories.find(cat =>
-                input === cat.name.toLowerCase() ||
-                input === cat.name.toLowerCase() + "s" ||
-                (input.length > 3 && cat.name.toLowerCase().includes(input))
-            );
-
-            if (matchedCategory) {
-                let catMsg = `📜 *${matchedCategory.name}*\n\n`;
-                matchedCategory.items.forEach(item => {
-                    catMsg += `- ${item.name}: ₹${item.price}\n`;
-                });
-
-                await this.saveAndSendSystemMessage(chatId, conversation, catMsg);
-                return;
-            }
-
-            /* AI REPLY (Unified via Bot Logic) */
-            // Fire typing indicator
+            /* AI REPLY */
             this.sendTyping(chatId).catch(() => { });
 
             try {
@@ -460,52 +366,40 @@ export class TelegramAdapter implements ChannelAdapter {
 
                 if (!aiReply) return;
 
-                // 🔊 JSON HANDLING: Extract fields from the new specific schema
+                // 🔊 PARSE TEXT_REPLY & VOICE_TTS (No JSON)
                 let displayMessage = aiReply;
-                let spokenMessage = aiReply;
+                let spokenMessage = "";
 
-                try {
-                    if (aiReply.trim().startsWith('{')) {
-                        const parsed = JSON.parse(aiReply);
-                        displayMessage = parsed.text_reply || aiReply;
-                        spokenMessage = parsed.voice_reply_text || displayMessage;
-                    }
-                } catch (e) { /* fallback to raw string */ }
+                const textMatch = aiReply.match(/TEXT_REPLY:\s*(.*)/i);
+                const voiceMatch = aiReply.match(/VOICE_TTS:\s*(.*)/i);
 
-                // 🔊 CONCURRENCY CHECK: Skip if agent took over
+                if (textMatch) {
+                    displayMessage = textMatch[1].split(/\nVOICE_TTS:/i)[0].trim();
+                } else {
+                    displayMessage = aiReply.replace(/VOICE_TTS:.*$/is, "").trim();
+                }
+                spokenMessage = voiceMatch ? voiceMatch[1].trim() : displayMessage;
+
+                // 🔊 CONCURRENCY CHECK
                 const freshConv = await prisma.conversation.findUnique({
                     where: { id: conversation.id },
                     select: { mode: true }
                 });
-                if (freshConv?.mode === "HUMAN") {
-                    console.log(`⚠️ AI reply skipped for ${chatId} - HUMAN mode active.`);
-                    return;
-                }
+                if (freshConv?.mode === "HUMAN") return;
 
-                // 🎤 PRE-GENERATE VOICE IN PARALLEL (Cache for 2 min)
-                // Use the spoken version for cleaner TTS
+                // 🎤 PRE-GENERATE VOICE (Cache for 2 min)
                 sarvamService.textToSpeech(spokenMessage, detectedLanguage)
                     .then(audioBuffer => {
-                        if (audioBuffer) {
-                            cacheService.set(cacheService.getPendingVoiceKey(chatId), audioBuffer, 120);
-                            console.log(`🔊 Voice pre-cached for ${chatId} in ${detectedLanguage}`);
-                        }
+                        if (audioBuffer) cacheService.set(cacheService.getPendingVoiceKey(chatId), audioBuffer, 120);
                     })
-                    .catch(err => console.error("TTS pre-gen error:", err));
+                    .catch(err => console.error("TTS error:", err));
 
-                // 🔘 Handling Modality Output
+                // 🔘 OUTPUT
                 if (isVoiceMsg) {
-                    // Cache the text and voice versions for the buttons
                     cacheService.set(cacheService.getPendingTextKey(chatId), displayMessage, 600);
-
                     const botMsg = await prisma.message.create({
-                        data: {
-                            content: displayMessage,
-                            sender: MessageSender.SYSTEM,
-                            conversationId: conversation.id,
-                        },
+                        data: { content: displayMessage, sender: MessageSender.SYSTEM, conversationId: conversation.id },
                     });
-
                     safeEmitConversationUpdate(conversation, "conversation_updated", {
                         conversationId: conversation.id,
                         lastMessage: displayMessage,
@@ -516,13 +410,12 @@ export class TelegramAdapter implements ChannelAdapter {
                     let intro = "I've prepared a reply for you:";
                     if (detectedLanguage === "ta-IN") intro = "உங்களுக்கான பதில் இதோ:";
                     else if (detectedLanguage === "hi-IN") intro = "आपके लिए एक जवाब तैयार है:";
-
                     await this.sendMessageWithVoiceButtons(chatId, intro);
                 } else {
                     await this.saveAndSendSystemMessage(chatId, conversation, displayMessage);
                 }
             } catch (err) {
-                console.error("Unified Bot Message Error:", err);
+                console.error("Bot Logic Error:", err);
             }
 
         } catch (err) {

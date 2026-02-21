@@ -44,11 +44,9 @@ A streamlined pipeline for converting conversations into revenue.
 
 ---
 
-## 📈 Recent Improvements (Feb 21, 2026)
-- ✅ **Fixed AI "Amnesia":** AI now correctly recalls previous conversation turns.
-- ✅ **Language Precision:** AI now strictly sticks to the customer's language (no unsolicited "Welcome back" loops).
-- ✅ **History Migration:** Fixed orders "bouncing back" to the board; they now move strictly to the History page.
-- ✅ **Logistics Cleanup:** Removed the redundant Logistics column from the Live Board to simplify agent focus.
+- ✅ **Optimized AI Format:** Switched to a hyper-clean, non-JSON plain text format for faster parsing and zero markdown errors.
+- ✅ **Database Reliability:** Fixed P2002 Unique Constraint errors in Lead/Conversation creation using atomic upsert operations.
+- ✅ **Multi-Modality Accuracy:** Precise handling of Voice vs Text replies with automatic emoji stripping for voice playback.
 
 ---
 
