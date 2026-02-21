@@ -79,12 +79,12 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     let whereCondition: any = { companyId, isDeleted: false };
 
     if (view === "history") {
-      // History: Completed, Delivered, Cancelled, Archived
-      whereCondition.status = { in: ["DELIVERED", "COMPLETED", "CANCELLED", "ARCHIVED", "REJECTED"] };
+      // History: Completed, Delivered, Cancelled, Archived, Shipped
+      whereCondition.status = { in: ["DELIVERED", "COMPLETED", "CANCELLED", "ARCHIVED", "REJECTED", "SHIPPED"] };
     } else {
       // Active Board: Include all non-terminal stages
       whereCondition.status = {
-        in: ["NEW", "PENDING", "BOT_CREATED_ORDER", "CONFIRMED", "PROCESSING", "PREPARING", "READY", "SHIPPED"]
+        in: ["NEW", "PENDING", "BOT_CREATED_ORDER", "CONFIRMED", "PROCESSING", "PREPARING", "READY"]
       };
     }
 

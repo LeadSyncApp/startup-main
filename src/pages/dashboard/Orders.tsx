@@ -38,7 +38,6 @@ export default function Orders() {
     { id: "NEW", title: industry.pipelineLabels.new, color: "border-blue-200 bg-blue-50/50", statuses: ["NEW", "PENDING"] },
     { id: "PROCESSING", title: industry.pipelineLabels.processing, color: "border-indigo-200 bg-indigo-50/50", statuses: ["PROCESSING", "CONFIRMED", "PREPARING"] },
     { id: "READY", title: industry.pipelineLabels.ready, color: "border-emerald-200 bg-emerald-50/50", statuses: ["READY"] },
-    { id: "DELIVERY", title: industry.pipelineLabels.logistics, color: "border-amber-200 bg-amber-50/50", statuses: ["SHIPPED"] },
   ], [industry]);
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -81,7 +80,7 @@ export default function Orders() {
       'PREPARING': 4, 'READY': 5, 'SHIPPED': 6, 'DELIVERED': 7,
       'COMPLETED': 8, 'CANCELLED': 9, 'REJECTED': 9, 'ARCHIVED': 10
     };
-    const TERMINAL = ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'];
+    const TERMINAL = ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED', 'SHIPPED'];
 
     const handleUpdate = (updated: Order) => {
       const status = (updated.status || "NEW").toUpperCase();
@@ -256,7 +255,7 @@ export default function Orders() {
   };
 
   const activeOrdersCount = useMemo(() => orders.filter(o =>
-    !['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(o.status.toUpperCase())
+    !['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED', 'SHIPPED'].includes(o.status.toUpperCase())
   ).length, [orders]);
 
   const revenueToday = useMemo(() => orders
@@ -368,7 +367,17 @@ export default function Orders() {
                       <td className="px-6 py-4 text-slate-600 line-clamp-1 max-w-[200px]">{order.summary}</td>
                       <td className="px-6 py-4 font-bold text-slate-900">₹{order.amount}</td>
                       <td className="px-6 py-4">
-                        <StatusBadge status={order.status} />
+                        <div className="flex items-center gap-2">
+                          <StatusBadge status={order.status} />
+                          {order.status.toUpperCase() === "SHIPPED" && (
+                            <button
+                              onClick={() => handleMoveStatus(order.id, "DELIVERED")}
+                              className="text-[10px] bg-slate-800 text-white px-2 py-1 rounded hover:bg-slate-700 transition font-bold"
+                            >
+                              Complete
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-right">
                         {(isOwner || isAdmin) && (
@@ -445,13 +454,7 @@ function OrderCard({ order, onApprove, onReject, onMove }: any) {
           {currentStatus === "READY" && (
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
-              <button onClick={() => onMove("SHIPPED")} className="flex-1 text-xs bg-amber-50 text-amber-700 px-3 py-2 rounded font-semibold hover:bg-amber-100">Deliver</button>
-            </div>
-          )}
-          {currentStatus === "SHIPPED" && (
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
-              <button onClick={() => onMove("DELIVERED")} className="flex-1 text-xs bg-slate-800 text-white px-3 py-2 rounded font-semibold hover:bg-slate-700">Complete</button>
+              <button onClick={() => onMove("SHIPPED")} className="flex-1 text-xs bg-amber-50 text-amber-700 px-3 py-2 rounded font-semibold hover:bg-amber-100 italic font-bold">Deliver Now</button>
             </div>
           )}
         </div>

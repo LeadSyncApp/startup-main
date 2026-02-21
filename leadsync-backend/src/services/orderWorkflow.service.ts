@@ -84,7 +84,7 @@ export class OrderWorkflowService {
                         status: newStatus,
                         version: nextVersion,
                         processedById: actor.id,
-                        completedAt: ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED'].includes(newStatus)
+                        completedAt: ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'SHIPPED'].includes(newStatus)
                             ? new Date()
                             : (oldStatus === OrderStatus.BOT_CREATED_ORDER ? null : order.completedAt),
                         approvalStatus: newStatus === OrderStatus.CONFIRMED ? OrderApprovalStatus.APPROVED

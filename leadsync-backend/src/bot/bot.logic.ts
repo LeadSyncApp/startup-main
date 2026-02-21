@@ -53,12 +53,40 @@ export async function handleBotMessage(
 
   const structuredMenu = company?.botStructuredMenu || null;
 
-  // 3️⃣ Generate AI reply grounded to structured menu
+  // 3️⃣ Fetch History (Context)
+  const history = await prisma.message.findMany({
+    where: { conversationId },
+    orderBy: { createdAt: "desc" },
+    take: 6,
+  });
+
+  const historyContext = history
+    .reverse()
+    .filter(m => m.content !== userMessage) // Avoid double current message
+    .map(m => ({
+      role: m.sender === "CLIENT" ? "user" : "assistant",
+      content: m.content
+    }));
+
+  // 4️⃣ Fetch Order History
+  const orderHistory = await prisma.order.findMany({
+    where: {
+      conversationId,
+      isDeleted: false,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 3,
+    select: { summary: true, amount: true, createdAt: true }
+  });
+
+  // 5️⃣ Generate AI reply grounded to structured menu
   const reply = await generateBotReply(
     userMessage,
     businessName,
     businessType,
-    structuredMenu
+    structuredMenu,
+    historyContext,
+    orderHistory as any
   );
 
   return reply;
