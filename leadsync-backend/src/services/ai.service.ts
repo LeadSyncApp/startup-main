@@ -103,20 +103,23 @@ OUTPUT ONLY THE SUMMARY. NO PREAMBLE.`;
 export async function generateShopReply(input: {
   tenant_id: string;
   user_message: string;
+  detected_language: string;
   session_state: any;
   retrieved_items: any[];
   learned_knowledge_text: string;
   learned_knowledge_structured?: any;
   menu_snapshot: any;
   shop_policies?: string;
+  order_history?: any[];
+  latest_order_status?: string | null;
 }): Promise<{ replyText: string; stateUpdates: any }> {
   try {
     const systemPrompt = `You are a shop assistant for a specific merchant (multi-tenant). HARD RULES:
-1) Use ONLY the provided shop data: retrieved_items, learned_knowledge_text/structured, menu_snapshot, shop_policies, session_state.
-2) Never invent items, prices, stock, sizes, colors, variants, brands, discounts, delivery promises, or availability not present.
-3) If information is missing, ask ONE clarifying question OR offer alternatives that exist in the menu.
-4) Use session_state to interpret follow-ups (e.g., 'casual', '1kg', 'blue', 'under 500').
-5) Reply in the user's language (Tamil/English mix allowed).
+1) Use ONLY the provided shop data: retrieved_items, learned_knowledge_text, menu_snapshot, shop_policies, and order_status.
+2) Never invent items or details. If information is missing, ask or offer alternatives from the menu.
+3) Use session_state to interpret follow-ups.
+4) LANGUAGE MIRRORING: Strictly match the user's detected_language. If they speak English, reply ONLY in English. If they speak Tamil, reply in Tamil. If they speak Mixed/Hinglish/Tanglish, mirror that mix. Never switch to Tamil if the user is speaking English.
+5) If the user says "Yeah confirm" or "confirm", acknowledge the order confirmation simply (e.g., "Got it! Your order is being processed.") instead of giving product recommendations.
 6) Output MUST be valid JSON ONLY. No markdown, no extra text.`;
 
     const userPrompt = `
@@ -202,6 +205,7 @@ export async function generateBotReply(
   const result = await generateShopReply({
     tenant_id: "default",
     user_message: message,
+    detected_language: detectedLanguage,
     session_state: { last_category: null, last_item_names: [], preferences: {} },
     retrieved_items: retrieved,
     learned_knowledge_text: controlFlags.botLearnedContext || "",

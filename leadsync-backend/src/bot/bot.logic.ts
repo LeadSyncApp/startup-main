@@ -154,11 +154,14 @@ CALLBACK: VIEW_MENU`;
   const result = await generateShopReply({
     tenant_id,
     user_message: userMessage,
+    detected_language: detectedLanguage,
     session_state,
     retrieved_items: retrievedItems,
     learned_knowledge_text: (company as any)?.botLearnedContext || "",
     menu_snapshot: menuSnapshot,
-    shop_policies: (company as any)?.botPolicies || ""
+    shop_policies: (company as any)?.botPolicies || "",
+    order_history: orderHistory,
+    latest_order_status: latestOrder?.status
   });
 
   // 7️⃣ Update Session Memory
