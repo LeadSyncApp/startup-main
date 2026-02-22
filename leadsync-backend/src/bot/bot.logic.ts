@@ -31,7 +31,8 @@ export async function handleBotMessage(
   modality: "text" | "voice" = "text",
   detectedLanguage: string = "en-IN",
   triggerSource: "typed_command" | "button_click" | "normal_message" = "normal_message",
-  command?: string
+  command?: string,
+  callbackPayload?: string
 ): Promise<string | null> {
   // 1️⃣ Get conversation with Lead (Customer Profile)
   const conversation = await prisma.conversation.findUnique({
@@ -95,6 +96,13 @@ export async function handleBotMessage(
     }
   });
 
+  // 5.5️⃣ Fetch latest order for status updates
+  const latestOrder = await prisma.order.findFirst({
+    where: { conversationId, isDeleted: false },
+    orderBy: { createdAt: "desc" },
+    select: { status: true, summary: true }
+  });
+
   const isMenuRequest = /menu|list|items|show|what|product|porutkal|patti/i.test(userMessage.toLowerCase());
 
   const controlFlags: any = {
@@ -102,7 +110,9 @@ export async function handleBotMessage(
     menu_allowed: true,
     history_allowed: !pendingOrder && !isMenuRequest, // 🛡️ CRITICAL: Disable history if ordering or asking for menu
     command,
-    trigger_source: triggerSource
+    trigger_source: triggerSource,
+    callback_payload: callbackPayload,
+    latest_order: latestOrder
   };
 
   // 6️⃣ Generate AI reply grounded to structured menu

@@ -182,7 +182,8 @@ export class TelegramAdapter implements ChannelAdapter {
                         "text",
                         "en-IN", // generic fallback, AI will redetect
                         "button_click",
-                        "/menu"
+                        "/menu",
+                        data
                     );
                     if (aiReply) {
                         await this.parseAndSendResponse(chatId, conversation, aiReply);
