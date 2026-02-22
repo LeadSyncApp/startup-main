@@ -1,6 +1,7 @@
 import { OrderStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { generateBotReply } from "../services/geminiService";
+import { generateShopReply } from "../services/geminiService";
+import { getSession, updateSession, getMenuSnapshot, calculateRetrieval } from "../utils/shop-ai.utils";
 
 /* =====================================================
    SWITCH TO BOT MODE
@@ -139,56 +140,30 @@ CALLBACK: VIEW_MENU`;
     select: { status: true, summary: true }
   });
 
-  // 5.6️⃣ Resolve Scope for Menu Browsing
-  let resolvedScope: "ALL" | "CATEGORY" | "NONE" = "NONE";
-  let resolvedCategoryName = "";
 
-  const lowerMsg = userMessage.toLowerCase();
-  const categories = structuredMenu?.categories || [];
+  // 5.6️⃣ Resolve Session & Retrieval (Phase 1)
+  const tenant_id = conversation.companyId;
+  const chat_id = conversation.lead.contact;
+  const session_state = getSession(tenant_id, chat_id);
 
-  if (lowerMsg.includes("show all") || lowerMsg.includes("everything") || lowerMsg.includes("menu") || lowerMsg.includes("items")) {
-    resolvedScope = "ALL";
-  } else {
-    // Check for category match
-    const matchedCategory = categories.find((cat: any) =>
-      lowerMsg.includes(cat.name.toLowerCase())
-    );
-    if (matchedCategory) {
-      resolvedScope = "CATEGORY";
-      resolvedCategoryName = matchedCategory.name;
-    }
+  const menuSnapshot = getMenuSnapshot(company?.botStructuredMenu);
+  const retrievedItems = calculateRetrieval(userMessage, menuSnapshot);
+
+  // 6️⃣ Generate AI reply grounded to structured menu (Phase 1)
+  const result = await generateShopReply({
+    tenant_id,
+    user_message: userMessage,
+    session_state,
+    retrieved_items: retrievedItems,
+    learned_knowledge_text: company?.botLearnedContext || "",
+    menu_snapshot: menuSnapshot,
+    shop_policies: "" // Optional policies
+  });
+
+  // 7️⃣ Update Session Memory
+  if (result.stateUpdates) {
+    updateSession(tenant_id, chat_id, result.stateUpdates);
   }
 
-  const controlFlags: any = {
-    eventType,
-    force_mode: pendingOrder ? "CONFIRM_ORDER" : "AUTO",
-    menu_allowed: true,
-    history_allowed: !pendingOrder,
-    command,
-    trigger_source: triggerSource,
-    callback_payload: callbackPayload,
-    latest_order: latestOrder,
-    resolvedScope,
-    resolvedCategoryName,
-    botLearnedContext, // 🆕 Added field
-  };
-
-  // 6️⃣ Generate AI reply grounded to structured menu
-  const reply = await generateBotReply(
-    userMessage,
-    businessName,
-    businessType,
-    structuredMenu,
-    historyContext,
-    orderHistory as any,
-    conversation.lead,
-    modality,
-    {
-      ...controlFlags,
-      pendingOrder: pendingOrder ? { summary: pendingOrder.summary, amount: pendingOrder.amount } : undefined
-    },
-    detectedLanguage
-  );
-
-  return reply;
+  return result.replyText;
 }

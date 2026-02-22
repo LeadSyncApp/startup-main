@@ -1,5 +1,6 @@
 import axios from "axios";
 import Groq from "groq-sdk";
+import { safeJsonParse, sanitizeReply, getMenuSnapshot, calculateRetrieval } from "../utils/shop-ai.utils";
 
 // Initialize Groq
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "dummy" });
@@ -98,6 +99,84 @@ OUTPUT ONLY THE SUMMARY. NO PREAMBLE.`;
   }
 }
 
+
+export async function generateShopReply(input: {
+  tenant_id: string;
+  user_message: string;
+  session_state: any;
+  retrieved_items: any[];
+  learned_knowledge_text: string;
+  learned_knowledge_structured?: any;
+  menu_snapshot: any;
+  shop_policies?: string;
+}): Promise<{ replyText: string; stateUpdates: any }> {
+  try {
+    const systemPrompt = `You are a shop assistant for a specific merchant (multi-tenant). HARD RULES:
+1) Use ONLY the provided shop data: retrieved_items, learned_knowledge_text/structured, menu_snapshot, shop_policies, session_state.
+2) Never invent items, prices, stock, sizes, colors, variants, brands, discounts, delivery promises, or availability not present.
+3) If information is missing, ask ONE clarifying question OR offer alternatives that exist in the menu.
+4) Use session_state to interpret follow-ups (e.g., 'casual', '1kg', 'blue', 'under 500').
+5) Reply in the user's language (Tamil/English mix allowed).
+6) Output MUST be valid JSON ONLY. No markdown, no extra text.`;
+
+    const userPrompt = `
+Input Payload:
+${JSON.stringify(input, null, 2)}
+
+Return VALID JSON ONLY in this schema:
+{
+  "reply": "string",
+  "intent": "PRICE_QUERY|AVAILABILITY_QUERY|RECOMMENDATION|COMPARE|VIEW_MENU|ORDER_INTENT|POLICY_QUERY|OTHER",
+  "detected_language": "ta|en|mixed|other",
+  "slots": {
+    "item_name": "string|null",
+    "category": "string|null",
+    "quantity": "number|null",
+    "unit": "kg|piece|pack|ml|service|hour|null",
+    "color": "string|null",
+    "size": "string|null",
+    "budget_max": "number|null",
+    "purpose": "string|null"
+  },
+  "state_updates": {
+    "last_category": "string|null",
+    "last_item_names": ["string"],
+    "preferences": {
+      "color": "string|null",
+      "size": "string|null",
+      "budget_max": "number|null",
+      "purpose": "string|null"
+    }
+  },
+  "needs_clarification": "boolean",
+  "clarifying_question": "string|null"
+}`;
+
+    const messages = [{ role: "user" as const, content: userPrompt }];
+    const rawOutput = await generateWithFallback(messages, systemPrompt);
+
+    // SAFE PARSE GUARD
+    const parsed = safeJsonParse(rawOutput, {
+      reply: "I'm sorry, I'm having trouble processing that. How can I help you with our menu?",
+      state_updates: input.session_state
+    });
+
+    return {
+      replyText: sanitizeReply(parsed.reply || parsed.clarifying_question || "How can I help you?"),
+      stateUpdates: parsed.state_updates || input.session_state
+    };
+  } catch (error) {
+    console.error("❌ generateShopReply error:", error);
+    return {
+      replyText: "I'm sorry, I encountered an error. Please try again or ask for an agent.",
+      stateUpdates: input.session_state
+    };
+  }
+}
+
+/**
+ * @deprecated Use generateShopReply for Phase 1
+ */
 export async function generateBotReply(
   message: string,
   businessName: string,
@@ -107,103 +186,29 @@ export async function generateBotReply(
   orderHistory?: any[],
   customerProfile?: any,
   inputModality: "text" | "voice" = "text",
-  controlFlags: {
-    eventType?: "START" | "MENU_BUTTON_CLICK" | "USER_MESSAGE";
-    force_mode?: "AUTO" | "CONFIRM_ORDER" | "BROWSE_MENU" | "SUPPORT_ONLY";
-    menu_allowed?: boolean;
-    history_allowed?: boolean;
-    pendingOrder?: { summary: string; amount: number };
-    command?: string;
-    trigger_source?: "typed_command" | "button_click" | "normal_message";
-    callback_payload?: string;
-    latest_order?: { status: string; summary: string } | null;
-    resolvedScope?: "ALL" | "CATEGORY" | "NONE";
-    resolvedCategoryName?: string;
-    botLearnedContext?: string; // 🆕 Added field
-  } = { eventType: "USER_MESSAGE", force_mode: "AUTO", menu_allowed: true, history_allowed: true, resolvedScope: "NONE", resolvedCategoryName: "" },
+  controlFlags: any = {},
   detectedLanguage: string = "en-IN"
 ): Promise<string> {
-  try {
-    const { eventType = "USER_MESSAGE", resolvedScope = "NONE", resolvedCategoryName = "", botLearnedContext = "" } = controlFlags;
+  // Simple wrapper for compatibility during migration
+  // Simple wrapper for compatibility during migration
 
-    // 🏷️ Format Product List for the AI
-    let productList = "NO PRODUCTS LISTED";
-    if (structuredMenu?.categories?.length > 0) {
-      productList = structuredMenu.categories
-        .map((cat: any) =>
-          `Category: "${cat.name}"\n` +
-          cat.items.map((i: any) => `  - { name: "${i.name}", price: ${i.price} }`).join("\n")
-        )
-        .join("\n");
-    }
+  // We don't have tenant_id/chat_id here easily without changing signature drastically
+  // but for Phase 1, the handleBotMessage will call generateShopReply directly.
+  // This is kept for any other parts of code that might still call it.
 
-    const lastAssistantMessage = (history || []).filter(h => h.role === "assistant").pop()?.content || "";
+  const menuSnapshot = getMenuSnapshot(structuredMenu);
+  const retrieved = calculateRetrieval(message, menuSnapshot);
 
-    const userLanguageHint = detectedLanguage.split("-")[0]; // en, ta, hi
+  const result = await generateShopReply({
+    tenant_id: "default",
+    user_message: message,
+    session_state: { last_category: null, last_item_names: [], preferences: {} },
+    retrieved_items: retrieved,
+    learned_knowledge_text: controlFlags.botLearnedContext || "",
+    menu_snapshot: menuSnapshot,
+  });
 
-    const systemPrompt = `You are a professional, industry-agnostic shop assistant for ${businessName}. Use ONLY the menuData and shopContext provided. Do not invent items.
-
-STRICT OUTPUT:
-- Plain text only.
-- No emojis.
-- No JSON / markdown / code.
-- Do not repeat the user message.
-- Never say generic error lines like "I am having trouble". If unsure, ask one clarification.
-
-LANGUAGE MIRROR:
-Reply in the same language style as the user message (English / Tamil-Tanglish / Hindi-Hinglish / mixed). Switch immediately if the user switches.
-
-SYSTEM CONTEXT:
-resolvedScope = ${resolvedScope}
-resolvedCategoryName = ${resolvedCategoryName}
-shopContext (Learned info):
-${botLearnedContext || "None"}
-
-menuData (source of truth):
-${productList}
-
-RESPONSE RULES:
-1) If resolvedScope = ALL:
-- Summarize by listing each category and 2–3 items per category with prices.
-- Ask ONE question: "Which category would you like?" (in the user’s language).
-
-2) If resolvedScope = CATEGORY:
-- Recommend 1–3 items ONLY from that category:
-  - include price
-  - give a brief reason based on shopContext if available (value/comfort/formal/popular)
-- Ask EXACTLY ONE follow-up question (purpose OR budget). Not both.
-
-3) If resolvedScope = NONE:
-- If the user is asking about a specific item, use shopContext and menuData to answer directly.
-- Otherwise, ask ONE clarification question to identify the category or say "type show all".
-
-Now respond to the user based on the context above. Keep it conversational.`;
-
-    const conversation = [
-      ...(history || [])
-        .slice(-8)
-        .map(m => ({
-          role: m.role || "user",
-          content: m.content
-        })),
-      { role: "user", content: message } // 🔥 Ensure current message is always last as USER role
-    ];
-
-    let aiOutput = await generateWithFallback(conversation, systemPrompt);
-
-    // Sanitization
-    aiOutput = aiOutput.replace(/```[a-z]*\n?|```/gi, "").trim();
-    aiOutput = aiOutput.replace(/\*\*|\*/g, "");
-
-    // Final check for emojis (safety layer)
-    aiOutput = aiOutput.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "");
-
-    return aiOutput;
-
-  } catch (error) {
-    console.error("❌ Bot Reply Fatal Error:", error);
-    return "I am sorry, I am having trouble right now. Our team will help you soon.";
-  }
+  return result.replyText;
 }
 
 export async function generateStructuredMenu(
