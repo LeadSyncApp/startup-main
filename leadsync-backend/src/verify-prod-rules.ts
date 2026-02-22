@@ -3,7 +3,7 @@ import path from "path";
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 import { intelligenceService } from "./services/intelligence.service";
-import { generateBotReply } from "./services/geminiService";
+import { generateBotReply } from "./services/ai.service";
 import { orderParserService } from "./services/orderParser.service";
 
 async function verify() {
