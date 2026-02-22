@@ -171,52 +171,42 @@ export class InstagramAdapter implements ChannelAdapter {
             if (conversation.mode === ConversationMode.HUMAN) return;
 
             /* AI REPLY */
-            const history = await prisma.message.findMany({
-                where: { conversationId: conversation.id },
-                orderBy: { createdAt: "desc" },
-                take: 5,
-            });
-
-            const historyContext = history.reverse().map(m => ({
-                role: m.sender === MessageSender.CLIENT ? "user" : "assistant",
-                content: m.content
-            }));
+            this.sendTyping(psid).catch(() => { });
 
             try {
-                const aiReply = await aiQueue.add(() => generateBotReply(
+                const { handleBotMessage } = await import("../bot/bot.logic");
+                const aiReply = await handleBotMessage(
+                    conversation.id,
                     text,
-                    company.name,
-                    company.botBusinessType || "general business",
-                    company.botStructuredMenu,
-                    historyContext
-                ));
+                    "text",
+                    "en-IN", // Simplified for IG for now
+                    "normal_message"
+                );
 
-                // 🚨 PARSE RESPONSE (TEXT_REPLY: / VOICE_TTS:)
-                let displayMessage = aiReply;
+                if (!aiReply) return;
 
-                if (aiReply.includes("TEXT_REPLY:")) {
-                    const lines = aiReply.split("\n");
-                    const textLine = lines.find(l => l.startsWith("TEXT_REPLY:"));
-                    if (textLine) {
-                        displayMessage = textLine.replace("TEXT_REPLY:", "").trim();
+                // Parse and send parts
+                const parts = aiReply.split(/(?=MESSAGE:)/g).filter(p => p.trim());
+                for (const part of parts) {
+                    const lines = part.split("\n").map(l => l.trim());
+                    let messageText = "";
+                    let msgLines: string[] = [];
+
+                    for (const line of lines) {
+                        if (line.startsWith("BUTTON:") || line.startsWith("CALLBACK:")) {
+                            // IG buttons are a bit different, for MVP we'll just send the text
+                            // and maybe add button support later if needed.
+                            continue;
+                        } else {
+                            msgLines.push(line.replace(/^MESSAGE:/i, "").trim());
+                        }
                     }
-                } else if (aiReply.trim().startsWith('{')) {
-                    // Legacy JSON fallback
-                    try {
-                        const parsed = JSON.parse(aiReply);
-                        displayMessage = parsed.message_to_customer || parsed.response_text || aiReply;
-                    } catch (e) { }
+                    messageText = msgLines.filter(l => l !== "").join("\n");
+
+                    if (messageText) {
+                        await this.saveAndSendMessage(psid, conversation, messageText);
+                    }
                 }
-
-                // Final mode check
-                const freshConv = await prisma.conversation.findUnique({
-                    where: { id: conversation.id },
-                    select: { mode: true }
-                });
-
-                if (freshConv?.mode === "HUMAN") return;
-
-                await this.saveAndSendMessage(psid, conversation, displayMessage);
             } catch (err) {
                 console.error("AI Error (IG):", err);
             }

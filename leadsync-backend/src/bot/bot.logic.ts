@@ -167,8 +167,51 @@ CALLBACK: VIEW_MENU`;
   });
 
   // 7️⃣ Update Session (DB + Memory Sync)
+  let finalReply = result.replyText;
+
   if (result.stateUpdates) {
-    const updatedState = { ...session_state, ...result.stateUpdates };
+    let updatedState = { ...session_state, ...result.stateUpdates };
+
+    // 🆕 PHASE 2C: Handle Order Finalization
+    if (result.orderFinalized && updatedState.cart?.items?.length > 0) {
+      try {
+        const summaryText = updatedState.cart.items.map((i: any) => `${i.quantity}x ${i.name}`).join(", ");
+        const newOrder = await (prisma.order as any).create({
+          data: {
+            companyId: conversation.companyId,
+            conversationId: conversation.id,
+            leadId: conversation.leadId,
+            summary: summaryText,
+            items: updatedState.cart.items,
+            amount: updatedState.cart.total,
+            status: OrderStatus.BOT_CREATED_ORDER, // Ghost Order for Agent approval
+            source: "BOT_DETECTED",
+            priority: "NORMAL",
+          }
+        });
+        console.log("✅ Ghost Order created from AI finalization.");
+
+        // Step 2: Generate Payment Link (Phase 3 Intro)
+        const { paymentService } = await import("../services/payment.service");
+        const paymentUrl = await paymentService.createPaymentLink(
+          newOrder.id,
+          newOrder.amount,
+          conversation.lead.contact,
+          summaryText
+        );
+
+        if (paymentUrl) {
+          finalReply += `\n\n💳 Pay here to confirm: ${paymentUrl}`;
+        }
+
+        // Clear cart after order is successfully recorded
+        updatedState.cart = { items: [], total: 0 };
+      } catch (orderErr) {
+        console.error("❌ Failed to create ghost order:", orderErr);
+      }
+    } else if (result.cartCleared) {
+      updatedState.cart = { items: [], total: 0 };
+    }
 
     // Update DB
     await (prisma.conversation as any).update({
@@ -180,5 +223,5 @@ CALLBACK: VIEW_MENU`;
     updateSession(tenant_id, chat_id, updatedState);
   }
 
-  return result.replyText;
+  return finalReply;
 }

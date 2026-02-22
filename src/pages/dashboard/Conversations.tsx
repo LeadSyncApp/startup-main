@@ -679,6 +679,14 @@ export default function Conversations() {
                       >
                         <div className="flex-1">
                           <p className="text-xs font-black text-slate-800 uppercase tracking-tight line-clamp-1">{item.name}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {item.size && (
+                              <span className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase">{item.size}</span>
+                            )}
+                            {item.color && (
+                              <span className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase">{item.color}</span>
+                            )}
+                          </div>
                           <p className="text-[10px] text-slate-400 font-bold mt-1">₹{item.price} × {item.quantity}</p>
                         </div>
                         <p className="text-xs font-black text-indigo-600 ml-2">₹{item.subtotal}</p>

@@ -12,6 +12,8 @@ export interface CartItem {
     price: number;
     quantity: number;
     subtotal: number;
+    color?: string | null;
+    size?: string | null;
 }
 
 export interface SessionState {

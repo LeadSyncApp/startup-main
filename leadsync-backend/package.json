@@ -30,6 +30,7 @@
     "jsonwebtoken": "^9.0.3",
     "node-fetch": "^2.7.0",
     "openai": "^6.21.0",
+    "razorpay": "^2.9.6",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {

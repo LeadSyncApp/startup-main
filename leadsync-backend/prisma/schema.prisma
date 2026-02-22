@@ -43,6 +43,7 @@ enum OrderStatus {
   PENDING             // Legacy
   NEW                 // Legacy
   CONFIRMED           // Legacy
+  PAID                // 🆕 Payment Received
   PROCESSING          // 🆕 Active (Visible)
   PREPARING           // Legacy
   READY               // Legacy
@@ -255,6 +256,7 @@ model Order {
   leadId         String
 
   summary  String
+  items    Json?        // 🆕 Structured Cart Items [{name, price, quantity, subtotal}]
   amount   Float        @default(0)
   priority OrderPriority @default(NORMAL)
   status   OrderStatus   @default(BOT_CREATED_ORDER) // 🆕 Default to Ghost Order

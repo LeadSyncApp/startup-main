@@ -17,6 +17,7 @@ import ordersRoutes from "./routes/orders.routes";
 import usersRoutes from "./routes/users.routes";
 import analyticsRoutes from "./routes/analytics.routes";
 import notificationRoutes from "./routes/notification.routes";
+import webhookRoutes from "./routes/webhook.routes";
 
 console.log("🔥 app.ts loaded");
 
@@ -57,6 +58,7 @@ app.use("/api/orders", ordersRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/webhook", webhookRoutes);
 
 /* 🩺 DIAGNOSTIC ROUTE */
 app.get("/api/debug/system", async (req, res) => {

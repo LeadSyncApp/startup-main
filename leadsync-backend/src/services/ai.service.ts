@@ -112,7 +112,12 @@ export async function generateShopReply(input: {
   shop_policies?: string;
   order_history?: any[];
   latest_order_status?: string | null;
-}): Promise<{ replyText: string; stateUpdates: any }> {
+}): Promise<{
+  replyText: string;
+  stateUpdates: any;
+  orderFinalized?: boolean;
+  cartCleared?: boolean;
+}> {
   try {
     const systemPrompt = `You are a shop assistant for a specific merchant (multi-tenant). HARD RULES:
 1) Use ONLY the provided shop data: retrieved_items, learned_knowledge_text, menu_snapshot, shop_policies, and order_status.
@@ -129,8 +134,9 @@ export async function generateShopReply(input: {
    - Calculate subtotal (item price * quantity) and grand total.
    - Confirm added items in your reply text and provide a current cart summary (Items - Qty - Subtotal) if the cart has items.
 7) ITEM SPECIFICITY: If an item in the menu has specific attributes (like a "Large" vs "Regular" size, or "Red" vs "Blue") and the user didn't specify, set needs_clarification: true and ask the user to specify.
-8) If the user says "Yeah confirm" or "confirm", and the cart is not empty, acknowledge the order confirmation, summarize their final cart, and tell them an agent will process it.
-9) Output MUST be valid JSON ONLY. No markdown, no extra text.`;
+8) If the user says "Yeah confirm" or "confirm", and the cart is not empty, acknowledge the order confirmation, summarize their final cart, tell them an agent will process it, and set order_finalized: true.
+9) If the user says "clear cart", set cart_cleared: true.
+10) Output MUST be valid JSON ONLY. No markdown, no extra text.`;
 
     const userPrompt = `
 Input Payload:
@@ -162,11 +168,20 @@ Return VALID JSON ONLY in this schema:
     },
     "cart": {
       "items": [
-        { "name": "string", "price": "number", "quantity": "number", "subtotal": "number" }
+        { 
+          "name": "string", 
+          "price": "number", 
+          "quantity": "number", 
+          "subtotal": "number",
+          "color": "string|null",
+          "size": "string|null"
+        }
       ],
       "total": "number"
     }
   },
+  "order_finalized": "boolean",
+  "cart_cleared": "boolean",
   "needs_clarification": "boolean",
   "clarifying_question": "string|null"
 }`;
@@ -182,7 +197,9 @@ Return VALID JSON ONLY in this schema:
 
     return {
       replyText: sanitizeReply(parsed.reply || parsed.clarifying_question || "How can I help you?"),
-      stateUpdates: parsed.state_updates || input.session_state
+      stateUpdates: parsed.state_updates || input.session_state,
+      orderFinalized: !!parsed.order_finalized,
+      cartCleared: !!parsed.cart_cleared
     };
   } catch (error) {
     console.error("❌ generateShopReply error:", error);
