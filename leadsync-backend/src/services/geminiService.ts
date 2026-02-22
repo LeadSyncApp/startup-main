@@ -198,42 +198,86 @@ Tags: ${customerProfile.tags || "None"}
     const systemPrompt = `[INVENTORY]
 ${productList}
 
-====================================
-ABSOLUTE OUTPUT FORMAT
-====================================
-Return PLAIN TEXT ONLY. NO MARKDOWN (**bold**, etc). NO JSON.
-Format MUST be:
-MESSAGE: <reply text>
-BUTTON: <label text (optional)>
-CALLBACK: <payload (optional)>
+=============================
+ABSOLUTE OUTPUT (STRICT)
+=============================
+Return PLAIN TEXT ONLY.
+No JSON. No markdown. No code blocks. No backticks. No extra lines.
 
-====================================
-1. START FLOW (/start command)
-====================================
-If command="/start" or latest_user_message="/start":
-OUTPUT ONLY THIS:
-MESSAGE: 👋 Welcome to ${businessName}! I can help you browse items, check prices, and place an order. Tap below to see what we have today.
+Output must be EXACTLY one of:
+
+A) Welcome with button:
+MESSAGE: <text>
+BUTTON: <button text>
+CALLBACK: MENU
+
+B) Anything else:
+MESSAGE: <text>
+
+Nothing else is allowed. Do not output anything else. No internal instructions.
+
+=============================
+LANGUAGE MIRRORING (CRITICAL)
+=============================
+- Detect the user’s language from latest_user_message.
+- If user is Tamil/Tanglish → reply in Tamil/Tanglish.
+- If user is Hindi/Hinglish → reply in Hindi/Hinglish.
+- If user is English → reply in English.
+- If user switches to English mid-chat → immediately switch to English.
+- Do NOT randomly use English when user is using Tamil/Hindi.
+- Keep tone friendly and professional, short.
+
+=============================
+START FLOW (MUST)
+=============================
+If command="/start" OR latest_user_message="/start":
+Return ONLY:
+MESSAGE: 👋 Welcome to ${businessName}! Tap below to view today’s items.
 BUTTON: 🛍 View today’s items from ${businessName}
 CALLBACK: MENU
 
-CRITICAL: DO NOT show items from [INVENTORY] here.
+Do NOT show items from [INVENTORY] here.
 
-====================================
-2. MENU FLOW (/menu or MENU button)
-====================================
-If command="/menu" or latest_user_message="/menu" or callback_payload="MENU" or user asks for items:
-MESSAGE: Here is what we have today:
-${productList}
-Edhu venum? (or match user language)
+=============================
+MENU FLOW (MUST SHOW ITEMS)
+=============================
+You must show items ONLY when:
+- command="/menu"
+OR
+- latest_user_message="/menu"
+OR
+- trigger_source="button_click" AND callback_payload="MENU"
+OR
+- user explicitly asks for: "menu", "items", "options", "catalog", "what available"
 
-====================================
-3. ORDERING & CHAT
-====================================
-- ORDER_CONFIRMED (e.g., "venum", "pack it"): Confirm briefly + ask ONE missing detail (size/qty).
-- ORDER_INTENT (e.g., "available?", "can I order?"): Say yes + ask ONE detail.
-- BROWSING: Answer natural (+ "Order place pannikidava?").
-- LANGUAGE: Mirror user (Tamil/Hinglish/Tanglish).
-- Concise: 1-2 lines. No repetition. Move forward.
+When MENU FLOW is triggered:
+1) If [INVENTORY] contains at least 1 item name:
+   - You MUST list items (max 8) with prices if present.
+   - If categories exist, include category headings briefly.
+   - End with a short question: “Edhu venum?” / “What would you like?” / “Kya chahiye?”
+   - Do NOT reply with a generic sentence without listing items.
+2) If [INVENTORY] is empty OR has no item names:
+   - Do NOT print “Today’s items at …” with nothing.
+   - Instead ask what they are looking for (category/item).
+
+Example (Tanglish):
+MESSAGE: Innaiku ${businessName} la irukura items: Sleeveless T-Shirt (₹15), Shirt (₹20), Tracksuit (₹30). Edhu venum?
+
+=============================
+ORDER DETECTION (DO NOT BREAK MENU)
+=============================
+- If user message includes confirmed buying phrases (venum / pannirunga / I want / I need / order kar do / chahiye) and is NOT a question:
+  Confirm order + ask ONE next detail (size/qty/delivery). Do NOT show menu again.
+- If user asks permission (order pannalama? / can I order? / venuma? with question):
+  Do NOT confirm as placed; say yes + ask ONE detail.
+
+=============================
+ANTI-REPEAT / DO-NOTS
+=============================
+- Never repeat your previous reply. Move to the next step.
+- Never invent items not in [INVENTORY].
+- Never generate fake order IDs or delivery status updates.
+- Never say “How can I assist you today?” if user asked something specific.
 `;
 
     const conversation = (history || []).map(m => ({
@@ -281,11 +325,11 @@ export async function generateStructuredMenu(
     try {
       console.log("🤖 [AI] Generating Structured Menu (Groq)...");
       let prompt = `Generate a JSON menu for: ${description}.
-Format: {"categories": [{"name": "C", "items": [{"name": "I", "price": 10}]}]}
+    Format: { "categories": [{ "name": "C", "items": [{ "name": "I", "price": 10 }] }] }
 ONLY JSON. No markdown.`;
 
       if (existingMenu) {
-        prompt += `\nUpdate: ${JSON.stringify(existingMenu)}`;
+        prompt += `\nUpdate: ${JSON.stringify(existingMenu)} `;
       }
 
       const completion = await groq.chat.completions.create({
@@ -316,16 +360,16 @@ export async function generateStructuredOrder(
     const menuContext = JSON.stringify(menu?.categories || []);
 
     const prompt = `
-Context: A customer sent this message: "${text}".
-Task: Extract order items based strictly on the menu below.
-Menu: ${menuContext}
+    Context: A customer sent this message: "${text}".
+      Task: Extract order items based strictly on the menu below.
+        Menu: ${menuContext}
 
-Rules:
-1. Return JSON: { "items": [{ "name": "Item Name", "quantity": 1, "price": 100 }] }
-2. If exact price is unknown, estimate from menu or leave 0.
-3. If no items found, return { "items": [] }.
+    Rules:
+    1. Return JSON: { "items": [{ "name": "Item Name", "quantity": 1, "price": 100 }] }
+    2. If exact price is unknown, estimate from menu or leave 0.
+    3. If no items found, return { "items": [] }.
 4. Handle flexible inputs like "2 of the chicken ones".
-5. ONLY JSON. No markdown.
+5. ONLY JSON.No markdown.
 `;
 
     const completion = await groq.chat.completions.create({
