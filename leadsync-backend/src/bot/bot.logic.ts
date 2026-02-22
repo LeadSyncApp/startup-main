@@ -66,12 +66,12 @@ export async function handleBotMessage(
 
   if (command === "/start" || userMessage === "/start") {
     const welcomeMsg = isTamil
-      ? `MESSAGE: 👋 ${businessName}-ukku varugai! Inraiya items-ai paarka mela ulla button-ai click pannunga.`
+      ? `MESSAGE: 👋 ${businessName}-ற்கு வரவேற்கிறோம்! இன்று கிடைக்கும் பொருட்களைக் காண கீழே உள்ள பொத்தானைத் தட்டவும்.`
       : isHindi
-        ? `MESSAGE: 👋 ${businessName} mein aapka swagat hai! Aaj ke items dekhne ke liye neeche button dabayein.`
-        : `MESSAGE: 👋 Welcome to ${businessName}! Tap below to view today's items.`;
+        ? `MESSAGE: 👋 ${businessName} में आपका स्वागत है! आज के उत्पादों को देखने के लिए नीचे दिए गए बटन पर टैप करें।`
+        : `MESSAGE: 👋 Welcome to ${businessName}! Tap below to view our products.`;
 
-    const buttonText = isTamil ? "🛍 Menu-vai Paarkka" : isHindi ? "🛍 Menu Dekhein" : "🛍 View Menu";
+    const buttonText = isTamil ? "🛍 மெனுவைக் காண்க (View Menu)" : isHindi ? "🛍 मेनू देखें (View Menu)" : "🛍 View Menu";
 
     return `${welcomeMsg}
 BUTTON: ${buttonText}
@@ -81,14 +81,14 @@ CALLBACK: VIEW_MENU`;
   if (callbackPayload === "VIEW_MENU" || userMessage.toLowerCase() === "/menu") {
     if (!structuredMenu || !structuredMenu.categories || structuredMenu.categories.length === 0) {
       return isTamil
-        ? `MESSAGE: Sorry, ${businessName}-il ippo items edhuvum illa. Naan vera eppadi help panna mudiyum?`
+        ? `MESSAGE: மன்னிக்கவும், ${businessName}-இல் தற்போது பொருட்கள் எதுவும் இல்லை. நான் வேறு எவ்வகையில் உதவ முடியும்?`
         : isHindi
-          ? `MESSAGE: Sorry, ${businessName} mein abhi koi items nahi hain. Main aapki aur kya madad kar sakta hoon?`
+          ? `MESSAGE: क्षमा करें, ${businessName} में फिलहाल कोई आइटम उपलब्ध नहीं है। मैं आपकी और कैसे मदद कर सकता हूँ?`
           : `MESSAGE: Sorry, there are no items available right now at ${businessName}. How else can I help you?`;
     }
 
-    let menuTitle = isTamil ? `🛍 *${businessName}-in Inraiya Menu:*` : isHindi ? `🛍 *${businessName} ki Aaj ki Menu:*` : `🛍 *Today's menu at ${businessName}:*`;
-    let menuFooter = isTamil ? "Neenga edhai order panna virumbureenga?" : isHindi ? "Aap kya order karna chahenge?" : "What would you like to order?";
+    let menuTitle = isTamil ? `🛍 *${businessName} - தயாரிப்பு பட்டியல் (Product Catalog)*` : isHindi ? `🛍 *${businessName} - उत्पाद सूची (Product Catalog)*` : `🛍 *Today's Menu at ${businessName}:*`;
+    let menuFooter = isTamil ? "நீங்கள் எதை ஆர்டர் செய்ய விரும்புகிறீர்கள்?" : isHindi ? "Aap kya order karna chahenge?" : "What would you like to order?";
 
     let menuText = `${menuTitle}\n\n`;
     structuredMenu.categories.forEach((cat: any) => {
