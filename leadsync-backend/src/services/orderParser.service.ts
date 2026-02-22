@@ -27,19 +27,7 @@ class OrderParserService {
             // 1. Parse content (Regex First)
             let items: ParsedItem[] = this.parseItemsRegex(text, menu);
 
-            // 2. AI Fallback: Sarvam.ai (Optimized for Hindi/Mixed & Intent)
-            if (items.length === 0) {
-                const sarvamResult = await sarvamService.analyzeIntent(text);
-                if (sarvamResult && sarvamResult.intent === "ORDER" && sarvamResult.entities?.product) {
-                    items.push({
-                        name: sarvamResult.entities.product,
-                        quantity: sarvamResult.entities.quantity || 1,
-                        price: 0 // Will be matched by catalog or agent
-                    });
-                }
-            }
-
-            // 3. AI Deep extraction (Groq) if still no items but looks like order
+            // 2. AI Deep extraction (Groq) if regex fails and it looks like an order
             if (items.length === 0 && this.looksLikeOrder(text)) {
                 const aiResult = await generateStructuredOrder(text, menu);
                 if (aiResult.items && aiResult.items.length > 0) {
