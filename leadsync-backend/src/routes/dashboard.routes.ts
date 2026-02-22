@@ -1,7 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
-import { generateStructuredMenu } from "../services/geminiService";
+import { generateStructuredMenu, generateLearnedContext } from "../services/geminiService";
 import { cacheService } from "../services/cache.service";
 
 const router = Router();
@@ -127,6 +127,8 @@ router.get(
           botWelcomeMessage: true,
           botStructuredMenu: true,
           botMenu: true,
+          botKnowledgeBase: true,
+          botLearnedContext: true,
         },
       });
 
@@ -290,6 +292,66 @@ router.patch(
       res.status(500).json({
         message: "Failed to save menu",
       });
+    }
+  }
+);
+
+/* =====================================================
+   PATCH /api/dashboard/save-knowledge
+===================================================== */
+router.patch(
+  "/save-knowledge",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+      const { botKnowledgeBase, botLearnedContext } = req.body;
+
+      const updated = await prisma.company.update({
+        where: { id: req.user.companyId },
+        data: {
+          botKnowledgeBase,
+          botLearnedContext
+        }
+      });
+
+      res.json({ message: "Knowledge saved", company: updated });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to save knowledge" });
+    }
+  }
+);
+
+/* =====================================================
+   POST /api/dashboard/train-ai
+===================================================== */
+router.post(
+  "/train-ai",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+      const { botKnowledgeBase } = req.body;
+      if (!botKnowledgeBase) {
+        return res.status(400).json({ message: "Knowledge base is empty" });
+      }
+
+      const learned = await generateLearnedContext(botKnowledgeBase);
+
+      const updated = await prisma.company.update({
+        where: { id: req.user.companyId },
+        data: {
+          botKnowledgeBase,
+          botLearnedContext: learned
+        }
+      });
+
+      res.json({ message: "AI Trained successfully", botLearnedContext: learned });
+    } catch (error) {
+      console.error("Training error:", error);
+      res.status(500).json({ message: "Failed to train AI" });
     }
   }
 );

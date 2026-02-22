@@ -68,6 +68,35 @@ async function generateWithFallback(
   throw lastError || new Error("All AI models failed");
 }
 
+export async function generateLearnedContext(
+  knowledgeBase: string
+): Promise<string> {
+  if (!process.env.GROQ_API_KEY) return knowledgeBase;
+  try {
+    const prompt = `You are a knowledge extraction AI.
+The user provided these notes/descriptions about their shop items:
+"${knowledgeBase}"
+
+Your task:
+1. Extract key characteristics, selling points, or specific details for the items mentioned.
+2. Structure it as a concise, bulleted guide that a shop assistant can use to answer customer questions.
+3. Keep it plain text. No markdown formatting.
+4. If there are suggestions (e.g., "suggest X for Y"), include them.
+
+OUTPUT ONLY THE SUMMARY. NO PREAMBLE.`;
+
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.3,
+    });
+    return completion.choices[0]?.message?.content || "";
+  } catch (e) {
+    console.error("Knowledge extraction failed:", e);
+    return knowledgeBase;
+  }
+}
+
 export async function generateBotReply(
   message: string,
   businessName: string,
@@ -89,11 +118,12 @@ export async function generateBotReply(
     latest_order?: { status: string; summary: string } | null;
     resolvedScope?: "ALL" | "CATEGORY" | "NONE";
     resolvedCategoryName?: string;
+    botLearnedContext?: string; // 🆕 Added field
   } = { eventType: "USER_MESSAGE", force_mode: "AUTO", menu_allowed: true, history_allowed: true, resolvedScope: "NONE", resolvedCategoryName: "" },
   detectedLanguage: string = "en-IN"
 ): Promise<string> {
   try {
-    const { eventType = "USER_MESSAGE", resolvedScope = "NONE", resolvedCategoryName = "" } = controlFlags;
+    const { eventType = "USER_MESSAGE", resolvedScope = "NONE", resolvedCategoryName = "", botLearnedContext = "" } = controlFlags;
 
     // 🏷️ Format Product List for the AI
     let productList = "NO PRODUCTS LISTED";
@@ -110,7 +140,7 @@ export async function generateBotReply(
 
     const userLanguageHint = detectedLanguage.split("-")[0]; // en, ta, hi
 
-    const systemPrompt = `You are a professional, industry-agnostic shop assistant for ${businessName}. Use ONLY the menuData provided. Do not invent items.
+    const systemPrompt = `You are a professional, industry-agnostic shop assistant for ${businessName}. Use ONLY the menuData and shopContext provided. Do not invent items.
 
 STRICT OUTPUT:
 - Plain text only.
@@ -123,8 +153,11 @@ LANGUAGE MIRROR:
 Reply in the same language style as the user message (English / Tamil-Tanglish / Hindi-Hinglish / mixed). Switch immediately if the user switches.
 
 SYSTEM CONTEXT:
-resolvedScope = ${resolvedScope}  (one of: ALL, CATEGORY, NONE)
-resolvedCategoryName = ${resolvedCategoryName} (string or empty)
+resolvedScope = ${resolvedScope}
+resolvedCategoryName = ${resolvedCategoryName}
+shopContext (Learned info):
+${botLearnedContext || "None"}
+
 menuData (source of truth):
 ${productList}
 
@@ -136,7 +169,7 @@ RESPONSE RULES:
 2) If resolvedScope = CATEGORY:
 - Recommend 1–3 items ONLY from that category:
   - include price
-  - give a brief reason (value/comfort/formal/popular) without exaggeration
+  - give a brief reason based on shopContext if available (value/comfort/formal/popular)
 - Ask EXACTLY ONE follow-up question (purpose OR budget). Not both.
 
 3) If resolvedScope = NONE:

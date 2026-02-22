@@ -27,6 +27,9 @@ export default function Settings() {
   const [botBusinessType, setBotBusinessType] = useState("");
   const [botWelcomeMessage, setBotWelcomeMessage] = useState("");
   const [shopDescription, setShopDescription] = useState("");
+  const [botKnowledgeBase, setBotKnowledgeBase] = useState("");
+  const [botLearnedContext, setBotLearnedContext] = useState("");
+  const [isTraining, setIsTraining] = useState(false);
 
   // Instagram State
   const [instagramConnected, setInstagramConnected] = useState(false);
@@ -62,6 +65,8 @@ export default function Settings() {
           setBotBusinessType(configData.company.botBusinessType || "");
           setBotWelcomeMessage(configData.company.botWelcomeMessage || "");
           setGeneratedMenu(configData.company.botStructuredMenu || null);
+          setBotKnowledgeBase(configData.company.botKnowledgeBase || "");
+          setBotLearnedContext(configData.company.botLearnedContext || "");
         }
       } catch (error) {
         console.error("Failed to load settings:", error);
@@ -274,6 +279,44 @@ export default function Settings() {
   };
 
   /* ===============================
+     KNOWLEDGE BASE FUNCTIONS
+  =============================== */
+  const handleTrainAI = async () => {
+    if (!botKnowledgeBase.trim()) {
+      toast.error("Enter items and descriptions first");
+      return;
+    }
+
+    setIsTraining(true);
+    const toastId = toast.loading("AI is learning your shop details...");
+
+    try {
+      const data = await api.post("/dashboard/train-ai", {
+        botKnowledgeBase,
+      });
+
+      setBotLearnedContext(data.botLearnedContext);
+      toast.success("AI Training complete! 🧠", { id: toastId });
+    } catch (err) {
+      toast.error("Training failed", { id: toastId });
+    } finally {
+      setIsTraining(false);
+    }
+  };
+
+  const handleSaveKnowledge = async () => {
+    try {
+      await api.patch("/dashboard/save-knowledge", {
+        botKnowledgeBase,
+        botLearnedContext,
+      });
+      toast.success("Knowledge saved manually ✅");
+    } catch {
+      toast.error("Failed to save knowledge");
+    }
+  };
+
+  /* ===============================
      UI
   =============================== */
 
@@ -460,6 +503,60 @@ export default function Settings() {
             className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 transition"
           >
             Save Basic Config
+          </button>
+        </div>
+      </div>
+
+      {/* AI KNOWLEDGE BASE & LEARNING */}
+      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <span>🧠</span> AI Shop Knowledge (Advanced Tuning)
+        </h2>
+        <p className="text-sm text-slate-500">
+          Enter detailed descriptions, suggestions, or "facts" about your products here. The AI will learn from this to answer customer questions better.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              1. Raw Item Descriptions / Notes
+            </label>
+            <textarea
+              placeholder="Ex: 'Our Tracksuits are 100% cotton and perfect for gym. Suggest them if customers ask for breathable fabric.'"
+              value={botKnowledgeBase}
+              onChange={(e) => setBotKnowledgeBase(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 h-48 text-sm font-mono"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              2. What the AI Learnt (Editable)
+            </label>
+            <textarea
+              placeholder="AI summary will appear here..."
+              value={botLearnedContext}
+              onChange={(e) => setBotLearnedContext(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 h-48 text-sm bg-slate-50 italic"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={handleTrainAI}
+            disabled={isTraining}
+            className={`bg-indigo-600 text-white px-5 py-2 rounded-lg transition shadow-sm ${isTraining ? "opacity-50 cursor-not-allowed" : "hover:bg-indigo-700"
+              }`}
+          >
+            {isTraining ? "AI is Learning..." : "Train AI Now 🚀"}
+          </button>
+
+          <button
+            onClick={handleSaveKnowledge}
+            className="border border-slate-200 text-slate-600 px-5 py-2 rounded-lg hover:bg-slate-50 transition"
+          >
+            Save Knowledge Manually
           </button>
         </div>
       </div>

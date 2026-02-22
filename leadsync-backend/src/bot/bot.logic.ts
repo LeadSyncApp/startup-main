@@ -51,6 +51,7 @@ export async function handleBotMessage(
       name: true,
       botBusinessType: true,
       botStructuredMenu: true,
+      botLearnedContext: true,
     },
   });
 
@@ -59,6 +60,7 @@ export async function handleBotMessage(
     company?.botBusinessType || "general business";
 
   const structuredMenu = (company?.botStructuredMenu as any) || null;
+  const botLearnedContext = company?.botLearnedContext || "";
 
   // 2.5️⃣ HARDCODED ROUTING (NO AI - STRICT RULES)
   const isTamil = detectedLanguage.startsWith("ta");
@@ -167,7 +169,8 @@ CALLBACK: VIEW_MENU`;
     callback_payload: callbackPayload,
     latest_order: latestOrder,
     resolvedScope,
-    resolvedCategoryName
+    resolvedCategoryName,
+    botLearnedContext, // 🆕 Added field
   };
 
   // 6️⃣ Generate AI reply grounded to structured menu
