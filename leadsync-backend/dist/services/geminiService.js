@@ -6,36 +6,99 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateBotReply = generateBotReply;
 exports.generateStructuredMenu = generateStructuredMenu;
 exports.generateStructuredOrder = generateStructuredOrder;
+const axios_1 = __importDefault(require("axios"));
 const groq_sdk_1 = __importDefault(require("groq-sdk"));
-// Initialize Groq (Primary)
+// Initialize Groq
 const groq = new groq_sdk_1.default({ apiKey: process.env.GROQ_API_KEY || "dummy" });
-// Model Hierarchy: Fast (Only Groq)
+// Model Hierarchy: Sarvam for Multilingual, Groq for Speed
 const MODELS = [
-    { provider: "groq", id: "llama-3.1-8b-instant" }, // ⚡ ~0.3s latency
+    { provider: "sarvam", id: "sarvam-m" }, // 🇮🇳 Best for Indian Languages
+    { provider: "groq", id: "llama-3.3-70b-versatile" }, // 🔥 State-of-the-art fallback
 ];
 async function withTimeout(promise, ms, label) {
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms));
-    return Promise.race([promise, timeout]);
+    let timeoutId;
+    const timeout = new Promise((_, reject) => timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms));
+    try {
+        const result = await Promise.race([promise, timeout]);
+        clearTimeout(timeoutId);
+        return result;
+    }
+    catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
+    }
 }
 async function generateWithFallback(messages, systemPrompt) {
     let lastError;
     const useGroq = !!process.env.GROQ_API_KEY;
+    const useSarvam = !!process.env.SARVAM_API_KEY;
     for (const model of MODELS) {
         if (model.provider === "groq" && !useGroq)
+            continue;
+        if (model.provider === "sarvam" && !useSarvam)
             continue;
         try {
             console.log(`🤖 [AI] Attempting ${model.provider.toUpperCase()}: ${model.id}...`);
             let content = "";
             const timeoutMs = 8000; // 8s timeout per model
-            if (model.provider === "groq") {
+            if (model.provider === "sarvam") {
+                // Sarvam.ai is extremely strict: No "system" role, and roles MUST alternate (User -> Assistant -> User).
+                const rawHistory = messages.filter(m => m.content && typeof m.content === 'string' && m.content.trim());
+                const chatMessages = [];
+                // Instruction
+                const instructionPrefix = `[INSTRUCTION: ${systemPrompt}]\n\n`;
+                for (let i = 0; i < rawHistory.length; i++) {
+                    const m = rawHistory[i];
+                    const role = (m.role === "assistant" || m.role === "bot") ? "assistant" : "user";
+                    // Sarvam requires the first message to be from 'user'
+                    if (chatMessages.length === 0 && role === "assistant")
+                        continue;
+                    // Safety: Only add if it alternates
+                    if (chatMessages.length > 0 && chatMessages[chatMessages.length - 1].role === role) {
+                        chatMessages[chatMessages.length - 1].content += "\n" + m.content.trim();
+                    }
+                    else {
+                        const isLastUserMsg = i === rawHistory.length - 1 && role === "user";
+                        chatMessages.push({
+                            role,
+                            content: isLastUserMsg ? instructionPrefix + m.content.trim() : m.content.trim()
+                        });
+                    }
+                }
+                // Final safety: If still empty (unlikely) or ends with assistant, ensure it's valid for chat completion
+                if (chatMessages.length === 0) {
+                    chatMessages.push({ role: "user", content: instructionPrefix + "Hello" });
+                }
+                else if (chatMessages[chatMessages.length - 1].role === "assistant") {
+                    chatMessages.push({ role: "user", content: "Please continue according to the instructions." });
+                }
+                try {
+                    const response = await withTimeout(axios_1.default.post("https://api.sarvam.ai/v1/chat/completions", {
+                        model: model.id,
+                        messages: chatMessages,
+                        temperature: 0.1
+                    }, {
+                        headers: {
+                            "api-subscription-key": process.env.SARVAM_API_KEY,
+                            "Content-Type": "application/json"
+                        }
+                    }), timeoutMs, `Sarvam ${model.id}`);
+                    content = response.data?.choices?.[0]?.message?.content || "";
+                }
+                catch (axiosError) {
+                    const detail = axiosError.response?.data?.error?.message || axiosError.response?.data || axiosError.message;
+                    console.error(`❌ Sarvam API Error Detail:`, detail);
+                    throw axiosError;
+                }
+            }
+            else if (model.provider === "groq") {
                 const completion = await withTimeout(groq.chat.completions.create({
                     messages: [
                         { role: "system", content: systemPrompt },
                         ...messages.filter(m => m.content && m.content.trim())
                     ],
                     model: model.id,
-                    temperature: 0.3,
-                    max_tokens: 150,
+                    max_tokens: 400 // Increased for large content
                 }), timeoutMs, `Groq ${model.id}`);
                 content = completion.choices[0]?.message?.content || "";
             }
@@ -51,85 +114,110 @@ async function generateWithFallback(messages, systemPrompt) {
     }
     throw lastError || new Error("All AI models failed");
 }
-async function generateBotReply(message, // Unused but kept for signature compatibility if needed, though conversation includes it
-businessType, structuredMenu, history) {
+async function generateBotReply(message, businessName, businessType, structuredMenu, history, orderHistory, customerProfile, inputModality = "text", controlFlags = { force_mode: "AUTO", menu_allowed: true, history_allowed: true }, detectedLanguage = "en-IN") {
     try {
-        const businessTypeLower = businessType.toLowerCase();
-        // 🏭 DYNAMIC INDUSTRY DETECTION
-        const isFood = businessTypeLower.match(/(restaurant|food|cafe|bakery|kitchen|dining|bistro|grill|pizza|burger)/);
-        const isRetail = businessTypeLower.match(/(retail|clothing|fashion|boutique|wear|store|shop|mart|apparel)/);
-        const isElectronics = businessTypeLower.match(/(electronics|mobile|tech|gadgets|computer|laptop|devices)/);
-        const isService = businessTypeLower.match(/(service|consulting|agency|salon|spa|repair|gym|fitness)/);
-        // 🏷️ DYNAMIC TERMINOLOGY
-        let catalogTerm = "CATALOG";
-        let outputFocus = "products and features";
-        if (isFood) {
-            catalogTerm = "MENU";
-            outputFocus = "dishes, ingredients, and taste";
-        }
-        else if (isRetail) {
-            catalogTerm = "COLLECTION";
-            outputFocus = "styles, sizes, colors, and material";
-        }
-        else if (isElectronics) {
-            catalogTerm = "INVENTORY";
-            outputFocus = "specs, warranty, battery life, and compatibility";
-        }
-        else if (isService) {
-            catalogTerm = "SERVICES LIST";
-            outputFocus = "service details, duration, and pricing";
-        }
-        let systemPrompt = `You are a helpful, professional AI assistant for "${businessType}" (${catalogTerm} based).
-STRICT OPERATING RULES:
-1. DOMAIN LOCK: You are ONLY allowed to discuss ${outputFocus}.
-   - IF asked about food in a shoe store -> Polite refusal.
-   - IF asked about math/code -> Polite refusal.
-   - REFUSAL TEMPLATE: "I can only assist you with our ${catalogTerm} and orders."
-
-2. SOURCE OF TRUTH: The ${catalogTerm} below is your ONLY knowledge base. 
-   - DO NOT hallucinate items not listed.
-   - DO NOT invent prices.
-
-3. INTENT MAPPING:
-   - "Show menu/orders/options" -> Output the ${catalogTerm}.
-   - "What do you have?" -> Summarize the ${catalogTerm}.
-
-4. TONE & FORMAT:
-   - Be concise (< 40 words) unless listing items.
-   - Use emojis relevant to: ${businessType}.
-
-OFFICIAL ${catalogTerm} DATA:
-`;
+        const businessTypeLower = (businessType || "business").toLowerCase();
+        const { force_mode = "AUTO", menu_allowed = true, history_allowed = true, pendingOrder } = controlFlags;
+        // Detect hard language code for enforcement
+        let hardLanguageRule = "";
+        if (detectedLanguage.startsWith("ta"))
+            hardLanguageRule = "STYLE: The user is using TAMIL/TANGLISH. You MUST reply in TANGLISH (Tamil written in English letters). Mix Tamil and English naturally.";
+        else if (detectedLanguage.startsWith("hi"))
+            hardLanguageRule = "STYLE: The user is using HINDI/HINGLISH. You MUST reply in HINGLISH. Mix Hindi and English naturally.";
+        else if (detectedLanguage.startsWith("en"))
+            hardLanguageRule = "STYLE: You MUST reply in friendly, professional ENGLISH.";
+        // 🏷️ Format Product List
+        let productList = "NO PRODUCTS LISTED";
         if (structuredMenu?.categories?.length > 0) {
-            const formattedMenu = structuredMenu.categories
-                .map((cat) => `${cat.name.toUpperCase()}:\n` +
-                cat.items
-                    .map((i) => `- ${i.name} (${i.price ? '₹' + i.price : 'Contact for Price'})${i.description ? ': ' + i.description : ''}`)
-                    .join("\n"))
+            productList = structuredMenu.categories
+                .map((cat) => `--- ${cat.name.toUpperCase()} ---\n` +
+                cat.items.map((i) => `- ${i.name}: ₹${i.price}${i.description ? ' (' + i.description + ')' : ''}`).join("\n"))
                 .join("\n\n");
-            systemPrompt += `${formattedMenu}\n\n[END OF ${catalogTerm}]`;
         }
-        else {
-            systemPrompt += `(Empty ${catalogTerm}. Politely ask the user what they are looking for so you can check manually.)`;
+        // 📜 Format Order History
+        let formattedOrderHistory = "No previous order history.";
+        if (orderHistory && orderHistory.length > 0) {
+            formattedOrderHistory = orderHistory
+                .map(o => `- ${o.summary} (Total: ₹${o.amount}) on ${new Date(o.createdAt).toLocaleDateString()}`)
+                .join("\n");
         }
-        // Ensure conversation struct is valid
+        // 👤 Format Customer Profile
+        const profileText = customerProfile ? `
+Name: ${customerProfile.name || "Unknown"}
+Phone: ${customerProfile.contact || "Unknown"}
+Address: ${customerProfile.address || "Not provided"}
+Tags: ${customerProfile.tags || "None"}
+`.trim() : "New Customer";
+        // 🛒 Current Draft Order
+        const currentDraft = pendingOrder
+            ? `CURRENT DRAFT: ${pendingOrder.summary} (Total: ₹${pendingOrder.amount}).`
+            : "No items currently being ordered.";
+        const systemPrompt = `[INVENTORY]
+${productList}
+
+====================================
+ABSOLUTE OUTPUT FORMAT
+====================================
+Return PLAIN TEXT ONLY. NO MARKDOWN (**bold**, etc). NO JSON.
+Format MUST be:
+MESSAGE: <reply text>
+BUTTON: <label text (optional)>
+CALLBACK: <payload (optional)>
+
+====================================
+1. START FLOW (/start command)
+====================================
+If command="/start" or latest_user_message="/start":
+OUTPUT ONLY THIS:
+MESSAGE: 👋 Welcome to ${businessName}! I can help you browse items, check prices, and place an order. Tap below to see what we have today.
+BUTTON: 🛍 View today’s items from ${businessName}
+CALLBACK: MENU
+
+CRITICAL: DO NOT show items from [INVENTORY] here.
+
+====================================
+2. MENU FLOW (/menu or MENU button)
+====================================
+If command="/menu" or latest_user_message="/menu" or callback_payload="MENU" or user asks for items:
+MESSAGE: Here is what we have today:
+${productList}
+Edhu venum? (or match user language)
+
+====================================
+3. ORDERING & CHAT
+====================================
+- ORDER_CONFIRMED (e.g., "venum", "pack it"): Confirm briefly + ask ONE missing detail (size/qty).
+- ORDER_INTENT (e.g., "available?", "can I order?"): Say yes + ask ONE detail.
+- BROWSING: Answer natural (+ "Order place pannikidava?").
+- LANGUAGE: Mirror user (Tamil/Hinglish/Tanglish).
+- Concise: 1-2 lines. No repetition. Move forward.
+`;
         const conversation = (history || []).map(m => ({
             role: m.role,
             content: m.content
         }));
-        // Add current user message to conversation if not already there? 
-        // Wait, the adapter appends it. No, adapter passes `historyContext` which EXCLUDES the current message?
-        // Let's check `TelegramAdapter.ts`: `const historyContext = history.reverse().map(...)`
-        // Then `generateBotReply(text, ...)`
-        // But `generateBotReply` logic (old) was:
-        // const conversation = [ ...(history || []), { role: "user", content: message } ];
-        // So YES, we must append the current message here.
         conversation.push({ role: "user", content: message });
-        return await generateWithFallback(conversation, systemPrompt);
+        let aiOutput = await generateWithFallback(conversation, systemPrompt);
+        // 🛡️ SANITIZATION LAYER: Ensure we return the raw output for the adapter to parse
+        aiOutput = aiOutput.replace(/```[a-z]*\n?|```/gi, "").trim();
+        // Strip common markdown bold/italic markers that AI often adds despite rules
+        aiOutput = aiOutput.replace(/\*\*|\*/g, "");
+        // Since the format is now MESSAGE: / BUTTON: / CALLBACK:, we return it as is.
+        // However, if the AI output doesn't start with MESSAGE:, we wrap it for safety.
+        if (!aiOutput.includes("MESSAGE:")) {
+            aiOutput = "MESSAGE: " + aiOutput;
+        }
+        return aiOutput;
     }
     catch (error) {
         console.error("❌ Bot Reply Fatal Error:", error);
-        return "Thank you for reaching out! Our team will assist you shortly.";
+        if (inputModality === "text") {
+            return "I'm sorry, I'm having trouble right now. Our team will help you soon!";
+        }
+        return JSON.stringify({
+            response_text: "I am sorry, I am having trouble right now. Our team will help you soon.",
+            allow_voice_choice: true
+        });
     }
 }
 async function generateStructuredMenu(description, existingMenu) {
@@ -155,7 +243,7 @@ ONLY JSON. No markdown.`;
             console.error("Groq JSON generation failed, falling back...");
         }
     }
-    // Fallback logic for original simple object return 
+    // Fallback logic for original simple object return
     return existingMenu || { categories: [] };
 }
 async function generateStructuredOrder(text, menu) {

@@ -52,9 +52,14 @@ class IntelligenceService {
                 // Update Conversation
                 const updateData = {
                     sentimentScore: { increment: analysis.sentimentDelta },
-                    intent: analysis.intent, // String literal fine
                     updatedAt: new Date(),
                 };
+                // CRITICAL: Don't overwrite ORDERING intent with BROWSING/SUPPORT
+                // This prevents Intelligence from wiping out what OrderParser detected
+                const conversation = await tx.conversation.findUnique({ where: { id: conversationId } });
+                if (analysis.intent === 'ORDERING' || (conversation && conversation.intent !== 'ORDERING')) {
+                    updateData.intent = analysis.intent;
+                }
                 // Apply Auto-Assignment if triggered
                 if (assignedUserId) {
                     updateData.assignedToId = assignedUserId;
@@ -106,11 +111,21 @@ class IntelligenceService {
                 messages: [
                     {
                         role: "system",
-                        content: `Analyze the user message JSON.
-Format: {"sentiment": number, "intent": string}
-Context: Food delivery / e-commerce support.
+                        content: `Analyze the user message for intent and sentiment.
+Context: LeadSync Real-time Ordering & Support Assistant.
+
+STRICT INTENT PRIORITY:
+If message contains:
+- quantity + item/service (e.g., "4 dosa", "2 kg apple")
+- ordering keywords: "want", "order", "venum", "chahiye", "book", "dena", "vangi"
+THEN intent = "ORDERING".
+
+Rules:
 - sentiment: -5 (Angry) to +5 (Happy). 0 is neutral.
-- intent: "BROWSING", "ORDERING" (wants to buy), "SUPPORT" (help), "COMPLAINT" (angry/issue)
+- intent: "ORDERING", "SUPPORT", "COMPLAINT", "BROWSING"
+- If intent matches "ORDERING" keywords, NEVER classify as "BROWSING".
+
+Format: {"sentiment": number, "intent": string}
 `
                     },
                     { role: "user", content: text }
@@ -123,6 +138,14 @@ Context: Food delivery / e-commerce support.
             const content = response.choices[0]?.message?.content || "{}";
             const result = JSON.parse(content);
             let safeIntent = result.intent?.toUpperCase();
+            // CRITICAL OVERRIDE: Local regex check for absolute priority
+            const lowerText = text.toLowerCase();
+            const orderKeywords = ["want", "order", "venum", "chahiye", "book", "onnu", "rendu", "moonu", "naalu", "dena", "vangi"];
+            const hasQuantity = /\d+/.test(lowerText);
+            const forceOrder = orderKeywords.some(kw => lowerText.includes(kw)) || (hasQuantity && lowerText.length > 3);
+            if (forceOrder) {
+                safeIntent = "ORDERING";
+            }
             if (!["BROWSING", "ORDERING", "SUPPORT", "COMPLAINT"].includes(safeIntent)) {
                 safeIntent = "BROWSING";
             }

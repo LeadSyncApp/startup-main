@@ -30,12 +30,18 @@ router.get("/status", auth_middleware_1.authMiddleware, async (req, res) => {
             select: {
                 telegramConnected: true,
                 telegramBotUsername: true,
+                instagramConnected: true,
+                instagramPageId: true,
             },
         });
         res.json({
             telegram: {
                 connected: company?.telegramConnected ?? false,
                 username: company?.telegramBotUsername ?? null,
+            },
+            instagram: {
+                connected: company?.instagramConnected ?? false,
+                pageId: company?.instagramPageId ?? null,
             },
         });
     }

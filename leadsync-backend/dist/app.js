@@ -16,6 +16,7 @@ const conversations_routes_1 = __importDefault(require("./routes/conversations.r
 const public_routes_1 = __importDefault(require("./routes/public.routes"));
 const dashboard_routes_1 = __importDefault(require("./routes/dashboard.routes"));
 const telegram_integration_routes_1 = __importDefault(require("./routes/telegram.integration.routes"));
+const instagram_integration_routes_1 = __importDefault(require("./routes/instagram.integration.routes"));
 const orders_routes_1 = __importDefault(require("./routes/orders.routes"));
 const users_routes_1 = __importDefault(require("./routes/users.routes"));
 const analytics_routes_1 = __importDefault(require("./routes/analytics.routes"));
@@ -38,6 +39,7 @@ app.use("/api/telegram", telegram_routes_1.default);
 app.use("/api/public", public_routes_1.default);
 app.use("/api/integrations", integrations_routes_1.default);
 app.use("/api/integrations", telegram_integration_routes_1.default);
+app.use("/api/integrations", instagram_integration_routes_1.default);
 /* 🔐 SECURE ROUTE */
 app.use("/api/secure", secure_routes_1.default);
 /* 🔐 MAIN ROUTES */

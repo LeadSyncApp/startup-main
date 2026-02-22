@@ -53,4 +53,37 @@ router.post('/leads', async (req, res) => {
         res.status(500).json({ message: 'Failed to create lead' });
     }
 });
+/**
+ * GET /api/public/orders/:id
+ * Public endpoint – Order Tracking
+ */
+router.get('/orders/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const order = await prisma_1.prisma.order.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                status: true,
+                summary: true,
+                amount: true,
+                createdAt: true,
+                updatedAt: true,
+                lead: {
+                    select: {
+                        name: true
+                    }
+                }
+            }
+        });
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+        res.json(order);
+    }
+    catch (err) {
+        console.error("Tracking error:", err);
+        res.status(500).json({ message: 'Failed to fetch order' });
+    }
+});
 exports.default = router;

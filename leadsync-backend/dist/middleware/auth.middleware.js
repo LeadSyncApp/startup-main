@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.authMiddleware = void 0;
+exports.authorizeRoles = exports.authMiddleware = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -44,3 +44,22 @@ const authMiddleware = (req, res, next) => {
     }
 };
 exports.authMiddleware = authMiddleware;
+/**
+ * RBAC Middleware: Restrict access based on user role.
+ * Usage: authorizeRoles("OWNER", "ADMIN")
+ */
+const authorizeRoles = (...allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ message: "Authentication required" });
+        }
+        if (!allowedRoles.includes(req.user.role)) {
+            console.warn(`🛑 RBAC Violation: User ${req.user.userId} with role ${req.user.role} tried to access a restricted route.`);
+            return res.status(403).json({
+                message: "Access Denied: You do not have permission to perform this action."
+            });
+        }
+        next();
+    };
+};
+exports.authorizeRoles = authorizeRoles;

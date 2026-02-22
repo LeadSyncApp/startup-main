@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.switchToBot = switchToBot;
 exports.switchToHuman = switchToHuman;
 exports.handleBotMessage = handleBotMessage;
+const client_1 = require("@prisma/client");
 const prisma_1 = require("../lib/prisma");
 const geminiService_1 = require("../services/geminiService");
 /* =====================================================
@@ -26,10 +27,11 @@ async function switchToHuman(conversationId) {
 /* =====================================================
    HANDLE BOT MESSAGE (MULTI-TENANT + STRUCTURED MENU)
 ===================================================== */
-async function handleBotMessage(conversationId, userMessage) {
-    // 1️⃣ Get conversation
+async function handleBotMessage(conversationId, userMessage, modality = "text", detectedLanguage = "en-IN", triggerSource = "normal_message", command, callbackPayload) {
+    // 1️⃣ Get conversation with Lead (Customer Profile)
     const conversation = await prisma_1.prisma.conversation.findUnique({
         where: { id: conversationId },
+        include: { lead: true }
     });
     if (!conversation || conversation.mode !== "BOT") {
         return null;
@@ -38,13 +40,66 @@ async function handleBotMessage(conversationId, userMessage) {
     const company = await prisma_1.prisma.company.findUnique({
         where: { id: conversation.companyId },
         select: {
+            name: true,
             botBusinessType: true,
             botStructuredMenu: true,
         },
     });
+    const businessName = company?.name || "our company";
     const businessType = company?.botBusinessType || "general business";
     const structuredMenu = company?.botStructuredMenu || null;
-    // 3️⃣ Generate AI reply grounded to structured menu
-    const reply = await (0, geminiService_1.generateBotReply)(userMessage, businessType, structuredMenu);
+    // 3️⃣ Fetch History (Context)
+    const history = await prisma_1.prisma.message.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "desc" },
+        take: 15,
+    });
+    const historyContext = history
+        .reverse()
+        .filter(m => m.content !== userMessage) // Avoid double current message
+        .map(m => ({
+        role: m.sender === "CLIENT" ? "user" : "assistant",
+        content: m.content
+    }));
+    // 4️⃣ Fetch Order History
+    const orderHistory = await prisma_1.prisma.order.findMany({
+        where: {
+            conversationId,
+            isDeleted: false,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 3,
+        select: { summary: true, amount: true, createdAt: true }
+    });
+    // 5️⃣ Check for recent unconfirmed orders (Ghost orders)
+    const pendingOrder = await prisma_1.prisma.order.findFirst({
+        where: {
+            conversationId,
+            status: client_1.OrderStatus.BOT_CREATED_ORDER,
+            isDeleted: false,
+            createdAt: { gt: new Date(Date.now() - 5 * 60 * 1000) } // Last 5 mins
+        }
+    });
+    // 5.5️⃣ Fetch latest order for status updates
+    const latestOrder = await prisma_1.prisma.order.findFirst({
+        where: { conversationId, isDeleted: false },
+        orderBy: { createdAt: "desc" },
+        select: { status: true, summary: true }
+    });
+    const isMenuRequest = /menu|list|items|show|what|product|porutkal|patti/i.test(userMessage.toLowerCase());
+    const controlFlags = {
+        force_mode: pendingOrder ? "CONFIRM_ORDER" : (isMenuRequest ? "BROWSE_MENU" : "AUTO"),
+        menu_allowed: true,
+        history_allowed: !pendingOrder && !isMenuRequest, // 🛡️ CRITICAL: Disable history if ordering or asking for menu
+        command,
+        trigger_source: triggerSource,
+        callback_payload: callbackPayload,
+        latest_order: latestOrder
+    };
+    // 6️⃣ Generate AI reply grounded to structured menu
+    const reply = await (0, geminiService_1.generateBotReply)(userMessage, businessName, businessType, structuredMenu, historyContext, orderHistory, conversation.lead, modality, {
+        ...controlFlags,
+        pendingOrder: pendingOrder ? { summary: pendingOrder.summary, amount: pendingOrder.amount } : undefined
+    }, detectedLanguage);
     return reply;
 }

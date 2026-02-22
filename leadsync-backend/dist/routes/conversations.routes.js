@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_middleware_1 = require("../middleware/auth.middleware");
@@ -119,6 +152,9 @@ router.get("/:id/messages", auth_middleware_1.authMiddleware, async (req, res) =
                 amount: true,
                 approvalStatus: true,
                 status: true,
+                version: true,
+                priority: true,
+                isUrgent: true,
             },
         });
         res.json({
@@ -397,6 +433,49 @@ router.patch("/:id/status", auth_middleware_1.authMiddleware, async (req, res) =
     catch (error) {
         console.error("Status update error:", error);
         res.status(500).json({ message: "Failed to update status" });
+    }
+});
+/* =========================================
+   VOICE REPLY — Agent triggers TTS voice message to customer
+   POST /conversations/:id/voice-reply
+   Body: { messageId?: string }  (optional: for context)
+========================================= */
+router.post("/:id/voice-reply", auth_middleware_1.authMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { companyId } = req.user;
+        // Fetch conversation + lead contact + company token
+        const conversation = await prisma_1.prisma.conversation.findFirst({
+            where: { id, companyId },
+            include: {
+                lead: { select: { contact: true } },
+                company: { select: { telegramBotToken: true } },
+            },
+        });
+        if (!conversation)
+            return res.status(404).json({ message: "Conversation not found" });
+        if (!conversation.company.telegramBotToken)
+            return res.status(400).json({ message: "Telegram not connected" });
+        // Get last SYSTEM (bot) reply to convert to voice
+        const lastBotMsg = await prisma_1.prisma.message.findFirst({
+            where: { conversationId: id, sender: client_1.MessageSender.SYSTEM },
+            orderBy: { createdAt: "desc" },
+        });
+        if (!lastBotMsg)
+            return res.status(404).json({ message: "No bot reply found to convert to voice" });
+        const { sarvamService } = await Promise.resolve().then(() => __importStar(require("../services/sarvam.service")));
+        const { TelegramAdapter } = await Promise.resolve().then(() => __importStar(require("../adapters/telegram.adapter")));
+        const audioBuffer = await sarvamService.textToSpeech(lastBotMsg.content, "en-IN");
+        if (!audioBuffer)
+            return res.status(503).json({ message: "TTS generation failed. Try again." });
+        const adapter = new TelegramAdapter(conversation.company.telegramBotToken);
+        await adapter.sendVoice(conversation.lead.contact, audioBuffer);
+        console.log(`🔊 Agent voice reply sent to ${conversation.lead.contact}`);
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error("Voice reply error:", error);
+        res.status(500).json({ message: "Failed to send voice reply" });
     }
 });
 exports.default = router;

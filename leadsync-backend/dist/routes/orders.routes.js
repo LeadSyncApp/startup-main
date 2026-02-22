@@ -63,13 +63,13 @@ router.get("/", auth_middleware_1.authMiddleware, async (req, res) => {
         const view = req.query.view; // 'active' | 'history'
         let whereCondition = { companyId, isDeleted: false };
         if (view === "history") {
-            // History: Completed, Delivered, Cancelled, Archived
-            whereCondition.status = { in: ["DELIVERED", "COMPLETED", "CANCELLED", "ARCHIVED", "REJECTED"] };
+            // History: Completed, Delivered, Cancelled, Archived, Shipped
+            whereCondition.status = { in: ["DELIVERED", "COMPLETED", "CANCELLED", "ARCHIVED", "REJECTED", "SHIPPED"] };
         }
         else {
-            // Active Board: Include PENDING so Agents can claim/approve them
+            // Active Board: Include all non-terminal stages
             whereCondition.status = {
-                in: ["PENDING", "NEW", "CONFIRMED", "PREPARING", "READY"]
+                in: ["NEW", "PENDING", "BOT_CREATED_ORDER", "CONFIRMED", "PROCESSING", "PREPARING", "READY"]
             };
         }
         const orders = await prisma_1.prisma.order.findMany({
@@ -83,6 +83,7 @@ router.get("/", auth_middleware_1.authMiddleware, async (req, res) => {
                         channel: true,
                         totalSpend: true,
                         segment: true,
+                        // ...
                     }
                 },
                 processedBy: {
@@ -110,7 +111,8 @@ router.post("/:id/approve", auth_middleware_1.authMiddleware, async (req, res) =
         const { id } = req.params;
         const { version } = req.body; // Optimistic Lock
         const companyId = req.user.companyId;
-        const result = await orderWorkflow_service_1.orderWorkflowService.transitionStatus(id, client_1.OrderStatus.CONFIRMED, {
+        const result = await orderWorkflow_service_1.orderWorkflowService.transitionStatus(id, client_1.OrderStatus.PROCESSING, // 🆕 Move to PROCESSING (Active)
+        {
             id: req.user.userId,
             name: "Agent",
             role: req.user.role
@@ -173,9 +175,10 @@ router.patch("/:id/status", auth_middleware_1.authMiddleware, async (req, res) =
     }
 });
 /* ===============================
-   SOFT DELETE ORDER
+   SOFT DELETE ORDER (History Archive)
+   🔒 Restricted to: OWNER, ADMIN
 ================================== */
-router.delete("/:id", auth_middleware_1.authMiddleware, async (req, res) => {
+router.delete("/:id", auth_middleware_1.authMiddleware, (0, auth_middleware_1.authorizeRoles)("OWNER", "ADMIN"), async (req, res) => {
     try {
         const { id } = req.params;
         const companyId = req.user.companyId;

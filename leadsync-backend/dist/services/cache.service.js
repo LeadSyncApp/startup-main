@@ -29,5 +29,13 @@ class MemoryCache {
     getCompanyKey(id) {
         return `company:${id}`;
     }
+    // Helper for storing pending voice replies (keyed by chat ID)
+    getPendingVoiceKey(chatId) {
+        return `pending_voice:${chatId}`;
+    }
+    // Helper for storing pending text replies (keyed by chat ID)
+    getPendingTextKey(chatId) {
+        return `pending_text:${chatId}`;
+    }
 }
 exports.cacheService = new MemoryCache();
