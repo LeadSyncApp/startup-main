@@ -7,7 +7,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "dummy" });
 // Model Hierarchy: Groq for Speed (Primary) - Sarvam only for STT/TTS/Lang Detection
 const MODELS = [
   { provider: "groq", id: "llama-3.3-70b-versatile" },
-  { provider: "google", id: "gemini-1.5-flash" }, // 🆕 Fallback
+  { provider: "groq", id: "llama-3.1-8b-instant" }, // 🔥 Faster Fallback
 ];
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -55,23 +55,6 @@ async function generateWithFallback(
           `Groq ${model.id}`
         );
         content = completion.choices[0]?.message?.content || "";
-      } else if (model.provider === "google") {
-        // Fallback to Gemini via HTTP (Simpler) or Sarvam can handle it if we had a generic helper
-        // Since we have GEMINI_API_KEY in .env, let's use it for real fallback
-        try {
-          const response = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-            {
-              contents: [
-                { role: "user", parts: [{ text: systemPrompt + "\n\nConversation history below:\n" + messages.map(m => `${m.role}: ${m.content}`).join("\n") }] }
-              ],
-              generationConfig: { maxOutputTokens: 400 }
-            }
-          );
-          content = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        } catch (e) {
-          console.error("Gemini fallback failed");
-        }
       }
 
       if (content.trim()) {
