@@ -427,68 +427,72 @@ export class TelegramAdapter implements ChannelAdapter {
         detectedLanguage: string = "en-IN",
         isVoiceMsg: boolean = false
     ) {
-        // 1. Parse structured format
-        const lines = aiReply.split("\n").map(l => l.trim());
-        let messageText = "";
-        let buttonLabel = "";
-        let callbackData = "";
+        // 1. Split AI output into blocks (in case AI sends multiple MESSAGE: parts)
+        const parts = aiReply.split(/(?=MESSAGE:)/g).filter(p => p.trim());
 
-        for (const line of lines) {
-            if (line.startsWith("MESSAGE:")) messageText = line.replace("MESSAGE:", "").trim();
-            if (line.startsWith("BUTTON:")) buttonLabel = line.replace("BUTTON:", "").trim();
-            if (line.startsWith("CALLBACK:")) callbackData = line.replace("CALLBACK:", "").trim();
-        }
+        for (const part of parts) {
+            const lines = part.split("\n").map(l => l.trim());
+            let messageText = "";
+            let buttonLabel = "";
+            let callbackData = "";
 
-        // Fallback if AI forgot headers (very rare with strict prompt)
-        if (!messageText) {
-            // Filter out internal headers and use the rest as text
-            messageText = aiReply.split("\n")
-                .filter(l => !l.startsWith("BUTTON:") && !l.startsWith("CALLBACK:"))
-                .join("\n")
-                .replace(/^MESSAGE:\s*/i, "")
-                .trim() || aiReply;
-        }
+            for (const line of lines) {
+                if (line.startsWith("MESSAGE:")) messageText = line.replace("MESSAGE:", "").trim();
+                if (line.startsWith("BUTTON:")) buttonLabel = line.replace("BUTTON:", "").trim();
+                if (line.startsWith("CALLBACK:")) callbackData = line.replace("CALLBACK:", "").trim();
+            }
 
-        // 2. Save Message to DB
-        const botMsg = await prisma.message.create({
-            data: {
-                content: messageText,
-                sender: MessageSender.SYSTEM,
+            // Fallback for non-headered text in this block
+            if (!messageText) {
+                messageText = part.split("\n")
+                    .filter(l => !l.startsWith("BUTTON:") && !l.startsWith("CALLBACK:"))
+                    .join("\n")
+                    .replace(/^MESSAGE:\s*/i, "")
+                    .trim();
+            }
+
+            if (!messageText) continue;
+
+            // 2. Save Message to DB
+            const botMsg = await prisma.message.create({
+                data: {
+                    content: messageText,
+                    sender: MessageSender.SYSTEM,
+                    conversationId: conversation.id,
+                },
+            });
+
+            safeEmitConversationUpdate(conversation, "conversation_updated", {
                 conversationId: conversation.id,
-            },
-        });
+                lastMessage: messageText,
+                updatedAt: new Date(),
+            });
+            emitToConversation(conversation.id, "new_message", botMsg);
 
-        safeEmitConversationUpdate(conversation, "conversation_updated", {
-            conversationId: conversation.id,
-            lastMessage: messageText,
-            updatedAt: new Date(),
-        });
-        emitToConversation(conversation.id, "new_message", botMsg);
-
-        // 3. Send to Telegram
-        const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
-        const payload: any = {
-            chat_id: chatId,
-            text: messageText,
-            parse_mode: "HTML",
-        };
-
-        // Attach button if provided (for WELCOME_ONLY or any other interaction)
-        if (buttonLabel && callbackData) {
-            payload.reply_markup = {
-                inline_keyboard: [[{ text: buttonLabel, callback_data: callbackData }]]
+            // 3. Send to Telegram
+            const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
+            const payload: any = {
+                chat_id: chatId,
+                text: messageText,
+                parse_mode: "HTML",
             };
-        }
 
-        await sendTelegramApi(url, payload);
+            if (buttonLabel && callbackData) {
+                payload.reply_markup = {
+                    inline_keyboard: [[{ text: buttonLabel, callback_data: callbackData }]]
+                };
+            }
 
-        // 4. Pre-generate voice if it was a voice conversation
-        if (isVoiceMsg) {
-            sarvamService.textToSpeech(messageText, detectedLanguage)
-                .then(audioBuffer => {
-                    if (audioBuffer) cacheService.set(cacheService.getPendingVoiceKey(chatId), audioBuffer, 120);
-                })
-                .catch(() => { });
+            await sendTelegramApi(url, payload);
+
+            // 4. Pre-generate voice if it was a voice conversation (background)
+            if (isVoiceMsg) {
+                sarvamService.textToSpeech(messageText, detectedLanguage)
+                    .then(audioBuffer => {
+                        if (audioBuffer) cacheService.set(cacheService.getPendingVoiceKey(chatId), audioBuffer, 120);
+                    })
+                    .catch(() => { });
+            }
         }
     }
 
