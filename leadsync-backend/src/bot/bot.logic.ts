@@ -137,6 +137,26 @@ CALLBACK: VIEW_MENU`;
     select: { status: true, summary: true }
   });
 
+  // 5.6️⃣ Resolve Scope for Menu Browsing
+  let resolvedScope: "ALL" | "CATEGORY" | "NONE" = "NONE";
+  let resolvedCategoryName = "";
+
+  const lowerMsg = userMessage.toLowerCase();
+  const categories = structuredMenu?.categories || [];
+
+  if (lowerMsg.includes("show all") || lowerMsg.includes("everything") || lowerMsg.includes("menu") || lowerMsg.includes("items")) {
+    resolvedScope = "ALL";
+  } else {
+    // Check for category match
+    const matchedCategory = categories.find((cat: any) =>
+      lowerMsg.includes(cat.name.toLowerCase())
+    );
+    if (matchedCategory) {
+      resolvedScope = "CATEGORY";
+      resolvedCategoryName = matchedCategory.name;
+    }
+  }
+
   const controlFlags: any = {
     eventType,
     force_mode: pendingOrder ? "CONFIRM_ORDER" : "AUTO",
@@ -145,7 +165,9 @@ CALLBACK: VIEW_MENU`;
     command,
     trigger_source: triggerSource,
     callback_payload: callbackPayload,
-    latest_order: latestOrder
+    latest_order: latestOrder,
+    resolvedScope,
+    resolvedCategoryName
   };
 
   // 6️⃣ Generate AI reply grounded to structured menu

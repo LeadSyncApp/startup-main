@@ -87,11 +87,13 @@ export async function generateBotReply(
     trigger_source?: "typed_command" | "button_click" | "normal_message";
     callback_payload?: string;
     latest_order?: { status: string; summary: string } | null;
-  } = { eventType: "USER_MESSAGE", force_mode: "AUTO", menu_allowed: true, history_allowed: true },
+    resolvedScope?: "ALL" | "CATEGORY" | "NONE";
+    resolvedCategoryName?: string;
+  } = { eventType: "USER_MESSAGE", force_mode: "AUTO", menu_allowed: true, history_allowed: true, resolvedScope: "NONE", resolvedCategoryName: "" },
   detectedLanguage: string = "en-IN"
 ): Promise<string> {
   try {
-    const { eventType = "USER_MESSAGE", pendingOrder } = controlFlags;
+    const { eventType = "USER_MESSAGE", resolvedScope = "NONE", resolvedCategoryName = "" } = controlFlags;
 
     // 🏷️ Format Product List for the AI
     let productList = "NO PRODUCTS LISTED";
@@ -108,39 +110,39 @@ export async function generateBotReply(
 
     const userLanguageHint = detectedLanguage.split("-")[0]; // en, ta, hi
 
-    const systemPrompt = `You are a professional shop assistant for ${businessName}. Use ONLY the menu provided by the system.
+    const systemPrompt = `You are a professional, industry-agnostic shop assistant for ${businessName}. Use ONLY the menuData provided. Do not invent items.
 
-OUTPUT RULES (STRICT):
-- Output plain text only.
-- No JSON, no markdown, no code, no backticks.
+STRICT OUTPUT:
+- Plain text only.
 - No emojis.
-- Do NOT repeat the user's message.
-- Do NOT say "I am having trouble" or similar generic error lines.
-- Do NOT invent items, prices, discounts, delivery status, or past orders.
+- No JSON / markdown / code.
+- Do not repeat the user message.
+- Never say generic error lines like "I am having trouble". If unsure, ask one clarification.
 
 LANGUAGE MIRROR:
-Reply in the same language style as the user message (English/Tamil/Hindi/mixed). Switch immediately if the user switches.
+Reply in the same language style as the user message (English / Tamil-Tanglish / Hindi-Hinglish / mixed). Switch immediately if the user switches.
 
-MENU (ONLY SOURCE OF TRUTH):
+SYSTEM CONTEXT:
+resolvedScope = ${resolvedScope}  (one of: ALL, CATEGORY, NONE)
+resolvedCategoryName = ${resolvedCategoryName} (string or empty)
+menuData (source of truth):
 ${productList}
 
-CRITICAL RECOMMENDATION RULE:
-If the user asks for recommendation / "best" / "suggest" / "which one to buy":
-1) You MUST recommend 1–3 items from the menu IMMEDIATELY (include price + a short reason like value/comfort/formal).
-2) THEN ask EXACTLY ONE follow-up question (budget OR purpose). Not both.
-3) Do not ask a question without giving recommendations first.
+RESPONSE RULES:
+1) If resolvedScope = ALL:
+- Summarize by listing each category and 2–3 items per category with prices.
+- Ask ONE question: "Which category would you like?" (in the user’s language).
 
-ORDER RULE:
-Only treat as a confirmed order if the message clearly contains intent words like:
-English: order, buy, I want, I need
-Tamil/Tanglish: venum, kudunga, pannirunga, order pannunga
-Hindi/Hinglish: chahiye, mangta, order karna, de do
-If confirmed:
-- Confirm item + qty in one line (qty=1 if missing)
-- Ask exactly ONE next question (size/variant OR delivery/pickup)
-- Do not re-list menu.
+2) If resolvedScope = CATEGORY:
+- Recommend 1–3 items ONLY from that category:
+  - include price
+  - give a brief reason (value/comfort/formal/popular) without exaggeration
+- Ask EXACTLY ONE follow-up question (purpose OR budget). Not both.
 
-Now answer this customer message:
+3) If resolvedScope = NONE:
+- Ask ONE clarification question to identify the category or say "type show all".
+
+Now respond to the user:
 ${message}`;
 
     const conversation = (history || [])
