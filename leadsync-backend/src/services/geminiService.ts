@@ -55,12 +55,15 @@ async function generateWithFallback(
         for (let i = 0; i < rawHistory.length; i++) {
           const m = rawHistory[i];
           const role = (m.role === "assistant" || m.role === "bot") ? "assistant" : "user";
-          const isLastUserMsg = i === rawHistory.length - 1 && role === "user";
+
+          // Sarvam requires the first message to be from 'user'
+          if (chatMessages.length === 0 && role === "assistant") continue;
 
           // Safety: Only add if it alternates
           if (chatMessages.length > 0 && chatMessages[chatMessages.length - 1].role === role) {
             chatMessages[chatMessages.length - 1].content += "\n" + m.content.trim();
           } else {
+            const isLastUserMsg = i === rawHistory.length - 1 && role === "user";
             chatMessages.push({
               role,
               content: isLastUserMsg ? instructionPrefix + m.content.trim() : m.content.trim()
@@ -68,9 +71,11 @@ async function generateWithFallback(
           }
         }
 
-        // If history was empty OR last message was assistant, ensure we end with an instruction
-        if (chatMessages.length === 0 || chatMessages[chatMessages.length - 1].role === "assistant") {
-          chatMessages.push({ role: "user", content: instructionPrefix + "Please respond to the latest request." });
+        // Final safety: If still empty (unlikely) or ends with assistant, ensure it's valid for chat completion
+        if (chatMessages.length === 0) {
+          chatMessages.push({ role: "user", content: instructionPrefix + "Hello" });
+        } else if (chatMessages[chatMessages.length - 1].role === "assistant") {
+          chatMessages.push({ role: "user", content: "Please continue according to the instructions." });
         }
 
         try {
