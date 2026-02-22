@@ -198,6 +198,9 @@ model Conversation {
   assignedToId String?
   assignedTo   User?   @relation("AssignedConversations", fields: [assignedToId], references: [id])
 
+  // AI Session State (Memory)
+  sessionState Json?
+
   // Optimization
   priorityScore Int @default(0)
 

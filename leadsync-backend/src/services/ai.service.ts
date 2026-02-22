@@ -123,8 +123,14 @@ export async function generateShopReply(input: {
    - Acknowledge the rule (e.g., "We deliver within 5km").
    - DO NOT confirm eligibility until user provides a location.
    - Reply like: "Our delivery area is within 5km of our store. If you share your area or pincode, I can check if you're eligible!"
-6) If the user says "Yeah confirm" or "confirm", acknowledge the order confirmation simply instead of giving product recommendations.
-7) Output MUST be valid JSON ONLY. No markdown, no extra text.`;
+6) CART MANAGEMENT:
+   - If user wants to order/buy items, update the 'cart' in state_updates using input.session_state.cart as base.
+   - If user says "remove [item]" or "clear cart", update the cart state accordingly.
+   - Calculate subtotal (item price * quantity) and grand total.
+   - Confirm added items in your reply text and provide a current cart summary (Items - Qty - Subtotal) if the cart has items.
+7) ITEM SPECIFICITY: If an item in the menu has specific attributes (like a "Large" vs "Regular" size, or "Red" vs "Blue") and the user didn't specify, set needs_clarification: true and ask the user to specify.
+8) If the user says "Yeah confirm" or "confirm", and the cart is not empty, acknowledge the order confirmation, summarize their final cart, and tell them an agent will process it.
+9) Output MUST be valid JSON ONLY. No markdown, no extra text.`;
 
     const userPrompt = `
 Input Payload:
@@ -153,6 +159,12 @@ Return VALID JSON ONLY in this schema:
       "size": "string|null",
       "budget_max": "number|null",
       "purpose": "string|null"
+    },
+    "cart": {
+      "items": [
+        { "name": "string", "price": "number", "quantity": "number", "subtotal": "number" }
+      ],
+      "total": "number"
     }
   },
   "needs_clarification": "boolean",

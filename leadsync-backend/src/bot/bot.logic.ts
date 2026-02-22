@@ -39,7 +39,7 @@ export async function handleBotMessage(
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
     include: { lead: true }
-  });
+  }) as any;
 
   if (!conversation || conversation.mode !== "BOT") {
     return null;
@@ -142,15 +142,17 @@ CALLBACK: VIEW_MENU`;
   });
 
 
-  // 5.6️⃣ Resolve Session & Retrieval (Phase 1)
+  // 5.6️⃣ Resolve Session & Retrieval (Phase 1 & 2C)
   const tenant_id = conversation.companyId;
   const chat_id = conversation.lead.contact;
-  const session_state = getSession(tenant_id, chat_id);
+
+  // Prefer DB sessionState, fallback to in-memory, fallback to init
+  const session_state = (conversation.sessionState as any) || getSession(tenant_id, chat_id);
 
   const menuSnapshot = getMenuSnapshot(company?.botStructuredMenu);
   const retrievedItems = calculateRetrieval(userMessage, menuSnapshot);
 
-  // 6️⃣ Generate AI reply grounded to structured menu (Phase 1)
+  // 6️⃣ Generate AI reply grounded to structured menu (Phase 1 & 2C)
   const result = await generateShopReply({
     tenant_id,
     user_message: userMessage,
@@ -164,9 +166,18 @@ CALLBACK: VIEW_MENU`;
     latest_order_status: latestOrder?.status
   });
 
-  // 7️⃣ Update Session Memory
+  // 7️⃣ Update Session (DB + Memory Sync)
   if (result.stateUpdates) {
-    updateSession(tenant_id, chat_id, result.stateUpdates);
+    const updatedState = { ...session_state, ...result.stateUpdates };
+
+    // Update DB
+    await (prisma.conversation as any).update({
+      where: { id: conversationId },
+      data: { sessionState: updatedState }
+    });
+
+    // Update fallback memory
+    updateSession(tenant_id, chat_id, updatedState);
   }
 
   return result.replyText;

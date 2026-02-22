@@ -7,6 +7,13 @@
  * - Sanitization & Safety
  */
 
+export interface CartItem {
+    name: string;
+    price: number;
+    quantity: number;
+    subtotal: number;
+}
+
 export interface SessionState {
     last_category: string | null;
     last_item_names: string[];
@@ -15,6 +22,10 @@ export interface SessionState {
         size: string | null;
         budget_max: number | null;
         purpose: string | null;
+    };
+    cart: {
+        items: CartItem[];
+        total: number;
     };
 }
 
@@ -33,6 +44,10 @@ export function getSession(tenant_id: string, chat_id: string): SessionState {
                 budget_max: null,
                 purpose: null,
             },
+            cart: {
+                items: [],
+                total: 0
+            }
         });
     }
     return sessions.get(key)!;

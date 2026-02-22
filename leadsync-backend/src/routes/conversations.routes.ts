@@ -142,7 +142,8 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
       messages,
       order: latestOrder || null,
       isLocked: conversation.assignedToId && conversation.assignedToId !== userId && userRole === "AGENT",
-      assignedTo: conversation.assignedTo
+      assignedTo: conversation.assignedTo,
+      sessionState: conversation.sessionState
     });
 
   } catch (error) {

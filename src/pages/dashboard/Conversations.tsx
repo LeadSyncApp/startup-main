@@ -123,6 +123,7 @@ export default function Conversations() {
   }, [token, companyId]);
 
   const [activeOrder, setActiveOrder] = useState<any>(null); // State for Ghost Order
+  const [sessionState, setSessionState] = useState<any>(null); // 🆕 Phase 2C
 
   /* FETCH MESSAGES */
   const fetchMessages = async (conv: Conversation) => {
@@ -140,6 +141,7 @@ export default function Conversations() {
       setAssignedToAgent(data.assignedTo);
       // Set Active Order
       setActiveOrder(data.order);
+      setSessionState(data.sessionState); // 🆕 Phase 2C
     } catch (err) {
       console.error("Failed message fetch", err);
     }
@@ -549,107 +551,154 @@ export default function Conversations() {
             </AnimatePresence>
 
 
-            {/* MESSAGE LIST */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar bg-slate-50/30">
-              <AnimatePresence mode="popLayout">
-                {messages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 opacity-50">
-                    <div className="p-6 bg-slate-100 rounded-full mb-4"><Zap size={32} /></div>
-                    <p className="text-sm font-bold uppercase tracking-widest">No history found</p>
+            {/* MESSAGE LIST + SIDEPANEL CONTAINER */}
+            <div className="flex-1 flex overflow-hidden">
+              <div className="flex-1 flex flex-col min-w-0 h-full relative">
+                {/* MESSAGE LIST */}
+                <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar bg-slate-50/30">
+                  <AnimatePresence mode="popLayout">
+                    {messages.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 opacity-50">
+                        <div className="p-6 bg-slate-100 rounded-full mb-4"><Zap size={32} /></div>
+                        <p className="text-sm font-bold uppercase tracking-widest">No history found</p>
+                      </div>
+                    ) : (
+                      messages.map((msg) => {
+                        const isAgent = msg.sender === "AGENT";
+                        const isSystem = msg.sender === "SYSTEM";
+                        const isClient = msg.sender === "CLIENT";
+                        const isVoiceOrMedia = isClient && (
+                          msg.messageType === "VOICE" ||
+                          msg.messageType === "IMAGE" ||
+                          msg.messageType === "FILE"
+                        );
+
+                        if (isSystem) {
+                          return (
+                            <div key={msg.id} className="flex justify-center">
+                              <span className="bg-slate-200/50 text-slate-500 text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.2em] border border-slate-200 text-center max-w-[80%]">
+                                {msg.content}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return (
+                          <motion.div
+                            key={msg.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={`flex ${isAgent ? "justify-end" : "justify-start"}`}
+                          >
+                            <div className="flex flex-col max-w-[80%]">
+                              <div className={`px-5 py-3.5 rounded-[2rem] text-sm leading-relaxed font-medium shadow-sm transition-all ${isAgent
+                                ? "bg-indigo-600 text-white rounded-br-none"
+                                : "bg-white text-slate-800 rounded-bl-none border border-slate-100"
+                                }`}>
+                                {/* Voice badge for voice messages */}
+                                {msg.messageType === "VOICE" && isClient && (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-1.5 bg-indigo-50 px-2 py-0.5 rounded-full">
+                                    <Mic size={8} /> Voice
+                                  </span>
+                                )}
+                                <span className="block">{msg.content}</span>
+                              </div>
+                              <div className={`flex items-center gap-2 mt-2 ${isAgent ? "justify-end" : "justify-start"
+                                }`}>
+                                <span className={`text-[10px] font-bold uppercase tracking-tighter ${isAgent ? "text-indigo-400" : "text-slate-400"
+                                  }`}>
+                                  {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                {isAgent && <Check size={10} className="text-indigo-400" />}
+                                {/* Voice Reply button — only for voice/media client messages */}
+                                {isVoiceOrMedia && selected && (
+                                  <button
+                                    onClick={() => handleVoiceReply(msg.id, selected.id)}
+                                    className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 px-2 py-1 rounded-full transition-all"
+                                  >
+                                    <Mic size={9} /> Voice Reply
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* CHAT INPUT AREA */}
+                {isLocked ? (
+                  <div className="p-8 bg-slate-50 border-t border-slate-200 text-center">
+                    <div className="bg-amber-50 border border-amber-200 text-amber-800 px-6 py-4 rounded-xl flex items-center justify-center gap-3 shadow-sm">
+                      <div className="bg-amber-100 p-2 rounded-full"><span className="font-bold text-xs">🔒</span></div>
+                      <div className="text-left">
+                        <p className="font-black text-sm uppercase tracking-wide">Locked by {assignedToAgent?.name || "another agent"}</p>
+                        <p className="text-xs opacity-70">You can view but cannot reply.</p>
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  messages.map((msg) => {
-                    const isAgent = msg.sender === "AGENT";
-                    const isSystem = msg.sender === "SYSTEM";
-                    const isClient = msg.sender === "CLIENT";
-                    const isVoiceOrMedia = isClient && (
-                      msg.messageType === "VOICE" ||
-                      msg.messageType === "IMAGE" ||
-                      msg.messageType === "FILE"
-                    );
-
-                    if (isSystem) {
-                      return (
-                        <div key={msg.id} className="flex justify-center">
-                          <span className="bg-slate-200/50 text-slate-500 text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.2em] border border-slate-200 text-center max-w-[80%]">
-                            {msg.content}
-                          </span>
-                        </div>
-                      );
-                    }
-                    return (
-                      <motion.div
-                        key={msg.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`flex ${isAgent ? "justify-end" : "justify-start"}`}
-                      >
-                        <div className="flex flex-col max-w-[80%]">
-                          <div className={`px-5 py-3.5 rounded-[2rem] text-sm leading-relaxed font-medium shadow-sm transition-all ${isAgent
-                            ? "bg-indigo-600 text-white rounded-br-none"
-                            : "bg-white text-slate-800 rounded-bl-none border border-slate-100"
-                            }`}>
-                            {/* Voice badge for voice messages */}
-                            {msg.messageType === "VOICE" && isClient && (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-1.5 bg-indigo-50 px-2 py-0.5 rounded-full">
-                                <Mic size={8} /> Voice
-                              </span>
-                            )}
-                            <span className="block">{msg.content}</span>
-                          </div>
-                          <div className={`flex items-center gap-2 mt-2 ${isAgent ? "justify-end" : "justify-start"
-                            }`}>
-                            <span className={`text-[10px] font-bold uppercase tracking-tighter ${isAgent ? "text-indigo-400" : "text-slate-400"
-                              }`}>
-                              {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                            {isAgent && <Check size={10} className="text-indigo-400" />}
-                            {/* Voice Reply button — only for voice/media client messages */}
-                            {isVoiceOrMedia && selected && (
-                              <button
-                                onClick={() => handleVoiceReply(msg.id, selected.id)}
-                                className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 px-2 py-1 rounded-full transition-all"
-                              >
-                                <Mic size={9} /> Voice Reply
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })
+                  <div className="p-8 bg-white border-t border-slate-100">
+                    <div className="flex items-center gap-3 bg-slate-100/50 p-2.5 rounded-[2.5rem] border border-slate-200/60 shadow-inner focus-within:border-indigo-500/50 focus-within:bg-white transition-all">
+                      <textarea
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                        rows={1}
+                        placeholder="ASSIST CUSTOMER..."
+                        className="flex-1 bg-transparent border-none resize-none py-3 px-6 text-sm focus:ring-0 max-h-32 custom-scrollbar font-bold text-slate-700 uppercase tracking-wide placeholder:opacity-50"
+                      />
+                      <button onClick={sendMessage} disabled={!newMessage.trim()} className={`h-12 w-12 flex items-center justify-center rounded-full transition-all shadow-xl ${newMessage.trim() ? "bg-indigo-600 text-white scale-100 hover:bg-indigo-700 hover:rotate-12" : "bg-slate-200 text-slate-400 scale-90 cursor-not-allowed"}`}>
+                        <Send size={20} />
+                      </button>
+                    </div>
+                  </div>
                 )}
-              </AnimatePresence>
-            </div>
+              </div>
 
-            {/* CHAT INPUT AREA */}
-            {isLocked ? (
-              <div className="p-8 bg-slate-50 border-t border-slate-200 text-center">
-                <div className="bg-amber-50 border border-amber-200 text-amber-800 px-6 py-4 rounded-xl flex items-center justify-center gap-3 shadow-sm">
-                  <div className="bg-amber-100 p-2 rounded-full"><span className="font-bold text-xs">🔒</span></div>
-                  <div className="text-left">
-                    <p className="font-black text-sm uppercase tracking-wide">Locked by {assignedToAgent?.name || "another agent"}</p>
-                    <p className="text-xs opacity-70">You can view but cannot reply.</p>
+              {/* LIVE CART PANEL (PHASE 2C) */}
+              {sessionState?.cart?.items?.length > 0 && (
+                <div className="hidden xl:flex w-80 flex-col bg-white border-l border-slate-100 animate-in slide-in-from-right duration-500 shadow-[20px_0_60px_-15px_rgba(0,0,0,0.05)]">
+                  <div className="p-6 border-b border-slate-50">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-black text-[11px] uppercase tracking-[0.2em] text-slate-400">Live Cart</h3>
+                      <div className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[9px] font-black uppercase">AI Tracking</div>
+                    </div>
+                    <p className="text-sm font-bold text-slate-800">Detected Items</p>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                    {sessionState.cart.items.map((item: any, idx: number) => (
+                      <motion.div
+                        key={idx}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        className="flex items-start justify-between bg-slate-50/50 p-3 rounded-2xl border border-slate-100"
+                      >
+                        <div className="flex-1">
+                          <p className="text-xs font-black text-slate-800 uppercase tracking-tight line-clamp-1">{item.name}</p>
+                          <p className="text-[10px] text-slate-400 font-bold mt-1">₹{item.price} × {item.quantity}</p>
+                        </div>
+                        <p className="text-xs font-black text-indigo-600 ml-2">₹{item.subtotal}</p>
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  <div className="p-6 bg-slate-50 border-t border-slate-100 space-y-4">
+                    <div className="flex justify-between items-center text-slate-800">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Amount</span>
+                      <span className="text-lg font-black tracking-tight">₹{sessionState.cart.total}</span>
+                    </div>
+
+                    <div className="bg-amber-100/50 p-3 rounded-xl border border-amber-200/50">
+                      <p className="text-[9px] font-bold text-amber-700 leading-tight">AI is holding these in session. Switch to HUMAN mode if you want to manually finalize or send invoice.</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="p-8 bg-white border-t border-slate-100">
-                <div className="flex items-center gap-3 bg-slate-100/50 p-2.5 rounded-[2.5rem] border border-slate-200/60 shadow-inner focus-within:border-indigo-500/50 focus-within:bg-white transition-all">
-                  <textarea
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                    rows={1}
-                    placeholder="ASSIST CUSTOMER..."
-                    className="flex-1 bg-transparent border-none resize-none py-3 px-6 text-sm focus:ring-0 max-h-32 custom-scrollbar font-bold text-slate-700 uppercase tracking-wide placeholder:opacity-50"
-                  />
-                  <button onClick={sendMessage} disabled={!newMessage.trim()} className={`h-12 w-12 flex items-center justify-center rounded-full transition-all shadow-xl ${newMessage.trim() ? "bg-indigo-600 text-white scale-100 hover:bg-indigo-700 hover:rotate-12" : "bg-slate-200 text-slate-400 scale-90 cursor-not-allowed"}`}>
-                    <Send size={20} />
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
       </div>
