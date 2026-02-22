@@ -10,7 +10,7 @@ import {
 } from "@prisma/client";
 import axios from "axios";
 import { emitToCompany, emitToConversation, safeEmitConversationUpdate } from "../lib/socket";
-import { generateBotReply } from "../services/geminiService";
+import { generateBotReply } from "../services/ai.service";
 import { aiQueue } from "../services/queue.service";
 import { cacheService } from "../services/cache.service";
 import { intelligenceService } from "../services/intelligence.service";

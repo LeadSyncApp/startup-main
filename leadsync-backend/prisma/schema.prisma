@@ -116,6 +116,7 @@ model Company {
   botStructuredMenu     Json?
   botKnowledgeBase      String?
   botLearnedContext     String?
+  botPolicies           String? @default("") 
 
   createdAt             DateTime @default(now())
 

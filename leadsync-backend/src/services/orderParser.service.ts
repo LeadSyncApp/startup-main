@@ -2,7 +2,7 @@ import { prisma } from "../lib/prisma";
 import { OrderSource, OrderStatus, OrderPriority, MessageSender } from "@prisma/client";
 import { emitToCompany, emitToConversation, emitToAgent, emitToCompanyAdmin, safeEmitConversationUpdate } from "../lib/socket";
 import { notificationService } from "./notification.service";
-import { generateStructuredOrder } from "./geminiService";
+import { generateStructuredOrder } from "./ai.service";
 import { sarvamService } from "./sarvam.service";
 
 interface ParsedItem {

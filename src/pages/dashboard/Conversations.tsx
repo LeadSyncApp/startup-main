@@ -30,13 +30,14 @@ interface Message {
 interface Conversation {
   id: string;
   mode: "BOT" | "HUMAN";
-  updatedAt: string;
   lead: {
     name: string | null;
     contact: string;
     channel: string;
   };
   lastMessage: string;
+  intent?: string;
+  updatedAt: string;
 }
 
 export default function Conversations() {
@@ -431,6 +432,11 @@ export default function Conversations() {
                       <span className="text-[9px] font-black px-1.5 py-0.5 rounded border border-slate-200 text-slate-400">
                         {conv.lead.channel}
                       </span>
+                      {conv.intent && (
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 uppercase tracking-tighter">
+                          {conv.intent.replace("_", " ")}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </motion.div>

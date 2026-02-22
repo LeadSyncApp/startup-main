@@ -1,7 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
-import { generateStructuredMenu, generateLearnedContext } from "../services/geminiService";
+import { generateStructuredMenu, generateLearnedContext } from "../services/ai.service";
 import { cacheService } from "../services/cache.service";
 
 const router = Router();
@@ -120,7 +120,7 @@ router.get(
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const company = await prisma.company.findUnique({
+      const company = await (prisma.company as any).findUnique({
         where: { id: req.user.companyId },
         select: {
           botBusinessType: true,
@@ -129,6 +129,7 @@ router.get(
           botMenu: true,
           botKnowledgeBase: true,
           botLearnedContext: true,
+          botPolicies: true,
         },
       });
 
@@ -306,13 +307,14 @@ router.patch(
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { botKnowledgeBase, botLearnedContext } = req.body;
+      const { botKnowledgeBase, botLearnedContext, botPolicies } = req.body;
 
-      const updated = await prisma.company.update({
+      const updated = await (prisma.company as any).update({
         where: { id: req.user.companyId },
         data: {
           botKnowledgeBase,
-          botLearnedContext
+          botLearnedContext,
+          botPolicies
         }
       });
 

@@ -1,6 +1,6 @@
 import { OrderStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { generateShopReply } from "../services/geminiService";
+import { generateShopReply } from "../services/ai.service";
 import { getSession, updateSession, getMenuSnapshot, calculateRetrieval } from "../utils/shop-ai.utils";
 
 /* =====================================================
@@ -46,13 +46,14 @@ export async function handleBotMessage(
   }
 
   // 2️⃣ Fetch company configuration
-  const company = await prisma.company.findUnique({
+  const company = await (prisma.company as any).findUnique({
     where: { id: conversation.companyId },
     select: {
       name: true,
       botBusinessType: true,
       botStructuredMenu: true,
       botLearnedContext: true,
+      botPolicies: true,
     },
   });
 
@@ -155,9 +156,9 @@ CALLBACK: VIEW_MENU`;
     user_message: userMessage,
     session_state,
     retrieved_items: retrievedItems,
-    learned_knowledge_text: company?.botLearnedContext || "",
+    learned_knowledge_text: (company as any)?.botLearnedContext || "",
     menu_snapshot: menuSnapshot,
-    shop_policies: "" // Optional policies
+    shop_policies: (company as any)?.botPolicies || ""
   });
 
   // 7️⃣ Update Session Memory

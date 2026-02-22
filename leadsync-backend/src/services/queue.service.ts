@@ -1,4 +1,4 @@
-import { generateBotReply, generateStructuredMenu } from "./geminiService";
+import { generateBotReply, generateStructuredMenu } from "./ai.service";
 
 type Task = () => Promise<any>;
 
