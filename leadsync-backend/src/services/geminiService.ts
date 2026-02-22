@@ -4,10 +4,10 @@ import Groq from "groq-sdk";
 // Initialize Groq
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "dummy" });
 
-// Model Hierarchy: Sarvam for Multilingual, Groq for Speed
+// Model Hierarchy: Groq for Speed (Primary), Sarvam for Multilingual
 const MODELS = [
-  { provider: "sarvam", id: "sarvam-m" },              // 🇮🇳 Best for Indian Languages
-  { provider: "groq", id: "llama-3.3-70b-versatile" }, // 🔥 State-of-the-art fallback
+  { provider: "groq", id: "llama-3.3-70b-versatile" }, // 🔥 State-of-the-art
+  { provider: "sarvam", id: "sarvam-m" },              // 🇮🇳 Multilingual Fallback
 ];
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -72,7 +72,8 @@ async function generateWithFallback(
 
         // Sarvam strictly follows User -> Assistant. Inject instructions into the VERY FIRST message.
         if (chatMessages.length > 0 && chatMessages[0].role === "user") {
-          chatMessages[0].content = `[SYSTEM_RULES: ${systemPrompt}]\n\nUser Message: ${chatMessages[0].content}`;
+          console.log(`🧠 [Sarvam] Injecting STRICT_RULES...`);
+          chatMessages[0].content = `[STRICT_RULES: ${systemPrompt}]\n\nCustomer Msg: ${chatMessages[0].content}`;
         }
 
         // Final safety: If still empty (unlikely) or ends with assistant, ensure it's valid for chat completion
