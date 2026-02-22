@@ -311,6 +311,7 @@ export default function Settings() {
       await api.patch("/dashboard/save-knowledge", {
         botKnowledgeBase,
         botLearnedContext,
+        botPolicies,
       });
       toast.success("Knowledge saved manually ✅");
     } catch {
@@ -559,32 +560,6 @@ export default function Settings() {
             className="border border-slate-200 text-slate-600 px-5 py-2 rounded-lg hover:bg-slate-50 transition"
           >
             Save Knowledge Manually
-          </button>
-        </div>
-      </div>
-
-      {/* SHOP POLICIES */}
-      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <span>📜</span> Shop Policies (Grounded Rules)
-        </h2>
-        <p className="text-sm text-slate-500">
-          Define your delivery times, return policies, or store rules. The AI will use these to answer customer queries.
-        </p>
-
-        <textarea
-          placeholder="Ex: 'Delivery takes 2 days. No returns on food items. Open from 9 AM to 9 PM.'"
-          value={botPolicies}
-          onChange={(e) => setBotPolicies(e.target.value)}
-          className="w-full border rounded-lg px-3 py-2 h-32 text-sm font-mono"
-        />
-
-        <div className="flex justify-end">
-          <button
-            onClick={handleSaveKnowledge}
-            className="bg-slate-800 text-white px-5 py-2 rounded-lg hover:bg-slate-900 transition shadow-sm"
-          >
-            Save Policies
           </button>
         </div>
       </div>
