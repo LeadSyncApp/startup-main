@@ -124,10 +124,10 @@ export class SarvamService {
     async detectLanguage(text: string): Promise<string> {
         const lowerText = text.toLowerCase();
 
-        // Tamil Keywords (including Tanglish)
-        const tamilKeywords = ["venum", "vendum", "moonu", "naalu", "onnu", "rendu", "kodu", "engo", "eppo", "iruku", "illa", "vanga", "ponga"];
-        // Hindi Keywords (including Hinglish)
-        const hindiKeywords = ["chahiye", "kitna", "dena", "lelo", "mangwana", "khareedna", "baad", "pehle", "karo", "hai", "hua"];
+        // Tamil Keywords (Professional & Conversational)
+        const tamilKeywords = ["venum", "vendum", "moonu", "naalu", "onnu", "rendu", "kodu", "engo", "eppo", "iruku", "illa", "vanga", "ponga", "enna", "eppadi", "evvalavu", "dhayavu", "nanri"];
+        // Hindi Keywords (Professional & Conversational)
+        const hindiKeywords = ["chahiye", "kitna", "dena", "lelo", "mangwana", "khareedna", "baad", "pehle", "karo", "hai", "hua", "kya", "kaise", "kab", "shukriya", "dhanyawad"];
 
         if (tamilKeywords.some(kw => lowerText.includes(kw)) || /[\u0B80-\u0BFF]/.test(text)) {
             return "ta-IN";
