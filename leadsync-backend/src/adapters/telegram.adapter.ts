@@ -167,6 +167,30 @@ export class TelegramAdapter implements ChannelAdapter {
                 console.error("❌ Voice reply regeneration failed:", err);
             }
 
+        } else if (data === "MENU" || data.startsWith("MENU")) {
+            // Handle the dynamic MENU button from the AI
+            try {
+                const conversation = await prisma.conversation.findFirst({
+                    where: { lead: { contact: chatId } },
+                    orderBy: { updatedAt: "desc" }
+                });
+                if (conversation) {
+                    await this.sendTyping(chatId);
+                    const aiReply = await handleBotMessage(
+                        conversation.id,
+                        "/menu",
+                        "text",
+                        "en-IN", // generic fallback, AI will redetect
+                        "button_click",
+                        "/menu"
+                    );
+                    if (aiReply) {
+                        await this.parseAndSendResponse(chatId, conversation, aiReply);
+                    }
+                }
+            } catch (err) {
+                console.error("❌ MENU callback failed:", err);
+            }
         } else if (data.startsWith("text_reply:")) {
             // Fast path: use cached text
             const pendingText = cacheService.get<string>(cacheService.getPendingTextKey(chatId));
@@ -365,86 +389,27 @@ export class TelegramAdapter implements ChannelAdapter {
 
             if (conversation.mode === ConversationMode.HUMAN) return;
 
-            /* COMMAND HANDLING */
-            if (text === "/start") {
-                await this.saveAndSendSystemMessage(chatId, conversation, buildWelcomeMessage(company, name));
-                return;
-            }
-
             /* AI REPLY */
             this.sendTyping(chatId).catch(() => { });
 
             try {
                 const modality = isVoiceMsg ? "voice" : "text";
-                const aiReply = await handleBotMessage(conversation.id, text, modality, detectedLanguage);
+                const isCommand = text.startsWith("/");
+                const triggerSource = isCommand ? "typed_command" : "normal_message";
+                const command = isCommand ? text.split(" ")[0] : undefined;
+
+                const aiReply = await handleBotMessage(
+                    conversation.id,
+                    text,
+                    modality,
+                    detectedLanguage,
+                    triggerSource,
+                    command
+                );
 
                 if (!aiReply) return;
 
-                // 🔊 PARSE NEW MODALITY-BASED RESPONSE (TEXT_REPLY: / VOICE_TTS:)
-                let displayMessage = aiReply;
-                let spokenMessage = aiReply;
-                let isVoiceChoiceAllowed = false;
-
-                if (aiReply.includes("TEXT_REPLY:")) {
-                    const lines = aiReply.split("\n");
-                    const textLine = lines.find(l => l.startsWith("TEXT_REPLY:"));
-                    const voiceLine = lines.find(l => l.startsWith("VOICE_TTS:"));
-
-                    if (textLine) {
-                        displayMessage = textLine.replace("TEXT_REPLY:", "").trim();
-                    }
-                    if (voiceLine) {
-                        spokenMessage = voiceLine.replace("VOICE_TTS:", "").trim();
-                        isVoiceChoiceAllowed = true;
-                    } else {
-                        spokenMessage = displayMessage;
-                    }
-                } else if (aiReply.startsWith('{')) {
-                    // Legacy JSON fallback
-                    try {
-                        const parsed = JSON.parse(aiReply);
-                        displayMessage = parsed.response_text || aiReply;
-                        spokenMessage = displayMessage;
-                        isVoiceChoiceAllowed = !!parsed.allow_voice_choice;
-                    } catch (e) { }
-                }
-
-                // 🔊 CONCURRENCY CHECK
-                const freshConv = await prisma.conversation.findUnique({
-                    where: { id: conversation.id },
-                    select: { mode: true }
-                });
-                if (freshConv?.mode === "HUMAN") return;
-
-                // 🎤 PRE-GENERATE VOICE (If voice input or JSON output indicated voice preference)
-                if (isVoiceMsg || isVoiceChoiceAllowed) {
-                    sarvamService.textToSpeech(spokenMessage, detectedLanguage)
-                        .then(audioBuffer => {
-                            if (audioBuffer) cacheService.set(cacheService.getPendingVoiceKey(chatId), audioBuffer, 120);
-                        })
-                        .catch(err => console.error("TTS error:", err));
-                }
-
-                // 🔘 OUTPUT
-                if (isVoiceMsg || isVoiceChoiceAllowed) {
-                    cacheService.set(cacheService.getPendingTextKey(chatId), displayMessage, 600);
-                    const botMsg = await prisma.message.create({
-                        data: { content: displayMessage, sender: MessageSender.SYSTEM, conversationId: conversation.id },
-                    });
-                    safeEmitConversationUpdate(conversation, "conversation_updated", {
-                        conversationId: conversation.id,
-                        lastMessage: displayMessage,
-                        updatedAt: new Date(),
-                    });
-                    emitToConversation(conversation.id, "new_message", botMsg);
-
-                    let intro = "I've prepared a reply for you:";
-                    if (detectedLanguage === "ta-IN") intro = "உங்களுக்கான பதில் இதோ:";
-                    else if (detectedLanguage === "hi-IN") intro = "आपके लिए एक जवाब तैयार है:";
-                    await this.sendMessageWithVoiceButtons(chatId, intro);
-                } else {
-                    await this.saveAndSendSystemMessage(chatId, conversation, displayMessage);
-                }
+                await this.parseAndSendResponse(chatId, conversation, aiReply, detectedLanguage, isVoiceMsg);
             } catch (err) {
                 console.error("Bot Logic Error:", err);
             }
@@ -454,28 +419,88 @@ export class TelegramAdapter implements ChannelAdapter {
         }
     }
 
+    private async parseAndSendResponse(
+        chatId: string,
+        conversation: any,
+        aiReply: string,
+        detectedLanguage: string = "en-IN",
+        isVoiceMsg: boolean = false
+    ) {
+        // 1. Parse structured format
+        const lines = aiReply.split("\n").map(l => l.trim());
+        let messageText = "";
+        let buttonLabel = "";
+        let callbackData = "";
+
+        for (const line of lines) {
+            if (line.startsWith("MESSAGE:")) messageText = line.replace("MESSAGE:", "").trim();
+            if (line.startsWith("BUTTON:")) buttonLabel = line.replace("BUTTON:", "").trim();
+            if (line.startsWith("CALLBACK:")) callbackData = line.replace("CALLBACK:", "").trim();
+        }
+
+        // Fallback if AI forgot headers
+        if (!messageText) messageText = aiReply.split("BUTTON:")[0].trim();
+
+        // 2. Save Message to DB
+        const botMsg = await prisma.message.create({
+            data: {
+                content: messageText,
+                sender: MessageSender.SYSTEM,
+                conversationId: conversation.id,
+            },
+        });
+
+        safeEmitConversationUpdate(conversation, "conversation_updated", {
+            conversationId: conversation.id,
+            lastMessage: messageText,
+            updatedAt: new Date(),
+        });
+        emitToConversation(conversation.id, "new_message", botMsg);
+
+        // 3. Send to Telegram
+        const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
+        const payload: any = {
+            chat_id: chatId,
+            text: messageText,
+            parse_mode: "HTML",
+        };
+
+        if (buttonLabel && callbackData) {
+            payload.reply_markup = {
+                inline_keyboard: [[{ text: buttonLabel, callback_data: callbackData }]]
+            };
+        }
+
+        await sendTelegramApi(url, payload);
+
+        // 4. Pre-generate voice if it was a voice conversation (Optional background task)
+        if (isVoiceMsg) {
+            sarvamService.textToSpeech(messageText, detectedLanguage)
+                .then(audioBuffer => {
+                    if (audioBuffer) cacheService.set(cacheService.getPendingVoiceKey(chatId), audioBuffer, 120);
+                })
+                .catch(() => { });
+        }
+    }
+
     private async saveAndSendSystemMessage(chatId: string, conversation: any, text: string) {
         // OPTIMIZATION: Run DB save and Telegram Send in Parallel
-        const dbPromise = (async () => {
-            const botMsg = await prisma.message.create({
-                data: {
-                    content: text,
-                    sender: MessageSender.SYSTEM,
-                    conversationId: conversation.id,
-                },
-            });
-
+        const dbPromise = prisma.message.create({
+            data: {
+                content: text,
+                sender: MessageSender.SYSTEM,
+                conversationId: conversation.id,
+            },
+        }).then(botMsg => {
             safeEmitConversationUpdate(conversation, "conversation_updated", {
                 conversationId: conversation.id,
                 lastMessage: text,
                 updatedAt: new Date(),
             });
             emitToConversation(conversation.id, "new_message", botMsg);
-        })();
+        });
 
         const telegramPromise = this.sendMessage(chatId, text);
-
-        // Await both to ensure completion, but they run concurrently
         await Promise.all([dbPromise, telegramPromise]);
     }
 }

@@ -141,6 +141,8 @@ export async function generateBotReply(
     menu_allowed?: boolean;
     history_allowed?: boolean;
     pendingOrder?: { summary: string; amount: number };
+    command?: string;
+    trigger_source?: "typed_command" | "button_click" | "normal_message";
   } = { force_mode: "AUTO", menu_allowed: true, history_allowed: true },
   detectedLanguage: string = "en-IN"
 ): Promise<string> {
@@ -187,51 +189,80 @@ Tags: ${customerProfile.tags || "None"}
       : "No items currently being ordered.";
 
     const systemPrompt = `
-You are a warm, professional, and friendly clerk at ${businessName}. 
-Your tone should be helpful, polite, and like someone running a premium local shop.
+You are LeadSync’s Telegram bot assistant used in production by multiple shops (retail, electronics, restaurant, services, etc.). Your job is to generate customer-facing Telegram messages and (when needed) a single button label for actions like “View today’s items”.
 
-----------------------------------------------------
-LANGUAGE & MIRRORING (CRITICAL)
-----------------------------------------------------
-${hardLanguageRule}
-- MATCH THE USER: If they use "ennaku", you use "ungalukkaga". 
-- Mix languages (Tanglish/Hinglish) EXACTLY like a local person would. 
-- Never be too robotic or formal. Be like a friendly shopkeeper.
+CONTEXT:
+- shop_name: ${businessName}
+- business_type: ${businessType}
+- offerings_summary: ${productList}
+- user_language_hint: ${detectedLanguage}
+- latest_user_message: "${message}"
+- command: ${controlFlags.command || "none"}
+- trigger_source: ${controlFlags.trigger_source || "normal_message"}
 
-----------------------------------------------------
-STRICT OPERATING MODES
-----------------------------------------------------
-MODE: ${force_mode}
-${force_mode === "BROWSE_MENU" ? `The customer wants to know about your items. Enthusiastically present the menu options below. Make them sound delicious!` : ""}
-${force_mode === "CONFIRM_ORDER" ? `Confirm the detected items: "${pendingOrder?.summary} for ₹${pendingOrder?.amount}". Ask politely if they want to place the order.` : ""}
+ABSOLUTE OUTPUT RULES (NON-NEGOTIABLE)
+1) Output PLAIN TEXT ONLY. No JSON. No markdown. No code blocks. No backticks.
+2) Output must be in one of these exact formats only:
 
-----------------------------------------------------
-RESPONSE RULES
-----------------------------------------------------
-1) NO REPETITION: Do not say "Welcome back" or use boring greetings.
-2) BE HELPFUL: If they ask a question (like "is it good?"), answer warmly and professionally.
-3) NO JSON/MARKDOWN: Output plain text ONLY.
+A) If you want to show a button:
+MESSAGE: <text to show user>
+BUTTON: <button label text>
+CALLBACK: <callback payload>
 
-----------------------------------------------------
-ABSOLUTE OUTPUT RULES
-----------------------------------------------------
-- input_modality="text": output EXACTLY ONE line: TEXT_REPLY: <response>
-- input_modality="voice": output EXACTLY TWO lines:
-  TEXT_REPLY: <natural with emojis>
-  VOICE_TTS: <spoken text only, no emojis>
+B) If you do NOT want to show a button:
+MESSAGE: <text to show user>
 
-----------------------------------------------------
-DATA
-----------------------------------------------------
-Business: ${businessName}
-Offerings:
-${menu_allowed ? productList : "HIDDEN"}
+Do not output anything else.
 
-Past Orders:
-${history_allowed ? formattedOrderHistory : "HIDDEN"}
+LANGUAGE RULES
+- Detect user language from latest_user_message (and user_language_hint if present).
+- Reply in the same language style (Tamil / Hindi / English / Mixed).
+- Keep it short, polite, professional.
+- Do not use over-friendly or exaggerated marketing lines.
 
-LATEST CUSTOMER MESSAGE: 
-"${message}"
+BEHAVIOR FOR /start (MOST IMPORTANT)
+If command="/start" OR latest_user_message is "/start":
+- Welcome the user using shop_name.
+- Explain in one line what the bot can do (browse items + order).
+- Show ONE button to view today’s items for THIS shop.
+- Button label MUST include shop_name dynamically.
+- Callback payload MUST be: MENU
+
+Example (English):
+MESSAGE: 👋 Welcome to {shop_name}! I can help you browse items, check prices, and place an order. Tap below to see what we have today.
+BUTTON: 🛍 View today’s items from {shop_name}
+CALLBACK: MENU
+
+Example (Tanglish):
+MESSAGE: 👋 Vanakkam! {shop_name} ku welcome. Items browse pannalam, price check pannalam, order place pannalam. Inga click pannunga.
+BUTTON: 🛍 Innaiku {shop_name} la irukura items paaka
+CALLBACK: MENU
+
+BEHAVIOR FOR /menu or MENU button
+If command="/menu" OR latest_user_message is "/menu" OR trigger_source="button_click" with callback="MENU":
+- Show today’s available items for this shop (if offerings_summary is provided).
+- Keep it short (max 8 items).
+- If offerings_summary is missing, ask what category/item they are looking for (do not invent items).
+- End with a question: “What would you like?” / “Edhu venum?” / “Kya chahiye?”
+
+Example:
+MESSAGE: Today’s items at {shop_name}: Item1, Item2, Item3... What would you like?
+
+NORMAL MESSAGES (non-command)
+If user asks for options/items/prices:
+- If offerings_summary exists, show a short relevant list.
+- If not, ask what they are looking for.
+
+If user says they want something (order intent):
+- Confirm the item/qty if mentioned.
+- Ask one next question only (delivery/pickup or variant or quantity).
+- Do NOT show menu again.
+
+STRICT DO-NOTS
+- Do NOT output generic replies like “How can I assist you today?” if the user already asked something specific.
+- Do NOT repeat the menu immediately after showing it, unless the user asks again.
+- Do NOT mention previous order IDs or status unless user asked.
+- Do NOT invent products, prices, or availability if not provided.
 `;
 
     const conversation = (history || []).map(m => ({
@@ -242,35 +273,13 @@ LATEST CUSTOMER MESSAGE:
 
     let aiOutput = await generateWithFallback(conversation, systemPrompt);
 
-    // 🛡️ SANITIZATION LAYER: Ensure the prefixes are there even if AI forgot
+    // 🛡️ SANITIZATION LAYER: Ensure we return the raw output for the adapter to parse
     aiOutput = aiOutput.replace(/```[a-z]*\n?|```/gi, "").trim();
 
-    if (inputModality === "text") {
-      // Ensure only one line and starts with TEXT_REPLY:
-      if (!aiOutput.startsWith("TEXT_REPLY:")) {
-        aiOutput = "TEXT_REPLY: " + aiOutput.replace(/^TEXT_REPLY:|^VOICE_TTS:/gi, "").trim();
-      }
-      // If there are multiple lines, keep only the one starting with TEXT_REPLY
-      const lines = aiOutput.split("\n");
-      aiOutput = lines.find(l => l.startsWith("TEXT_REPLY:")) || lines[0];
-    } else {
-      // Input modality = voice
-      let textReply = "";
-      let voiceTts = "";
-
-      const lines = aiOutput.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-      textReply = lines.find(l => l.startsWith("TEXT_REPLY:"))?.replace("TEXT_REPLY:", "").trim() || "";
-      voiceTts = lines.find(l => l.startsWith("VOICE_TTS:"))?.replace("VOICE_TTS:", "").trim() || "";
-
-      // Fallbacks if AI didn't follow the 2-line rule strictly
-      if (!textReply && lines.length > 0) {
-        textReply = lines[0].replace("TEXT_REPLY:", "").trim();
-      }
-      if (!voiceTts) {
-        voiceTts = textReply.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "").trim();
-      }
-
-      aiOutput = `TEXT_REPLY: ${textReply}\nVOICE_TTS: ${voiceTts}`;
+    // Since the format is now MESSAGE: / BUTTON: / CALLBACK:, we return it as is.
+    // However, if the AI output doesn't start with MESSAGE:, we wrap it for safety.
+    if (!aiOutput.includes("MESSAGE:")) {
+      aiOutput = "MESSAGE: " + aiOutput;
     }
 
     return aiOutput;

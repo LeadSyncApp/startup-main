@@ -29,7 +29,9 @@ export async function handleBotMessage(
   conversationId: string,
   userMessage: string,
   modality: "text" | "voice" = "text",
-  detectedLanguage: string = "en-IN"
+  detectedLanguage: string = "en-IN",
+  triggerSource: "typed_command" | "button_click" | "normal_message" = "normal_message",
+  command?: string
 ): Promise<string | null> {
   // 1️⃣ Get conversation with Lead (Customer Profile)
   const conversation = await prisma.conversation.findUnique({
@@ -98,7 +100,9 @@ export async function handleBotMessage(
   const controlFlags: any = {
     force_mode: pendingOrder ? "CONFIRM_ORDER" : (isMenuRequest ? "BROWSE_MENU" : "AUTO"),
     menu_allowed: true,
-    history_allowed: !pendingOrder && !isMenuRequest // 🛡️ CRITICAL: Disable history if ordering or asking for menu
+    history_allowed: !pendingOrder && !isMenuRequest, // 🛡️ CRITICAL: Disable history if ordering or asking for menu
+    command,
+    trigger_source: triggerSource
   };
 
   // 6️⃣ Generate AI reply grounded to structured menu
