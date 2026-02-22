@@ -6,7 +6,8 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "dummy" });
 
 // Model Hierarchy: Groq for Speed (Primary) - Sarvam only for STT/TTS/Lang Detection
 const MODELS = [
-  { provider: "groq", id: "llama-3.3-70b-versatile" }, // 🔥 State-of-the-art
+  { provider: "groq", id: "llama-3.3-70b-versatile" },
+  { provider: "google", id: "gemini-1.5-flash" }, // 🆕 Fallback
 ];
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -54,6 +55,23 @@ async function generateWithFallback(
           `Groq ${model.id}`
         );
         content = completion.choices[0]?.message?.content || "";
+      } else if (model.provider === "google") {
+        // Fallback to Gemini via HTTP (Simpler) or Sarvam can handle it if we had a generic helper
+        // Since we have GEMINI_API_KEY in .env, let's use it for real fallback
+        try {
+          const response = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            {
+              contents: [
+                { role: "user", parts: [{ text: systemPrompt + "\n\nConversation history below:\n" + messages.map(m => `${m.role}: ${m.content}`).join("\n") }] }
+              ],
+              generationConfig: { maxOutputTokens: 400 }
+            }
+          );
+          content = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        } catch (e) {
+          console.error("Gemini fallback failed");
+        }
       }
 
       if (content.trim()) {
@@ -173,17 +191,20 @@ RESPONSE RULES:
 - Ask EXACTLY ONE follow-up question (purpose OR budget). Not both.
 
 3) If resolvedScope = NONE:
-- Ask ONE clarification question to identify the category or say "type show all".
+- If the user is asking about a specific item, use shopContext and menuData to answer directly.
+- Otherwise, ask ONE clarification question to identify the category or say "type show all".
 
-Now respond to the user:
-${message}`;
+Now respond to the user based on the context above. Keep it conversational.`;
 
-    const conversation = (history || [])
-      .slice(-6)
-      .map(m => ({
-        role: m.role || "user",
-        content: m.content
-      }));
+    const conversation = [
+      ...(history || [])
+        .slice(-8)
+        .map(m => ({
+          role: m.role || "user",
+          content: m.content
+        })),
+      { role: "user", content: message } // 🔥 Ensure current message is always last as USER role
+    ];
 
     let aiOutput = await generateWithFallback(conversation, systemPrompt);
 
@@ -210,7 +231,7 @@ export async function generateStructuredMenu(
     try {
       let prompt = `Generate a JSON menu for: ${description}.
     Format: { "categories": [{ "name": "C", "items": [{ "name": "I", "price": 10 }] }] }
-ONLY JSON. No markdown.`;
+ONLY JSON.No markdown.`;
       if (existingMenu) prompt += `\nUpdate: ${JSON.stringify(existingMenu)} `;
 
       const completion = await groq.chat.completions.create({
@@ -234,7 +255,7 @@ export async function generateStructuredOrder(
   if (!process.env.GROQ_API_KEY) return { items: [] };
   try {
     const menuContext = JSON.stringify(menu?.categories || []);
-    const prompt = `Extract order from: "${text}". Menu: ${menuContext}. Return JSON { "items": [{ "name": "N", "quantity": 1, "price": 10 }] }. ONLY JSON.`;
+    const prompt = `Extract order from: "${text}".Menu: ${menuContext}. Return JSON { "items": [{ "name": "N", "quantity": 1, "price": 10 }] }. ONLY JSON.`;
     const completion = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
       model: "llama-3.3-70b-versatile",
