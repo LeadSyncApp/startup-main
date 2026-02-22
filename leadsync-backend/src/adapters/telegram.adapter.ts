@@ -427,21 +427,19 @@ export class TelegramAdapter implements ChannelAdapter {
             let messageText = "";
             let buttonLabel = "";
             let callbackData = "";
+            let msgLines: string[] = [];
 
             for (const line of lines) {
-                if (line.startsWith("MESSAGE:")) messageText = line.replace("MESSAGE:", "").trim();
-                if (line.startsWith("BUTTON:")) buttonLabel = line.replace("BUTTON:", "").trim();
-                if (line.startsWith("CALLBACK:")) callbackData = line.replace("CALLBACK:", "").trim();
+                if (line.startsWith("BUTTON:")) {
+                    buttonLabel = line.replace("BUTTON:", "").trim();
+                } else if (line.startsWith("CALLBACK:")) {
+                    callbackData = line.replace("CALLBACK:", "").trim();
+                } else {
+                    // Collect all lines that are not buttons/callbacks
+                    msgLines.push(line.replace(/^MESSAGE:/i, "").trim());
+                }
             }
-
-            // Fallback for non-headered text in this block
-            if (!messageText) {
-                messageText = part.split("\n")
-                    .filter(l => !l.startsWith("BUTTON:") && !l.startsWith("CALLBACK:"))
-                    .join("\n")
-                    .replace(/^MESSAGE:\s*/i, "")
-                    .trim();
-            }
+            messageText = msgLines.filter(l => l !== "").join("\n");
 
             if (!messageText) continue;
 

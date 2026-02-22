@@ -60,45 +60,36 @@ export async function handleBotMessage(
 
   const structuredMenu = (company?.botStructuredMenu as any) || null;
 
-  // 2.5️⃣ HARDCODED ROUTING (NO AI)
+  // 2.5️⃣ HARDCODED ROUTING (NO AI - STRICT RULES)
   const isTamil = detectedLanguage.startsWith("ta");
   const isHindi = detectedLanguage.startsWith("hi");
 
-  if (command === "/start" || userMessage === "/start") {
-    const welcomeMsg = isTamil
-      ? `MESSAGE: 👋 ${businessName}-ற்கு வரவேற்கிறோம்! இன்று கிடைக்கும் பொருட்களைக் காண கீழே உள்ள பொத்தானைத் தட்டவும்.`
-      : isHindi
-        ? `MESSAGE: 👋 ${businessName} में आपका स्वागत है! आज के उत्पादों को देखने के लिए नीचे दिए गए बटन पर टैप करें।`
-        : `MESSAGE: 👋 Welcome to ${businessName}! Tap below to view our products.`;
+  let eventType: "START" | "MENU_BUTTON_CLICK" | "USER_MESSAGE" = "USER_MESSAGE";
+  if (command === "/start" || userMessage === "/start") eventType = "START";
+  if (callbackPayload === "VIEW_MENU" || userMessage.toLowerCase() === "/menu") eventType = "MENU_BUTTON_CLICK";
 
-    const buttonText = isTamil ? "🛍 மெனுவைக் காண்க (View Menu)" : isHindi ? "🛍 मेनू देखें (View Menu)" : "🛍 View Menu";
+  if (eventType === "START") {
+    const line1 = `Welcome to ${businessName}.`;
+    const line2 = "Tap View Menu to see today's items.";
 
-    return `${welcomeMsg}
-BUTTON: ${buttonText}
+    return `MESSAGE: ${line1}\n${line2}
+BUTTON: View Menu
 CALLBACK: VIEW_MENU`;
   }
 
-  if (callbackPayload === "VIEW_MENU" || userMessage.toLowerCase() === "/menu") {
+  if (eventType === "MENU_BUTTON_CLICK") {
     if (!structuredMenu || !structuredMenu.categories || structuredMenu.categories.length === 0) {
-      return isTamil
-        ? `MESSAGE: மன்னிக்கவும், ${businessName}-இல் தற்போது பொருட்கள் எதுவும் இல்லை. நான் வேறு எவ்வகையில் உதவ முடியும்?`
-        : isHindi
-          ? `MESSAGE: क्षमा करें, ${businessName} में फिलहाल कोई आइटम उपलब्ध नहीं है। मैं आपकी और कैसे मदद कर सकता हूँ?`
-          : `MESSAGE: Sorry, there are no items available right now at ${businessName}. How else can I help you?`;
+      return `MESSAGE: Menu is not available right now. Please tell me what you are looking for.`;
     }
 
-    let menuTitle = isTamil ? `🛍 *${businessName} - தயாரிப்பு பட்டியல் (Product Catalog)*` : isHindi ? `🛍 *${businessName} - उत्पाद सूची (Product Catalog)*` : `🛍 *Today's Menu at ${businessName}:*`;
-    let menuFooter = isTamil ? "நீங்கள் எதை ஆர்டர் செய்ய விரும்புகிறீர்கள்?" : isHindi ? "Aap kya order karna chahenge?" : "What would you like to order?";
-
-    let menuText = `${menuTitle}\n\n`;
+    let menuText = `${businessName} menu:\n`;
     structuredMenu.categories.forEach((cat: any) => {
-      menuText += `*${cat.name.toUpperCase()}*\n`;
+      menuText += `${cat.name}:\n`;
       cat.items.forEach((item: any) => {
-        menuText += `- ${item.name}: ₹${item.price}\n`;
+        menuText += `- ${item.name} - ₹${item.price}\n`;
       });
-      menuText += "\n";
     });
-    menuText += menuFooter;
+    menuText += "What would you like?";
 
     return `MESSAGE: ${menuText.trim()}`;
   }
@@ -146,12 +137,11 @@ CALLBACK: VIEW_MENU`;
     select: { status: true, summary: true }
   });
 
-  const isMenuRequest = /menu|list|items|show|what|product|porutkal|patti/i.test(userMessage.toLowerCase());
-
   const controlFlags: any = {
-    force_mode: pendingOrder ? "CONFIRM_ORDER" : (isMenuRequest ? "BROWSE_MENU" : "AUTO"),
+    eventType,
+    force_mode: pendingOrder ? "CONFIRM_ORDER" : "AUTO",
     menu_allowed: true,
-    history_allowed: !pendingOrder && !isMenuRequest, // 🛡️ CRITICAL: Disable history if ordering or asking for menu
+    history_allowed: !pendingOrder,
     command,
     trigger_source: triggerSource,
     callback_payload: callbackPayload,

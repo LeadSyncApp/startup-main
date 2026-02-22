@@ -48,7 +48,7 @@ async function generateWithFallback(
               ...messages.filter(m => m.content && m.content.trim())
             ],
             model: model.id,
-            max_tokens: 400  // Increased for large content
+            max_tokens: 400
           }),
           timeoutMs,
           `Groq ${model.id}`
@@ -78,6 +78,7 @@ export async function generateBotReply(
   customerProfile?: any,
   inputModality: "text" | "voice" = "text",
   controlFlags: {
+    eventType?: "START" | "MENU_BUTTON_CLICK" | "USER_MESSAGE";
     force_mode?: "AUTO" | "CONFIRM_ORDER" | "BROWSE_MENU" | "SUPPORT_ONLY";
     menu_allowed?: boolean;
     history_allowed?: boolean;
@@ -86,172 +87,163 @@ export async function generateBotReply(
     trigger_source?: "typed_command" | "button_click" | "normal_message";
     callback_payload?: string;
     latest_order?: { status: string; summary: string } | null;
-  } = { force_mode: "AUTO", menu_allowed: true, history_allowed: true },
+  } = { eventType: "USER_MESSAGE", force_mode: "AUTO", menu_allowed: true, history_allowed: true },
   detectedLanguage: string = "en-IN"
 ): Promise<string> {
   try {
-    const businessTypeLower = (businessType || "business").toLowerCase();
-    const { force_mode = "AUTO", menu_allowed = true, history_allowed = true, pendingOrder } = controlFlags;
+    const { eventType = "USER_MESSAGE", pendingOrder } = controlFlags;
 
-    // Detect hard language code for enforcement
-    let hardLanguageRule = "";
-    if (detectedLanguage.startsWith("ta")) hardLanguageRule = "STYLE: The user is using TAMIL/TANGLISH. You MUST reply in TANGLISH (Tamil written in English letters). Mix Tamil and English naturally.";
-    else if (detectedLanguage.startsWith("hi")) hardLanguageRule = "STYLE: The user is using HINDI/HINGLISH. You MUST reply in HINGLISH. Mix Hindi and English naturally.";
-    else if (detectedLanguage.startsWith("en")) hardLanguageRule = "STYLE: You MUST reply in friendly, professional ENGLISH.";
-
-    // 🏷️ Format Product List
+    // 🏷️ Format Product List for the AI
     let productList = "NO PRODUCTS LISTED";
     if (structuredMenu?.categories?.length > 0) {
       productList = structuredMenu.categories
         .map((cat: any) =>
-          `--- ${cat.name.toUpperCase()} ---\n` +
-          cat.items.map((i: any) => `- ${i.name}: ₹${i.price}${i.description ? ' (' + i.description + ')' : ''}`).join("\n")
+          `Category: "${cat.name}"\n` +
+          cat.items.map((i: any) => `  - { name: "${i.name}", price: ${i.price} }`).join("\n")
         )
-        .join("\n\n");
-    }
-
-    // 📜 Format Order History
-    let formattedOrderHistory = "No previous order history.";
-    if (orderHistory && orderHistory.length > 0) {
-      formattedOrderHistory = orderHistory
-        .map(o => `- ${o.summary} (Total: ₹${o.amount}) on ${new Date(o.createdAt).toLocaleDateString()}`)
         .join("\n");
     }
 
-    // 👤 Format Customer Profile
-    const profileText = customerProfile ? `
-Name: ${customerProfile.name || "Unknown"}
-Phone: ${customerProfile.contact || "Unknown"}
-Address: ${customerProfile.address || "Not provided"}
-Tags: ${customerProfile.tags || "None"}
-`.trim() : "New Customer";
+    const lastAssistantMessage = (history || []).filter(h => h.role === "assistant").pop()?.content || "";
 
-    // 🛒 Current Draft Order
-    const currentDraft = pendingOrder
-      ? `CURRENT DRAFT: ${pendingOrder.summary} (Total: ₹${pendingOrder.amount}).`
-      : "No items currently being ordered.";
+    const userLanguageHint = detectedLanguage.split("-")[0]; // en, ta, hi
 
-    const systemPrompt = `You are LeadSync’s production Telegram assistant for multi-tenant businesses (${businessType}).
-This is a real customer-facing chat for ${businessName}.
+    const systemPrompt = `SYSTEM ROLE
+You are the customer-facing chat assistant for a multi-tenant business platform. Each conversation belongs to exactly one shop (shopName) and has a dynamic item list (menu) coming from the platform database. Your job is to reply to the customer naturally and correctly.
 
-${hardLanguageRule}
+ABSOLUTE OUTPUT RULES (VERY IMPORTANT)
+1) Output PLAIN TEXT ONLY. No JSON. No markdown. No code blocks. No backticks.
+2) Do NOT use any emojis.
+3) Do NOT repeat the same reply twice.
+4) Do NOT invent menu items, prices, order IDs, delivery status, or past orders.
+5) Do NOT show any internal fields, tags, schemas, or “intent” labels to the customer.
 
-[INVENTORY]
+INPUT
+- shopName: ${businessName}
+- eventType: ${eventType}
+- userMessage: ${message}
+- userLanguageHint: ${userLanguageHint}
+- menuData: 
 ${productList}
+- lastAssistantMessage: ${lastAssistantMessage}
+- knownCustomerDetails: ${customerProfile ? JSON.stringify(customerProfile) : "none"}
+- shopRules: deliveryEnabled=true, variantsNeeded=true
 
-[CONTEXT]
-Detected Language: ${detectedLanguage}
-Command: ${controlFlags.command || "none"}
-Trigger Source: ${controlFlags.trigger_source || "normal_message"}
+CORE BEHAVIOR
 
-=============================
-STRICT PRODUCTION RULES (MANDATORY)
-=============================
-1. MIRROR LANGUAGE:
-   - Always reply in the user's detected language/style.
-   - If User speaks English -> Reply English.
-   - If User speaks Tanglish/Tamil -> Reply Tanglish.
-   - If User speaks Hinglish/Hindi -> Reply Hinglish.
-   - Switch language IMMEDIATELY when the user switches.
+A) START EVENT (eventType = START)
+Return exactly 2 lines:
+Line 1: "Welcome to ${businessName}."
+Line 2: "Tap View Menu to see today's items."
+No emojis. No menu listing here.
 
-2. ORDER HANDLING:
-   - CONFIRM any order clearly.
-   - Ask for the NEXT required detail only (e.g., size, address, payment preference).
-   - NEVER hallucinate order IDs or delivery status.
-   - Use the [INVENTORY] to ground prices and items.
+B) MENU BUTTON CLICK (eventType = MENU_BUTTON_CLICK)
+You MUST show the full menu from menuData.
+Rules:
+- Always list all categories and all items.
+- Display in clean readable format.
+- Include prices if present.
+- If menuData is empty, say: "Menu is not available right now. Please tell me what you are looking for."
+- End with ONE short question asking what they want.
 
-3. ANTI-REPETITION:
-   - NEVER repeat your previous response or the same information twice.
-   - If the user already knows the price, don't repeat it.
-   - Keep conversation moving forward.
+Menu formatting example (use this exact style):
+"${businessName} menu:
+Tops:
+- Sleeveless T-Shirt - ₹15
+- Shirt - ₹20
+- white shirt - ₹100
+Bottoms:
+- Tracksuit - ₹30
+What would you like?"
 
-4. NO BUSINESS LOGIC GENERATION:
-   - Do not make up company policies. 
-   - Stick to the provided [INVENTORY] and customer context.
+C) USER MESSAGE (eventType = USER_MESSAGE)
+1) LANGUAGE MIRRORING (STRICT)
+- Reply only in the same language style as the user:
+  - If userMessage is mostly English -> reply in English.
+  - If userMessage is Tamil or Tanglish -> reply in Tamil/Tanglish.
+  - If userMessage is Hindi or Hinglish -> reply in Hindi/Hinglish.
+  - If mixed -> reply in the same mix.
+- If user switches to English, switch to English immediately.
 
-5. OUTPUT FORMAT:
-   - Return PLAIN TEXT ONLY.
-   - No JSON. No markdown (except bold for emphasis). No backticks.
-   - Start with "MESSAGE: " header.
+2) RELEVANCE (NO OFF-TOPIC)
+- Respond only to what the user asked.
+- If the user asks about an item, answer based only on menuData.
+- If the item is not in menuData, say it is not available and offer closest alternatives from menuData.
 
-[CONVERSATIONAL POLISH]
-- Be friendly, professional, and concise.
-- End with a short, helpful question if the order is not complete.`;
+3) ORDER DETECTION (DO NOT MISFIRE)
+Only treat as a CONFIRMED ORDER when the user clearly intends to place it now, e.g.:
+English: "I want", "I need", "order", "buy", "book"
+Tamil/Tanglish: "venum", "kudunga", "order pannunga", "pannirunga"
+Hindi/Hinglish: "chahiye", "mangta", "order karna", "de do"
+If the user is only asking a question, treat as ORDER_INTENT (not confirmed).
+
+4) RESPONSE RULES FOR ORDERING
+- If CONFIRMED ORDER:
+  - Confirm in one line: item + qty (assume qty=1 if not specified).
+  - Ask ONLY ONE next required question (size/delivery/pickup).
+- If ORDER_INTENT (asking permission):
+  - Say yes it is possible.
+  - Ask ONE detail (size/qty/delivery).
+- If BROWSING/PRICE/DETAIL:
+  - Answer briefly.
+  - Ask a short follow-up: "Would you like to order?" or "How many?"
+
+5) ANTI-REPEAT
+- If your planned reply is substantially the same as lastAssistantMessage, change it to progress the conversation.
+
+QUALITY BAR (MUST)
+- Keep replies short, polite, and professional.
+- No emojis.
+- No filler.
+
+NOW FOLLOW THESE RULES AND OUTPUT ONLY THE CUSTOMER-FACING TEXT RESPONSE.`;
 
     const conversation = (history || [])
-      .slice(-6) // STICK TO LATEST 6 MESSAGES AS REQUESTED
+      .slice(-6)
       .map(m => ({
-        role: (m.role === "assistant" || m.role === "bot") ? "assistant" : "user",
+        role: m.role || "user",
         content: m.content
       }));
 
-    // Add the current message
-    conversation.push({ role: "user", content: message });
-
     let aiOutput = await generateWithFallback(conversation, systemPrompt);
 
-    // 🛡️ SANITIZATION LAYER: Improved to prevent hallucinated headers when empty
+    // Sanitization
     aiOutput = aiOutput.replace(/```[a-z]*\n?|```/gi, "").trim();
     aiOutput = aiOutput.replace(/\*\*|\*/g, "");
 
-    // If AI hallucinates a list header but inventory is empty, or if it says "Today's items at ...:" with nothing
-    if ((productList === "NO PRODUCTS LISTED" || productList.length < 5) &&
-      (aiOutput.includes("items:") || aiOutput.includes("options:")) &&
-      aiOutput.length < 100) {
-      aiOutput = "MESSAGE: Edhu venum? Ippo items edhuvum available illa. Check back later! 😊";
-    }
-
-    if (!aiOutput.includes("MESSAGE:")) {
-      aiOutput = "MESSAGE: " + aiOutput;
-    }
+    // Final check for emojis (safety layer)
+    aiOutput = aiOutput.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "");
 
     return aiOutput;
 
   } catch (error) {
     console.error("❌ Bot Reply Fatal Error:", error);
-    if (inputModality === "text") {
-      return "I'm sorry, I'm having trouble right now. Our team will help you soon!";
-    }
-    return JSON.stringify({
-      response_text: "I am sorry, I am having trouble right now. Our team will help you soon.",
-      allow_voice_choice: true
-    });
+    return "I am sorry, I am having trouble right now. Our team will help you soon.";
   }
 }
-
-
 
 export async function generateStructuredMenu(
   description: string,
   existingMenu?: any
 ): Promise<any> {
-
-  // Use Groq for structured JSON generation if available
   if (process.env.GROQ_API_KEY) {
     try {
-      console.log("🤖 [AI] Generating Structured Menu (Groq)...");
       let prompt = `Generate a JSON menu for: ${description}.
     Format: { "categories": [{ "name": "C", "items": [{ "name": "I", "price": 10 }] }] }
 ONLY JSON. No markdown.`;
-
-      if (existingMenu) {
-        prompt += `\nUpdate: ${JSON.stringify(existingMenu)} `;
-      }
+      if (existingMenu) prompt += `\nUpdate: ${JSON.stringify(existingMenu)} `;
 
       const completion = await groq.chat.completions.create({
         messages: [{ role: "user", content: prompt }],
-        model: "llama-3.3-70b-versatile", // Use smarter model for JSON
+        model: "llama-3.3-70b-versatile",
         temperature: 0.2,
         response_format: { type: "json_object" }
       });
-
       return JSON.parse(completion.choices[0]?.message?.content || "{}");
     } catch (e) {
-      console.error("Groq JSON generation failed, falling back...");
+      console.error("Groq JSON generation failed");
     }
   }
-
-  // Fallback logic for original simple object return
   return existingMenu || { categories: [] };
 }
 
@@ -260,36 +252,17 @@ export async function generateStructuredOrder(
   menu: any
 ): Promise<{ items: { name: string; quantity: number; price?: number }[] }> {
   if (!process.env.GROQ_API_KEY) return { items: [] };
-
   try {
-    console.log("🤖 [AI] Analyzing Structured Order...");
     const menuContext = JSON.stringify(menu?.categories || []);
-
-    const prompt = `
-    Context: A customer sent this message: "${text}".
-      Task: Extract order items based strictly on the menu below.
-        Menu: ${menuContext}
-
-    Rules:
-    1. Return JSON: { "items": [{ "name": "Item Name", "quantity": 1, "price": 100 }] }
-    2. If exact price is unknown, estimate from menu or leave 0.
-    3. If no items found, return { "items": [] }.
-4. Handle flexible inputs like "2 of the chicken ones".
-5. ONLY JSON.No markdown.
-`;
-
+    const prompt = `Extract order from: "${text}". Menu: ${menuContext}. Return JSON { "items": [{ "name": "N", "quantity": 1, "price": 10 }] }. ONLY JSON.`;
     const completion = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
       model: "llama-3.3-70b-versatile",
       temperature: 0.1,
       response_format: { type: "json_object" }
     });
-
-    const result = JSON.parse(completion.choices[0]?.message?.content || "{}");
-    return result.items ? result : { items: [] };
-
+    return JSON.parse(completion.choices[0]?.message?.content || "{}");
   } catch (e) {
-    console.error("❌ AI Order Extraction Failed:", e);
     return { items: [] };
   }
 }
