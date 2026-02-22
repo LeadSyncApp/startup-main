@@ -85,7 +85,7 @@ export default function Settings() {
   const [igPageIdInput, setIgPageIdInput] = useState("");
   const [igTokenInput, setIgTokenInput] = useState("");
 
-  const [onboardingMode, setOnboardingMode] = useState<'PASTE' | 'MANUAL'>('PASTE');
+  const [onboardingMode, setOnboardingMode] = useState<'PASTE' | 'MANUAL' | 'CSV'>('PASTE');
   const [previewMenu, setPreviewMenu] = useState<StructuredMenu | null>(null);
   const [mergeWithExisting, setMergeWithExisting] = useState(false);
   const [generatedMenu, setGeneratedMenu] = useState<StructuredMenu | null>(null);
@@ -265,6 +265,74 @@ export default function Settings() {
     } catch {
       toast.error("Failed to commit menu changes.");
     }
+  };
+
+  const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".csv")) {
+      toast.error("Please upload a .csv file");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+
+      if (lines.length < 2) {
+        toast.error("CSV file is empty or missing data rows");
+        return;
+      }
+
+      const categoriesMap: Record<string, MenuItem[]> = {};
+      const headers = lines[0].toLowerCase().split(",").map(h => h.trim());
+
+      const nameIdx = headers.indexOf("name");
+      const priceIdx = headers.indexOf("price");
+      const catIdx = headers.indexOf("category");
+
+      if (nameIdx === -1 || priceIdx === -1) {
+        toast.error("CSV must have 'Name' and 'Price' columns");
+        return;
+      }
+
+      lines.slice(1).forEach(line => {
+        const cols = line.split(",").map(c => c.trim());
+        const name = cols[nameIdx];
+        const price = Number(cols[priceIdx]) || 0;
+        const category = catIdx !== -1 ? cols[catIdx] : "Uncategorized";
+
+        if (name) {
+          if (!categoriesMap[category]) categoriesMap[category] = [];
+          categoriesMap[category].push({ name, price });
+        }
+      });
+
+      const structured: StructuredMenu = {
+        categories: Object.entries(categoriesMap).map(([name, items]) => ({
+          name,
+          items
+        }))
+      };
+
+      setPreviewMenu(structured);
+      toast.success("CSV parsed! Preview your items below.");
+    };
+    reader.readAsText(file);
+  };
+
+  const downloadCsvTemplate = () => {
+    const csvContent = "Category,Name,Price\nCoffee,Cold Brew Coffee,250\nCoffee,Oat Milk Latte,300\nBakery,Cheddar Croissant,180";
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "menu_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   /* ===============================
@@ -611,6 +679,12 @@ export default function Settings() {
           >
             🧱 Manual Entry
           </button>
+          <button
+            onClick={() => setOnboardingMode('CSV')}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'CSV' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            🧾 CSV Upload
+          </button>
         </div>
 
         {onboardingMode === 'PASTE' ? (
@@ -650,6 +724,32 @@ Cheese Croissant 180..."
                 <label htmlFor="mergeCheck" className="text-xs font-bold text-slate-500 cursor-pointer">Merge with existing items</label>
               </div>
             </div>
+          </div>
+        ) : onboardingMode === 'CSV' ? (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100/50 flex justify-between items-center">
+              <div>
+                <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-1">Standard Upload</p>
+                <p className="text-sm text-indigo-900/70">Upload your product list in CSV format.</p>
+              </div>
+              <button
+                onClick={downloadCsvTemplate}
+                className="text-xs font-bold text-indigo-600 hover:underline"
+              >
+                Download Template ↓
+              </button>
+            </div>
+
+            <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-200 rounded-3xl cursor-pointer hover:bg-slate-50 hover:border-indigo-400 transition-all group">
+              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                <div className="bg-indigo-50 p-4 rounded-full text-indigo-600 mb-3 group-hover:scale-110 transition-transform">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                </div>
+                <p className="text-sm font-bold text-slate-600">Click to upload or drag and drop</p>
+                <p className="text-xs text-slate-400 mt-1">.CSV files only (Max 5MB)</p>
+              </div>
+              <input type="file" className="hidden" accept=".csv" onChange={handleCSVUpload} />
+            </label>
           </div>
         ) : (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
