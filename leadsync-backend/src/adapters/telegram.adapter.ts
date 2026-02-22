@@ -429,13 +429,11 @@ export class TelegramAdapter implements ChannelAdapter {
     ) {
         // 1. Parse structured format
         const lines = aiReply.split("\n").map(l => l.trim());
-        let action = "";
         let messageText = "";
         let buttonLabel = "";
         let callbackData = "";
 
         for (const line of lines) {
-            if (line.startsWith("ACTION:")) action = line.replace("ACTION:", "").trim();
             if (line.startsWith("MESSAGE:")) messageText = line.replace("MESSAGE:", "").trim();
             if (line.startsWith("BUTTON:")) buttonLabel = line.replace("BUTTON:", "").trim();
             if (line.startsWith("CALLBACK:")) callbackData = line.replace("CALLBACK:", "").trim();
@@ -443,8 +441,12 @@ export class TelegramAdapter implements ChannelAdapter {
 
         // Fallback if AI forgot headers (very rare with strict prompt)
         if (!messageText) {
-            // If there's no MESSAGE: header, we treat the non-header block as the message
-            messageText = aiReply.split("\n").filter(l => !l.includes(":")).join("\n").trim() || aiReply;
+            // Filter out internal headers and use the rest as text
+            messageText = aiReply.split("\n")
+                .filter(l => !l.startsWith("BUTTON:") && !l.startsWith("CALLBACK:"))
+                .join("\n")
+                .replace(/^MESSAGE:\s*/i, "")
+                .trim() || aiReply;
         }
 
         // 2. Save Message to DB
