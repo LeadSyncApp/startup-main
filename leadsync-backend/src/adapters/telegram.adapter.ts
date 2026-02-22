@@ -429,18 +429,23 @@ export class TelegramAdapter implements ChannelAdapter {
     ) {
         // 1. Parse structured format
         const lines = aiReply.split("\n").map(l => l.trim());
+        let action = "";
         let messageText = "";
         let buttonLabel = "";
         let callbackData = "";
 
         for (const line of lines) {
+            if (line.startsWith("ACTION:")) action = line.replace("ACTION:", "").trim();
             if (line.startsWith("MESSAGE:")) messageText = line.replace("MESSAGE:", "").trim();
             if (line.startsWith("BUTTON:")) buttonLabel = line.replace("BUTTON:", "").trim();
             if (line.startsWith("CALLBACK:")) callbackData = line.replace("CALLBACK:", "").trim();
         }
 
-        // Fallback if AI forgot headers
-        if (!messageText) messageText = aiReply.split("BUTTON:")[0].trim();
+        // Fallback if AI forgot headers (very rare with strict prompt)
+        if (!messageText) {
+            // If there's no MESSAGE: header, we treat the non-header block as the message
+            messageText = aiReply.split("\n").filter(l => !l.includes(":")).join("\n").trim() || aiReply;
+        }
 
         // 2. Save Message to DB
         const botMsg = await prisma.message.create({
@@ -466,6 +471,7 @@ export class TelegramAdapter implements ChannelAdapter {
             parse_mode: "HTML",
         };
 
+        // Attach button if provided (for WELCOME_ONLY or any other interaction)
         if (buttonLabel && callbackData) {
             payload.reply_markup = {
                 inline_keyboard: [[{ text: buttonLabel, callback_data: callbackData }]]
@@ -474,7 +480,7 @@ export class TelegramAdapter implements ChannelAdapter {
 
         await sendTelegramApi(url, payload);
 
-        // 4. Pre-generate voice if it was a voice conversation (Optional background task)
+        // 4. Pre-generate voice if it was a voice conversation
         if (isVoiceMsg) {
             sarvamService.textToSpeech(messageText, detectedLanguage)
                 .then(audioBuffer => {
