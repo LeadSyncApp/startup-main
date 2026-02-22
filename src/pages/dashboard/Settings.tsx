@@ -88,8 +88,12 @@ export default function Settings() {
   const [generatedMenu, setGeneratedMenu] = useState<StructuredMenu | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAllPresets, setShowAllPresets] = useState(false);
 
   const handleLoadPreset = (presetName: keyof typeof PRESETS) => {
+    const confirm = window.confirm(`This will overwrite menu, learned knowledge, and policies for your shop (Tenant ID: ${user?.companyId || 'current'}) only. This only affects your shop data.\n\nContinue?`);
+    if (!confirm) return;
+
     const p = PRESETS[presetName];
     setBotBusinessType(presetName);
     setGeneratedMenu(p.menu as any);
@@ -97,7 +101,7 @@ export default function Settings() {
     setBotPolicies(p.policies);
     setBotWelcomeMessage(p.welcome);
     setBotLearnedContext("Click 'Train AI' to process this preset...");
-    toast.success(`Loaded ${presetName} Preset! Now save and train.`);
+    toast.success(`Loaded demo data for ${presetName}! Now save and train.`);
   };
 
   /* ===============================
@@ -393,29 +397,58 @@ export default function Settings() {
   return (
     <div className="space-y-8 max-w-4xl pb-12">
 
-      {/* 🧪 TEST PRESETS SELECTOR */}
+      {/* 🧪 DEMO DATA SELECTOR */}
       <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 shadow-sm space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="bg-indigo-600 text-white h-10 w-10 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
-            <span className="font-bold text-xl">🧪</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-indigo-600 text-white h-10 w-10 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+              <span className="font-bold text-xl">🧪</span>
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-indigo-900">Load Demo Data (for your business type)</h2>
+              <p className="text-sm text-indigo-600/70 font-medium">Quickly populate your shop with realistic demo data for testing.</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-indigo-900">Load Test Preset</h2>
-            <p className="text-sm text-indigo-600/70 font-medium">Quickly populate your shop with realistic demo data for testing.</p>
-          </div>
+
+          {(user?.role === "ADMIN" || user?.role === "OWNER") && (
+            <button
+              onClick={() => setShowAllPresets(!showAllPresets)}
+              className="text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-600 transition-colors"
+            >
+              {showAllPresets ? "Hide Other Presets" : "Switch business type / view other presets"}
+            </button>
+          )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {Object.keys(PRESETS).map((name) => (
-            <button
-              key={name}
-              onClick={() => handleLoadPreset(name as keyof typeof PRESETS)}
-              className="bg-white border border-indigo-200 text-indigo-700 px-4 py-3 rounded-xl text-sm font-bold hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-sm active:scale-95"
-            >
-              {name}
-            </button>
-          ))}
-        </div>
+        {!botBusinessType && !showAllPresets ? (
+          <div className="bg-white/50 p-4 rounded-xl border border-indigo-100 text-center">
+            <p className="text-sm text-indigo-900 font-bold mb-3 uppercase tracking-wide">Select your business type in "Merchant Profile" first</p>
+            <p className="text-xs text-indigo-600/60">Or use the advanced link above to see all demographics.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {Object.keys(PRESETS)
+              .filter(name => showAllPresets || name === botBusinessType)
+              .map((name) => (
+                <button
+                  key={name}
+                  onClick={() => handleLoadPreset(name as keyof typeof PRESETS)}
+                  className={`
+                  px-4 py-3 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-95 border
+                  ${name === botBusinessType
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-indigo-200"
+                      : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"}
+                `}
+                >
+                  {name === botBusinessType ? `✅ Load ${name}` : name}
+                </button>
+              ))}
+          </div>
+        )}
+
+        <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest text-center">
+          ⚠️ This only affects your shop data.
+        </p>
       </div>
 
       {/* PROFILE */}
