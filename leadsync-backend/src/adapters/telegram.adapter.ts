@@ -167,7 +167,7 @@ export class TelegramAdapter implements ChannelAdapter {
                 console.error("❌ Voice reply regeneration failed:", err);
             }
 
-        } else if (data === "MENU" || data.startsWith("MENU")) {
+        } else if (data === "MENU" || data.startsWith("MENU") || data === "VIEW_MENU") {
             // Handle the dynamic MENU button from the AI
             try {
                 const conversation = await prisma.conversation.findFirst({
@@ -282,18 +282,8 @@ export class TelegramAdapter implements ChannelAdapter {
                     const sttResult = await sarvamService.speechToText(audioBuffer, "voice.ogg");
                     if (sttResult) {
                         text = sttResult.transcript;
-                        detectedLanguage = sttResult.languageCode;
-
-                        // 🔍 Local Language Correction (Sarvam auto-detect is sometimes wrong for Tanglish/Hinglish)
-                        const lowerText = text.toLowerCase();
-                        const tamilKeywords = ["venum", "vendum", "moonu", "naalu", "onnu", "rendu", "kodu", "engo", "eppo"];
-                        const hindiKeywords = ["chahiye", "kitna", "dena", "lelo", "mangwana", "khareedna"];
-
-                        if (tamilKeywords.some(kw => lowerText.includes(kw))) {
-                            detectedLanguage = "ta-IN";
-                        } else if (hindiKeywords.some(kw => lowerText.includes(kw))) {
-                            detectedLanguage = "hi-IN";
-                        }
+                        // Voice transcription already detects language, but we can refine it
+                        detectedLanguage = await sarvamService.detectLanguage(text);
                     } else {
                         await this.sendMessage(chatId, "Sorry, I had trouble hearing that. Could you try again?");
                         return;
@@ -302,6 +292,8 @@ export class TelegramAdapter implements ChannelAdapter {
                     await this.sendMessage(chatId, "The voice message couldn't be received. Please try again.");
                     return;
                 }
+            } else if (text) {
+                detectedLanguage = await sarvamService.detectLanguage(text);
             }
 
             if (!text) return;

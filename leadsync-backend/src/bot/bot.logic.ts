@@ -58,7 +58,50 @@ export async function handleBotMessage(
   const businessType =
     company?.botBusinessType || "general business";
 
-  const structuredMenu = company?.botStructuredMenu || null;
+  const structuredMenu = (company?.botStructuredMenu as any) || null;
+
+  // 2.5️⃣ HARDCODED ROUTING (NO AI)
+  const isTamil = detectedLanguage.startsWith("ta");
+  const isHindi = detectedLanguage.startsWith("hi");
+
+  if (command === "/start" || userMessage === "/start") {
+    const welcomeMsg = isTamil
+      ? `MESSAGE: 👋 ${businessName}-ukku varugai! Inraiya items-ai paarka mela ulla button-ai click pannunga.`
+      : isHindi
+        ? `MESSAGE: 👋 ${businessName} mein aapka swagat hai! Aaj ke items dekhne ke liye neeche button dabayein.`
+        : `MESSAGE: 👋 Welcome to ${businessName}! Tap below to view today's items.`;
+
+    const buttonText = isTamil ? "🛍 Menu-vai Paarkka" : isHindi ? "🛍 Menu Dekhein" : "🛍 View Menu";
+
+    return `${welcomeMsg}
+BUTTON: ${buttonText}
+CALLBACK: VIEW_MENU`;
+  }
+
+  if (callbackPayload === "VIEW_MENU" || userMessage.toLowerCase() === "/menu") {
+    if (!structuredMenu || !structuredMenu.categories || structuredMenu.categories.length === 0) {
+      return isTamil
+        ? `MESSAGE: Sorry, ${businessName}-il ippo items edhuvum illa. Naan vera eppadi help panna mudiyum?`
+        : isHindi
+          ? `MESSAGE: Sorry, ${businessName} mein abhi koi items nahi hain. Main aapki aur kya madad kar sakta hoon?`
+          : `MESSAGE: Sorry, there are no items available right now at ${businessName}. How else can I help you?`;
+    }
+
+    let menuTitle = isTamil ? `🛍 *${businessName}-in Inraiya Menu:*` : isHindi ? `🛍 *${businessName} ki Aaj ki Menu:*` : `🛍 *Today's menu at ${businessName}:*`;
+    let menuFooter = isTamil ? "Neenga edhai order panna virumbureenga?" : isHindi ? "Aap kya order karna chahenge?" : "What would you like to order?";
+
+    let menuText = `${menuTitle}\n\n`;
+    structuredMenu.categories.forEach((cat: any) => {
+      menuText += `*${cat.name.toUpperCase()}*\n`;
+      cat.items.forEach((item: any) => {
+        menuText += `- ${item.name}: ₹${item.price}\n`;
+      });
+      menuText += "\n";
+    });
+    menuText += menuFooter;
+
+    return `MESSAGE: ${menuText.trim()}`;
+  }
 
   // 3️⃣ Fetch History (Context)
   const history = await prisma.message.findMany({

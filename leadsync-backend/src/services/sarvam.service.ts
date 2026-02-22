@@ -118,79 +118,26 @@ export class SarvamService {
     }
 
     /**
-     * Analyzes text for order intent using Sarvam.ai (or similar).
-     * Free-tier friendly: Checks specific keywords first to avoid unnecessary API calls.
+     * Detects the language of a given text.
+     * Uses local keywords for speed and falls back to Sarvam (if available).
      */
-    async analyzeIntent(text: string): Promise<SarvamResponse | null> {
+    async detectLanguage(text: string): Promise<string> {
+        const lowerText = text.toLowerCase();
 
-        if (!text) return null;
+        // Tamil Keywords (including Tanglish)
+        const tamilKeywords = ["venum", "vendum", "moonu", "naalu", "onnu", "rendu", "kodu", "engo", "eppo", "iruku", "illa", "vanga", "ponga"];
+        // Hindi Keywords (including Hinglish)
+        const hindiKeywords = ["chahiye", "kitna", "dena", "lelo", "mangwana", "khareedna", "baad", "pehle", "karo", "hai", "hua"];
 
-        // 1. Local Keyword Pre-check (Optimized for Indian Languages & Hinglish)
-        const orderKeywords = [
-            // Standard
-            "buy", "order", "price", "want", "book", "cash", "total", "bill",
-            // Hindi / North (Hinglish)
-            "khareedna", "chahiye", "mangwana", "lene", "daam", "kitna", "dena", "lelo",
-            // Tamil
-            "vendum", "kodu", "venum", "vaanganum", "vilai", "evvalavu", "onnu", "rendu", "moonu", "naalu", "anju",
-            // Telugu
-            "kavali", "konali", "ivvandi", "dhara",
-            // Kannada
-            "beku", "idiyalla", "kodona", "bele"
-        ];
-        const hasKeyword = orderKeywords.some(k => text.toLowerCase().includes(k));
-
-        if (!hasKeyword && !text.match(/\d+/)) { // Also check if numbers are present (counts)
-            return { intent: "OTHER", entities: {}, confidence: 1.0 };
+        if (tamilKeywords.some(kw => lowerText.includes(kw)) || /[\u0B80-\u0BFF]/.test(text)) {
+            return "ta-IN";
         }
 
-        // 2. Call AI API (Only if keyword or quantity present)
-        if (!this.apiKey) {
-            console.warn("Sarvam API Key missing, skipping AI.");
-            return null;
+        if (hindiKeywords.some(kw => lowerText.includes(kw)) || /[\u0900-\u097F]/.test(text)) {
+            return "hi-IN";
         }
 
-        try {
-            const response = await axios.post(
-                "https://api.sarvam.ai/v1/chat/completions",
-                {
-                    model: "sarvam-m",
-                    messages: [
-                        {
-                            role: "user",
-                            content: `INSTRUCTION: Extract order intent and entities.
-Intent: ORDER (wants to buy), INQUIRY (asking price), COMPLAINT, or OTHER.
-Extract Product Name & Quantity.
-Return ONLY JSON.
-
-User Message: "${text}"`
-                        }
-                    ]
-                },
-                {
-                    headers: {
-                        "api-subscription-key": this.apiKey,
-                        "Content-Type": "application/json"
-                    }
-                }
-            );
-
-            const aiResult = response.data?.choices?.[0]?.message?.content;
-            if (!aiResult) return null;
-
-            // Parse JSON from response
-            try {
-                const parsed = JSON.parse(aiResult.replace(/```json|```/g, "").trim());
-                return parsed as SarvamResponse;
-            } catch (e) {
-                console.error("Failed to parse Sarvam JSON:", aiResult);
-                return null;
-            }
-
-        } catch (error: any) {
-            console.error("Sarvam AI Error:", error?.response?.data || error.message);
-            return null; // Fail safe
-        }
+        return "en-IN";
     }
 }
 

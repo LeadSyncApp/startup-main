@@ -4,10 +4,9 @@ import Groq from "groq-sdk";
 // Initialize Groq
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "dummy" });
 
-// Model Hierarchy: Groq for Speed (Primary), Sarvam for Multilingual
+// Model Hierarchy: Groq for Speed (Primary) - Sarvam only for STT/TTS/Lang Detection
 const MODELS = [
   { provider: "groq", id: "llama-3.3-70b-versatile" }, // 🔥 State-of-the-art
-  { provider: "sarvam", id: "sarvam-m" },              // 🇮🇳 Multilingual Fallback
 ];
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -31,11 +30,9 @@ async function generateWithFallback(
 ): Promise<string> {
   let lastError;
   const useGroq = !!process.env.GROQ_API_KEY;
-  const useSarvam = !!process.env.SARVAM_API_KEY;
 
   for (const model of MODELS) {
     if (model.provider === "groq" && !useGroq) continue;
-    if (model.provider === "sarvam" && !useSarvam) continue;
 
     try {
       console.log(`🤖 [AI] Attempting ${model.provider.toUpperCase()}: ${model.id}...`);
@@ -43,73 +40,7 @@ async function generateWithFallback(
       let content = "";
       const timeoutMs = 8000; // 8s timeout per model
 
-      if (model.provider === "sarvam") {
-        // Sarvam.ai is extremely strict: No "system" role, and roles MUST alternate (User -> Assistant -> User).
-        const rawHistory = messages.filter(m => m.content && typeof m.content === 'string' && m.content.trim());
-
-        const chatMessages: { role: "user" | "assistant"; content: string }[] = [];
-
-        // Instruction
-        const instructionPrefix = `[INSTRUCTION: ${systemPrompt}]\n\n`;
-
-        for (let i = 0; i < rawHistory.length; i++) {
-          const m = rawHistory[i];
-          const role = (m.role === "assistant" || m.role === "bot") ? "assistant" : "user";
-
-          // Sarvam requires the first message to be from 'user'
-          if (chatMessages.length === 0 && role === "assistant") continue;
-
-          // Safety: Only add if it alternates
-          if (chatMessages.length > 0 && chatMessages[chatMessages.length - 1].role === role) {
-            chatMessages[chatMessages.length - 1].content += "\n" + m.content.trim();
-          } else {
-            chatMessages.push({
-              role,
-              content: m.content.trim()
-            });
-          }
-        }
-
-        // Sarvam strictly follows User -> Assistant. Inject instructions into the VERY FIRST message.
-        if (chatMessages.length > 0 && chatMessages[0].role === "user") {
-          console.log(`🧠 [Sarvam] Injecting STRICT_RULES...`);
-          chatMessages[0].content = `[STRICT_RULES: ${systemPrompt}]\n\nCustomer Msg: ${chatMessages[0].content}`;
-        }
-
-        // Final safety: If still empty (unlikely) or ends with assistant, ensure it's valid for chat completion
-        if (chatMessages.length === 0) {
-          chatMessages.push({ role: "user", content: instructionPrefix + "Hello" });
-        } else if (chatMessages[chatMessages.length - 1].role === "assistant") {
-          chatMessages.push({ role: "user", content: "Please continue according to the instructions." });
-        }
-
-        try {
-          const response: any = await withTimeout(
-            axios.post(
-              "https://api.sarvam.ai/v1/chat/completions",
-              {
-                model: model.id,
-                messages: chatMessages,
-                temperature: 0.1
-              },
-              {
-                headers: {
-                  "api-subscription-key": process.env.SARVAM_API_KEY,
-                  "Content-Type": "application/json"
-                }
-              }
-            ),
-            timeoutMs,
-            `Sarvam ${model.id}`
-          );
-          content = response.data?.choices?.[0]?.message?.content || "";
-        } catch (axiosError: any) {
-          const detail = axiosError.response?.data?.error?.message || axiosError.response?.data || axiosError.message;
-          console.error(`❌ Sarvam API Error Detail:`, detail);
-          throw axiosError;
-        }
-      }
-      else if (model.provider === "groq") {
+      if (model.provider === "groq") {
         const completion: any = await withTimeout(
           groq.chat.completions.create({
             messages: [
@@ -201,123 +132,51 @@ Tags: ${customerProfile.tags || "None"}
       : "No items currently being ordered.";
 
     const systemPrompt = `You are LeadSync’s production Telegram assistant for multi-tenant businesses (${businessType}).
-This is a real customer-facing chat for ${businessName}. You MUST follow the rules exactly to avoid repeated replies and wrong intent.
+This is a real customer-facing chat for ${businessName}.
+
+${hardLanguageRule}
 
 [INVENTORY]
 ${productList}
 
 [CONTEXT]
+Detected Language: ${detectedLanguage}
 Command: ${controlFlags.command || "none"}
 Trigger Source: ${controlFlags.trigger_source || "normal_message"}
-Callback Payload: ${controlFlags.callback_payload || "none"}
 
 =============================
-ABSOLUTE OUTPUT FORMAT
+STRICT PRODUCTION RULES (MANDATORY)
 =============================
-Return PLAIN TEXT ONLY.
-No JSON. No markdown. No code blocks. No backticks. No extra text.
+1. MIRROR LANGUAGE:
+   - Always reply in the user's detected language/style.
+   - If User speaks English -> Reply English.
+   - If User speaks Tanglish/Tamil -> Reply Tanglish.
+   - If User speaks Hinglish/Hindi -> Reply Hinglish.
+   - Switch language IMMEDIATELY when the user switches.
 
-Output must be EXACTLY one of:
+2. ORDER HANDLING:
+   - CONFIRM any order clearly.
+   - Ask for the NEXT required detail only (e.g., size, address, payment preference).
+   - NEVER hallucinate order IDs or delivery status.
+   - Use the [INVENTORY] to ground prices and items.
 
-A) Start with button:
-MESSAGE: <text>
-BUTTON: <button text>
-CALLBACK: MENU
+3. ANTI-REPETITION:
+   - NEVER repeat your previous response or the same information twice.
+   - If the user already knows the price, don't repeat it.
+   - Keep conversation moving forward.
 
-B) Anything else:
-MESSAGE: <text>
+4. NO BUSINESS LOGIC GENERATION:
+   - Do not make up company policies. 
+   - Stick to the provided [INVENTORY] and customer context.
 
-Nothing else.
+5. OUTPUT FORMAT:
+   - Return PLAIN TEXT ONLY.
+   - No JSON. No markdown (except bold for emphasis). No backticks.
+   - Start with "MESSAGE: " header.
 
-=============================
-LANGUAGE MIRRORING (STRICT)
-=============================
-- Detect language style from latest_user_message.
-- Reply in the SAME style:
-  Tanglish ↔ Tanglish, Tamil ↔ Tamil, Hinglish ↔ Hinglish, English ↔ English.
-- If user switches to English, switch to English immediately.
-- Do not randomly use English when user uses Tamil/Hindi.
-- Keep it short and natural. Avoid repeating “sir” every time.
-
-=============================
-START FLOW (MUST)
-=============================
-If command="/start" OR latest_user_message="/start":
-Return ONLY:
-MESSAGE: 👋 Welcome to ${businessName}! Tap below to view today’s items.
-BUTTON: 🛍 View today’s items from ${businessName}
-CALLBACK: MENU
-Do NOT show items here.
-
-=============================
-MENU FLOW (MUST LIST ITEMS)
-=============================
-Trigger MENU only when:
-- command="/menu"
-OR
-- latest_user_message="/menu"
-OR
-- trigger_source="button_click" AND callback_payload="MENU"
-OR
-- user asks explicitly: "menu", "items", "options", "catalog", "what available"
-
-If MENU is triggered:
-- If [INVENTORY] contains at least ONE item name:
-  List max 8 items with prices if present.
-  End with a question in the same language: “Edhu venum?” / “What would you like?”
-- If [INVENTORY] is empty OR no item names:
-  Ask what they are looking for; DO NOT print an empty “Today’s items at …”.
-
-=============================
-ORDER INTENT (THIS FIXES YOUR REPEATING ISSUE)
-=============================
-You MUST detect ORDER_CONFIRMED vs ORDER_INTENT vs BROWSING.
-
-A) ORDER_CONFIRMED (place order now)
-Trigger when user clearly asks to place it now (NOT a question), like:
-- "Appo yennaku oru tracksuit order pannirunga"
-- "enaku shirt venum"
-- "I want 1 tracksuit"
-- "mujhe shirt chahiye"
-- "order kar do"
-
-If ORDER_CONFIRMED:
-1) Confirm order + quantity (assume qty=1 if not said).
-2) Ask ONE next required detail only:
-   - For clothes: size (S/M/L/XL) OR colour if relevant (ask size first).
-   - For others: variant/model OR delivery/pickup if relevant.
-3) Do NOT talk about quality again.
-4) Do NOT repeat your previous reply.
-
-B) ORDER_INTENT (asking permission)
-Trigger when it is a question about ordering:
-- "tracksuit order pannalama?"
-- "can I order?"
-- "order panna mudiyuma?"
-If ORDER_INTENT:
-Do NOT confirm as placed. Say yes + ask ONE detail.
-
-C) BROWSING/QUESTION (quality/price/details)
-Examples:
-- "Tracksuit nala irukkuma?"
-- "price enna?"
-If BROWSING:
-Answer briefly, then ask if they want to order OR ask size/qty.
-
-=============================
-ANTI-REPEAT (HARD RULE)
-=============================
-Before replying, check last_messages for the most recent assistant reply.
-- You MUST NOT output the same sentence or same meaning again.
-- If the last assistant message mentioned “quality/try pannalam”, the next reply MUST NOT repeat it.
-- Always move to the next step (confirm order / ask size / ask qty / ask delivery).
-
-=============================
-STRICT DO-NOTS
-=============================
-- Never generate fake order IDs or delivery status updates.
-- Never say “How can I assist you today?” if user asked something specific.
-- Never re-list the menu after an order-confirmed message.`;
+[CONVERSATIONAL POLISH]
+- Be friendly, professional, and concise.
+- End with a short, helpful question if the order is not complete.`;
 
     const conversation = (history || [])
       .slice(-6) // STICK TO LATEST 6 MESSAGES AS REQUESTED
