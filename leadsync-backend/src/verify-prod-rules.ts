@@ -46,13 +46,12 @@ async function verify() {
         console.log(`Reply:\n${reply}`);
 
         const lines = reply.split("\n");
-        const hasText = lines.some(l => l.startsWith("TEXT_REPLY:"));
-        const hasVoice = lines.some(l => l.startsWith("VOICE_TTS:"));
+        const hasMessage = lines.some(l => l.startsWith("MESSAGE:"));
 
         if (modality === "text") {
-            console.log(hasText && lines.length === 1 ? "✅ PASS: Single line TEXT_REPLY" : "❌ FAIL: Invalid text format");
+            console.log(hasMessage && lines.length === 1 ? "✅ PASS: Single line MESSAGE" : "❌ FAIL: Invalid text format");
         } else {
-            console.log(hasText && hasVoice ? "✅ PASS: Multiline TEXT + VOICE" : "❌ FAIL: Invalid voice format");
+            console.log(hasMessage ? "✅ PASS: Multi-line MESSAGE (Voice processed via parsing)" : "❌ FAIL: Invalid format");
         }
         console.log("---");
     }

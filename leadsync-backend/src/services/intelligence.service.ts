@@ -163,9 +163,9 @@ Format: {"sentiment": number, "intent": string}
 
             // CRITICAL OVERRIDE: Local regex check for absolute priority
             const lowerText = text.toLowerCase();
-            const orderKeywords = ["want", "order", "venum", "chahiye", "book", "onnu", "rendu", "moonu", "naalu", "dena", "vangi"];
+            const orderKeywords = ["want", "order", "venum", "chahiye", "book", "onnu", "rendu", "moonu", "naalu", "dena", "vangi", "idly", "dosa", "coffee", "tea", "biryani", "appointment"];
             const hasQuantity = /\d+/.test(lowerText);
-            const forceOrder = orderKeywords.some(kw => lowerText.includes(kw)) || (hasQuantity && lowerText.length > 3);
+            const forceOrder = orderKeywords.some(kw => lowerText.includes(kw)) || (hasQuantity && lowerText.length > 3 && !lowerText.includes("status"));
 
             if (forceOrder) {
                 safeIntent = "ORDERING";

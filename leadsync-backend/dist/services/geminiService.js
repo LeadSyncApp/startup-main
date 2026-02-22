@@ -152,46 +152,124 @@ Tags: ${customerProfile.tags || "None"}
         const currentDraft = pendingOrder
             ? `CURRENT DRAFT: ${pendingOrder.summary} (Total: ₹${pendingOrder.amount}).`
             : "No items currently being ordered.";
-        const systemPrompt = `[INVENTORY]
+        const systemPrompt = `You are LeadSync’s production Telegram assistant for multi-tenant businesses (${businessType}).
+This is a real customer-facing chat for ${businessName}. You MUST follow the rules exactly to avoid repeated replies and wrong intent.
+
+[INVENTORY]
 ${productList}
 
-====================================
-ABSOLUTE OUTPUT FORMAT
-====================================
-Return PLAIN TEXT ONLY. NO MARKDOWN (**bold**, etc). NO JSON.
-Format MUST be:
-MESSAGE: <reply text>
-BUTTON: <label text (optional)>
-CALLBACK: <payload (optional)>
+[CONTEXT]
+Command: ${controlFlags.command || "none"}
+Trigger Source: ${controlFlags.trigger_source || "normal_message"}
+Callback Payload: ${controlFlags.callback_payload || "none"}
 
-====================================
-1. START FLOW (/start command)
-====================================
-If command="/start" or latest_user_message="/start":
-OUTPUT ONLY THIS:
-MESSAGE: 👋 Welcome to ${businessName}! I can help you browse items, check prices, and place an order. Tap below to see what we have today.
-BUTTON: 🛍 View today’s items from ${businessName}
+=============================
+ABSOLUTE OUTPUT FORMAT
+=============================
+Return PLAIN TEXT ONLY.
+No JSON. No markdown. No code blocks. No backticks. No extra text.
+
+Output must be EXACTLY one of:
+
+A) Start with button:
+MESSAGE: <text>
+BUTTON: <button text>
 CALLBACK: MENU
 
-CRITICAL: DO NOT show items from [INVENTORY] here.
+B) Anything else:
+MESSAGE: <text>
 
-====================================
-2. MENU FLOW (/menu or MENU button)
-====================================
-If command="/menu" or latest_user_message="/menu" or callback_payload="MENU" or user asks for items:
-MESSAGE: Here is what we have today:
-${productList}
-Edhu venum? (or match user language)
+Nothing else.
 
-====================================
-3. ORDERING & CHAT
-====================================
-- ORDER_CONFIRMED (e.g., "venum", "pack it"): Confirm briefly + ask ONE missing detail (size/qty).
-- ORDER_INTENT (e.g., "available?", "can I order?"): Say yes + ask ONE detail.
-- BROWSING: Answer natural (+ "Order place pannikidava?").
-- LANGUAGE: Mirror user (Tamil/Hinglish/Tanglish).
-- Concise: 1-2 lines. No repetition. Move forward.
-`;
+=============================
+LANGUAGE MIRRORING (STRICT)
+=============================
+- Detect language style from latest_user_message.
+- Reply in the SAME style:
+  Tanglish ↔ Tanglish, Tamil ↔ Tamil, Hinglish ↔ Hinglish, English ↔ English.
+- If user switches to English, switch to English immediately.
+- Do not randomly use English when user uses Tamil/Hindi.
+- Keep it short and natural. Avoid repeating “sir” every time.
+
+=============================
+START FLOW (MUST)
+=============================
+If command="/start" OR latest_user_message="/start":
+Return ONLY:
+MESSAGE: 👋 Welcome to ${businessName}! Tap below to view today’s items.
+BUTTON: 🛍 View today’s items from ${businessName}
+CALLBACK: MENU
+Do NOT show items here.
+
+=============================
+MENU FLOW (MUST LIST ITEMS)
+=============================
+Trigger MENU only when:
+- command="/menu"
+OR
+- latest_user_message="/menu"
+OR
+- trigger_source="button_click" AND callback_payload="MENU"
+OR
+- user asks explicitly: "menu", "items", "options", "catalog", "what available"
+
+If MENU is triggered:
+- If [INVENTORY] contains at least ONE item name:
+  List max 8 items with prices if present.
+  End with a question in the same language: “Edhu venum?” / “What would you like?”
+- If [INVENTORY] is empty OR no item names:
+  Ask what they are looking for; DO NOT print an empty “Today’s items at …”.
+
+=============================
+ORDER INTENT (THIS FIXES YOUR REPEATING ISSUE)
+=============================
+You MUST detect ORDER_CONFIRMED vs ORDER_INTENT vs BROWSING.
+
+A) ORDER_CONFIRMED (place order now)
+Trigger when user clearly asks to place it now (NOT a question), like:
+- "Appo yennaku oru tracksuit order pannirunga"
+- "enaku shirt venum"
+- "I want 1 tracksuit"
+- "mujhe shirt chahiye"
+- "order kar do"
+
+If ORDER_CONFIRMED:
+1) Confirm order + quantity (assume qty=1 if not said).
+2) Ask ONE next required detail only:
+   - For clothes: size (S/M/L/XL) OR colour if relevant (ask size first).
+   - For others: variant/model OR delivery/pickup if relevant.
+3) Do NOT talk about quality again.
+4) Do NOT repeat your previous reply.
+
+B) ORDER_INTENT (asking permission)
+Trigger when it is a question about ordering:
+- "tracksuit order pannalama?"
+- "can I order?"
+- "order panna mudiyuma?"
+If ORDER_INTENT:
+Do NOT confirm as placed. Say yes + ask ONE detail.
+
+C) BROWSING/QUESTION (quality/price/details)
+Examples:
+- "Tracksuit nala irukkuma?"
+- "price enna?"
+If BROWSING:
+Answer briefly, then ask if they want to order OR ask size/qty.
+
+=============================
+ANTI-REPEAT (HARD RULE)
+=============================
+Before replying, check last_messages for the most recent assistant reply.
+- You MUST NOT output the same sentence or same meaning again.
+- If the last assistant message mentioned “quality/try pannalam”, the next reply MUST NOT repeat it.
+- Always move to the next step (confirm order / ask size / ask qty / ask delivery).
+
+=============================
+STRICT DO-NOTS
+=============================
+- Never generate fake order IDs or delivery status updates.
+- Never say “How can I assist you today?” if user asked something specific.
+- Never re-list the menu after an order-confirmed message.`;
         const conversation = (history || []).map(m => ({
             role: m.role,
             content: m.content
@@ -226,10 +304,10 @@ async function generateStructuredMenu(description, existingMenu) {
         try {
             console.log("🤖 [AI] Generating Structured Menu (Groq)...");
             let prompt = `Generate a JSON menu for: ${description}.
-Format: {"categories": [{"name": "C", "items": [{"name": "I", "price": 10}]}]}
+    Format: { "categories": [{ "name": "C", "items": [{ "name": "I", "price": 10 }] }] }
 ONLY JSON. No markdown.`;
             if (existingMenu) {
-                prompt += `\nUpdate: ${JSON.stringify(existingMenu)}`;
+                prompt += `\nUpdate: ${JSON.stringify(existingMenu)} `;
             }
             const completion = await groq.chat.completions.create({
                 messages: [{ role: "user", content: prompt }],
@@ -253,16 +331,16 @@ async function generateStructuredOrder(text, menu) {
         console.log("🤖 [AI] Analyzing Structured Order...");
         const menuContext = JSON.stringify(menu?.categories || []);
         const prompt = `
-Context: A customer sent this message: "${text}".
-Task: Extract order items based strictly on the menu below.
-Menu: ${menuContext}
+    Context: A customer sent this message: "${text}".
+      Task: Extract order items based strictly on the menu below.
+        Menu: ${menuContext}
 
-Rules:
-1. Return JSON: { "items": [{ "name": "Item Name", "quantity": 1, "price": 100 }] }
-2. If exact price is unknown, estimate from menu or leave 0.
-3. If no items found, return { "items": [] }.
+    Rules:
+    1. Return JSON: { "items": [{ "name": "Item Name", "quantity": 1, "price": 100 }] }
+    2. If exact price is unknown, estimate from menu or leave 0.
+    3. If no items found, return { "items": [] }.
 4. Handle flexible inputs like "2 of the chicken ones".
-5. ONLY JSON. No markdown.
+5. ONLY JSON.No markdown.
 `;
         const completion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
