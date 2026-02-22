@@ -225,20 +225,43 @@ export async function generateStructuredMenu(
 ): Promise<any> {
   if (process.env.GROQ_API_KEY) {
     try {
-      let prompt = `Generate a JSON menu for: ${description}.
-    Format: { "categories": [{ "name": "C", "items": [{ "name": "I", "price": 10 }] }] }
-ONLY JSON.No markdown.`;
-      if (existingMenu) prompt += `\nUpdate: ${JSON.stringify(existingMenu)} `;
+      let prompt = `You are a Commerce AI Normalizer. Take the following raw text from a merchant and extract a structured JSON menu.
+      
+Rules:
+1. Group items into logical 'categories' (e.g., Beverages, Appetizers, Clothing).
+2. Extract 'name' (string) and 'price' (number). Use INR as default currency.
+3. If price is missing, set it to 0.
+4. Normalize names: Title Case, remove extra symbols.
+5. If current items are provided, merge them logically, preferring the new raw input data.
+6. Return ONLY a valid JSON object.
+
+Format:
+{
+  "categories": [
+    {
+      "name": "Category Name",
+      "items": [
+        { "name": "Item Name", "price": 100 }
+      ]
+    }
+  ]
+}
+
+Raw Input: "${description}"`;
+
+      if (existingMenu) {
+        prompt += `\nExisting Menu to merge/update: ${JSON.stringify(existingMenu)}`;
+      }
 
       const completion = await groq.chat.completions.create({
         messages: [{ role: "user", content: prompt }],
         model: "llama-3.3-70b-versatile",
-        temperature: 0.2,
+        temperature: 0.1,
         response_format: { type: "json_object" }
       });
       return JSON.parse(completion.choices[0]?.message?.content || "{}");
     } catch (e) {
-      console.error("Groq JSON generation failed");
+      console.error("Groq Normalizer failed:", e);
     }
   }
   return existingMenu || { categories: [] };

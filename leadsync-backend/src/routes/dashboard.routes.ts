@@ -358,4 +358,39 @@ router.post(
   }
 );
 
+/* =====================================================
+   POST /api/dashboard/analyze-menu
+   (AI Smart Paste - Extract without saving)
+===================================================== */
+router.post(
+  "/analyze-menu",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+      const { rawText, mergeWithExisting } = req.body;
+      if (!rawText) {
+        return res.status(400).json({ message: "Raw text is required" });
+      }
+
+      let existingMenu = null;
+      if (mergeWithExisting) {
+        const company = await prisma.company.findUnique({
+          where: { id: req.user.companyId },
+          select: { botStructuredMenu: true },
+        });
+        existingMenu = company?.botStructuredMenu;
+      }
+
+      const analyzed = await generateStructuredMenu(rawText, existingMenu);
+
+      res.json({ menu: analyzed });
+    } catch (error) {
+      console.error("Analyze menu error:", error);
+      res.status(500).json({ message: "Failed to analyze menu" });
+    }
+  }
+);
+
 export default router;
