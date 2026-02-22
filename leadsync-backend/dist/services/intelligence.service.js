@@ -105,6 +105,14 @@ class IntelligenceService {
     async performAIAnalysis(text) {
         try {
             // ... existing AI logic (unchanged) ...
+            // CRITICAL OVERRIDE: Local regex check for absolute priority
+            const lowerText = text.toLowerCase().trim();
+            const orderKeywords = ["want", "order", "venum", "chahiye", "book", "onnu", "rendu", "moonu", "naalu", "dena", "vangi", "idly", "dosa", "coffee", "tea", "biryani", "appointment", "tracksuit", "shirt"];
+            const hasQuantity = /\d+/.test(lowerText);
+            // If it looks like an order, we return immediately with ORDERING intent
+            if (orderKeywords.some(kw => lowerText.includes(kw)) || (hasQuantity && lowerText.length > 3)) {
+                return { sentimentDelta: 0, intent: "ORDERING" };
+            }
             if (!process.env.GROQ_API_KEY)
                 return { sentimentDelta: 0, intent: "BROWSING" };
             const response = await groq.chat.completions.create({
@@ -138,14 +146,6 @@ Format: {"sentiment": number, "intent": string}
             const content = response.choices[0]?.message?.content || "{}";
             const result = JSON.parse(content);
             let safeIntent = result.intent?.toUpperCase();
-            // CRITICAL OVERRIDE: Local regex check for absolute priority
-            const lowerText = text.toLowerCase();
-            const orderKeywords = ["want", "order", "venum", "chahiye", "book", "onnu", "rendu", "moonu", "naalu", "dena", "vangi", "idly", "dosa", "coffee", "tea", "biryani", "appointment"];
-            const hasQuantity = /\d+/.test(lowerText);
-            const forceOrder = orderKeywords.some(kw => lowerText.includes(kw)) || (hasQuantity && lowerText.length > 3 && !lowerText.includes("status"));
-            if (forceOrder) {
-                safeIntent = "ORDERING";
-            }
             if (!["BROWSING", "ORDERING", "SUPPORT", "COMPLAINT"].includes(safeIntent)) {
                 safeIntent = "BROWSING";
             }

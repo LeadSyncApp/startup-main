@@ -63,12 +63,16 @@ async function generateWithFallback(
           if (chatMessages.length > 0 && chatMessages[chatMessages.length - 1].role === role) {
             chatMessages[chatMessages.length - 1].content += "\n" + m.content.trim();
           } else {
-            const isLastUserMsg = i === rawHistory.length - 1 && role === "user";
             chatMessages.push({
               role,
-              content: isLastUserMsg ? instructionPrefix + m.content.trim() : m.content.trim()
+              content: m.content.trim()
             });
           }
+        }
+
+        // Sarvam strictly follows User -> Assistant. Inject instructions into the VERY FIRST message.
+        if (chatMessages.length > 0 && chatMessages[0].role === "user") {
+          chatMessages[0].content = `[SYSTEM_RULES: ${systemPrompt}]\n\nUser Message: ${chatMessages[0].content}`;
         }
 
         // Final safety: If still empty (unlikely) or ends with assistant, ensure it's valid for chat completion
@@ -314,21 +318,29 @@ STRICT DO-NOTS
 - Never say “How can I assist you today?” if user asked something specific.
 - Never re-list the menu after an order-confirmed message.`;
 
-    const conversation = (history || []).map(m => ({
-      role: m.role,
-      content: m.content
-    }));
+    const conversation = (history || [])
+      .slice(-6) // STICK TO LATEST 6 MESSAGES AS REQUESTED
+      .map(m => ({
+        role: (m.role === "assistant" || m.role === "bot") ? "assistant" : "user",
+        content: m.content
+      }));
+
+    // Add the current message
     conversation.push({ role: "user", content: message });
 
     let aiOutput = await generateWithFallback(conversation, systemPrompt);
 
-    // 🛡️ SANITIZATION LAYER: Ensure we return the raw output for the adapter to parse
+    // 🛡️ SANITIZATION LAYER: Improved to prevent hallucinated headers when empty
     aiOutput = aiOutput.replace(/```[a-z]*\n?|```/gi, "").trim();
-    // Strip common markdown bold/italic markers that AI often adds despite rules
     aiOutput = aiOutput.replace(/\*\*|\*/g, "");
 
-    // Since the format is now MESSAGE: / BUTTON: / CALLBACK:, we return it as is.
-    // However, if the AI output doesn't start with MESSAGE:, we wrap it for safety.
+    // If AI hallucinates a list header but inventory is empty, or if it says "Today's items at ...:" with nothing
+    if ((productList === "NO PRODUCTS LISTED" || productList.length < 5) &&
+      (aiOutput.includes("items:") || aiOutput.includes("options:")) &&
+      aiOutput.length < 100) {
+      aiOutput = "MESSAGE: Edhu venum? Ippo items edhuvum available illa. Check back later! 😊";
+    }
+
     if (!aiOutput.includes("MESSAGE:")) {
       aiOutput = "MESSAGE: " + aiOutput;
     }
