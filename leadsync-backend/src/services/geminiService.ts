@@ -232,12 +232,11 @@ START FLOW
 ====================================
 If command="/start" OR latest_user_message="/start":
 Return ONLY:
-MESSAGE: 👋 Welcome to {shop_name}! Tap below to see today’s items.
+MESSAGE: 👋 Welcome to {shop_name}! I can help you browse items, check prices, and place an order. Tap below to see what we have today.
 BUTTON: 🛍 View today’s items from {shop_name}
 CALLBACK: MENU
 
-Do NOT show menu items here.
-Do NOT auto-trigger menu.
+CRITICAL: Do NOT show any menu items, prices, or categories in the START response. ONLY the welcome MESSAGE and the BUTTON.
 
 ====================================
 MENU FLOW
@@ -249,15 +248,19 @@ OR
 OR
 - trigger_source="button_click" AND callback_payload="MENU"
 OR
-- user clearly asked: "menu", "items", "options", "catalog", "what available"
+- user clearly asked: "menu", "items", "catalog", "what do you have"
 
 If offerings_summary contains items:
-- Display max 8 items. Format cleanly.
-- End with a short question: "Edhu venum?" / "What would you like?" / "Kya chahiye?"
+- Format them as a clean list without markdown (no bold, no italics, no code blocks).
+- Example format:
+  Sleeveless T-Shirt: ₹15
+  Shirt: ₹20
+  Tracksuit: ₹30
+- Display max 8 items.
+- End with: "Edhu venum?" or "What would you like?" or "Kya chahiye?"
 
 If offerings_summary is empty:
-- Do NOT say "Today's items at..."
-- Instead ask: "What are you looking for today?"
+- Ask: "What are you looking for today?"
 
 ====================================
 ORDER DETECTION LEVELS (VERY IMPORTANT)
@@ -277,12 +280,11 @@ HOW TO RESPOND
 If ORDER_CONFIRMED:
 - Confirm briefly (item + quantity if known).
 - Ask ONE next required detail only: size/variant/color, delivery or pickup, or quantity if missing.
-- Do NOT repeat menu. Do NOT talk about quality again.
-Example: "✅ Seri! 1 Tracksuit note panniten. Size enna venum (S/M/L/XL)? ❓"
+- Example: "✅ Seri! 1 Tracksuit note panniten. Size enna venum (S/M/L/XL)?"
 
 If ORDER_INTENT:
 - Do NOT confirm order yet. Say yes possible. Ask ONE detail to proceed.
-Example: "Aama pannalam 😊 Size enna venum?"
+- Example: "Aama pannalam 😊 Size enna venum?"
 
 If BROWSING (price/quality question):
 - Answer briefly. Then ask if they want to order.
@@ -296,6 +298,7 @@ ANTI-REPEAT RULE
 ====================================
 STRICT PRODUCTION RULES
 ====================================
+- Never use markdown like **bold** or *italics*. Use PLAIN TEXT ONLY.
 - Never generate fake order IDs or status updates.
 - Never invent items if not in offerings_summary.
 - Never show empty menu header.
@@ -312,6 +315,8 @@ STRICT PRODUCTION RULES
 
     // 🛡️ SANITIZATION LAYER: Ensure we return the raw output for the adapter to parse
     aiOutput = aiOutput.replace(/```[a-z]*\n?|```/gi, "").trim();
+    // Strip common markdown bold/italic markers that AI often adds despite rules
+    aiOutput = aiOutput.replace(/\*\*|\*/g, "");
 
     // Since the format is now MESSAGE: / BUTTON: / CALLBACK:, we return it as is.
     // However, if the AI output doesn't start with MESSAGE:, we wrap it for safety.
