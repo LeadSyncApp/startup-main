@@ -66,6 +66,7 @@ router.get("/", auth_middleware_1.authMiddleware, async (req, res) => {
                 id: true,
                 mode: true,
                 updatedAt: true,
+                intent: true,
                 priorityScore: true, // Needed for UI badge
                 lead: {
                     select: {
@@ -90,6 +91,7 @@ router.get("/", auth_middleware_1.authMiddleware, async (req, res) => {
             items: result.map((c) => ({
                 id: c.id,
                 mode: c.mode,
+                intent: c.intent,
                 lead: c.lead,
                 updatedAt: c.updatedAt,
                 lastMessage: c.messages[0]?.content || "",
@@ -162,7 +164,8 @@ router.get("/:id/messages", auth_middleware_1.authMiddleware, async (req, res) =
             messages,
             order: latestOrder || null,
             isLocked: conversation.assignedToId && conversation.assignedToId !== userId && userRole === "AGENT",
-            assignedTo: conversation.assignedTo
+            assignedTo: conversation.assignedTo,
+            sessionState: conversation.sessionState
         });
     }
     catch (error) {

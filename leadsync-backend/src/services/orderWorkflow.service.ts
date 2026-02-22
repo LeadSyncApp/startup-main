@@ -12,15 +12,16 @@ const STATUS_RANK: Record<OrderStatus, number> = {
     [OrderStatus.PENDING]: 1,
     [OrderStatus.NEW]: 1,
     [OrderStatus.CONFIRMED]: 2,
-    [OrderStatus.PROCESSING]: 3,
-    [OrderStatus.PREPARING]: 4,
-    [OrderStatus.READY]: 5,
-    [OrderStatus.SHIPPED]: 6,
-    [OrderStatus.DELIVERED]: 7,
-    [OrderStatus.COMPLETED]: 8,
-    [OrderStatus.CANCELLED]: 9,
-    [OrderStatus.REJECTED]: 9,
-    [OrderStatus.ARCHIVED]: 10,
+    [OrderStatus.PAID]: 3,
+    [OrderStatus.PROCESSING]: 4,
+    [OrderStatus.PREPARING]: 5,
+    [OrderStatus.READY]: 6,
+    [OrderStatus.SHIPPED]: 7,
+    [OrderStatus.DELIVERED]: 8,
+    [OrderStatus.COMPLETED]: 9,
+    [OrderStatus.CANCELLED]: 10,
+    [OrderStatus.REJECTED]: 10,
+    [OrderStatus.ARCHIVED]: 11,
 };
 
 /**
@@ -139,7 +140,8 @@ export class OrderWorkflowService {
 
         // Agent Valid Transitions
         const validTransitions: Record<string, OrderStatus[]> = {
-            [OrderStatus.BOT_CREATED_ORDER]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED, OrderStatus.REJECTED],
+            [OrderStatus.BOT_CREATED_ORDER]: [OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.CANCELLED, OrderStatus.REJECTED],
+            [OrderStatus.PAID]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
             [OrderStatus.PROCESSING]: [OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.REJECTED],
             [OrderStatus.PREPARING]: [OrderStatus.READY, OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.REJECTED],
             [OrderStatus.READY]: [OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.CANCELLED, OrderStatus.REJECTED],
@@ -147,8 +149,8 @@ export class OrderWorkflowService {
             [OrderStatus.DELIVERED]: [OrderStatus.COMPLETED, OrderStatus.ARCHIVED],
 
             // Legacy Support
-            [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.REJECTED],
-            [OrderStatus.CONFIRMED]: [OrderStatus.PROCESSING, OrderStatus.PREPARING, OrderStatus.CANCELLED],
+            [OrderStatus.PENDING]: [OrderStatus.PAID, OrderStatus.CONFIRMED, OrderStatus.REJECTED],
+            [OrderStatus.CONFIRMED]: [OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.PREPARING, OrderStatus.CANCELLED],
         };
 
         const allowed = validTransitions[current] || [];

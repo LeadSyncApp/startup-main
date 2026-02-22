@@ -21,6 +21,7 @@ const orders_routes_1 = __importDefault(require("./routes/orders.routes"));
 const users_routes_1 = __importDefault(require("./routes/users.routes"));
 const analytics_routes_1 = __importDefault(require("./routes/analytics.routes"));
 const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
+const webhook_routes_1 = __importDefault(require("./routes/webhook.routes"));
 console.log("🔥 app.ts loaded");
 const app = (0, express_1.default)();
 app.use((0, compression_1.default)()); // ✅ GZIP Compression
@@ -50,6 +51,7 @@ app.use("/api/orders", orders_routes_1.default);
 app.use("/api/users", users_routes_1.default);
 app.use("/api/analytics", analytics_routes_1.default);
 app.use("/api/notifications", notification_routes_1.default);
+app.use("/api/webhook", webhook_routes_1.default);
 /* 🩺 DIAGNOSTIC ROUTE */
 app.get("/api/debug/system", async (req, res) => {
     const diagnostics = {

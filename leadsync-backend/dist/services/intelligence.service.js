@@ -76,6 +76,12 @@ class IntelligenceService {
                     where: { id: leadId },
                     data: { lastActiveAt: new Date() }
                 });
+                const socketData = {
+                    conversationId: updatedConversation.id,
+                    lastMessage: messageText,
+                    updatedAt: updatedConversation.updatedAt,
+                    intent: updatedConversation.intent
+                };
                 // 4. Notifications & Side Effects
                 if (assignedUserId) {
                     // System Message
@@ -91,10 +97,10 @@ class IntelligenceService {
                     (0, socket_1.emitToCompany)(companyId, "conversation_removed", { conversationId });
                     // 2. Add to Agent's Private List
                     (0, socket_1.emitToAgent)(assignedUserId, "conversation_added", updatedConversation);
-                    // 3. Update Admin View
-                    (0, socket_1.emitToCompanyAdmin)(companyId, "conversation_updated", updatedConversation);
                     (0, socket_1.emitToConversation)(conversationId, "new_message", sysMsg);
                 }
+                // 3. Update Admin View (Always sync intent/status)
+                (0, socket_1.emitToCompanyAdmin)(companyId, "conversation_updated", socketData);
             });
             console.log(`🧠 [Intelligence] Analyzed intent=${analysis.intent}, sentiment=${analysis.sentimentDelta}, assigned=${assignedUserId ? 'YES' : 'NO'}`);
         }

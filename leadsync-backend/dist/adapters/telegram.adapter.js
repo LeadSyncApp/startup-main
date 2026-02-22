@@ -124,7 +124,7 @@ class TelegramAdapter {
                 console.error("❌ Voice reply regeneration failed:", err);
             }
         }
-        else if (data === "MENU" || data.startsWith("MENU")) {
+        else if (data === "MENU" || data.startsWith("MENU") || data === "VIEW_MENU") {
             // Handle the dynamic MENU button from the AI
             try {
                 const conversation = await prisma_1.prisma.conversation.findFirst({
@@ -223,17 +223,8 @@ class TelegramAdapter {
                     const sttResult = await sarvam_service_1.sarvamService.speechToText(audioBuffer, "voice.ogg");
                     if (sttResult) {
                         text = sttResult.transcript;
-                        detectedLanguage = sttResult.languageCode;
-                        // 🔍 Local Language Correction (Sarvam auto-detect is sometimes wrong for Tanglish/Hinglish)
-                        const lowerText = text.toLowerCase();
-                        const tamilKeywords = ["venum", "vendum", "moonu", "naalu", "onnu", "rendu", "kodu", "engo", "eppo"];
-                        const hindiKeywords = ["chahiye", "kitna", "dena", "lelo", "mangwana", "khareedna"];
-                        if (tamilKeywords.some(kw => lowerText.includes(kw))) {
-                            detectedLanguage = "ta-IN";
-                        }
-                        else if (hindiKeywords.some(kw => lowerText.includes(kw))) {
-                            detectedLanguage = "hi-IN";
-                        }
+                        // Voice transcription already detects language, but we can refine it
+                        detectedLanguage = await sarvam_service_1.sarvamService.detectLanguage(text);
                     }
                     else {
                         await this.sendMessage(chatId, "Sorry, I had trouble hearing that. Could you try again?");
@@ -244,6 +235,9 @@ class TelegramAdapter {
                     await this.sendMessage(chatId, "The voice message couldn't be received. Please try again.");
                     return;
                 }
+            }
+            else if (text) {
+                detectedLanguage = await sarvam_service_1.sarvamService.detectLanguage(text);
             }
             if (!text)
                 return;
@@ -354,22 +348,20 @@ class TelegramAdapter {
             let messageText = "";
             let buttonLabel = "";
             let callbackData = "";
+            let msgLines = [];
             for (const line of lines) {
-                if (line.startsWith("MESSAGE:"))
-                    messageText = line.replace("MESSAGE:", "").trim();
-                if (line.startsWith("BUTTON:"))
+                if (line.startsWith("BUTTON:")) {
                     buttonLabel = line.replace("BUTTON:", "").trim();
-                if (line.startsWith("CALLBACK:"))
+                }
+                else if (line.startsWith("CALLBACK:")) {
                     callbackData = line.replace("CALLBACK:", "").trim();
+                }
+                else {
+                    // Collect all lines that are not buttons/callbacks
+                    msgLines.push(line.replace(/^MESSAGE:/i, "").trim());
+                }
             }
-            // Fallback for non-headered text in this block
-            if (!messageText) {
-                messageText = part.split("\n")
-                    .filter(l => !l.startsWith("BUTTON:") && !l.startsWith("CALLBACK:"))
-                    .join("\n")
-                    .replace(/^MESSAGE:\s*/i, "")
-                    .trim();
-            }
+            messageText = msgLines.filter(l => l !== "").join("\n");
             if (!messageText)
                 continue;
             // 2. Save Message to DB

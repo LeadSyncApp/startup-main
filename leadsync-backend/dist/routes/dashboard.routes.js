@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prisma_1 = require("../lib/prisma");
 const auth_middleware_1 = require("../middleware/auth.middleware");
-const geminiService_1 = require("../services/geminiService");
+const ai_service_1 = require("../services/ai.service");
 const cache_service_1 = require("../services/cache.service");
 const router = (0, express_1.Router)();
 /* =====================================================
@@ -98,6 +98,9 @@ router.get("/bot-config", auth_middleware_1.authMiddleware, async (req, res) => 
                 botWelcomeMessage: true,
                 botStructuredMenu: true,
                 botMenu: true,
+                botKnowledgeBase: true,
+                botLearnedContext: true,
+                botPolicies: true,
             },
         });
         res.json({ company });
@@ -157,7 +160,7 @@ router.patch("/bot-config", auth_middleware_1.authMiddleware, async (req, res) =
             select: { botStructuredMenu: true },
         });
         const existingMenu = existingCompany?.botStructuredMenu || null;
-        const structuredMenu = await (0, geminiService_1.generateStructuredMenu)(shopDescription, existingMenu);
+        const structuredMenu = await (0, ai_service_1.generateStructuredMenu)(shopDescription, existingMenu);
         const categories = structuredMenu?.categories || [];
         const keyboardMenu = [];
         for (let i = 0; i < categories.length; i += 2) {
@@ -221,6 +224,82 @@ router.patch("/save-edited-menu", auth_middleware_1.authMiddleware, async (req, 
         res.status(500).json({
             message: "Failed to save menu",
         });
+    }
+});
+/* =====================================================
+   PATCH /api/dashboard/save-knowledge
+===================================================== */
+router.patch("/save-knowledge", auth_middleware_1.authMiddleware, async (req, res) => {
+    try {
+        if (!req.user)
+            return res.status(401).json({ message: "Unauthorized" });
+        const { botKnowledgeBase, botLearnedContext, botPolicies } = req.body;
+        const updated = await prisma_1.prisma.company.update({
+            where: { id: req.user.companyId },
+            data: {
+                botKnowledgeBase,
+                botLearnedContext,
+                botPolicies
+            }
+        });
+        res.json({ message: "Knowledge saved", company: updated });
+    }
+    catch (error) {
+        res.status(500).json({ message: "Failed to save knowledge" });
+    }
+});
+/* =====================================================
+   POST /api/dashboard/train-ai
+===================================================== */
+router.post("/train-ai", auth_middleware_1.authMiddleware, async (req, res) => {
+    try {
+        if (!req.user)
+            return res.status(401).json({ message: "Unauthorized" });
+        const { botKnowledgeBase } = req.body;
+        if (!botKnowledgeBase) {
+            return res.status(400).json({ message: "Knowledge base is empty" });
+        }
+        const learned = await (0, ai_service_1.generateLearnedContext)(botKnowledgeBase);
+        const updated = await prisma_1.prisma.company.update({
+            where: { id: req.user.companyId },
+            data: {
+                botKnowledgeBase,
+                botLearnedContext: learned
+            }
+        });
+        res.json({ message: "AI Trained successfully", botLearnedContext: learned });
+    }
+    catch (error) {
+        console.error("Training error:", error);
+        res.status(500).json({ message: "Failed to train AI" });
+    }
+});
+/* =====================================================
+   POST /api/dashboard/analyze-menu
+   (AI Smart Paste - Extract without saving)
+===================================================== */
+router.post("/analyze-menu", auth_middleware_1.authMiddleware, async (req, res) => {
+    try {
+        if (!req.user)
+            return res.status(401).json({ message: "Unauthorized" });
+        const { rawText, mergeWithExisting } = req.body;
+        if (!rawText) {
+            return res.status(400).json({ message: "Raw text is required" });
+        }
+        let existingMenu = null;
+        if (mergeWithExisting) {
+            const company = await prisma_1.prisma.company.findUnique({
+                where: { id: req.user.companyId },
+                select: { botStructuredMenu: true },
+            });
+            existingMenu = company?.botStructuredMenu;
+        }
+        const analyzed = await (0, ai_service_1.generateStructuredMenu)(rawText, existingMenu);
+        res.json({ menu: analyzed });
+    }
+    catch (error) {
+        console.error("Analyze menu error:", error);
+        res.status(500).json({ message: "Failed to analyze menu" });
     }
 });
 exports.default = router;

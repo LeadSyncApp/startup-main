@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -8,8 +41,6 @@ const prisma_1 = require("../lib/prisma");
 const client_1 = require("@prisma/client");
 const axios_1 = __importDefault(require("axios"));
 const socket_1 = require("../lib/socket");
-const geminiService_1 = require("../services/geminiService");
-const queue_service_1 = require("../services/queue.service");
 const cache_service_1 = require("../services/cache.service");
 const intelligence_service_1 = require("../services/intelligence.service");
 const orderParser_service_1 = require("../services/orderParser.service");
@@ -142,42 +173,34 @@ class InstagramAdapter {
             if (conversation.mode === client_1.ConversationMode.HUMAN)
                 return;
             /* AI REPLY */
-            const history = await prisma_1.prisma.message.findMany({
-                where: { conversationId: conversation.id },
-                orderBy: { createdAt: "desc" },
-                take: 5,
-            });
-            const historyContext = history.reverse().map(m => ({
-                role: m.sender === client_1.MessageSender.CLIENT ? "user" : "assistant",
-                content: m.content
-            }));
+            this.sendTyping(psid).catch(() => { });
             try {
-                const aiReply = await queue_service_1.aiQueue.add(() => (0, geminiService_1.generateBotReply)(text, company.name, company.botBusinessType || "general business", company.botStructuredMenu, historyContext));
-                // 🚨 PARSE RESPONSE (TEXT_REPLY: / VOICE_TTS:)
-                let displayMessage = aiReply;
-                if (aiReply.includes("TEXT_REPLY:")) {
-                    const lines = aiReply.split("\n");
-                    const textLine = lines.find(l => l.startsWith("TEXT_REPLY:"));
-                    if (textLine) {
-                        displayMessage = textLine.replace("TEXT_REPLY:", "").trim();
-                    }
-                }
-                else if (aiReply.trim().startsWith('{')) {
-                    // Legacy JSON fallback
-                    try {
-                        const parsed = JSON.parse(aiReply);
-                        displayMessage = parsed.message_to_customer || parsed.response_text || aiReply;
-                    }
-                    catch (e) { }
-                }
-                // Final mode check
-                const freshConv = await prisma_1.prisma.conversation.findUnique({
-                    where: { id: conversation.id },
-                    select: { mode: true }
-                });
-                if (freshConv?.mode === "HUMAN")
+                const { handleBotMessage } = await Promise.resolve().then(() => __importStar(require("../bot/bot.logic")));
+                const aiReply = await handleBotMessage(conversation.id, text, "text", "en-IN", // Simplified for IG for now
+                "normal_message");
+                if (!aiReply)
                     return;
-                await this.saveAndSendMessage(psid, conversation, displayMessage);
+                // Parse and send parts
+                const parts = aiReply.split(/(?=MESSAGE:)/g).filter(p => p.trim());
+                for (const part of parts) {
+                    const lines = part.split("\n").map(l => l.trim());
+                    let messageText = "";
+                    let msgLines = [];
+                    for (const line of lines) {
+                        if (line.startsWith("BUTTON:") || line.startsWith("CALLBACK:")) {
+                            // IG buttons are a bit different, for MVP we'll just send the text
+                            // and maybe add button support later if needed.
+                            continue;
+                        }
+                        else {
+                            msgLines.push(line.replace(/^MESSAGE:/i, "").trim());
+                        }
+                    }
+                    messageText = msgLines.filter(l => l !== "").join("\n");
+                    if (messageText) {
+                        await this.saveAndSendMessage(psid, conversation, messageText);
+                    }
+                }
             }
             catch (err) {
                 console.error("AI Error (IG):", err);

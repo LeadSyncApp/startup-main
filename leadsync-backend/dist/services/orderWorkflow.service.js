@@ -14,15 +14,16 @@ const STATUS_RANK = {
     [client_1.OrderStatus.PENDING]: 1,
     [client_1.OrderStatus.NEW]: 1,
     [client_1.OrderStatus.CONFIRMED]: 2,
-    [client_1.OrderStatus.PROCESSING]: 3,
-    [client_1.OrderStatus.PREPARING]: 4,
-    [client_1.OrderStatus.READY]: 5,
-    [client_1.OrderStatus.SHIPPED]: 6,
-    [client_1.OrderStatus.DELIVERED]: 7,
-    [client_1.OrderStatus.COMPLETED]: 8,
-    [client_1.OrderStatus.CANCELLED]: 9,
-    [client_1.OrderStatus.REJECTED]: 9,
-    [client_1.OrderStatus.ARCHIVED]: 10,
+    [client_1.OrderStatus.PAID]: 3,
+    [client_1.OrderStatus.PROCESSING]: 4,
+    [client_1.OrderStatus.PREPARING]: 5,
+    [client_1.OrderStatus.READY]: 6,
+    [client_1.OrderStatus.SHIPPED]: 7,
+    [client_1.OrderStatus.DELIVERED]: 8,
+    [client_1.OrderStatus.COMPLETED]: 9,
+    [client_1.OrderStatus.CANCELLED]: 10,
+    [client_1.OrderStatus.REJECTED]: 10,
+    [client_1.OrderStatus.ARCHIVED]: 11,
 };
 /**
  * Strict State Machine for Order Processing
@@ -124,15 +125,16 @@ class OrderWorkflowService {
             return true;
         // Agent Valid Transitions
         const validTransitions = {
-            [client_1.OrderStatus.BOT_CREATED_ORDER]: [client_1.OrderStatus.PROCESSING, client_1.OrderStatus.CANCELLED, client_1.OrderStatus.REJECTED],
+            [client_1.OrderStatus.BOT_CREATED_ORDER]: [client_1.OrderStatus.PAID, client_1.OrderStatus.PROCESSING, client_1.OrderStatus.CANCELLED, client_1.OrderStatus.REJECTED],
+            [client_1.OrderStatus.PAID]: [client_1.OrderStatus.PROCESSING, client_1.OrderStatus.CANCELLED],
             [client_1.OrderStatus.PROCESSING]: [client_1.OrderStatus.PREPARING, client_1.OrderStatus.READY, client_1.OrderStatus.SHIPPED, client_1.OrderStatus.CANCELLED, client_1.OrderStatus.REJECTED],
             [client_1.OrderStatus.PREPARING]: [client_1.OrderStatus.READY, client_1.OrderStatus.SHIPPED, client_1.OrderStatus.CANCELLED, client_1.OrderStatus.REJECTED],
             [client_1.OrderStatus.READY]: [client_1.OrderStatus.SHIPPED, client_1.OrderStatus.DELIVERED, client_1.OrderStatus.CANCELLED, client_1.OrderStatus.REJECTED],
             [client_1.OrderStatus.SHIPPED]: [client_1.OrderStatus.DELIVERED, client_1.OrderStatus.CANCELLED, client_1.OrderStatus.REJECTED],
             [client_1.OrderStatus.DELIVERED]: [client_1.OrderStatus.COMPLETED, client_1.OrderStatus.ARCHIVED],
             // Legacy Support
-            [client_1.OrderStatus.PENDING]: [client_1.OrderStatus.CONFIRMED, client_1.OrderStatus.REJECTED],
-            [client_1.OrderStatus.CONFIRMED]: [client_1.OrderStatus.PROCESSING, client_1.OrderStatus.PREPARING, client_1.OrderStatus.CANCELLED],
+            [client_1.OrderStatus.PENDING]: [client_1.OrderStatus.PAID, client_1.OrderStatus.CONFIRMED, client_1.OrderStatus.REJECTED],
+            [client_1.OrderStatus.CONFIRMED]: [client_1.OrderStatus.PAID, client_1.OrderStatus.PROCESSING, client_1.OrderStatus.PREPARING, client_1.OrderStatus.CANCELLED],
         };
         const allowed = validTransitions[current] || [];
         if (!allowed.includes(next)) {

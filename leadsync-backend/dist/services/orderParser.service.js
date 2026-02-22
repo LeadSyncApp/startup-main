@@ -5,8 +5,7 @@ const prisma_1 = require("../lib/prisma");
 const client_1 = require("@prisma/client");
 const socket_1 = require("../lib/socket");
 const notification_service_1 = require("./notification.service");
-const geminiService_1 = require("./geminiService");
-const sarvam_service_1 = require("./sarvam.service");
+const ai_service_1 = require("./ai.service");
 class OrderParserService {
     /**
      * Main entry point: Parses text for orders, creates them if found, and handles notifications.
@@ -15,20 +14,9 @@ class OrderParserService {
         try {
             // 1. Parse content (Regex First)
             let items = this.parseItemsRegex(text, menu);
-            // 2. AI Fallback: Sarvam.ai (Optimized for Hindi/Mixed & Intent)
-            if (items.length === 0) {
-                const sarvamResult = await sarvam_service_1.sarvamService.analyzeIntent(text);
-                if (sarvamResult && sarvamResult.intent === "ORDER" && sarvamResult.entities?.product) {
-                    items.push({
-                        name: sarvamResult.entities.product,
-                        quantity: sarvamResult.entities.quantity || 1,
-                        price: 0 // Will be matched by catalog or agent
-                    });
-                }
-            }
-            // 3. AI Deep extraction (Groq) if still no items but looks like order
+            // 2. AI Deep extraction (Groq) if regex fails and it looks like an order
             if (items.length === 0 && this.looksLikeOrder(text)) {
-                const aiResult = await (0, geminiService_1.generateStructuredOrder)(text, menu);
+                const aiResult = await (0, ai_service_1.generateStructuredOrder)(text, menu);
                 if (aiResult.items && aiResult.items.length > 0) {
                     items = aiResult.items.map(i => ({
                         name: i.name,

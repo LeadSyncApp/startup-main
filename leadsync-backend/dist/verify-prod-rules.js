@@ -7,7 +7,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 dotenv_1.default.config({ path: path_1.default.join(__dirname, "../.env") });
 const intelligence_service_1 = require("./services/intelligence.service");
-const geminiService_1 = require("./services/geminiService");
+const ai_service_1 = require("./services/ai.service");
 const orderParser_service_1 = require("./services/orderParser.service");
 async function verify() {
     console.log("🚀 STARTING PRODUCTION RULE VERIFICATION\n");
@@ -32,7 +32,7 @@ async function verify() {
     ];
     for (const [modality, msg] of formatTests) {
         console.log(`Testing Modality: ${modality}`);
-        const reply = await (0, geminiService_1.generateBotReply)(msg, "Test Cafe", "Food", [], [], [], {}, modality);
+        const reply = await (0, ai_service_1.generateBotReply)(msg, "Test Cafe", "Food", [], [], [], {}, modality);
         console.log(`Reply:\n${reply}`);
         const lines = reply.split("\n");
         const hasMessage = lines.some(l => l.startsWith("MESSAGE:"));
