@@ -35,6 +35,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         id: true,
         mode: true,
         updatedAt: true,
+        intent: true,
         priorityScore: true, // Needed for UI badge
         lead: {
           select: {
@@ -61,6 +62,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       items: result.map((c) => ({
         id: c.id,
         mode: c.mode,
+        intent: c.intent,
         lead: c.lead,
         updatedAt: c.updatedAt,
         lastMessage: c.messages[0]?.content || "",

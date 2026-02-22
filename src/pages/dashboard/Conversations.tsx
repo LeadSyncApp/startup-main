@@ -164,12 +164,17 @@ export default function Conversations() {
       setConversations(prev => prev.map(c => c.id === data.conversationId ? { ...c, mode: data.mode } : c));
       if (selectedRef.current?.id === data.conversationId) setSelected(prev => prev ? { ...prev, mode: data.mode } : null);
     };
-    const onConversationUpdated = (data: { conversationId: string; lastMessage: string; updatedAt: string }) => {
+    const onConversationUpdated = (data: { conversationId: string; lastMessage: string; updatedAt: string; intent?: string }) => {
       setConversations(prev => {
         const index = prev.findIndex(c => c.id === data.conversationId);
         if (index === -1) return prev;
         const updated = [...prev];
-        updated[index] = { ...updated[index], lastMessage: data.lastMessage, updatedAt: data.updatedAt };
+        updated[index] = {
+          ...updated[index],
+          lastMessage: data.lastMessage,
+          updatedAt: data.updatedAt,
+          intent: data.intent !== undefined ? data.intent : updated[index].intent
+        };
         const item = updated.splice(index, 1)[0];
         updated.unshift(item);
         return updated;
