@@ -18,15 +18,17 @@ interface ApiOptions {
 async function apiFetch(endpoint: string, options: ApiOptions = {}) {
   const token = localStorage.getItem("token");
 
+  const isFormData = options.body instanceof FormData;
+
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, {
       method: options.method || "GET",
       headers: {
-        "Content-Type": "application/json",
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {}),
       },
-      body: options.body ? JSON.stringify(options.body) : undefined,
+      body: isFormData ? options.body : (options.body ? JSON.stringify(options.body) : undefined),
     });
 
     if (res.status === 401) {
@@ -62,15 +64,15 @@ async function apiFetch(endpoint: string, options: ApiOptions = {}) {
 export const api = {
   get: (endpoint: string) => apiFetch(endpoint),
 
-  post: (endpoint: string, body?: any) =>
-    apiFetch(endpoint, { method: "POST", body }),
+  post: (endpoint: string, body?: any, headers?: Record<string, string>) =>
+    apiFetch(endpoint, { method: "POST", body, headers }),
 
-  put: (endpoint: string, body?: any) =>
-    apiFetch(endpoint, { method: "PUT", body }),
+  put: (endpoint: string, body?: any, headers?: Record<string, string>) =>
+    apiFetch(endpoint, { method: "PUT", body, headers }),
 
   // ✅ NEW PATCH METHOD
-  patch: (endpoint: string, body?: any) =>
-    apiFetch(endpoint, { method: "PATCH", body }),
+  patch: (endpoint: string, body?: any, headers?: Record<string, string>) =>
+    apiFetch(endpoint, { method: "PATCH", body, headers }),
 
   delete: (endpoint: string) =>
     apiFetch(endpoint, { method: "DELETE" }),

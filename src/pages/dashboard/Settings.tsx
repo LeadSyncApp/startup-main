@@ -278,11 +278,7 @@ export default function Settings() {
       formData.append("file", file);
       formData.append("mergeWithExisting", mergeWithExisting.toString());
 
-      const response = await api.post("/dashboard/upload-menu-file", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data"
-        }
-      });
+      const response = await api.post("/dashboard/upload-menu-file", formData);
 
       setPreviewMenu(response.menu);
       toast.success("File processed! Review the extracted items below.", { id: toastId });
