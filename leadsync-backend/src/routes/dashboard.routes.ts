@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { generateStructuredMenu, generateLearnedContext } from "../services/ai.service";
 import { cacheService } from "../services/cache.service";
+import { upload, fileParserService } from "../services/fileParser.service";
 
 const router = Router();
 
@@ -389,6 +390,60 @@ router.post(
     } catch (error) {
       console.error("Analyze menu error:", error);
       res.status(500).json({ message: "Failed to analyze menu" });
+    }
+  }
+);
+
+/* =====================================================
+   POST /api/dashboard/upload-menu-file
+   (Support: PDF, DOCX, XLSX, CSV)
+===================================================== */
+router.post(
+  "/upload-menu-file",
+  authMiddleware,
+  upload.single("file"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      console.log(`📂 Processing file: ${file.originalname} (${file.mimetype})`);
+
+      // 1. Extract Text
+      const extractedText = await fileParserService.extractText(file);
+
+      if (!extractedText || extractedText.trim().length === 0) {
+        return res.status(400).json({ message: "Could not extract any text from the file" });
+      }
+
+      // 2. Determine merge preference
+      const mergeWithExisting = req.body.mergeWithExisting === 'true';
+      let existingMenu = null;
+
+      if (mergeWithExisting) {
+        const company = await prisma.company.findUnique({
+          where: { id: req.user.companyId },
+          select: { botStructuredMenu: true },
+        });
+        existingMenu = company?.botStructuredMenu;
+      }
+
+      // 3. Let AI structure the extracted data
+      console.log(`🧱 Structuring data with AI...`);
+      const analyzed = await generateStructuredMenu(extractedText, existingMenu);
+
+      res.json({
+        message: "File processed successfully",
+        menu: analyzed,
+        extractedSample: extractedText.slice(0, 500) + "..."
+      });
+    } catch (error: any) {
+      console.error("File upload/analysis error:", error);
+      res.status(500).json({ message: error.message || "Failed to process file" });
     }
   }
 );

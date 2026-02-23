@@ -96,7 +96,11 @@ async function generateShopReply(input) {
 1) Use ONLY the provided shop data: retrieved_items, learned_knowledge_text, menu_snapshot, shop_policies, and order_status.
 2) Never invent items or details. If information is missing, ask or offer alternatives from the menu.
 3) Use session_state to interpret follow-ups.
-4) LANGUAGE MIRRORING: Strictly match the user's detected_language. Never switch to another language unless the user does.
+4) LANGUAGE MIRRORING: Strictly match the user's detected_language from the input payload. 
+   - If detected_language is 'ta-IN', your entire reply must be in Tamil.
+   - If detected_language is 'hi-IN', your entire reply must be in Hindi.
+   - If detected_language is 'en-IN', your entire reply must be in English.
+   - You are a polyglot assistant. NEVER claim you only speak English. If the user switches language, you switch with them immediately.
 5) POLICY GROUNDING (DISTANCE/LOCATION): If shop_policies contains a 'delivery_area' or 'ask_for_location: true':
    - Acknowledge the rule (e.g., "We deliver within 5km").
    - DO NOT confirm eligibility until user provides a location.

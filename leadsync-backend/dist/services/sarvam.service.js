@@ -97,16 +97,21 @@ class SarvamService {
      */
     async detectLanguage(text) {
         const lowerText = text.toLowerCase();
-        // Tamil Keywords (Professional & Conversational)
-        const tamilKeywords = ["venum", "vendum", "moonu", "naalu", "onnu", "rendu", "kodu", "engo", "eppo", "iruku", "illa", "vanga", "ponga", "enna", "eppadi", "evvalavu", "dhayavu", "nanri"];
-        // Hindi Keywords (Professional & Conversational)
+        // 🛡️ REFINED DETECTION: Use word boundaries to prevent false positives (like "pongal" matching "ponga")
+        const isTamil = (kw) => new RegExp(`\\b${kw}\\b`, 'i').test(lowerText);
+        const isHindi = (kw) => new RegExp(`\\b${kw}\\b`, 'i').test(lowerText);
+        const tamilKeywords = ["venum", "vendum", "moonu", "naalu", "onnu", "rendu", "kodu", "engo", "eppo", "iruku", "illa", "vanga", "enna", "eppadi", "evvalavu", "dhayavu", "nanri"];
         const hindiKeywords = ["chahiye", "kitna", "dena", "lelo", "mangwana", "khareedna", "baad", "pehle", "karo", "hai", "hua", "kya", "kaise", "kab", "shukriya", "dhanyawad"];
-        if (tamilKeywords.some(kw => lowerText.includes(kw)) || /[\u0B80-\u0BFF]/.test(text)) {
+        // Check for Script first (stronger signal)
+        if (/[\u0B80-\u0BFF]/.test(text))
             return "ta-IN";
-        }
-        if (hindiKeywords.some(kw => lowerText.includes(kw)) || /[\u0900-\u097F]/.test(text)) {
+        if (/[\u0900-\u097F]/.test(text))
             return "hi-IN";
-        }
+        // Then check for phonetic keywords with word boundaries
+        if (tamilKeywords.some(isTamil))
+            return "ta-IN";
+        if (hindiKeywords.some(isHindi))
+            return "hi-IN";
         return "en-IN";
     }
 }

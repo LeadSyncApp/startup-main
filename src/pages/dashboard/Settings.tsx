@@ -85,7 +85,7 @@ export default function Settings() {
   const [igPageIdInput, setIgPageIdInput] = useState("");
   const [igTokenInput, setIgTokenInput] = useState("");
 
-  const [onboardingMode, setOnboardingMode] = useState<'PASTE' | 'MANUAL' | 'CSV'>('PASTE');
+  const [onboardingMode, setOnboardingMode] = useState<'PASTE' | 'MANUAL' | 'FILE'>('PASTE');
   const [previewMenu, setPreviewMenu] = useState<StructuredMenu | null>(null);
   const [mergeWithExisting, setMergeWithExisting] = useState(false);
   const [generatedMenu, setGeneratedMenu] = useState<StructuredMenu | null>(null);
@@ -267,60 +267,32 @@ export default function Settings() {
     }
   };
 
-  const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith(".csv")) {
-      toast.error("Please upload a .csv file");
-      return;
-    }
+    const toastId = toast.loading(`Uploading and analyzing ${file.name}...`);
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("mergeWithExisting", mergeWithExisting.toString());
 
-      if (lines.length < 2) {
-        toast.error("CSV file is empty or missing data rows");
-        return;
-      }
-
-      const categoriesMap: Record<string, MenuItem[]> = {};
-      const headers = lines[0].toLowerCase().split(",").map(h => h.trim());
-
-      const nameIdx = headers.indexOf("name");
-      const priceIdx = headers.indexOf("price");
-      const catIdx = headers.indexOf("category");
-
-      if (nameIdx === -1 || priceIdx === -1) {
-        toast.error("CSV must have 'Name' and 'Price' columns");
-        return;
-      }
-
-      lines.slice(1).forEach(line => {
-        const cols = line.split(",").map(c => c.trim());
-        const name = cols[nameIdx];
-        const price = Number(cols[priceIdx]) || 0;
-        const category = catIdx !== -1 ? cols[catIdx] : "Uncategorized";
-
-        if (name) {
-          if (!categoriesMap[category]) categoriesMap[category] = [];
-          categoriesMap[category].push({ name, price });
+      const response = await api.post("/dashboard/upload-menu-file", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data"
         }
       });
 
-      const structured: StructuredMenu = {
-        categories: Object.entries(categoriesMap).map(([name, items]) => ({
-          name,
-          items
-        }))
-      };
-
-      setPreviewMenu(structured);
-      toast.success("CSV parsed! Preview your items below.");
-    };
-    reader.readAsText(file);
+      setPreviewMenu(response.menu);
+      toast.success("File processed! Review the extracted items below.", { id: toastId });
+    } catch (err: any) {
+      console.error("File upload error:", err);
+      toast.error(err.response?.data?.message || "Failed to process file", { id: toastId });
+    } finally {
+      // Reset input
+      e.target.value = "";
+    }
   };
 
   const downloadCsvTemplate = () => {
@@ -680,10 +652,10 @@ export default function Settings() {
             🧱 Manual Entry
           </button>
           <button
-            onClick={() => setOnboardingMode('CSV')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'CSV' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            onClick={() => setOnboardingMode('FILE')}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'FILE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            🧾 CSV Upload
+            🧾 Upload Document
           </button>
         </div>
 
@@ -725,30 +697,32 @@ Cheese Croissant 180..."
               </div>
             </div>
           </div>
-        ) : onboardingMode === 'CSV' ? (
+        ) : onboardingMode === 'FILE' ? (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100/50 flex justify-between items-center">
               <div>
-                <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-1">Standard Upload</p>
-                <p className="text-sm text-indigo-900/70">Upload your product list in CSV format.</p>
+                <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-1">Document Analysis</p>
+                <p className="text-sm text-indigo-900/70">Upload PDF, Word, Excel, or CSV catalogs.</p>
               </div>
-              <button
-                onClick={downloadCsvTemplate}
-                className="text-xs font-bold text-indigo-600 hover:underline"
-              >
-                Download Template ↓
-              </button>
+              <div className="flex gap-4">
+                <button
+                  onClick={downloadCsvTemplate}
+                  className="text-xs font-bold text-indigo-600 hover:underline"
+                >
+                  Download CSV Template ↓
+                </button>
+              </div>
             </div>
 
             <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-200 rounded-3xl cursor-pointer hover:bg-slate-50 hover:border-indigo-400 transition-all group">
-              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+              <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
                 <div className="bg-indigo-50 p-4 rounded-full text-indigo-600 mb-3 group-hover:scale-110 transition-transform">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                 </div>
-                <p className="text-sm font-bold text-slate-600">Click to upload or drag and drop</p>
-                <p className="text-xs text-slate-400 mt-1">.CSV files only (Max 5MB)</p>
+                <p className="text-sm font-bold text-slate-600">Click to upload catalog</p>
+                <p className="text-xs text-slate-400 mt-1">Supports PDF, DOCX, XLSX, CSV (Max 10MB)</p>
               </div>
-              <input type="file" className="hidden" accept=".csv" onChange={handleCSVUpload} />
+              <input type="file" className="hidden" accept=".pdf,.docx,.xlsx,.csv,.txt" onChange={handleFileUpload} />
             </label>
           </div>
         ) : (
