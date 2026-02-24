@@ -3,6 +3,9 @@ import { prisma } from "../lib/prisma";
 import crypto from "crypto";
 import { OrderStatus, MessageSender } from "@prisma/client";
 import { emitToConversation, safeEmitConversationUpdate } from "../lib/socket";
+import { invoiceService } from "../services/invoice.service";
+import { orderWorkflowService } from "../services/orderWorkflow.service";
+
 
 const router = Router();
 
@@ -38,23 +41,18 @@ router.post("/razorpay", async (req: Request, res: Response) => {
                 });
 
                 if (order) {
-                    // Update Order to PAID
-                    const updatedOrder = await prisma.order.update({
-                        where: { id: orderId },
-                        data: {
-                            status: "PAID" as any,
-                            logs: {
-                                create: {
-                                    actorName: "Razorpay",
-                                    actorRole: "SYSTEM",
-                                    action: "PAYMENT_RECEIVED",
-                                    metadata: { paymentId: paymentLink.payment_id || paymentLink.id }
-                                }
-                            }
-                        }
-                    });
+                    // 1️⃣ Update Order to PAID using Workflow Service
+                    const { order: updatedOrder } = await orderWorkflowService.transitionStatus(
+                        orderId,
+                        "PAID" as any,
+                        { id: "SYSTEM", name: "Razorpay", role: "SYSTEM" }
+                    );
 
-                    // 🆕 CRM INTELLIGENCE: Update Lead Stats
+                    // 2️⃣ Generate Invoice
+                    const paymentId = paymentLink.payment_id || paymentLink.id;
+                    const invoice = await invoiceService.ensureInvoiceForPaidOrder(orderId, paymentId);
+
+                    // 3️⃣ 🆕 CRM INTELLIGENCE: Update Lead Stats
                     const newOrderCount = (order.lead?.orderCount || 0) + 1;
                     const newTotalSpend = (order.lead?.totalSpend || 0) + order.amount;
                     await prisma.lead.update({
@@ -67,10 +65,15 @@ router.post("/razorpay", async (req: Request, res: Response) => {
                         }
                     });
 
-                    // Create System Message in Conversation
+                    // 4️⃣ Create System Message with Invoice Link
+                    let content = "✅ Payment Received successfully! Your order is now being processed.";
+                    if (invoice.pdfUrl) {
+                        content += `\n\n📄 View your invoice: ${invoice.pdfUrl}`;
+                    }
+
                     const sysMsg = await prisma.message.create({
                         data: {
-                            content: "✅ Payment Received successfully! Your order is now being processed.",
+                            content,
                             sender: MessageSender.SYSTEM,
                             conversationId: order.conversationId
                         }
@@ -78,15 +81,10 @@ router.post("/razorpay", async (req: Request, res: Response) => {
 
                     // Real-time Updates
                     emitToConversation(order.conversationId, "new_message", sysMsg);
-                    emitToConversation(order.conversationId, "order_updated", updatedOrder);
+                    // Updated order already emitted by workflow service, but we might want to emit it again with invoice details if needed
+                    // emitToConversation(order.conversationId, "order_updated", updatedOrder);
 
-                    safeEmitConversationUpdate(order.conversation, "conversation_updated", {
-                        conversationId: order.conversationId,
-                        lastMessage: "✅ Payment Received",
-                        updatedAt: new Date()
-                    });
-
-                    console.log(`✅ Order ${orderId} marked as PAID via Razorpay.`);
+                    console.log(`✅ Order ${orderId} marked as PAID and invoice generated.`);
                 }
             }
         }

@@ -79,6 +79,11 @@ export default function Settings() {
   const [botPolicies, setBotPolicies] = useState("");
   const [isTraining, setIsTraining] = useState(false);
 
+  // Business Details
+  const [businessName, setBusinessName] = useState("");
+  const [businessAddress, setBusinessAddress] = useState("");
+  const [gstin, setGstin] = useState("");
+
   // Instagram State
   const [instagramConnected, setInstagramConnected] = useState(false);
   const [instagramPageId, setInstagramPageId] = useState("");
@@ -135,6 +140,9 @@ export default function Settings() {
           setBotKnowledgeBase(configData.company.botKnowledgeBase || "");
           setBotLearnedContext(configData.company.botLearnedContext || "");
           setBotPolicies(configData.company.botPolicies || "");
+          setBusinessName(configData.company.businessName || "");
+          setBusinessAddress(configData.company.businessAddress || "");
+          setGstin(configData.company.gstin || "");
         }
       } catch (error) {
         console.error("Failed to load settings:", error);
@@ -428,6 +436,19 @@ export default function Settings() {
     }
   };
 
+  const handleSaveBusinessDetails = async () => {
+    try {
+      await api.patch("/dashboard/business-details", {
+        businessName,
+        businessAddress,
+        gstin,
+      });
+      toast.success("Business details saved ✅");
+    } catch {
+      toast.error("Failed to save business details");
+    }
+  };
+
   /* ===============================
      UI
   =============================== */
@@ -504,6 +525,57 @@ export default function Settings() {
         <p><strong>Name:</strong> {user?.name}</p>
         <p><strong>Email:</strong> {user?.email}</p>
         <p><strong>Role:</strong> {user?.role}</p>
+      </div>
+
+      {/* BUSINESS DETAILS (FOR INVOICING) */}
+      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <span>🏢</span> Business Details (for Invoices)
+        </h2>
+        <p className="text-sm text-slate-500">
+          These details will appear on the invoices generated for your customers.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Legal Business Name</label>
+            <input
+              type="text"
+              placeholder="Ex: Green Earth Cafe"
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
+              className="w-full border rounded-xl px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">GSTIN (Optional)</label>
+            <input
+              type="text"
+              placeholder="Ex: 29AAAAA0000A1Z5"
+              value={gstin}
+              onChange={(e) => setGstin(e.target.value)}
+              className="w-full border rounded-xl px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+            />
+          </div>
+          <div className="md:col-span-2 space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Registered Address</label>
+            <textarea
+              placeholder="Full address for invoice header..."
+              value={businessAddress}
+              onChange={(e) => setBusinessAddress(e.target.value)}
+              className="w-full border rounded-xl px-3 py-2 text-sm focus:border-indigo-500 outline-none h-20"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            onClick={handleSaveBusinessDetails}
+            className="bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 transition shadow-sm font-bold"
+          >
+            Save Business Details
+          </button>
+        </div>
       </div>
 
       {/* TELEGRAM */}

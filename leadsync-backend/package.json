@@ -18,8 +18,10 @@
     "@google/genai": "^1.40.0",
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.19.2",
+    "@supabase/supabase-js": "^2.97.0",
     "@types/compression": "^1.8.1",
     "@types/multer": "^2.0.0",
+    "@types/pdfkit": "^0.17.5",
     "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
@@ -35,6 +37,7 @@
     "node-fetch": "^2.7.0",
     "openai": "^6.21.0",
     "pdf-parse": "^2.4.5",
+    "pdfkit": "^0.17.2",
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.3"
   },

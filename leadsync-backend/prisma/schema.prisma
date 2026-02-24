@@ -110,6 +110,11 @@ model Company {
   instagramPageId       String?  @unique
   instagramPageAccessToken String?
   instagramConnected    Boolean  @default(false)
+  
+  businessName          String?
+  businessAddress       String?
+  gstin                 String?
+  invoiceCounter        Int      @default(0)
 
   botWelcomeMessage     String?
   botBusinessType       String?
@@ -125,6 +130,29 @@ model Company {
   leads         Lead[]
   conversations Conversation[]
   orders        Order[]
+  invoices      Invoice[]
+}
+
+model Invoice {
+  id               String   @id @default(uuid())
+  companyId        String
+  orderId          String   @unique
+  invoiceNumber    String   // e.g., INV-000001
+  invoiceDate      DateTime @default(now())
+  subtotal         Float
+  tax              Float    @default(0)
+  total            Float
+  currency         String   @default("INR")
+  paymentStatus    String   // PAID/UNPAID
+  paymentProvider  String   @default("razorpay")
+  paymentRef       String?  // razorpay_payment_id
+  pdfUrl           String?
+  createdAt        DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, invoiceNumber])
 }
 
 model User {
@@ -282,6 +310,7 @@ model Order {
   company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  invoice      Invoice?
 
   @@index([companyId])
   @@index([companyId, approvalStatus])

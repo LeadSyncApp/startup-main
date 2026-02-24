@@ -131,6 +131,9 @@ router.get(
           botKnowledgeBase: true,
           botLearnedContext: true,
           botPolicies: true,
+          businessName: true,
+          businessAddress: true,
+          gstin: true,
         },
       });
 
@@ -175,6 +178,34 @@ router.patch(
       res.status(500).json({
         message: "Failed to update welcome",
       });
+    }
+  }
+);
+
+/* =====================================================
+   PATCH /api/dashboard/business-details
+===================================================== */
+router.patch(
+  "/business-details",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+      const { businessName, businessAddress, gstin } = req.body;
+
+      const updated = await (prisma.company as any).update({
+        where: { id: req.user.companyId },
+        data: {
+          businessName,
+          businessAddress,
+          gstin,
+        }
+      });
+
+      res.json({ message: "Business details updated", company: updated });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update business details" });
     }
   }
 );
