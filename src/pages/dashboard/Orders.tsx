@@ -26,6 +26,10 @@ interface Order {
   createdAt: string;
   completedAt?: string;
   version: number;
+  invoice?: {
+    pdfUrl: string;
+    invoiceNumber: string;
+  };
 }
 
 export default function Orders() {
@@ -379,6 +383,24 @@ export default function Orders() {
                           )}
                         </div>
                       </td>
+                      <td className="px-6 py-4">
+                        {order.invoice?.pdfUrl ? (
+                          <a
+                            href={order.invoice.pdfUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 font-bold group"
+                          >
+                            <span className="bg-indigo-50 p-1.5 rounded-lg group-hover:bg-indigo-100 transition">📄</span>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] uppercase tracking-tighter text-slate-400">Invoice</span>
+                              <span className="text-xs">{order.invoice.invoiceNumber}</span>
+                            </div>
+                          </a>
+                        ) : (
+                          <span className="text-slate-300 italic text-xs">Not Paid</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-right">
                         {(isOwner || isAdmin) && (
                           <button onClick={() => handleDelete(order.id)} className="p-2 text-slate-400 hover:text-rose-600 transition">
@@ -431,7 +453,20 @@ function OrderCard({ order, onApprove, onReject, onMove }: any) {
         <span className="text-[10px] text-slate-400 font-mono">{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
       <h4 className="font-semibold text-slate-800 text-sm leading-tight mb-3">{order.summary}</h4>
-      <div className="text-xs text-slate-500 mb-3 block">👤 {order.lead?.name}</div>
+      <div className="flex justify-between items-center mb-3">
+        <div className="text-xs text-slate-500">👤 {order.lead?.name}</div>
+        {order.invoice?.pdfUrl && (
+          <a
+            href={order.invoice.pdfUrl}
+            target="_blank"
+            rel="noreferrer"
+            title="Download Invoice"
+            className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-100 transition font-bold flex items-center gap-1"
+          >
+            📄 Invoice
+          </a>
+        )}
+      </div>
       {isNew ? (
         <div className="grid grid-cols-2 gap-2">
           <button onClick={onReject} className="px-3 py-2 rounded-lg border border-red-200 text-red-600 text-xs font-bold hover:bg-red-50 transition">Reject</button>

@@ -35,6 +35,7 @@ Phase 3 bridged the gap between "Chatting" and "Revenue."
 - **Purchase History**: Tracks `orderCount` to measure customer loyalty.
 - **Auto-Segmentation**: System automatically tags customers as **"REGULAR"** or **"NEW"** based on behavior.
 - **Lead Priorities**: High-spend or urgent-sentiment leads are automatically bumped to the top of the queue.
+- **Automated Invoicing**: Generation of PDF Sales Invoices upon payment success, stored in Supabase with dashboard download links.
 
 ---
 

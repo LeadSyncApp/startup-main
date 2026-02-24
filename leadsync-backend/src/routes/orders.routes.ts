@@ -105,6 +105,9 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         processedBy: {
           select: { id: true, name: true }
         },
+        invoice: {
+          select: { pdfUrl: true, invoiceNumber: true }
+        }
       },
       orderBy: view === "history"
         ? [{ completedAt: "desc" }, { createdAt: "desc" }]
