@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Bell, ShoppingCart, MessageSquare, AlertTriangle, Info, CheckCheck } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { api } from "../../lib/api";
 import { useSocket } from "../../context/SocketContext";
 import { useAuth } from "../../context/AuthContext";
@@ -37,7 +38,9 @@ export default function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
   const panelRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   // Fetch on open or token change
   const fetchNotifications = async () => {
@@ -63,9 +66,23 @@ export default function NotificationBell() {
     }).catch(() => {});
   }, [token]);
 
+  // Calculate dropdown position when opening
+  const updateDropdownPosition = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 8,
+        right: window.innerWidth - rect.right + window.scrollX
+      });
+    }
+  };
+
   // Re-fetch when panel opens
   useEffect(() => {
-    if (open) fetchNotifications();
+    if (open) {
+      fetchNotifications();
+      updateDropdownPosition();
+    }
   }, [open]);
 
   // Real-time: push new notifications to top
@@ -82,7 +99,8 @@ export default function NotificationBell() {
   // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (panelRef.current && !panelRef.current.contains(target)) {
         setOpen(false);
       }
     };
@@ -112,6 +130,7 @@ export default function NotificationBell() {
     <div className="relative" ref={panelRef}>
       {/* Bell Button */}
       <button
+        ref={buttonRef}
         onClick={() => setOpen((o) => !o)}
         className="relative p-2 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
         aria-label="Notifications"
@@ -124,16 +143,19 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* Dropdown */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.97 }}
-            transition={{ duration: 0.15 }}
-            className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[9999] overflow-hidden"
-          >
+      {/* Dropdown Portal */}
+      {open && createPortal(
+        <motion.div
+          initial={{ opacity: 0, y: -8, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -8, scale: 0.97 }}
+          transition={{ duration: 0.15 }}
+          className="fixed w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[9999] overflow-hidden"
+          style={{
+            top: `${dropdownPosition.top}px`,
+            right: `${dropdownPosition.right}px`
+          }}
+        >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <h3 className="text-sm font-bold text-slate-900">Notifications</h3>
@@ -192,9 +214,9 @@ export default function NotificationBell() {
                 <p className="text-[10px] text-center text-slate-400">Showing last {notifications.length} notifications</p>
               </div>
             )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </motion.div>,
+        document.body
+      )}
     </div>
   );
 }
