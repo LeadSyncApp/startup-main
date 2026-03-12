@@ -96,8 +96,10 @@ export default function DashboardLayout() {
     <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] flex relative overflow-hidden">
 
       {/* Background Glow */}
-      <div className="absolute top-[-200px] right-[-200px] w-[500px] h-[500px] bg-cyan-500/20 blur-[120px] rounded-full" />
-      <div className="absolute bottom-[-200px] left-[-200px] w-[500px] h-[500px] bg-indigo-500/20 blur-[120px] rounded-full" />
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-100px] right-[-100px] w-[300px] h-[300px] bg-cyan-500/10 blur-[60px] rounded-full" />
+        <div className="absolute bottom-[-100px] left-[-100px] w-[300px] h-[300px] bg-indigo-500/10 blur-[60px] rounded-full" />
+      </div>
 
       {/* Mobile Overlay */}
       {sidebarOpen && (
