@@ -1,5 +1,5 @@
-import { OrderStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
+import { OrderStatus } from "@prisma/client";
 import { generateShopReply } from "../services/ai.service";
 import { getSession, updateSession, getMenuSnapshot, calculateRetrieval } from "../utils/shop-ai.utils";
 
@@ -126,8 +126,8 @@ CALLBACK: VIEW_MENU`;
 
   const historyContext = history
     .reverse()
-    .filter(m => m.content !== userMessage) // Avoid double current message
-    .map(m => ({
+    .filter((m: any) => m.content !== userMessage) // Avoid double current message
+    .map((m: any) => ({
       role: m.sender === "CLIENT" ? "user" : "assistant",
       content: m.content
     }));
