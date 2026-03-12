@@ -196,6 +196,8 @@ export async function generateShopReply(input: {
    - DO NOT confirm eligibility until user provides a location.
    - Reply like: "Our delivery area is within 5km of our store. If you share your area, I can check!"
 6) CART MANAGEMENT:
+   - If user wants to order/buy items, FIRST validate that ALL items exist in the provided menu_snapshot.
+   - ONLY add items to cart if they are found in the menu. If an item is not in the menu, do not add it.
    - If user wants to order/buy items, update the 'cart' in state_updates using input.session_state.cart as base.
    - If user says "remove [item]" or "clear cart", update the cart state accordingly.
    - Calculate subtotal (item price * quantity) and grand total.
@@ -371,14 +373,37 @@ export async function generateStructuredOrder(
   if (!process.env.GROQ_API_KEY) return { items: [] };
   try {
     const menuContext = JSON.stringify(menu?.categories || []);
-    const prompt = `Extract order from: "${text}".Menu: ${menuContext}. Return JSON { "items": [{ "name": "N", "quantity": 1, "price": 10 }] }. ONLY JSON.`;
+    const prompt = `Extract order from: "${text}".
+Menu: ${menuContext}.
+
+CRITICAL RULE: Only extract items that EXACTLY match items in the provided menu. If an item is not found in the menu, DO NOT include it in the result.
+
+Return JSON { "items": [{ "name": "N", "quantity": 1, "price": 10 }] }. ONLY JSON.`;
     const completion = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
       model: "llama-3.3-70b-versatile",
       temperature: 0.1,
       response_format: { type: "json_object" }
     });
-    return JSON.parse(completion.choices[0]?.message?.content || "{}");
+    const result = JSON.parse(completion.choices[0]?.message?.content || "{}");
+    
+    // Additional validation: Ensure all extracted items exist in the menu
+    if (menu?.categories && result.items) {
+      const menuItems = menu.categories.flatMap((c: any) => c.items);
+      const validItems = result.items.filter((item: any) => {
+        const foundInMenu = menuItems.some((menuItem: any) => 
+          menuItem.name.toLowerCase().includes(item.name.toLowerCase()) ||
+          item.name.toLowerCase().includes(menuItem.name.toLowerCase())
+        );
+        if (!foundInMenu) {
+          console.log(`🚫 [AI] Item "${item.name}" not found in menu. Filtering out.`);
+        }
+        return foundInMenu;
+      });
+      result.items = validItems;
+    }
+    
+    return result;
   } catch (e) {
     return { items: [] };
   }

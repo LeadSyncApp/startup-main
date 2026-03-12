@@ -164,10 +164,16 @@ class OrderParserService {
                 if (menuItem) {
                     finalName = menuItem.name;
                     matchedPrice = menuItem.price;
+                    items.push({ name: finalName, quantity, price: matchedPrice });
+                } else {
+                    // Item not found in menu - skip it
+                    console.log(`🚫 [OrderParser] Item "${rawName}" not found in menu. Skipping.`);
+                    continue;
                 }
+            } else {
+                // No menu available - add item (legacy behavior)
+                items.push({ name: finalName, quantity, price: matchedPrice });
             }
-
-            items.push({ name: finalName, quantity, price: matchedPrice });
         }
 
         return items;

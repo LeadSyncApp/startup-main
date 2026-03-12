@@ -195,24 +195,45 @@ CALLBACK: VIEW_MENU`;
     // 🆕 PHASE 2C: Handle Order Finalization
     if (result.orderFinalized && updatedState.cart?.items?.length > 0) {
       try {
-        const summaryText = updatedState.cart.items.map((i: any) => `${i.quantity}x ${i.name}`).join(", ");
-        const newOrder = await (prisma.order as any).create({
-          data: {
-            companyId: conversation.companyId,
-            conversationId: conversation.id,
-            leadId: conversation.leadId,
-            summary: summaryText,
-            items: updatedState.cart.items,
-            amount: updatedState.cart.total,
-            status: OrderStatus.BOT_CREATED_ORDER, // Ghost Order for Agent approval
-            source: "BOT_DETECTED",
-            priority: "NORMAL",
+        // Validate cart items against menu before creating order
+        const menuItems = (company?.botStructuredMenu as any)?.categories?.flatMap((c: any) => c.items) || [];
+        const validCartItems = updatedState.cart.items.filter((cartItem: any) => {
+          const foundInMenu = menuItems.some((menuItem: any) => 
+            menuItem.name.toLowerCase().includes(cartItem.name.toLowerCase()) ||
+            cartItem.name.toLowerCase().includes(menuItem.name.toLowerCase())
+          );
+          if (!foundInMenu) {
+            console.log(`🚫 [Bot] Cart item "${cartItem.name}" not found in menu. Filtering out.`);
           }
+          return foundInMenu;
         });
-        console.log("✅ Ghost Order created from AI finalization.");
 
-        // Clear cart after order is successfully recorded
-        updatedState.cart = { items: [], total: 0 };
+        if (validCartItems.length === 0) {
+          console.log("🚫 [Bot] No valid items in cart. Skipping order creation.");
+          // Clear the cart since all items are invalid
+          updatedState.cart = { items: [], total: 0 };
+        } else {
+          const summaryText = validCartItems.map((i: any) => `${i.quantity}x ${i.name}`).join(", ");
+          const totalAmount = validCartItems.reduce((sum: number, item: any) => sum + (item.price || 0) * item.quantity, 0);
+          
+          const newOrder = await (prisma.order as any).create({
+            data: {
+              companyId: conversation.companyId,
+              conversationId: conversation.id,
+              leadId: conversation.leadId,
+              summary: summaryText,
+              items: validCartItems,
+              amount: totalAmount,
+              status: OrderStatus.BOT_CREATED_ORDER, // Ghost Order for Agent approval
+              source: "BOT_DETECTED",
+              priority: "NORMAL",
+            }
+          });
+          console.log("✅ Ghost Order created from AI finalization with validated items.");
+
+          // Clear cart after order is successfully recorded
+          updatedState.cart = { items: [], total: 0 };
+        }
       } catch (orderErr) {
         console.error("❌ Failed to create ghost order:", orderErr);
       }
