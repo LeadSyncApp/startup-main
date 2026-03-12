@@ -115,9 +115,9 @@ export default function DashboardLayout() {
         </div>
 
         {/* Desktop Header */}
-        <div className="hidden lg:flex items-center justify-between px-10 py-4 border-b border-white/10 bg-white/5 backdrop-blur-md relative z-[100]">
+        <div className="hidden lg:flex items-center justify-between px-10 py-4 border-b border-white/10 bg-white/5 backdrop-blur-md">
           <h1 className="text-white font-semibold text-lg">LeadSync</h1>
-          <div className="flex items-center gap-4 relative z-[101]">
+          <div className="flex items-center gap-4">
             {/* Search Bar */}
             <div className="relative group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors h-4 w-4" />
@@ -128,7 +128,10 @@ export default function DashboardLayout() {
                 className="w-64 bg-white/10 border border-white/20 rounded-xl py-2 pl-9 pr-3 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-transparent transition-all"
               />
             </div>
-            <NotificationBell />
+            {/* Notification Bell with isolated stacking context */}
+            <div className="isolate">
+              <NotificationBell />
+            </div>
           </div>
         </div>
 
