@@ -38,7 +38,6 @@ export default function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -71,22 +70,22 @@ export default function NotificationBell() {
     });
   }, [token]);
 
-  // Calculate dropdown position when opening
-  const updateDropdownPosition = () => {
+  // Calculate dropdown position
+  const getDropdownPosition = () => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY + 8,
-        right: window.innerWidth - rect.right + window.scrollX
-      });
+      return {
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right
+      };
     }
+    return { top: 60, right: 20 };
   };
 
   // Re-fetch when panel opens
   useEffect(() => {
     if (open) {
       fetchNotifications();
-      updateDropdownPosition();
     }
   }, [open]);
 
@@ -133,7 +132,7 @@ export default function NotificationBell() {
   };
 
   return (
-    <div className="relative" ref={panelRef}>
+    <div className="relative z-50" ref={panelRef}>
       {/* Bell Button */}
       <button
         ref={buttonRef}
@@ -156,10 +155,11 @@ export default function NotificationBell() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -8, scale: 0.97 }}
           transition={{ duration: 0.15 }}
-          className="fixed w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[9999] overflow-hidden"
+          className="fixed w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
           style={{
-            top: `${dropdownPosition.top}px`,
-            right: `${dropdownPosition.right}px`
+            top: `${getDropdownPosition().top}px`,
+            right: `${getDropdownPosition().right}px`,
+            zIndex: 2147483647
           }}
         >
             {/* Header */}
