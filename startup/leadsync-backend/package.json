@@ -19,6 +19,7 @@
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.19.2",
     "@supabase/supabase-js": "^2.97.0",
+    "@types/axios": "^0.9.36",
     "@types/compression": "^1.8.1",
     "@types/multer": "^2.0.0",
     "@types/pdfkit": "^0.17.5",
