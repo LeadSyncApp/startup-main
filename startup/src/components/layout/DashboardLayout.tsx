@@ -151,7 +151,7 @@ export default function DashboardLayout() {
 
         <main className="flex-1">
           <div className="px-6 lg:px-10 py-8 lg:py-10">
-            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-6 lg:p-8">
+            <div className="bg-white/5 border border-white/10 rounded-2xl shadow-2xl p-6 lg:p-8">
               <Outlet />
             </div>
           </div>
