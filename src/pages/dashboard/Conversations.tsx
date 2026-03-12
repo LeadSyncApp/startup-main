@@ -125,6 +125,81 @@ export default function Conversations() {
   const [activeOrder, setActiveOrder] = useState<any>(null); // State for Ghost Order
   const [sessionState, setSessionState] = useState<any>(null); // 🆕 Phase 2C
 
+  // Handle accepting cart item
+  const handleAcceptItem = async (itemIndex: number) => {
+    if (!selected || !sessionState?.cart?.items) return;
+    
+    try {
+      const item = sessionState.cart.items[itemIndex];
+      
+      // Add item to order (you may need to adjust this based on your API)
+      await api.post(`/conversations/${selected.id}/accept-item`, {
+        item: item,
+        sessionId: sessionState.id
+      });
+      
+      // Remove item from cart and update total
+      setSessionState((prev: any) => {
+        const newItems = prev.cart.items.filter((_: any, idx: number) => idx !== itemIndex);
+        const newTotal = newItems.reduce((sum: number, item: any) => sum + (item.subtotal || 0), 0);
+        
+        return {
+          ...prev,
+          cart: {
+            ...prev.cart,
+            items: newItems,
+            total: newTotal
+          }
+        };
+      });
+      
+      toast.success(`${item.name} accepted and added to order`);
+    } catch (error) {
+      console.error('Failed to accept item:', error);
+      toast.error('Failed to accept item');
+    }
+  };
+
+  // Handle rejecting cart item
+  const handleRejectItem = async (itemIndex: number) => {
+    if (!selected || !sessionState?.cart?.items) return;
+    
+    try {
+      const item = sessionState.cart.items[itemIndex];
+      
+      // Remove item from cart
+      setSessionState((prev: any) => {
+        const newItems = prev.cart.items.filter((_: any, idx: number) => idx !== itemIndex);
+        const newTotal = newItems.reduce((sum: number, item: any) => sum + (item.subtotal || 0), 0);
+        
+        return {
+          ...prev,
+          cart: {
+            ...prev.cart,
+            items: newItems,
+            total: newTotal
+          }
+        };
+      });
+      
+      toast.success(`${item.name} rejected and removed from cart`);
+    } catch (error) {
+      console.error('Failed to reject item:', error);
+      toast.error('Failed to reject item');
+    }
+  };
+
+  // Auto-cleanup old cart items when new items are detected
+  const clearOldCartItems = () => {
+    setSessionState((prev: any) => ({
+      ...prev,
+      cart: {
+        items: [],
+        total: 0
+      }
+    }));
+  };
+
   /* FETCH MESSAGES */
   const fetchMessages = async (conv: Conversation) => {
     try {
@@ -253,6 +328,8 @@ export default function Conversations() {
     setSelected(conv);
     setMessages([]); // Clear to avoid showing wrong chat
     setShowMobileList(false);
+    // Clear old cart items when switching conversations
+    clearOldCartItems();
     fetchMessages(conv);
   };
 
@@ -663,7 +740,15 @@ export default function Conversations() {
                   <div className="p-6 border-b border-slate-50">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-black text-[11px] uppercase tracking-[0.2em] text-slate-400">Live Cart</h3>
-                      <div className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[9px] font-black uppercase">AI Tracking</div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={clearOldCartItems}
+                          className="px-2 py-0.5 bg-red-50 text-red-600 rounded text-[9px] font-black uppercase hover:bg-red-100 transition-colors"
+                        >
+                          Clear All
+                        </button>
+                        <div className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[9px] font-black uppercase">AI Tracking</div>
+                      </div>
                     </div>
                     <p className="text-sm font-bold text-slate-800">Detected Items</p>
                   </div>
@@ -675,21 +760,41 @@ export default function Conversations() {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: idx * 0.05 }}
-                        className="flex items-start justify-between bg-slate-50/50 p-3 rounded-2xl border border-slate-100"
+                        className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100"
                       >
-                        <div className="flex-1">
-                          <p className="text-xs font-black text-slate-800 uppercase tracking-tight line-clamp-1">{item.name}</p>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {item.size && (
-                              <span className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase">{item.size}</span>
-                            )}
-                            {item.color && (
-                              <span className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase">{item.color}</span>
-                            )}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <p className="text-xs font-black text-slate-800 uppercase tracking-tight line-clamp-1">{item.name}</p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {item.size && (
+                                <span className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase">{item.size}</span>
+                              )}
+                              {item.color && (
+                                <span className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase">{item.color}</span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-bold mt-1">₹{item.price} × {item.quantity}</p>
                           </div>
-                          <p className="text-[10px] text-slate-400 font-bold mt-1">₹{item.price} × {item.quantity}</p>
+                          <p className="text-xs font-black text-indigo-600 ml-2">₹{item.subtotal}</p>
                         </div>
-                        <p className="text-xs font-black text-indigo-600 ml-2">₹{item.subtotal}</p>
+                        
+                        {/* Accept/Reject Buttons */}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleAcceptItem(idx)}
+                            className="flex-1 bg-green-500 hover:bg-green-600 text-white text-[10px] font-black py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1"
+                          >
+                            <Check className="w-3 h-3" />
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => handleRejectItem(idx)}
+                            className="flex-1 bg-red-500 hover:bg-red-600 text-white text-[10px] font-black py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Reject
+                          </button>
+                        </div>
                       </motion.div>
                     ))}
                   </div>

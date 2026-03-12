@@ -58,15 +58,27 @@ export default function NotificationBell() {
     }
   };
 
-  // Update position when opening
+  // Update position when opening or on window resize
   useEffect(() => {
-    if (open && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPosition({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right
-      });
-    }
+    const updatePosition = () => {
+      if (open && buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        const scrollY = window.scrollY || window.pageYOffset;
+        setPosition({
+          top: rect.bottom + scrollY + 8,
+          right: window.innerWidth - rect.right
+        });
+      }
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition);
+    
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition);
+    };
   }, [open]);
 
   // Fetch count on mount (just for badge)
