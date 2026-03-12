@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
+import NotificationBell from "./NotificationBell";
 import { Menu } from "lucide-react";
 import { useSocket } from "../../context/SocketContext"; // Import Socket
 import toast from "react-hot-toast"; // Import Toast
@@ -91,7 +92,7 @@ export default function DashboardLayout() {
       <div className="flex-1 flex flex-col relative z-10">
 
         {/* Mobile Top Bar */}
-        <div className="lg:hidden flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5 backdrop-blur-md">
+        <div className="lg:hidden flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5 backdrop-blur-md relative">
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-white"
@@ -99,6 +100,15 @@ export default function DashboardLayout() {
             <Menu size={26} />
           </button>
           <h1 className="text-white font-semibold">LeadSync</h1>
+          <NotificationBell />
+        </div>
+
+        {/* Desktop Header */}
+        <div className="hidden lg:flex items-center justify-between px-10 py-4 border-b border-white/10 bg-white/5 backdrop-blur-md relative">
+          <h1 className="text-white font-semibold text-lg">LeadSync</h1>
+          <div className="flex items-center gap-4">
+            <NotificationBell />
+          </div>
         </div>
 
         <main className="flex-1">
