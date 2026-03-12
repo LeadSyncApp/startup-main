@@ -64,9 +64,19 @@ export default function NotificationBell() {
       if (open && buttonRef.current) {
         const rect = buttonRef.current.getBoundingClientRect();
         const scrollY = window.scrollY || window.pageYOffset;
+        const dropdownWidth = 320; // w-80 = 20rem = 320px
+        const paddingFromEdge = 16;
+        
+        // Calculate right position to prevent overflow
+        let rightPosition = window.innerWidth - rect.right;
+        if (rect.right + dropdownWidth > window.innerWidth - paddingFromEdge) {
+          // Panel would overflow, adjust position
+          rightPosition = paddingFromEdge;
+        }
+        
         setPosition({
           top: rect.bottom + scrollY + 8,
-          right: window.innerWidth - rect.right
+          right: rightPosition
         });
       }
     };
