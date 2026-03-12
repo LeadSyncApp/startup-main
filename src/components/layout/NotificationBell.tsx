@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Bell, ShoppingCart, MessageSquare, AlertTriangle, Info, CheckCheck } from "lucide-react";
-import { motion } from "framer-motion";
 import { api } from "../../lib/api";
 import { useSocket } from "../../context/SocketContext";
 import { useAuth } from "../../context/AuthContext";
@@ -70,18 +68,6 @@ export default function NotificationBell() {
     });
   }, [token]);
 
-  // Calculate dropdown position
-  const getDropdownPosition = () => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      return {
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right
-      };
-    }
-    return { top: 60, right: 20 };
-  };
-
   // Re-fetch when panel opens
   useEffect(() => {
     if (open) {
@@ -132,7 +118,7 @@ export default function NotificationBell() {
   };
 
   return (
-    <div className="relative z-50" ref={panelRef}>
+    <div className="relative" ref={panelRef}>
       {/* Bell Button */}
       <button
         ref={buttonRef}
@@ -148,20 +134,9 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* Dropdown Portal */}
-      {open && createPortal(
-        <motion.div
-          initial={{ opacity: 0, y: -8, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -8, scale: 0.97 }}
-          transition={{ duration: 0.15 }}
-          className="fixed w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
-          style={{
-            top: `${getDropdownPosition().top}px`,
-            right: `${getDropdownPosition().right}px`,
-            zIndex: 2147483647
-          }}
-        >
+      {/* Dropdown - Simple absolute positioning */}
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden" style={{ zIndex: 9999 }}>
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <h3 className="text-sm font-bold text-slate-900">Notifications</h3>
@@ -220,8 +195,7 @@ export default function NotificationBell() {
                 <p className="text-[10px] text-center text-slate-400">Showing last {notifications.length} notifications</p>
               </div>
             )}
-        </motion.div>,
-        document.body
+        </div>
       )}
     </div>
   );
