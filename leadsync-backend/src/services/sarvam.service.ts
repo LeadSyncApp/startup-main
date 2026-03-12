@@ -43,7 +43,9 @@ export class SarvamService {
             form.append("language_code", "unknown"); // Auto-detect language
             form.append("mode", "transcribe");       // Standard transcription mode
 
-            console.log(`🎙️ STT: Sending ${audioBuffer.length} bytes to Sarvam...`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`🎙️ STT: Sending ${audioBuffer.length} bytes to Sarvam...`);
+        }
 
             const response = await axios.post(
                 "https://api.sarvam.ai/speech-to-text",
@@ -59,7 +61,9 @@ export class SarvamService {
 
             const transcript = response.data?.transcript || "";
             const languageCode = response.data?.language_code || "en-IN";
-            console.log(`✅ STT Result: "${transcript}" | Lang: ${languageCode}`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`✅ STT Result: "${transcript}" | Lang: ${languageCode}`);
+        }
 
             return { transcript: transcript.trim(), languageCode };
 
@@ -108,7 +112,9 @@ export class SarvamService {
             const base64Audio = response.data?.audios?.[0];
             if (!base64Audio) return null;
 
-            console.log(`🔊 TTS Generated for: "${text.slice(0, 40)}..."`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`🔊 TTS Generated for: "${text.slice(0, 40)}..."`);
+        }
             return Buffer.from(base64Audio, "base64");
 
         } catch (err: any) {

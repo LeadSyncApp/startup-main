@@ -12,22 +12,48 @@ const MODELS = [
 ];
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  let timeoutId: any;
+  let timeoutId: NodeJS.Timeout | null = null;
   const timeout = new Promise<T>((_, reject) =>
     timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
   );
   try {
     const result = await Promise.race([promise, timeout]);
-    clearTimeout(timeoutId);
+    if (timeoutId) clearTimeout(timeoutId);
     return result;
   } catch (error) {
-    clearTimeout(timeoutId);
+    if (timeoutId) clearTimeout(timeoutId);
     throw error;
   }
 }
 
+interface Message {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+interface ShopAIInput {
+  tenant_id: string;
+  user_message: string;
+  detected_language: string;
+  session_state: Record<string, any>;
+  retrieved_items: any[];
+  learned_knowledge_text: string;
+  learned_knowledge_structured?: Record<string, any>;
+  menu_snapshot: any;
+  shop_policies?: string;
+  order_history?: any[];
+  latest_order_status?: string | null;
+}
+
+interface ShopAIOutput {
+  replyText: string;
+  stateUpdates: Record<string, any>;
+  orderFinalized?: boolean;
+  cartCleared?: boolean;
+}
+
 async function generateWithFallback(
-  messages: any[],
+  messages: Message[],
   systemPrompt: string
 ): Promise<string> {
   let lastError;
@@ -37,21 +63,24 @@ async function generateWithFallback(
     if (model.provider === "groq" && !useGroq) continue;
 
     try {
-      console.log(`🤖 [AI] Attempting ${model.provider.toUpperCase()}: ${model.id}...`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`🤖 [AI] Attempting ${model.provider.toUpperCase()}: ${model.id}...`);
+      }
 
       let content = "";
       const timeoutMs = 8000; // 8s timeout per model
 
       if (model.provider === "groq") {
-        const completion: any = await withTimeout(
+        const completion = await withTimeout(
           groq.chat.completions.create({
             messages: [
               { role: "system", content: systemPrompt },
               ...messages.filter(m => m.content && m.content.trim())
             ],
             model: model.id,
-            max_tokens: 400
-          }),
+            max_tokens: 500,
+            temperature: 0.3,
+          }) as Promise<any>,
           timeoutMs,
           `Groq ${model.id}`
         );
@@ -59,12 +88,15 @@ async function generateWithFallback(
       }
 
       if (content.trim()) {
-        console.log(`✅ [AI] Success with ${model.id}`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`✅ [AI] Success with ${model.id}`);
+        }
         return content.trim();
       }
-    } catch (err: any) {
-      console.error(`⚠️ [AI] ${model.id} failed: ${err.message}`);
-      lastError = err;
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error(`⚠️ [AI] ${model.id} failed: ${errorMessage}`);
+      lastError = err instanceof Error ? err : new Error(errorMessage);
     }
   }
   throw lastError || new Error("All AI models failed");

@@ -1,10 +1,10 @@
 import { prisma } from "../lib/prisma";
 import PDFDocument from "pdfkit";
-import { createClient } from "@supabase/supabase-js";
-import { OrderStatus } from "@prisma/client";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { OrderStatus, Invoice, Company, Order, Lead } from "@prisma/client";
 
 class InvoiceService {
-    private supabase: any;
+    private supabase: SupabaseClient | null = null;
 
     constructor() {
         const supabaseUrl = process.env.SUPABASE_URL;
@@ -21,7 +21,7 @@ class InvoiceService {
      */
     async ensureInvoiceForPaidOrder(orderId: string, paymentRef?: string) {
         // 1. Check if invoice already exists
-        const existingInvoice = await (prisma as any).invoice.findUnique({
+        const existingInvoice = await prisma.invoice.findUnique({
             where: { orderId },
         });
 
@@ -44,7 +44,7 @@ class InvoiceService {
         }
 
         // 3. Increment company invoice counter and get new number
-        const updatedCompany = await (prisma.company as any).update({
+        const updatedCompany = await prisma.company.update({
             where: { id: order.companyId },
             data: {
                 invoiceCounter: {
@@ -56,7 +56,7 @@ class InvoiceService {
         const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(updatedCompany.invoiceCounter).padStart(6, "0")}`;
 
         // 4. Create invoice record (without PDF URL yet)
-        const invoice = await (prisma as any).invoice.create({
+        const invoice = await prisma.invoice.create({
             data: {
                 companyId: order.companyId,
                 orderId: order.id,
@@ -91,7 +91,7 @@ class InvoiceService {
                         .getPublicUrl(filePath);
 
                     // Update invoice with PDF URL
-                    return await (prisma as any).invoice.update({
+                    return await prisma.invoice.update({
                         where: { id: invoice.id },
                         data: { pdfUrl: publicUrl },
                     });
@@ -104,10 +104,10 @@ class InvoiceService {
         return invoice;
     }
 
-    private async generateInvoicePDF(order: any, invoice: any): Promise<Buffer> {
+    private async generateInvoicePDF(order: Order & { company: Company; lead: Lead }, invoice: Invoice): Promise<Buffer> {
         return new Promise((resolve, reject) => {
             const doc = new PDFDocument({ margin: 50 });
-            const buffers: any[] = [];
+            const buffers: Buffer[] = [];
 
             doc.on("data", buffers.push.bind(buffers));
             doc.on("end", () => {
@@ -160,7 +160,7 @@ class InvoiceService {
 
             // Items (If order.items is available)
             let currentY = tableTop + 30;
-            const items = Array.isArray(order.items) ? order.items : [{ name: order.summary, quantity: 1, price: order.amount }];
+            const items = Array.isArray(order.items) ? order.items as { name: string; quantity: number; price: number }[] : [{ name: order.summary, quantity: 1, price: order.amount }];
 
             for (const item of items) {
                 const itemTotal = (item.price * item.quantity).toFixed(2);
@@ -169,8 +169,8 @@ class InvoiceService {
                     currentY,
                     item.name,
                     item.quantity.toString(),
-                    item.price.toFixed(2),
-                    itemTotal
+                    `₹${item.price.toFixed(2)}`,
+                    `₹${itemTotal}`
                 );
                 currentY += 25;
             }
@@ -193,7 +193,7 @@ class InvoiceService {
         });
     }
 
-    private generateTableRow(doc: any, y: number, item: string, qty: string, rate: string, total: string) {
+    private generateTableRow(doc: PDFKit.PDFDocument, y: number, item: string, qty: string, rate: string, total: string) {
         doc
             .fontSize(10)
             .text(item, 50, y)
@@ -202,7 +202,7 @@ class InvoiceService {
             .text(total, 0, y, { align: "right" });
     }
 
-    private generateHr(doc: any, y: number) {
+    private generateHr(doc: PDFKit.PDFDocument, y: number) {
         doc
             .strokeColor("#aaaaaa")
             .lineWidth(1)

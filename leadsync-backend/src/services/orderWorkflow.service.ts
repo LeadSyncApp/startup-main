@@ -67,7 +67,7 @@ export class OrderWorkflowService {
         // 3. Perform Update with Optimistic Locking
         // If version is provided, we check it. If not, we just update (force).
         // For critical "Accept" actions, version MUST be provided.
-        const whereClause: any = { id: orderId };
+        const whereClause: { id: string; version?: number } = { id: orderId };
         if (expectedVersion) {
             whereClause.version = expectedVersion;
         }
@@ -123,8 +123,8 @@ export class OrderWorkflowService {
 
             return { order: updatedOrder, log };
 
-        } catch (error: any) {
-            if (error.code === 'P2025' || error.message.includes('Record to update not found')) {
+        } catch (error: unknown) {
+            if (error instanceof Error && 'code' in error && error.code === 'P2025' || error instanceof Error && error.message.includes('Record to update not found')) {
                 throw new Error("CONCURRENCY_CONFLICT: Order was modified by another agent. Please refresh.");
             }
             throw error;

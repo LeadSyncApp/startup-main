@@ -60,8 +60,8 @@ class PaymentService {
             });
 
             return response.short_url;
-        } catch (error) {
-            console.error("❌ Razorpay Link Creation Error:", error);
+        } catch (error: unknown) {
+            console.error("❌ Razorpay Link Creation Error:", error instanceof Error ? error.message : String(error));
             return null;
         }
     }
