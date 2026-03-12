@@ -2,13 +2,22 @@ import { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import NotificationBell from "./NotificationBell";
-import { Menu } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 import { useSocket } from "../../context/SocketContext"; // Import Socket
 import toast from "react-hot-toast"; // Import Toast
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const { socket } = useSocket();
+
+  // Handle search functionality
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    // You can implement search logic here
+    console.log("🔍 Searching for:", query);
+    // TODO: Implement actual search functionality
+  };
 
   // 🔔 Global Notification Listener
   useEffect(() => {
@@ -107,6 +116,16 @@ export default function DashboardLayout() {
         <div className="hidden lg:flex items-center justify-between px-10 py-4 border-b border-white/10 bg-white/5 backdrop-blur-md relative">
           <h1 className="text-white font-semibold text-lg">LeadSync</h1>
           <div className="flex items-center gap-4">
+            {/* Search Bar */}
+            <div className="relative group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors h-4 w-4" />
+              <input
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                placeholder="Q Search..."
+                className="w-64 bg-white/10 border border-white/20 rounded-xl py-2 pl-9 pr-3 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-transparent transition-all"
+              />
+            </div>
             <NotificationBell />
           </div>
         </div>

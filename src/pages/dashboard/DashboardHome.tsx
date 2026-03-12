@@ -7,12 +7,14 @@ import {
   TrendingUp,
   DollarSign,
   Package,
-  Award
+  Award,
+  Bell
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
+import toast from "react-hot-toast";
 
 export default function DashboardHome() {
   const { token, companyId, company } = useAuth();
@@ -21,6 +23,21 @@ export default function DashboardHome() {
   // Data State
   const [kpis, setKpis] = useState({ leads: 0, conversations: 0, orders: 0, agents: 0 });
   const [analytics, setAnalytics] = useState<any>(null); // { revenueChart, topProducts, topAgents, aggregates }
+
+  // Test notification function
+  const createTestNotification = async () => {
+    try {
+      await api.post("/notifications/test", {
+        title: "Test Notification",
+        body: "This is a test notification to verify the system works!",
+        type: "SYSTEM"
+      });
+      toast.success("Test notification created!");
+    } catch (error) {
+      console.error("Failed to create test notification:", error);
+      toast.error("Failed to create test notification");
+    }
+  };
 
   useEffect(() => {
     if (!token || !companyId) return;
@@ -92,6 +109,13 @@ export default function DashboardHome() {
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={createTestNotification}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition shadow-sm flex items-center gap-2"
+          >
+            <Bell className="w-4 h-4" />
+            Test Notification
+          </button>
           <Link to="/dashboard/orders" className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition shadow-sm">
             Manage Orders
           </Link>

@@ -6,6 +6,28 @@ import { prisma } from "../lib/prisma";
 const router = Router();
 
 /* =========================================
+   CREATE TEST NOTIFICATION (for debugging)
+   ========================================= */
+router.post("/test", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.userId;
+        const { title, body, type } = req.body;
+
+        const notification = await notificationService.notifyUser(
+            userId,
+            title || "Test Notification",
+            body || "This is a test notification to verify the system works.",
+            type || "SYSTEM"
+        );
+
+        res.json({ success: true, notification });
+    } catch (error) {
+        console.error("Test notification error:", error);
+        res.status(500).json({ message: "Failed to create test notification" });
+    }
+});
+
+/* =========================================
    GET NOTIFICATIONS (Paginated)
    ========================================= */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {

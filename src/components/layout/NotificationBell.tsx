@@ -47,11 +47,13 @@ export default function NotificationBell() {
     if (!token) return;
     try {
       setLoading(true);
+      console.log("🔔 Fetching notifications...");
       const data = await api.get("/notifications?page=1");
+      console.log("🔔 Notifications received:", data);
       setNotifications(data.items ?? []);
       setUnreadCount(data.unreadCount ?? 0);
-    } catch {
-      // silent
+    } catch (error) {
+      console.error("🔔 Failed to fetch notifications:", error);
     } finally {
       setLoading(false);
     }
@@ -61,9 +63,12 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!token) return;
     api.get("/notifications?page=1").then((data) => {
+      console.log("🔔 Initial notifications loaded:", data);
       setUnreadCount(data.unreadCount ?? 0);
       setNotifications(data.items ?? []);
-    }).catch(() => {});
+    }).catch((error) => {
+      console.error("🔔 Failed to load initial notifications:", error);
+    });
   }, [token]);
 
   // Calculate dropdown position when opening
@@ -89,6 +94,7 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!socket) return;
     const handler = (n: Notification) => {
+      console.log("🔔 Real-time notification received:", n);
       setNotifications((prev) => [n, ...prev.slice(0, 19)]);
       setUnreadCount((c) => c + 1);
     };
