@@ -92,8 +92,9 @@ export default function Settings() {
 
   const [onboardingMode, setOnboardingMode] = useState<'PASTE' | 'MANUAL' | 'FILE'>('PASTE');
   const [previewMenu, setPreviewMenu] = useState<StructuredMenu | null>(null);
-  const [mergeWithExisting, setMergeWithExisting] = useState(false);
+  const [mergeWithExisting, setMergeWithExisting] = useState(true);
   const [generatedMenu, setGeneratedMenu] = useState<StructuredMenu | null>(null);
+
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -235,6 +236,41 @@ export default function Settings() {
   /* ===============================
      COMMERCE AI ONBOARDING (PHASE 2A)
   =============================== */
+  // Helper: Convert a StructuredMenu into a human-readable text block for AI Knowledge Base
+  const menuToKnowledgeText = (menu: StructuredMenu): string => {
+    return menu.categories
+      .map((cat) => {
+        const items = cat.items
+          .map((item) => `  - ${item.name}: ₹${item.price}`)
+          .join("\n");
+        return `${cat.name}:\n${items}`;
+      })
+      .join("\n\n");
+  };
+
+  // Helper: Merge two StructuredMenus by category name (frontend merge)
+  const mergeMenus = (existing: StructuredMenu, incoming: StructuredMenu): StructuredMenu => {
+    const merged = { categories: existing.categories.map((c) => ({ ...c, items: [...c.items] })) };
+    for (const incomingCat of incoming.categories) {
+      const existingCat = merged.categories.find(
+        (c) => c.name.toLowerCase() === incomingCat.name.toLowerCase()
+      );
+      if (existingCat) {
+        for (const incomingItem of incomingCat.items) {
+          const alreadyExists = existingCat.items.find(
+            (i) => i.name.toLowerCase() === incomingItem.name.toLowerCase()
+          );
+          if (!alreadyExists) {
+            existingCat.items.push(incomingItem);
+          }
+        }
+      } else {
+        merged.categories.push({ ...incomingCat, items: [...incomingCat.items] });
+      }
+    }
+    return merged;
+  };
+
   const handleAnalyzeSmartPaste = async () => {
     if (!shopDescription.trim()) return;
 
@@ -244,7 +280,7 @@ export default function Settings() {
     try {
       const data = await api.post("/dashboard/analyze-menu", {
         rawText: shopDescription,
-        mergeWithExisting
+        mergeWithExisting: false // We handle merging on frontend
       });
 
       setPreviewMenu(data.menu);
@@ -260,16 +296,30 @@ export default function Settings() {
     if (!previewMenu) return;
 
     try {
+      // Merge incoming items with existing menu on the frontend
+      const finalMenu = mergeWithExisting && generatedMenu
+        ? mergeMenus(generatedMenu, previewMenu)
+        : previewMenu;
+
+      // Auto-populate AI Knowledge Base with the formatted menu
+      const menuText = menuToKnowledgeText(finalMenu);
+      const newKnowledge = botKnowledgeBase
+        ? botKnowledgeBase + "\n\n" + menuText
+        : menuText;
+
       await api.patch("/dashboard/save-edited-menu", {
-        structuredMenu: previewMenu,
+        structuredMenu: finalMenu,
         botBusinessType,
         botWelcomeMessage,
+        botKnowledgeBase: newKnowledge,
       });
 
-      setGeneratedMenu(previewMenu);
+      setGeneratedMenu(finalMenu);
+      setBotKnowledgeBase(newKnowledge);
       setPreviewMenu(null);
       setShopDescription("");
-      toast.success("Products added to your menu successfully! ✅");
+
+      toast.success("Products added! AI Knowledge Base updated — click Train AI to finalize. ✅");
     } catch {
       toast.error("Failed to commit menu changes.");
     }
@@ -284,7 +334,7 @@ export default function Settings() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("mergeWithExisting", mergeWithExisting.toString());
+      formData.append("mergeWithExisting", "false"); // We handle merging on frontend
 
       const response = await api.post("/dashboard/upload-menu-file", formData);
 
@@ -385,12 +435,24 @@ export default function Settings() {
 
   const saveEditedMenu = async () => {
     try {
+      // Also sync the AI Knowledge Base text with the current menu
+      const menuText = generatedMenu ? menuToKnowledgeText(generatedMenu) : "";
+      const syncedKnowledge = menuText
+        ? (botKnowledgeBase && !botKnowledgeBase.includes(menuText)
+            ? botKnowledgeBase + "\n\n" + menuText
+            : botKnowledgeBase || menuText)
+        : botKnowledgeBase;
+
       await api.patch("/dashboard/save-edited-menu", {
         structuredMenu: generatedMenu,
         botBusinessType,
         botWelcomeMessage,
+        botKnowledgeBase: syncedKnowledge,
       });
 
+      if (syncedKnowledge !== botKnowledgeBase) {
+        setBotKnowledgeBase(syncedKnowledge);
+      }
       toast.success("Menu saved successfully ✅");
     } catch {
       toast.error("Failed to save menu");
