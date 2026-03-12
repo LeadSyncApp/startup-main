@@ -744,7 +744,7 @@ export default function Settings() {
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Step 1 — Register Webhook in Meta Developer Console</p>
               <p className="text-xs text-slate-500">Callback URL (paste this in your Meta App → Webhooks):</p>
               <code className="block text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 font-mono text-indigo-700 break-all select-all">
-                {igWebhookUrl || `${import.meta.env.VITE_API_URL?.replace("/api", "") || window.location.origin}/api/instagram/webhook`}
+                {igWebhookUrl || "https://your-app-domain.com/api/instagram/webhook"}
               </code>
               <p className="text-xs text-slate-400 mt-1">Verify Token: use <span className="font-mono bg-slate-100 px-1 rounded">{igVerifyToken || "leadsync_ig_verify_2026"}</span> in Meta App verification.</p>
             </div>
@@ -797,7 +797,7 @@ export default function Settings() {
             <div className="bg-slate-50 rounded-xl px-4 py-3 border border-slate-100">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Webhook URL (for Meta App)</p>
               <code className="text-xs font-mono text-indigo-700 break-all select-all">
-                {igWebhookUrl || `${import.meta.env.VITE_API_URL?.replace("/api", "") || window.location.origin}/api/instagram/webhook`}
+                {igWebhookUrl || "https://your-app-domain.com/api/instagram/webhook"}
               </code>
             </div>
           </div>
