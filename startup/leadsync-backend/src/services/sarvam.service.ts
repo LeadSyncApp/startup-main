@@ -10,6 +10,15 @@ interface SarvamResponse {
     confidence: number;
 }
 
+interface SarvamSTTResponse {
+    transcript: string;
+    language_code: string;
+}
+
+interface SarvamTTSResponse {
+    audios: string[];
+}
+
 export class SarvamService {
     private readonly apiKey: string;
     private readonly apiUrl = "https://api.sarvam.ai/v1/intent-extraction"; // Hypothetical Endpoint
@@ -45,7 +54,7 @@ export class SarvamService {
 
             console.log(`🎙️ STT: Sending ${audioBuffer.length} bytes to Sarvam...`);
 
-            const response = await axios.post(
+            const response = await axios.post<SarvamSTTResponse>(
                 "https://api.sarvam.ai/speech-to-text",
                 form,
                 {
@@ -82,7 +91,7 @@ export class SarvamService {
         }
 
         try {
-            const response = await axios.post(
+            const response = await axios.post<SarvamTTSResponse>(
                 "https://api.sarvam.ai/text-to-speech",
                 {
                     inputs: [text.slice(0, 500)], // Sarvam TTS char limit
@@ -126,19 +135,27 @@ export class SarvamService {
         if (/[\u0B80-\u0BFF]/.test(text)) return "ta-IN"; // Tamil script
         if (/[\u0900-\u097F]/.test(text)) return "hi-IN"; // Hindi/Devanagari script
 
-        // 2. Keyword-based detection for phonetic/Romanized text
+        // 2. Keyword-based detection for phonetic/Romanized text - more conservative approach
         const lowerText = text.toLowerCase();
         const words = lowerText.split(/\s+/);
 
+        // Only detect as Tamil if there are multiple Tamil indicators
         const tamilPhonetic = [
-            "venum", "vendum", "kodu", "iruku", "illa", "vanga", "enna", "eppadi", "evvalavu", "nanri", "oru", "dosa", "idly", "ittly",
-            "yennaku", "enakku", "ungaluku", "irukkuma", "irukinga", "romba", "nalla", "sapada", "sappadu", "thanga", "kodunga", "pannunga", "vaanga", "enna", "ethu"
+            "venum", "vendum", "kodu", "iruku", "illa", "vanga", "enna", "eppadi", "evvalavu", "nanri", "dosa", "idly", "ittly",
+            "yennaku", "enakku", "ungaluku", "irukkuma", "irukinga", "romba", "nalla", "sapada", "sappadu", "thanga", "kodunga", "pannunga", "vaanga"
         ];
-        const hindiPhonetic = ["chahiye", "kitna", "dena", "lelo", "hai", "hua", "kya", "kaise", "kab", "shukriya", "dhanyawad", "ek", "do", "aap", "mujhse"];
+        
+        // More specific Hindi indicators - require at least 2 Hindi words to trigger
+        const hindiPhonetic = ["chahiye", "kitna", "dena", "lelo", "kya", "kaise", "dhanyawad", "shukriya"];
 
-        if (words.some(w => tamilPhonetic.includes(w))) return "ta-IN";
-        if (words.some(w => hindiPhonetic.includes(w))) return "hi-IN";
+        const tamilWordCount = words.filter(w => tamilPhonetic.includes(w)).length;
+        const hindiWordCount = words.filter(w => hindiPhonetic.includes(w)).length;
 
+        // Only detect as non-English if there are clear indicators
+        if (tamilWordCount >= 2) return "ta-IN";
+        if (hindiWordCount >= 2) return "hi-IN";
+
+        // Default to English for safety
         return "en-IN";
     }
 }
