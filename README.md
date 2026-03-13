@@ -4,6 +4,8 @@
 
 > **Last updated**: March 2026
 
+> **Status**: Active development
+
 ---
 
 ## **Key Features**
