@@ -70,14 +70,14 @@ const sendTelegramApi = async (url: string, payload: any) => {
 async function downloadTelegramVoice(botToken: string, fileId: string): Promise<Buffer | null> {
     try {
         const fileRes = await axios.get(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
-        const filePath = fileRes.data?.result?.file_path;
+        const filePath = (fileRes.data as any)?.result?.file_path;
         if (!filePath) return null;
 
         const audioRes = await axios.get(
             `https://api.telegram.org/file/bot${botToken}/${filePath}`,
             { responseType: "arraybuffer", timeout: 15000 }
         );
-        return Buffer.from(audioRes.data);
+        return Buffer.from(audioRes.data as ArrayBuffer);
     } catch (err: any) {
         console.error("❌ Voice download error:", err.message);
         return null;
