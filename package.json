@@ -1,6 +1,7 @@
 {
   "name": "startup-backup",
   "private": true,
+  "version": "1.0.1",
   "scripts": {
     "build": "cd startup/startup-frontend && npm install && npm run build"
   },
