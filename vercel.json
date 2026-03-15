@@ -1,5 +1,6 @@
 {
-  "buildCommand": "npm run build",
+  "root": "startup/startup-frontend",
+  "buildCommand": "npm install && npm run build",
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/" }
