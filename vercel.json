@@ -1,4 +1,0 @@
-{
-  "buildCommand": "cd startup/startup-frontend && npm ci && npm run build",
-  "outputDirectory": "startup/startup-frontend/dist"
-}
