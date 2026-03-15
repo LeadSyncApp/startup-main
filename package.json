@@ -2,7 +2,7 @@
   "name": "startup-backup",
   "private": true,
   "scripts": {
-    "build": "cd startup/startup-frontend && npm ci && npm run build"
+    "build": "cd startup/startup-frontend && npm install && npm run build"
   },
   "description": "LeadSync CRM application with frontend and backend"
 }
