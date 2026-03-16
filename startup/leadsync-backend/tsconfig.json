@@ -1,5 +1,4 @@
 {
-  // TypeScript configuration for LeadSync Backend
   "compilerOptions": {
     "target": "ES2020",
     "module": "CommonJS",
@@ -9,9 +8,9 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "prisma"],
-  "references": [{ "path": "./tsconfig.prisma.json" }]
+  "exclude": ["node_modules", "dist"]
 }
