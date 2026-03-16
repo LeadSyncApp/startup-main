@@ -9,7 +9,7 @@
     "ngrok": "ngrok http 4000",
     "dev:all": "concurrently \"npm run dev\" \"npm run ngrok\"",
     "seed": "ts-node -P tsconfig.prisma.json prisma/seed.ts",
-    "build": "tsc",
+    "build": "npx tsc",
     "start": "node dist/server.js",
     "migrate": "npx prisma db push --accept-data-loss",
     "postinstall": "prisma generate"
