@@ -57,9 +57,15 @@ app.use(
   cors({
     origin: allowedOrigins || "*",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    credentials: true, // Allow cookies if needed
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   })
 );
+
+// Handle preflight requests explicitly
+app.options('*', cors());
 
 app.use(express.json());
 

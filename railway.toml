@@ -1,0 +1,9 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "cd startup/leadsync-backend && npm start"
+buildCommand = "cd startup/leadsync-backend && npm run build"
+
+[env]
+NODE_ENV = "production"
