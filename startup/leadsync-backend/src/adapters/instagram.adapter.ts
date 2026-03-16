@@ -97,7 +97,7 @@ export class InstagramAdapter implements ChannelAdapter {
                     const profileRes = await axios.get(
                         `${this.GRAPH_URL}/${psid}?fields=name&access_token=${this.pageAccessToken}`
                     );
-                    if (profileRes.data?.name) igName = profileRes.data.name;
+                    if ((profileRes.data as any)?.name) igName = (profileRes.data as any).name;
                 } catch (_) { /* fallback to default */ }
 
                 lead = await prisma.lead.create({

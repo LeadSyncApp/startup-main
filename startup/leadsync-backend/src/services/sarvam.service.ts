@@ -66,8 +66,8 @@ export class SarvamService {
                 }
             );
 
-            const transcript = response.data?.transcript || "";
-            const languageCode = response.data?.language_code || "en-IN";
+            const transcript = (response.data as any)?.transcript || "";
+            const languageCode = (response.data as any)?.language_code || "en-IN";
             console.log(`✅ STT Result: "${transcript}" | Lang: ${languageCode}`);
 
             return { transcript: transcript.trim(), languageCode };
@@ -114,7 +114,7 @@ export class SarvamService {
             );
 
             // Response is base64 encoded audio
-            const base64Audio = response.data?.audios?.[0];
+            const base64Audio = (response.data as any)?.audios?.[0];
             if (!base64Audio) return null;
 
             console.log(`🔊 TTS Generated for: "${text.slice(0, 40)}..."`);

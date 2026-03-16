@@ -29,11 +29,11 @@ router.post(
         `https://api.telegram.org/bot${token}/getMe`
       );
 
-      if (!telegramResponse.data.ok) {
+      if (!(telegramResponse.data as any).ok) {
         return res.status(400).json({ message: "Invalid bot token" });
       }
 
-      const botUsername = telegramResponse.data.result.username;
+      const botUsername = (telegramResponse.data as any).result.username;
 
       /* 2️⃣ Generate webhook secret */
       const webhookSecret = crypto.randomBytes(32).toString("hex");
