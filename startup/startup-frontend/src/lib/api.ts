@@ -1,8 +1,18 @@
 // Safe environment loading — VITE_API_URL is the single source of truth.
-// Fallback only used when .env is missing (local dev without .env file).
-const API_BASE =
-  import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
-  "http://localhost:4000/api";
+// Use the build-time VITE_API_URL when provided. Otherwise fall back to a sensible
+// runtime default that points at the same origin + /api (useful for preview or
+// when frontend & backend are proxied).
+const buildTimeApi = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
+let API_BASE: string;
+if (buildTimeApi) {
+  API_BASE = buildTimeApi;
+} else if (typeof window !== "undefined") {
+  // runtime fallback: use current origin and /api
+  API_BASE = `${window.location.origin}/api`;
+} else {
+  // server-side / build-time fallback for local tooling
+  API_BASE = "http://localhost:4000/api";
+}
 
 // ✅ Added PATCH here
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
