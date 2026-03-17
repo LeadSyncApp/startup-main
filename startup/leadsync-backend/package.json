@@ -4,6 +4,9 @@
   "description": "LeadSync Backend API",
   "main": "dist/server.js",
   "type": "commonjs",
+  "engines": {
+    "node": ">=20.16.0"
+  },
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "ngrok": "ngrok http 4000",
