@@ -1,0 +1,5 @@
+[phases.install]
+cmds = ["npm install", "cd startup/leadsync-backend && npm install"]
+
+[phases.build]
+cmds = ["cd startup/leadsync-backend && npm run build"]
