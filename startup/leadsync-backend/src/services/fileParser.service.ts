@@ -1,7 +1,8 @@
 import multer from "multer";
 import mammoth from "mammoth";
 import ExcelJS from "exceljs";
-const pdf = require("pdf-parse");
+// Use pdf2json (server-friendly) instead of pdf-parse (which pulls browser APIs in some versions)
+const PDFParser = require("pdf2json");
 
 const storage = multer.memoryStorage();
 export const upload = multer({
@@ -19,8 +20,40 @@ export class FileParserService {
 
         try {
             if (mimetype === 'application/pdf' || extension === 'pdf') {
-                const data = await pdf(file.buffer);
-                return data.text;
+                // pdf2json works with buffers via parseBuffer and emits events when ready.
+                const extracted = await new Promise<string>((resolve, reject) => {
+                    try {
+                        const pdfParser = new PDFParser();
+                        pdfParser.on("pdfParser_dataError", (err: any) => {
+                            reject(err?.parserError || err);
+                        });
+                        pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
+                            try {
+                                let text = "";
+                                const pages = pdfData?.formImage?.Pages || [];
+                                pages.forEach((page: any) => {
+                                    (page.Texts || []).forEach((t: any) => {
+                                        (t.R || []).forEach((r: any) => {
+                                            if (r.T) {
+                                                // pdf2json encodes text as URI components
+                                                text += decodeURIComponent(r.T) + " ";
+                                            }
+                                        });
+                                    });
+                                    text += "\n";
+                                });
+                                resolve(text.trim());
+                            } catch (e) {
+                                reject(e);
+                            }
+                        });
+                        pdfParser.parseBuffer(Buffer.from(file.buffer));
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+
+                return extracted;
             }
 
             if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || extension === 'docx') {

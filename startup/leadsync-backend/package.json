@@ -12,7 +12,7 @@
     "ngrok": "ngrok http 4000",
     "dev:all": "concurrently \"npm run dev\" \"npm run ngrok\"",
     "seed": "ts-node -P tsconfig.prisma.json prisma/seed.ts",
-  "build": "tsc",
+    "build": "tsc",
     "start": "node dist/server.js",
     "migrate": "npx prisma db push --accept-data-loss",
     "postinstall": "prisma generate"
@@ -43,6 +43,7 @@
     "node-fetch": "^2.7.0",
     "openai": "^6.21.0",
     "pdf-parse": "^2.4.5",
+    "pdf2json": "^4.0.2",
     "pdfkit": "^0.17.2",
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.3",
