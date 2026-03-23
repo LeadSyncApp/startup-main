@@ -1,0 +1,56 @@
+﻿# REPO MAP
+
+_Generated automatically. Do not edit manually._
+
+- startup-frontend/
+  - public/
+    - favicon.ico
+    - favicon.svg
+  - scripts/
+    - generate-repo-map.ps1
+  - src/
+    - assets/
+      - react.svg
+    - components/
+      - conversations/
+      - dashboard/
+      - layout/
+      - leads/
+      - settings/
+      - ui/
+      - ErrorBoundary.tsx
+      - ProtectedRoute.tsx
+      - PublicRoute.tsx
+    - context/
+      - AuthContext.tsx
+      - SocketContext.tsx
+    - lib/
+      - api.ts
+    - pages/
+      - dashboard/
+      - Home.tsx
+      - Login.tsx
+      - OrderTracking.tsx
+      - Signup.tsx
+    - types/
+      - index.ts
+      - react-confetti.d.ts
+    - utils/
+      - formatINR.ts
+      - industryConfig.ts
+    - App.tsx
+    - index.css
+    - main.jsx
+    - main.tsx
+    - vite-env.d.ts
+  - .eslintrc.json
+  - .gitignore
+  - index.html
+  - package.json
+  - package-lock.json
+  - postcss.config.js
+  - tailwind.config.js
+  - tsconfig.json
+  - tsconfig.node.json
+  - tsconfig.tsbuildinfo
+  - vite.config.ts

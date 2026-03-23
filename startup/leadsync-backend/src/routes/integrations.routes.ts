@@ -41,6 +41,7 @@ router.get(
         telegram: {
           connected: company?.telegramConnected ?? false,
           username: company?.telegramBotUsername ?? null,
+          webhookUrl: company?.telegramConnected ? `${process.env.API_BASE_URL}/api/telegram/webhook` : null,
         },
         instagram: {
           connected: company?.instagramConnected ?? false,

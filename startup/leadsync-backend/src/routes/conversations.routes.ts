@@ -475,12 +475,19 @@ router.post("/:id/voice-reply", authMiddleware, async (req: AuthRequest, res: Re
       where: { id, companyId },
       include: {
         lead: { select: { contact: true } },
-        company: { select: { telegramBotToken: true } },
+        company: { select: { telegramBotUsername: true, telegramConnected: true, instagramConnected: true, instagramPageId: true } },
       },
     });
 
     if (!conversation) return res.status(404).json({ message: "Conversation not found" });
-    if (!conversation.company.telegramBotToken) return res.status(400).json({ message: "Telegram not connected" });
+    
+    // Get company token for internal use (not exposed in response)
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { telegramBotToken: true }
+    });
+    
+    if (!company?.telegramBotToken) return res.status(400).json({ message: "Telegram not connected" });
 
     // Get last SYSTEM (bot) reply to convert to voice
     const lastBotMsg = await prisma.message.findFirst({
@@ -496,7 +503,7 @@ router.post("/:id/voice-reply", authMiddleware, async (req: AuthRequest, res: Re
     const audioBuffer = await sarvamService.textToSpeech(lastBotMsg.content, "en-IN");
     if (!audioBuffer) return res.status(503).json({ message: "TTS generation failed. Try again." });
 
-    const adapter = new TelegramAdapter(conversation.company.telegramBotToken);
+    const adapter = new TelegramAdapter(company.telegramBotToken);
     await adapter.sendVoice(conversation.lead.contact, audioBuffer);
 
     console.log(`🔊 Agent voice reply sent to ${conversation.lead.contact}`);
