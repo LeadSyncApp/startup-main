@@ -2,6 +2,12 @@
 // Use the build-time VITE_API_URL when provided. Otherwise fall back to a sensible
 // runtime default that points at the same origin + /api (useful for preview or
 // when frontend & backend are proxied).
+
+// IMMEDIATE DEBUG: Check environment variable at module load
+console.log('=== MODULE LOAD DEBUG ===');
+console.log('Raw import.meta.env.VITE_API_URL:', import.meta.env.VITE_API_URL);
+console.log('Type of VITE_API_URL:', typeof import.meta.env.VITE_API_URL);
+
 const buildTimeApi = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
 let API_BASE: string;
 
@@ -20,6 +26,7 @@ if (buildTimeApi && buildTimeApi !== 'undefined') {
 }
 
 console.log('Final API_BASE:', API_BASE);
+console.log('========================');
 
 // ✅ Added PATCH here
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -35,8 +42,18 @@ async function apiFetch(endpoint: string, options: ApiOptions = {}) {
 
   const isFormData = options.body instanceof FormData;
 
+  // DEBUG: Log URL construction details
+  console.log('=== API FETCH DEBUG ===');
+  console.log('1. endpoint:', endpoint);
+  console.log('2. API_BASE:', API_BASE);
+  console.log('3. import.meta.env.VITE_API_URL:', import.meta.env.VITE_API_URL);
+  
+  const finalUrl = `${API_BASE}${endpoint}`;
+  console.log('4. finalUrl constructed:', finalUrl);
+  console.log('========================');
+
   try {
-    const res = await fetch(`${API_BASE}${endpoint}`, {
+    const res = await fetch(finalUrl, {
       method: options.method || "GET",
       headers: {
         ...(isFormData ? {} : { "Content-Type": "application/json" }),
