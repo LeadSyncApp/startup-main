@@ -47,7 +47,6 @@ router.get(
           connected: company?.instagramConnected ?? false,
           pageId: company?.instagramPageId ?? null,
           webhookUrl: `${process.env.API_BASE_URL}/api/instagram/webhook`,
-          verifyToken: process.env.INSTAGRAM_VERIFY_TOKEN || "",
         },
       });
     } catch (error) {

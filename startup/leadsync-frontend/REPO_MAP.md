@@ -2,7 +2,7 @@
 
 _Generated automatically. Do not edit manually._
 
-- startup-frontend/
+- leadsync-frontend/
   - public/
     - favicon.ico
     - favicon.svg
@@ -49,6 +49,7 @@ _Generated automatically. Do not edit manually._
   - package.json
   - package-lock.json
   - postcss.config.js
+  - REPO_MAP.md
   - tailwind.config.js
   - tsconfig.json
   - tsconfig.node.json
