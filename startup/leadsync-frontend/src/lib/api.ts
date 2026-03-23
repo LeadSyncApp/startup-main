@@ -4,7 +4,12 @@
 // when frontend & backend are proxied).
 const buildTimeApi = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
 let API_BASE: string;
-if (buildTimeApi) {
+
+// Debug logging to identify URL construction issues
+console.log('VITE_API_URL from env:', import.meta.env.VITE_API_URL);
+console.log('buildTimeApi after processing:', buildTimeApi);
+
+if (buildTimeApi && buildTimeApi !== 'undefined') {
   API_BASE = buildTimeApi;
 } else if (typeof window !== "undefined") {
   // runtime fallback: use current origin and /api
@@ -13,6 +18,8 @@ if (buildTimeApi) {
   // server-side / build-time fallback for local tooling
   API_BASE = "http://localhost:4000/api";
 }
+
+console.log('Final API_BASE:', API_BASE);
 
 // ✅ Added PATCH here
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
