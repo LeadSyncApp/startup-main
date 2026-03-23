@@ -1,31 +1,26 @@
 // Safe environment loading — VITE_API_URL is the single source of truth.
-// Use the build-time VITE_API_URL when provided. Otherwise fall back to a sensible
-// runtime default that points at the same origin + /api (useful for preview or
-// when frontend & backend are proxied).
+// Must be a full absolute URL with protocol (http:// or https://)
 
 // IMMEDIATE DEBUG: Check environment variable at module load
 console.log('=== MODULE LOAD DEBUG ===');
 console.log('Raw import.meta.env.VITE_API_URL:', import.meta.env.VITE_API_URL);
 console.log('Type of VITE_API_URL:', typeof import.meta.env.VITE_API_URL);
 
-const buildTimeApi = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
+const rawApiUrl = import.meta.env.VITE_API_URL?.trim();
 let API_BASE: string;
 
-// Debug logging to identify URL construction issues
-console.log('VITE_API_URL from env:', import.meta.env.VITE_API_URL);
-console.log('buildTimeApi after processing:', buildTimeApi);
-
-if (buildTimeApi && buildTimeApi !== 'undefined') {
-  API_BASE = buildTimeApi;
-} else if (typeof window !== "undefined") {
-  // runtime fallback: use current origin and /api
-  API_BASE = `${window.location.origin}/api`;
-} else {
-  // server-side / build-time fallback for local tooling
-  API_BASE = "http://localhost:4000/api";
+// Validate VITE_API_URL is a proper absolute URL
+if (!rawApiUrl) {
+  throw new Error('VITE_API_URL is not defined in environment variables');
 }
 
-console.log('Final API_BASE:', API_BASE);
+if (!rawApiUrl.startsWith('http://') && !rawApiUrl.startsWith('https://')) {
+  throw new Error(`VITE_API_URL must be a full absolute URL starting with http:// or https://. Got: "${rawApiUrl}"`);
+}
+
+API_BASE = rawApiUrl.replace(/\/$/, ""); // Remove trailing slash
+
+console.log('Validated API_BASE:', API_BASE);
 console.log('========================');
 
 // ✅ Added PATCH here
