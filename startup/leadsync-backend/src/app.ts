@@ -29,6 +29,8 @@ console.log("🔥 app.ts loaded");
 
 const app = express();
 
+app.set("trust proxy", 1); // Trust first proxy for Railway deployment
+
 app.use(compression()); // ✅ GZIP Compression
 app.use(helmet({ contentSecurityPolicy: false })); // ✅ Security headers (CSP off — API-only backend)
 
