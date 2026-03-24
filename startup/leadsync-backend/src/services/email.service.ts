@@ -1,24 +1,46 @@
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 console.log('🔧 Email service initializing...');
 
-// Validate required environment variables
-const requiredEnvVars = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM'];
-const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+// Environment-based provider selection
+const useResend = !!process.env.RESEND_API_KEY;
+const useSmtp = !useResend && !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 
-if (missingVars.length > 0) {
-  console.error('❌ Email service - Missing environment variables:', missingVars.join(', '));
-  throw new Error(`Missing required email environment variables: ${missingVars.join(', ')}`);
+// Validate required environment variables
+if (useResend) {
+  if (!process.env.RESEND_API_KEY || !process.env.SMTP_FROM) {
+    console.error('❌ Email service - Missing Resend configuration');
+    throw new Error('Missing required Resend environment variables: RESEND_API_KEY, SMTP_FROM');
+  }
+  console.log('📧 Email service - Using Resend provider');
+} else if (useSmtp) {
+  const requiredSmtpVars = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM'];
+  const missingVars = requiredSmtpVars.filter(varName => !process.env[varName]);
+  if (missingVars.length > 0) {
+    console.error('❌ Email service - Missing SMTP environment variables:', missingVars.join(', '));
+    throw new Error(`Missing required SMTP environment variables: ${missingVars.join(', ')}`);
+  }
+  console.log('📧 Email service - Using SMTP provider');
+} else {
+  console.error('❌ Email service - No email provider configured');
+  throw new Error('No email provider configured. Set RESEND_API_KEY for Resend or SMTP_* variables for SMTP.');
 }
 
-// Lazy transporter - created only when needed
-let transporter: nodemailer.Transporter | null = null;
+// Initialize Resend client (if configured)
+let resendClient: Resend | null = null;
+if (useResend) {
+  resendClient = new Resend(process.env.RESEND_API_KEY);
+}
 
-const createTransporter = (): nodemailer.Transporter => {
-  if (!transporter) {
-    console.log('📧 Creating email transporter...');
+// Lazy SMTP transporter - created only when needed (fallback)
+let smtpTransporter: nodemailer.Transporter | null = null;
+
+const createSmtpTransporter = (): nodemailer.Transporter => {
+  if (!smtpTransporter && useSmtp) {
+    console.log('📧 Creating SMTP transporter...');
     
-    transporter = nodemailer.createTransport({
+    smtpTransporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
@@ -36,9 +58,9 @@ const createTransporter = (): nodemailer.Transporter => {
       socketTimeout: 30000, // 30 seconds
     } as nodemailer.TransportOptions);
     
-    console.log('✅ Email transporter created successfully');
+    console.log('✅ SMTP transporter created successfully');
   }
-  return transporter;
+  return smtpTransporter!;
 };
 
 export interface EmailOptions {
@@ -54,35 +76,53 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
       to: options.to,
       subject: options.subject,
       from: process.env.SMTP_FROM,
-      smtpHost: process.env.SMTP_HOST,
-      smtpPort: process.env.SMTP_PORT,
+      provider: useResend ? 'Resend' : 'SMTP',
     });
 
-    const transporter = createTransporter();
+    if (useResend && resendClient) {
+      // Use Resend for production
+      const result = await resendClient.emails.send({
+        from: process.env.SMTP_FROM!,
+        to: [options.to],
+        subject: options.subject,
+        html: options.html,
+        text: options.text || '',
+      });
+      
+      console.log('✅ Email service - Resend email sent successfully:', {
+        messageId: result.data?.id,
+        to: options.to,
+        subject: options.subject,
+      });
+    } else if (useSmtp) {
+      // Use SMTP as fallback
+      const transporter = createSmtpTransporter();
 
-    const mailOptions = {
-      from: process.env.SMTP_FROM,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-      text: options.text || '',
-    };
+      const mailOptions = {
+        from: process.env.SMTP_FROM,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text || '',
+      };
 
-    const result = await transporter.sendMail(mailOptions);
-    
-    console.log('✅ Email service - Email sent successfully:', {
-      messageId: result.messageId,
-      response: result.response,
-      to: options.to,
-      subject: options.subject,
-    });
+      const result = await transporter.sendMail(mailOptions);
+      
+      console.log('✅ Email service - SMTP email sent successfully:', {
+        messageId: result.messageId,
+        response: result.response,
+        to: options.to,
+        subject: options.subject,
+      });
+    } else {
+      throw new Error('No email provider available');
+    }
   } catch (error) {
     console.error('❌ Email service - Failed to send email:', {
       error: error instanceof Error ? error.message : 'Unknown error',
       to: options.to,
       subject: options.subject,
-      smtpHost: process.env.SMTP_HOST,
-      smtpPort: process.env.SMTP_PORT,
+      provider: useResend ? 'Resend' : 'SMTP',
     });
     throw error;
   }
