@@ -13,7 +13,8 @@ if (useResend) {
     console.error('❌ Email service - Missing Resend configuration');
     throw new Error('Missing required Resend environment variables: RESEND_API_KEY, SMTP_FROM');
   }
-  console.log('📧 Email service - Using Resend provider');
+  
+  console.log('📧 Email service - Using Resend provider with sender:', process.env.SMTP_FROM);
 } else if (useSmtp) {
   const requiredSmtpVars = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM'];
   const missingVars = requiredSmtpVars.filter(varName => !process.env[varName]);
@@ -77,6 +78,7 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
       subject: options.subject,
       from: process.env.SMTP_FROM,
       provider: useResend ? 'Resend' : 'SMTP',
+      isProduction: process.env.NODE_ENV === 'production',
     });
 
     if (useResend && resendClient) {
@@ -90,9 +92,11 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
       });
       
       console.log('✅ Email service - Resend email sent successfully:', {
+        fullResponse: result,
         messageId: result.data?.id,
         to: options.to,
         subject: options.subject,
+        provider: 'Resend',
       });
     } else if (useSmtp) {
       // Use SMTP as fallback
