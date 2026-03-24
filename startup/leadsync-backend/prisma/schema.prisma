@@ -168,6 +168,8 @@ model User {
   isActive     Boolean  @default(true)
   companyId    String
   staffId      String?
+  resetToken   String?  @db.Text
+  resetTokenExpiry DateTime?
   createdAt    DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -180,6 +182,7 @@ model User {
   @@index([companyId])
   @@index([isActive])
   @@index([createdAt])
+  @@index([resetToken])
 }
 
 model Message {

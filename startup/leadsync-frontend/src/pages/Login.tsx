@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Zap, Mail, Lock, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
@@ -9,14 +9,18 @@ type Mode = "login" | "forgot" | "reset";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
 
-  const [mode, setMode] = useState<Mode>("login");
+  // Check for reset token in URL params
+  const resetToken = searchParams.get('token');
+  
+  const [mode, setMode] = useState<Mode>(resetToken ? "reset" : "login");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [userId, setUserId] = useState<string | null>(null);
+  const [token, setToken] = useState(resetToken || "");
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -51,10 +55,18 @@ export default function Login() {
     try {
       const data = await api.post("/auth/forgot-password", { email });
 
-      setUserId(data.userId);
-      setMode("reset");
+      // In development, show the token for testing
+      if (data.resetToken) {
+        console.log('Development reset token:', data.resetToken);
+        setToken(data.resetToken);
+        setMode("reset");
+      } else {
+        // In production, just show success message
+        alert("Password reset link has been sent to your email. Please check your inbox.");
+        setMode("login");
+      }
     } catch (err: any) {
-      setError(err.message || "Failed");
+      setError(err.message || "Failed to send reset email");
     } finally {
       setLoading(false);
     }
@@ -68,15 +80,16 @@ export default function Login() {
 
     try {
       await api.post("/auth/reset-password", {
-        userId,
+        token,
         newPassword,
       });
 
       setMode("login");
+      setToken("");
       setNewPassword("");
       alert("Password updated successfully. Please login.");
     } catch (err: any) {
-      setError(err.message || "Failed");
+      setError(err.message || "Failed to reset password");
     } finally {
       setLoading(false);
     }
@@ -218,6 +231,22 @@ export default function Login() {
           {/* ================= RESET FORM ================= */}
           {mode === "reset" && (
             <form onSubmit={handleReset} className="space-y-5">
+              {!resetToken && (
+                <div>
+                  <label className="block text-sm text-slate-200 mb-2">
+                    Reset Token
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter reset token from email"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                    className="w-full rounded-lg bg-slate-700 border border-slate-600 py-3 px-4 text-white"
+                    required
+                  />
+                </div>
+              )}
+              
               <input
                 type="password"
                 placeholder="Enter new password"
@@ -235,6 +264,14 @@ export default function Login() {
                 className="w-full bg-cyan-600 hover:bg-cyan-700 rounded-lg py-3 font-semibold text-white"
               >
                 {loading ? "Updating…" : "Reset Password"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMode("login")}
+                className="w-full text-sm text-slate-400"
+              >
+                Back to Login
               </button>
             </form>
           )}

@@ -78,7 +78,21 @@ async function apiFetch(endpoint: string, options: ApiOptions = {}) {
         window.location.href = "/login";
       }
       const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.message || "API Error");
+      
+      // Enhanced error message with status, endpoint, and details
+      const statusText = res.statusText || 'Unknown';
+      const errorMessage = errorData.message || 'API Error';
+      const enhancedError = `${res.status} ${statusText} - ${errorMessage} (${endpoint})`;
+      
+      console.error('API Error Details:', {
+        status: res.status,
+        statusText,
+        endpoint,
+        url: finalUrl,
+        message: errorMessage
+      });
+      
+      throw new Error(enhancedError);
     }
 
     return res.json();
