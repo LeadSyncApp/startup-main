@@ -68,6 +68,7 @@ _Generated automatically. Do not edit manually._
       - cache.service.ts
       - customerMessaging.service.ts
       - customerMessaging.service.ts.utf8
+      - email.service.ts
       - fileParser.service.ts
       - intelligence.service.ts
       - invoice.service.ts
@@ -93,3 +94,4 @@ _Generated automatically. Do not edit manually._
   - REPO_MAP.md
   - tsconfig.json
   - tsconfig.prisma.json
+  - tsconfig.prisma.tsbuildinfo

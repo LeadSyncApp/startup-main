@@ -15,7 +15,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "migrate": "npx prisma db push --accept-data-loss",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "repo:map": "powershell -ExecutionPolicy Bypass -File ./scripts/generate-repo-map.ps1"
   },
   "dependencies": {
     "@google/genai": "^1.40.0",

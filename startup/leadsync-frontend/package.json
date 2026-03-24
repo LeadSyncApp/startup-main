@@ -7,7 +7,8 @@
     "dev": "npx vite",
     "build": "tsc -b && npx vite build",
     "lint": "eslint .",
-    "preview": "npx vite preview"
+    "preview": "npx vite preview",
+    "repo:map": "powershell -ExecutionPolicy Bypass -File ./scripts/generate-repo-map.ps1"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.17",
