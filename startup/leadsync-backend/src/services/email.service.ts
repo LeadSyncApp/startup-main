@@ -91,6 +91,18 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
         text: options.text || '',
       });
       
+      // Check for actual Resend API errors
+      if (result.error || !result.data) {
+        console.error('❌ Email service - Resend API error:', {
+          error: result.error,
+          data: result.data,
+          to: options.to,
+          subject: options.subject,
+          provider: 'Resend',
+        });
+        throw new Error(`Resend API error: ${result.error?.message || 'Unknown error'}`);
+      }
+      
       console.log('✅ Email service - Resend email sent successfully:', {
         fullResponse: result,
         messageId: result.data?.id,
