@@ -11,25 +11,35 @@ if (missingVars.length > 0) {
   throw new Error(`Missing required email environment variables: ${missingVars.join(', ')}`);
 }
 
-// Create transporter with environment-based configuration
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+// Lazy transporter - created only when needed
+let transporter: nodemailer.Transporter | null = null;
 
-// Verify transporter configuration
-transporter.verify((error: Error | null, success: boolean) => {
-  if (error) {
-    console.error('❌ Email service - Transporter verification failed:', error);
-  } else {
-    console.log('✅ Email service - Transporter ready');
+const createTransporter = (): nodemailer.Transporter => {
+  if (!transporter) {
+    console.log('📧 Creating email transporter...');
+    
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
+      family: 4, // Force IPv4
+      requireTLS: true, // Force TLS
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+      tls: {
+        servername: process.env.SMTP_HOST,
+      },
+      connectionTimeout: 30000, // 30 seconds
+      greetingTimeout: 10000, // 10 seconds
+      socketTimeout: 30000, // 30 seconds
+    } as nodemailer.TransportOptions);
+    
+    console.log('✅ Email transporter created successfully');
   }
-});
+  return transporter;
+};
 
 export interface EmailOptions {
   to: string;
@@ -47,6 +57,8 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
       smtpHost: process.env.SMTP_HOST,
       smtpPort: process.env.SMTP_PORT,
     });
+
+    const transporter = createTransporter();
 
     const mailOptions = {
       from: process.env.SMTP_FROM,
