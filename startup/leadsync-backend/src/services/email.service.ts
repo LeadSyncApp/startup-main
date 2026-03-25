@@ -81,28 +81,6 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
       isProduction: process.env.NODE_ENV === 'production',
     });
 
-    // Check if we're in testing mode with Resend
-    const isTestingMode = useResend && process.env.SMTP_FROM?.includes('@resend.dev');
-    
-    if (isTestingMode) {
-      // In testing mode, only allow delivery to the same domain as the sender
-      const senderDomain = process.env.SMTP_FROM?.split('@')[1];
-      const recipientDomain = options.to.split('@')[1];
-      
-      if (recipientDomain !== senderDomain) {
-        console.log('🚫 Email service - Testing mode: Blocked delivery to external domain:', {
-          to: options.to,
-          recipientDomain,
-          senderDomain,
-          reason: 'Resend testing mode only allows delivery to verified recipients'
-        });
-        
-        const error = new Error('Password reset email is currently limited to verified test recipients until the sender domain is verified.');
-        (error as any).code = 'PROVIDER_RESTRICTION';
-        throw error;
-      }
-    }
-
     if (useResend && resendClient) {
       // Use Resend for production
       const result = await resendClient.emails.send({
