@@ -93,13 +93,7 @@ export default function DashboardLayout() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] flex relative overflow-hidden">
-
-      {/* Background Glow */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-100px] right-[-100px] w-[300px] h-[300px] bg-cyan-500/10 blur-[60px] rounded-full" />
-        <div className="absolute bottom-[-100px] left-[-100px] w-[300px] h-[300px] bg-indigo-500/10 blur-[60px] rounded-full" />
-      </div>
+    <div className="min-h-screen bg-[#0B1120] flex relative overflow-hidden">
 
       {/* Mobile Overlay */}
       {sidebarOpen && (
@@ -125,7 +119,7 @@ export default function DashboardLayout() {
       <div className="flex-1 flex flex-col relative z-10">
 
         {/* Desktop Top Bar */}
-        <div className="hidden lg:flex items-center justify-between px-10 py-3 border-b border-white/10 bg-white/5 backdrop-blur-md">
+        <div className="hidden lg:flex items-center justify-between px-10 py-3 border-b border-white/10 bg-[#0F172A]/80 backdrop-blur">
           <p className="text-sm text-slate-400">
             Welcome back, <span className="font-semibold text-white">{user?.name}</span>
           </p>
@@ -136,7 +130,7 @@ export default function DashboardLayout() {
         </div>
 
         {/* Mobile Top Bar */}
-        <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/5 backdrop-blur-md">
+        <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0F172A]/80 backdrop-blur">
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-white p-1"
@@ -151,14 +145,12 @@ export default function DashboardLayout() {
 
         <main className="flex-1">
           <div className="px-6 lg:px-10 py-8 lg:py-10">
-            <div className="bg-white/5 border border-white/10 rounded-2xl shadow-2xl p-6 lg:p-8">
-              <Outlet />
-            </div>
+            <Outlet />
           </div>
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-white/10 bg-white/5 backdrop-blur-md py-6">
+        <footer className="border-t border-white/10 bg-[#0F172A]/80 backdrop-blur py-6">
           <div className="px-6 lg:px-10 text-center text-sm text-slate-400">
             LeadSync CRM © 2025 •{" "}
             <a href="#" className="text-cyan-400 hover:text-cyan-300">
