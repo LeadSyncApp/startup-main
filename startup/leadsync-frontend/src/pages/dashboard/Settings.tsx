@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import { api } from "../../lib/api";
-import { PageTransition } from "../../components/ui/Animations";
+import { PageTransition } from "../components/PageTransition";
+
+// Fixed display-only webhook URL constant
+const DISPLAY_WEBHOOK_URL = "https://your-api-domain.com/api/instagram/webhook";
 import { SavedRepliesManager } from "../../components/conversations/SavedReplies";
 import { BotKnowledgeManager } from "../../components/settings/BotKnowledgeManager";
 import { AutomationManager } from "../../components/settings/AutomationManager";
@@ -744,7 +747,7 @@ export default function Settings() {
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Step 1 — Register Webhook in Meta Developer Console</p>
               <p className="text-xs text-slate-500">Callback URL (paste this in your Meta App → Webhooks):</p>
               <code className="block text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 font-mono text-indigo-700 break-all select-all">
-                {igWebhookUrl || "https://your-api-domain.com/api/instagram/webhook"}
+                {DISPLAY_WEBHOOK_URL}
               </code>
               <p className="text-xs text-slate-400 mt-1">Verify Token: use <span className="font-mono bg-slate-100 px-1 rounded">{igVerifyToken || "leadsync_ig_verify_2026"}</span> in Meta App verification.</p>
             </div>
@@ -797,7 +800,7 @@ export default function Settings() {
             <div className="bg-slate-50 rounded-xl px-4 py-3 border border-slate-100">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Webhook URL (for Meta App)</p>
               <code className="text-xs font-mono text-indigo-700 break-all select-all">
-                {igWebhookUrl || "https://your-api-domain.com/api/instagram/webhook"}
+                {DISPLAY_WEBHOOK_URL}
               </code>
             </div>
           </div>
