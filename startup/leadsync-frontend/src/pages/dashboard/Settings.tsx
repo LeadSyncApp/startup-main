@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import { api } from "../../lib/api";
-import { PageTransition } from "../components/PageTransition";
+import { PageTransition } from "../../components/ui/Animations";
 
 // Fixed display-only webhook URL constant
 const DISPLAY_WEBHOOK_URL = "https://your-api-domain.com/api/instagram/webhook";
@@ -96,7 +96,6 @@ export default function Settings() {
   const [instagramPageId, setInstagramPageId] = useState("");
   const [igPageIdInput, setIgPageIdInput] = useState("");
   const [igTokenInput, setIgTokenInput] = useState("");
-  const [igWebhookUrl, setIgWebhookUrl] = useState("");
   const [igVerifyToken, setIgVerifyToken] = useState("");
 
   const [onboardingMode, setOnboardingMode] = useState<'PASTE' | 'MANUAL' | 'FILE'>('PASTE');
@@ -141,7 +140,6 @@ export default function Settings() {
         setTelegramUsername(statusData.telegram?.username || null);
         setInstagramConnected(statusData.instagram?.connected || false);
         setInstagramPageId(statusData.instagram?.pageId || "");
-        setIgWebhookUrl(statusData.instagram?.webhookUrl || "https://your-api-domain.com/api/instagram/webhook");
         setIgVerifyToken(statusData.instagram?.verifyToken || "");
 
         // Config
