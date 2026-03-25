@@ -178,7 +178,9 @@ _Generated automatically. Do not edit manually._
   - tsconfig.json
   - tsconfig.node.json
   - tsconfig.tsbuildinfo
+  - vercel.json
   - vite.config.ts
+
 
 
 ## Important Rules

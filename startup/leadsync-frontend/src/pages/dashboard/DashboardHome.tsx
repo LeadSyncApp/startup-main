@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Users,
   MessageSquare,
@@ -22,7 +22,8 @@ import { DashboardSkeleton } from "../../components/ui/Skeleton";
 import { StaggerContainer, StaggerItem } from "../../components/ui/Animations";
 
 export default function DashboardHome() {
-  const { token, companyId, company, isOwner, isAdmin } = useAuth();
+  const { token, companyId, isOwner, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
 
   // Data State
@@ -73,23 +74,22 @@ export default function DashboardHome() {
   const aov = analytics?.aggregates?.aov || 0;
 
   return (
-    <StaggerContainer className="space-y-8 pb-10">
-      {/* HEADER */}
+    <StaggerContainer className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-8">
+      {/* TOP ACTION BAR */}
       <StaggerItem>
-        <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-              Dashboard
-            </h1>
-            <p className="text-slate-500">
-              Overview for <span className="font-semibold text-slate-700">{company?.name || "Your Company"}</span>
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Link to="/dashboard/orders" className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition shadow-sm active:scale-95">
-              Manage Orders
-              <ArrowUpRight className="w-4 h-4" />
-            </Link>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-semibold text-white">Dashboard</h1>
+
+          <div className="flex gap-3">
+            <button onClick={() => navigate('/dashboard/orders')} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
+              Create Order
+            </button>
+            <button onClick={() => navigate('/dashboard/leads')} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg">
+              Add Lead
+            </button>
+            <button onClick={() => navigate('/dashboard/conversations')} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg">
+              Conversations
+            </button>
           </div>
         </div>
       </StaggerItem>
@@ -101,7 +101,7 @@ export default function DashboardHome() {
             {alertKpis.urgentLeads > 0 && (
               <Link
                 to="/dashboard/leads"
-                className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-bold hover:bg-red-100 transition active:scale-95 group"
+                className="flex items-center gap-2 px-3 py-2 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 text-xs font-bold hover:bg-red-500/30 transition active:scale-95 group"
               >
                 <AlertTriangle size={13} className="animate-pulse" />
                 {alertKpis.urgentLeads} Urgent Lead{alertKpis.urgentLeads !== 1 ? "s" : ""}
@@ -111,7 +111,7 @@ export default function DashboardHome() {
             {alertKpis.pendingOrders > 0 && (
               <Link
                 to="/dashboard/orders"
-                className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-bold hover:bg-amber-100 transition active:scale-95 group"
+                className="flex items-center gap-2 px-3 py-2 bg-amber-500/20 border border-amber-500/30 rounded-xl text-amber-400 text-xs font-bold hover:bg-amber-500/30 transition active:scale-95 group"
               >
                 <ShoppingCart size={13} />
                 {alertKpis.pendingOrders} Order{alertKpis.pendingOrders !== 1 ? "s" : ""} Awaiting Approval
@@ -121,7 +121,7 @@ export default function DashboardHome() {
             {alertKpis.botConversations > 0 && (
               <Link
                 to="/dashboard/conversations"
-                className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-700 text-xs font-bold hover:bg-indigo-100 transition active:scale-95 group"
+                className="flex items-center gap-2 px-3 py-2 bg-indigo-500/20 border border-indigo-500/30 rounded-xl text-indigo-400 text-xs font-bold hover:bg-indigo-500/30 transition active:scale-95 group"
               >
                 <Zap size={13} />
                 {alertKpis.botConversations} Active Bot Chat{alertKpis.botConversations !== 1 ? "s" : ""}
@@ -135,10 +135,10 @@ export default function DashboardHome() {
       {/* KPI GRID (Top Row) */}
       <StaggerItem>
         <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Total Revenue (30d)" value={`₹${revenue30d.toLocaleString()}`} icon={DollarSign} color="text-green-600 bg-green-50" trend="+12%" />
-          <StatCard label="Orders (30d)" value={orders30d} icon={ShoppingCart} color="text-blue-600 bg-blue-50" />
-          <StatCard label="Avg Order Value" value={`₹${aov}`} icon={TrendingUp} color="text-indigo-600 bg-indigo-50" />
-          <StatCard label="Total Leads" value={kpis.leads} icon={Users} color="text-orange-600 bg-orange-50" />
+          <StatCard label="Revenue" value={`₹${revenue30d.toLocaleString()}`} icon={DollarSign} iconBg="bg-green-500/20 text-green-400" trend="+12%" />
+          <StatCard label="Orders" value={orders30d} icon={ShoppingCart} iconBg="bg-blue-500/20 text-blue-400" />
+          <StatCard label="AOV" value={`₹${aov}`} icon={TrendingUp} iconBg="bg-purple-500/20 text-purple-400" />
+          <StatCard label="Leads" value={kpis.leads} icon={Users} iconBg="bg-orange-500/20 text-orange-400" />
         </div>
       </StaggerItem>
 
@@ -146,8 +146,10 @@ export default function DashboardHome() {
       <StaggerItem>
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main Chart: Revenue */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-[400px]">
-          <h3 className="text-lg font-bold text-slate-800 mb-6">Revenue Trend (14 Days)</h3>
+          <div className="lg:col-span-2 bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl h-[400px]">
+          <h2 className="text-lg font-semibold text-white mb-4">
+            Revenue Trend (14 Days)
+          </h2>
           {analytics?.revenueChart && analytics.revenueChart.length > 0 ? (
             <ResponsiveContainer width="100%" height="85%">
               <AreaChart data={analytics.revenueChart}>
@@ -173,8 +175,8 @@ export default function DashboardHome() {
           </div>
 
           {/* Side Panel: Top Products */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
               <Package className="w-5 h-5 text-indigo-500" />
               Top Products
             </h3>
@@ -182,16 +184,24 @@ export default function DashboardHome() {
               {analytics?.topProducts?.map((prod: any, idx: number) => (
                 <div key={idx} className="flex items-center justify-between pb-3 border-b border-slate-50 last:border-0">
                   <div className="flex items-center gap-3">
-                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-700 text-slate-400 text-xs font-bold">
                       {idx + 1}
                     </span>
-                    <span className="font-medium text-slate-700 truncate max-w-[150px]">{prod.name}</span>
+                    <span className="font-medium text-white truncate max-w-[150px]">{prod.name}</span>
                   </div>
-                  <span className="text-sm font-semibold text-slate-900">{prod.count} sold</span>
+                  <span className="text-sm font-semibold text-white">{prod.count} sold</span>
                 </div>
               ))}
               {(!analytics?.topProducts || analytics.topProducts.length === 0) && (
-                <div className="text-center py-10 text-slate-400 text-sm">No sales data yet.</div>
+                <div className="flex flex-col items-center justify-center py-10 text-center text-slate-400">
+                  <p className="mb-3">No sales yet</p>
+                  <button
+                    onClick={() => navigate('/orders')}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
+                  >
+                    Create First Order
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -202,8 +212,8 @@ export default function DashboardHome() {
       <StaggerItem>
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Top Agents */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
               <Award className="w-5 h-5 text-amber-500" />
               Top Performing Agents
             </h3>
@@ -211,14 +221,14 @@ export default function DashboardHome() {
               {analytics?.topAgents?.map((agent: any, idx: number) => (
                 <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
+                    <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs">
                       {agent.name.charAt(0)}
                     </div>
-                    <span className="font-semibold text-slate-700">{agent.name}</span>
+                    <span className="font-semibold text-white">{agent.name}</span>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-slate-900">{agent.count} Orders</p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wide">Processed</p>
+                    <p className="text-sm font-bold text-white">{agent.count} Orders</p>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide">Processed</p>
                   </div>
                 </div>
               ))}
@@ -230,39 +240,39 @@ export default function DashboardHome() {
 
           {/* Quick Links */}
           <div className="grid sm:grid-cols-2 gap-4">
-            <Link to="/dashboard/leads" className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all group active:scale-[0.98]">
+            <Link to="/dashboard/leads" className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl hover:shadow-md hover:border-blue-200 transition-all group active:scale-[0.98]">
               <Users className="w-8 h-8 text-blue-500 mb-3 group-hover:scale-110 transition-transform" />
-              <h4 className="font-bold text-slate-900">Leads CRM</h4>
-              <p className="text-xs text-slate-500 mt-1">Manage customer pipeline.</p>
+              <h4 className="font-bold text-white">Leads CRM</h4>
+              <p className="text-xs text-slate-400 mt-1">Manage customer pipeline.</p>
             </Link>
-            <Link to="/dashboard/conversations" className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-green-200 transition-all group active:scale-[0.98]">
+            <Link to="/dashboard/conversations" className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl hover:shadow-md hover:border-green-200 transition-all group active:scale-[0.98]">
               <MessageSquare className="w-8 h-8 text-green-500 mb-3 group-hover:scale-110 transition-transform" />
-              <h4 className="font-bold text-slate-900">Inbox</h4>
-              <p className="text-xs text-slate-500 mt-1">Chat with customers.</p>
+              <h4 className="font-bold text-white">Inbox</h4>
+              <p className="text-xs text-slate-400 mt-1">Chat with customers.</p>
             </Link>
             {(isOwner || isAdmin) && (
-              <Link to="/dashboard/broadcasts" className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-amber-200 transition-all group active:scale-[0.98]">
+              <Link to="/dashboard/broadcasts" className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl hover:shadow-md hover:border-amber-200 transition-all group active:scale-[0.98]">
                 <Megaphone className="w-8 h-8 text-amber-500 mb-3 group-hover:scale-110 transition-transform" />
-                <h4 className="font-bold text-slate-900">Broadcasts</h4>
-                <p className="text-xs text-slate-500 mt-1">Send bulk messages to segments.</p>
+                <h4 className="font-bold text-white">Broadcasts</h4>
+                <p className="text-xs text-slate-400 mt-1">Send bulk messages to segments.</p>
               </Link>
             )}
             {(isOwner || isAdmin) && (
-              <Link to="/dashboard/reports" className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-purple-200 transition-all group active:scale-[0.98]">
+              <Link to="/dashboard/reports" className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl hover:shadow-md hover:border-purple-200 transition-all group active:scale-[0.98]">
                 <FileText className="w-8 h-8 text-purple-500 mb-3 group-hover:scale-110 transition-transform" />
-                <h4 className="font-bold text-slate-900">Reports</h4>
-                <p className="text-xs text-slate-500 mt-1">Export orders & leads data.</p>
+                <h4 className="font-bold text-white">Reports</h4>
+                <p className="text-xs text-slate-400 mt-1">Export orders & leads data.</p>
               </Link>
             )}
-            <Link to="/dashboard/orders" className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-purple-200 transition-all group sm:col-span-2 active:scale-[0.98]">
+            <Link to="/dashboard/orders" className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl hover:shadow-md hover:border-purple-200 transition-all group sm:col-span-2 active:scale-[0.98]">
               <div className="flex items-center justify-between">
                 <div>
                   <ShoppingCart className="w-8 h-8 text-purple-500 mb-3 group-hover:scale-110 transition-transform" />
-                  <h4 className="font-bold text-slate-900">Live Operations Center</h4>
-                  <p className="text-xs text-slate-500 mt-1">Manage active orders and dispatch.</p>
+                  <h4 className="font-bold text-white">Live Operations Center</h4>
+                  <p className="text-xs text-slate-400 mt-1">Manage active orders and dispatch.</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-2xl font-bold text-slate-900">{kpis.orders}</span>
+                  <span className="text-2xl font-bold text-white">{kpis.orders}</span>
                   <p className="text-xs text-slate-400">Total Orders</p>
                 </div>
               </div>
@@ -274,14 +284,14 @@ export default function DashboardHome() {
   );
 }
 
-function StatCard({ label, value, icon: Icon, color, trend }: any) {
+function StatCard({ label, value, icon: Icon, iconBg, trend }: any) {
   return (
     <motion.div
-      whileHover={{ y: -2 }}
-      className="bg-white border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all"
+      whileHover={{ scale: 1.02 }}
+      className="bg-white/5 backdrop-blur-lg border border-white/10 shadow-xl rounded-2xl p-6 hover:scale-[1.02] transition-all duration-200"
     >
       <div className="flex items-center justify-between mb-4">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconBg}`}>
           <Icon className="w-5 h-5" />
         </div>
         {trend && (
@@ -291,8 +301,8 @@ function StatCard({ label, value, icon: Icon, color, trend }: any) {
         )}
       </div>
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
-        <h2 className="text-2xl font-bold text-slate-900">{value}</h2>
+        <p className="text-slate-400 text-sm">{label}</p>
+        <h2 className="text-2xl font-bold text-white">{value}</h2>
       </div>
     </motion.div>
   );
