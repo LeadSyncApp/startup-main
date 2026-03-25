@@ -234,6 +234,13 @@ router.post("/forgot-password", async (req, res) => {
     } catch (emailError) {
       console.error('❌ Forgot password - Email send failed:', emailError);
       
+      // Check if this is a provider restriction error
+      if (emailError instanceof Error && (emailError as any).code === 'PROVIDER_RESTRICTION') {
+        return res.status(422).json({ 
+          message: "Password reset email is currently limited to verified test recipients until the sender domain is verified." 
+        });
+      }
+      
       // Clear the reset token since email failed
       await prisma.user.update({
         where: { id: user.id },
