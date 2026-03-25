@@ -46,6 +46,8 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/reset-password" element={<Login />} />
+        <Route path="/order-tracking" element={<OrderTracking />} />
+        <Route path="/track/:id" element={<OrderTracking />} />
       </Route>
 
       {/* ================= DASHBOARD ================= */}
