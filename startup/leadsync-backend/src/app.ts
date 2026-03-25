@@ -50,24 +50,34 @@ const generalLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// CORS: use CORS_ORIGIN env var in production, default to * for local dev
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(",").map(o => o.trim())
-  : null;
+// CORS configuration
+const envOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  ...envOrigins,
+];
 
 app.use(
   cors({
-    origin: allowedOrigins || "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-    credentials: true, // Allow cookies if needed
-    preflightContinue: false,
-    optionsSuccessStatus: 204
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
-
-// Handle preflight requests explicitly
-app.options('*', cors());
 
 app.use(express.json());
 
