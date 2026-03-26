@@ -24,52 +24,6 @@ interface StructuredMenu {
   categories: Category[];
 }
 
-const PRESETS = {
-  "Organic Cafe": {
-    menu: {
-      categories: [
-        { name: "Coffee", items: [{ name: "Cold Brew Coffee", price: 250 }, { name: "Oat Milk Latte", price: 320 }] },
-        { name: "Bakery", items: [{ name: "Cheddar Croissant", price: 180 }, { name: "Avocado Toast", price: 450 }] }
-      ]
-    },
-    knowledge: "Our Cold Brew is steeped for 24 hours for a smooth, low-acid finish. Croissants are baked fresh daily at 7 AM. We use only organic, locally sourced ingredients.",
-    policies: "delivery_area: within 5km of Indiranagar\ndelivery_time: 30-45 mins\nreturns: No returns on food items.\nask_for_location: true",
-    welcome: "Welcome to our Organic Cafe! ☕ Freshly brewed and ready for you."
-  },
-  "Clothing Store": {
-    menu: {
-      categories: [
-        { name: "Summer Wear", items: [{ name: "Linen Shirt", price: 1200 }, { name: "Cotton Shorts", price: 800 }] },
-        { name: "Accessories", items: [{ name: "Canvas Tote Bag", price: 350 }, { name: "Silk Scarf", price: 950 }] }
-      ]
-    },
-    knowledge: "All shirts are pre-shrunk and made from 100% organic cotton. Linen is sourced from Belgium. Sizes range from S to XXL.",
-    policies: "delivery_area: Pan-India via BlueDart\nreturns: 30-day easy returns if tags are intact.\nshipping_fee: Free on orders above 2000 INR.\nask_for_location: false",
-    welcome: "Welcome to our Sustainable Clothing Store! 🌿 Wear the change."
-  },
-  "Bakery": {
-    menu: {
-      categories: [
-        { name: "Signature Cakes", items: [{ name: "Belgian Chocolate Cake", price: 1500 }, { name: "Red Velvet Bliss", price: 1200 }] },
-        { name: "Daily Treats", items: [{ name: "Blueberry Muffin", price: 120 }, { name: "Customized Cupcake", price: 80 }] }
-      ]
-    },
-    knowledge: "We take custom cake orders with 24-hour notice. All bakes are eggless by default unless specified. We use high-quality imported cocoa.",
-    policies: "delivery_area: within 10km radius\ndelivery_time: Slots at 10 AM, 2 PM, 6 PM\nconfirmation_required: true\nask_for_location: true",
-    welcome: "Welcome to The Sourdough Studio! 🥐 Sweet treats for everyday joy."
-  },
-  "Salon": {
-    menu: {
-      categories: [
-        { name: "Hair Care", items: [{ name: "Professional Haircut", price: 600 }, { name: "Deep Conditioning Spa", price: 1500 }] },
-        { name: "Skin Care", items: [{ name: "Organic Glow Facial", price: 2200 }, { name: "Fruit Peel", price: 1800 }] }
-      ]
-    },
-    knowledge: "Our stylists have 5+ years of experience. We use only paraben-free, vegan products. Appointments are mandatory for weekends.",
-    policies: "booking: Mandatory on weekends via link.\ncancellation: 4 hours notice required.\nmembership: 10% off for silver members.\nask_for_location: false",
-    welcome: "Welcome to Aura Wellness Salon! ✨ Glow like never before."
-  }
-};
 
 export default function Settings() {
   const { token, user } = useAuth();
@@ -106,21 +60,6 @@ export default function Settings() {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [showAllPresets, setShowAllPresets] = useState(false);
-
-  const handleLoadPreset = (presetName: keyof typeof PRESETS) => {
-    const confirm = window.confirm(`This will overwrite menu, learned knowledge, and policies for your shop (Tenant ID: ${user?.companyId || 'current'}) only. This only affects your shop data.\n\nContinue?`);
-    if (!confirm) return;
-
-    const p = PRESETS[presetName];
-    setBotBusinessType(presetName);
-    setGeneratedMenu(p.menu as any);
-    setBotKnowledgeBase(p.knowledge);
-    setBotPolicies(p.policies);
-    setBotWelcomeMessage(p.welcome);
-    setBotLearnedContext("Click 'Train AI' to process this preset...");
-    toast.success(`Loaded demo data for ${presetName}! Now save and train.`);
-  };
 
   /* ===============================
      LOAD DATA
@@ -544,60 +483,6 @@ export default function Settings() {
 
   return (
     <PageTransition className="space-y-8 max-w-4xl pb-12">
-
-      {/* 🧪 DEMO DATA SELECTOR */}
-      <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-indigo-600 text-white h-10 w-10 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
-              <span className="font-bold text-xl">🧪</span>
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-indigo-900">Load Demo Data (for your business type)</h2>
-              <p className="text-sm text-indigo-600/70 font-medium">Quickly populate your shop with realistic demo data for testing.</p>
-            </div>
-          </div>
-
-          {(user?.role === "ADMIN" || user?.role === "OWNER") && (
-            <button
-              onClick={() => setShowAllPresets(!showAllPresets)}
-              className="text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-600 transition-colors"
-            >
-              {showAllPresets ? "Hide Other Presets" : "Switch business type / view other presets"}
-            </button>
-          )}
-        </div>
-
-        {!botBusinessType && !showAllPresets ? (
-          <div className="bg-white/50 p-4 rounded-xl border border-indigo-100 text-center">
-            <p className="text-sm text-indigo-900 font-bold mb-3 uppercase tracking-wide">Select your business type in "Merchant Profile" first</p>
-            <p className="text-xs text-indigo-600/60">Or use the advanced link above to see all demographics.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {Object.keys(PRESETS)
-              .filter(name => showAllPresets || name === botBusinessType)
-              .map((name) => (
-                <button
-                  key={name}
-                  onClick={() => handleLoadPreset(name as keyof typeof PRESETS)}
-                  className={`
-                  px-4 py-3 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-95 border
-                  ${name === botBusinessType
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-indigo-200"
-                      : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"}
-                `}
-                >
-                  {name === botBusinessType ? `✅ Load ${name}` : name}
-                </button>
-              ))}
-          </div>
-        )}
-
-        <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest text-center">
-          ⚠️ This only affects your shop data.
-        </p>
-      </div>
 
       {/* PROFILE */}
       <div className="bg-white p-6 rounded-2xl shadow border">
