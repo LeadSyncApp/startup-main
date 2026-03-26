@@ -86,7 +86,7 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
   ];
 
   return (
-    <aside className="h-full w-64 bg-slate-900/50 backdrop-blur-lg border-r border-white/10 shadow-lg flex flex-col">
+    <aside className="h-full w-64 bg-[#0F172A] border-r border-white/10 shadow-lg flex flex-col">
 
       {/* Logo Section */}
       <div className="px-6 py-6 border-b border-white/10 flex items-center justify-between">
@@ -125,9 +125,9 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
               end={path === "/dashboard"}
               onClick={closeSidebar}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${isActive
-                  ? "bg-indigo-600/20 text-indigo-400"
-                  : "text-slate-400 hover:bg-white/5 hover:text-white"
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${isActive
+                  ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                  : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`
               }
             >
