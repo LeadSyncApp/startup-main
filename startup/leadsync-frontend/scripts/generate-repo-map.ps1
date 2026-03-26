@@ -1,6 +1,6 @@
 param(
     [string]$Root = ".",
-    [int]$MaxDepth = 3
+    [Nullable[int]]$MaxDepth = $null
 )
 
 $ExcludeDirs = @(
@@ -32,13 +32,9 @@ function Get-TreeLines {
         [string]$Indent
     )
 
-    if ($Depth -gt $MaxDepth) {
-        return @()
-    }
-
     $Lines = @()
-    $Items = Get-ChildItem -LiteralPath $Path -Force |
-        Sort-Object @{ Expression = { $_.PSIsContainer }; Descending = $true }, Name
+    $Items = Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue |
+        Sort-Object @{ Expression = { -not $_.PSIsContainer } }, Name
 
     foreach ($Item in $Items) {
         if ($Item.PSIsContainer) {
@@ -47,7 +43,9 @@ function Get-TreeLines {
             }
 
             $Lines += "$Indent- $($Item.Name)/"
-            $Lines += Get-TreeLines -Path $Item.FullName -Depth ($Depth + 1) -Indent ($Indent + "  ")
+            if ($null -eq $MaxDepth -or $Depth -lt $MaxDepth) {
+                $Lines += Get-TreeLines -Path $Item.FullName -Depth ($Depth + 1) -Indent ($Indent + "  ")
+            }
         }
         else {
             if (Test-ExcludedFile -Name $Item.Name) {

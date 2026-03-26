@@ -13,11 +13,34 @@ _Generated automatically. Do not edit manually._
       - react.svg
     - components/
       - conversations/
+        - ChatPanel.tsx
+        - ConversationTags.tsx
+        - NotesPanel.tsx
+        - SavedReplies.tsx
       - dashboard/
+        - SectionSummary.tsx
       - layout/
+        - DashboardLayout.tsx
+        - MarketingNav.tsx
+        - NotificationBell.tsx
+        - Sidebar.tsx
       - leads/
+        - LeadDetailModal.tsx
+        - LeadDrawer.tsx
+        - LeadsKanban.tsx
+        - LeadsTable.tsx
       - settings/
+        - AutomationManager.tsx
+        - BotKnowledgeManager.tsx
       - ui/
+        - Animations.tsx
+        - EmptyState.tsx
+        - GlobalSearch.tsx
+        - Modal.tsx
+        - Skeleton.tsx
+        - Spinner.tsx
+        - Toast.tsx
+        - ToastContainer.tsx
       - ErrorBoundary.tsx
       - ProtectedRoute.tsx
       - PublicRoute.tsx
@@ -28,6 +51,15 @@ _Generated automatically. Do not edit manually._
       - api.ts
     - pages/
       - dashboard/
+        - Broadcasts.tsx
+        - Conversations.tsx
+        - DashboardHome.tsx
+        - Leads.tsx
+        - Orders.tsx
+        - Reports.tsx
+        - Revenue.tsx
+        - Settings.tsx
+        - UserManagement.tsx
       - Home.tsx
       - Login.tsx
       - OrderTracking.tsx

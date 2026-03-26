@@ -6,20 +6,35 @@ _Generated automatically. Do not edit manually._
   - prisma/
     - migrations/
       - 20260208094647_init/
+        - migration.sql
       - 20260208182720_add_telegram_webhook_secret_and_fix_relations/
+        - migration.sql
       - 20260208183718_add_telegram_webhook_secret/
+        - migration.sql
       - 20260208202707_add_conversation_mode/
+        - migration.sql
       - 20260208211639_fix_company_conversation_relation/
+        - migration.sql
       - 20260208212439_finalize_conversation_schema/
+        - migration.sql
       - 20260211090420_add_orders_model/
+        - migration.sql
       - 20260212165914_add_telegram_connected/
+        - migration.sql
       - 20260213120325_add_unique_and_cascade/
+        - migration.sql
       - 20260214084537_add_bot_config/
+        - migration.sql
       - 20260214095533_add_structured_menu/
+        - migration.sql
       - 20260215094423_add_admin_and_agent_performance/
+        - migration.sql
       - 20260215104448_add_order_approval_flow/
+        - migration.sql
       - 20260215153038_add_is_active_to_user/
+        - migration.sql
       - 20260323095146_add_staff_id_to_user/
+        - migration.sql
       - 20240219_enable_rls.sql
       - migration_lock.toml
     - schema.prisma
@@ -44,7 +59,10 @@ _Generated automatically. Do not edit manually._
       - auth.middleware.ts
     - routes/
       - leads/
+        - leads.routes.ts
       - telegram/
+        - telegram.controller.ts
+        - telegram.routes.ts
       - analytics.routes.ts
       - auth.routes.ts
       - automation.routes.ts
