@@ -11,6 +11,8 @@ interface LeadsTableProps {
   onSelect?: (id: string) => void;
   onSelectAll?: () => void;
   allSelected?: boolean;
+  // 🆕 User context for proper permission checks
+  currentUser?: { id: string; role: string };
 }
 
 const PriorityBadge = ({ priority }: { priority: string }) => {
@@ -64,7 +66,7 @@ const PendingOrderBadge = ({ state, claimedBy }: { state: string; claimedBy?: st
   return null;
 };
 
-export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingOrder, selectedIds, onSelect, onSelectAll, allSelected }: LeadsTableProps) {
+export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingOrder, selectedIds, onSelect, onSelectAll, allSelected, currentUser }: LeadsTableProps) {
   const hasSelect = !!onSelect;
   return (
     <>
@@ -196,10 +198,15 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                     {lead.hasPendingOrderApproval && lead.pendingOrderState === "PENDING_APPROVAL" && (
                       <button
                         onClick={(e) => onClaimPendingOrder?.(lead.id, e)}
-                        className="bg-amber-600 text-white text-xs px-3 py-1.5 rounded-md shadow-sm hover:bg-amber-700 transition font-medium whitespace-nowrap ml-auto active:scale-95 flex items-center gap-1"
+                        disabled={!lead.canCurrentUserClaim && currentUser?.role !== "ADMIN" && currentUser?.role !== "OWNER"}
+                        className={`text-xs px-3 py-1.5 rounded-md shadow-sm transition font-medium whitespace-nowrap ml-auto active:scale-95 flex items-center gap-1 ${
+                          lead.canCurrentUserClaim || currentUser?.role === "ADMIN" || currentUser?.role === "OWNER"
+                            ? "bg-amber-600 text-white hover:bg-amber-700"
+                            : "bg-slate-300 text-slate-500 cursor-not-allowed"
+                        }`}
                       >
                         <Package size={12} />
-                        Claim Order
+                        {lead.pendingOrderClaimedById ? "View Order" : "Claim Order"}
                       </button>
                     )}
                     {!lead.agentAssigned && lead.conversationId && !lead.hasPendingOrderApproval && (
@@ -286,10 +293,15 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                 {lead.hasPendingOrderApproval && lead.pendingOrderState === "PENDING_APPROVAL" && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onClaimPendingOrder?.(lead.id, e); }}
-                    className="bg-amber-600 text-white text-xs px-3 py-1.5 rounded-md shadow-sm font-medium active:scale-95 flex items-center gap-1"
+                    disabled={!lead.canCurrentUserClaim && currentUser?.role !== "ADMIN" && currentUser?.role !== "OWNER"}
+                    className={`text-xs px-3 py-1.5 rounded-md shadow-sm font-medium active:scale-95 flex items-center gap-1 ${
+                      lead.canCurrentUserClaim || currentUser?.role === "ADMIN" || currentUser?.role === "OWNER"
+                        ? "bg-amber-600 text-white"
+                        : "bg-slate-300 text-slate-500 cursor-not-allowed"
+                    }`}
                   >
                     <Package size={12} />
-                    Claim Order
+                    {lead.pendingOrderClaimedById ? "View Order" : "Claim Order"}
                   </button>
                 )}
                 {!lead.agentAssigned && lead.conversationId && !lead.hasPendingOrderApproval && (

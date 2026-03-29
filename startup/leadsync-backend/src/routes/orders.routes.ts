@@ -66,7 +66,12 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         pendingOrderState: "PENDING_APPROVAL",
         pendingOrderId: order.id,
         pendingOrderSummary: summary,
-        pendingOrderAmount: amount ?? 0
+        pendingOrderAmount: amount ?? 0,
+        // 🆕 If conversation has assigned agent, automatically assign pending order to them
+        ...(conversation.assignedToId ? {
+          pendingOrderClaimedById: conversation.assignedToId,
+          pendingOrderClaimedAt: new Date()
+        } : {})
       }
     });
 
@@ -81,7 +86,12 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       pendingOrderState: "PENDING_APPROVAL",
       pendingOrderId: order.id,
       pendingOrderSummary: summary,
-      pendingOrderAmount: amount ?? 0
+      pendingOrderAmount: amount ?? 0,
+      // 🆕 Include assignment info if conversation was already assigned
+      ...(conversation.assignedToId ? {
+        pendingOrderClaimedById: conversation.assignedToId,
+        agentAssigned: "Agent" // Will be updated with actual agent name in frontend
+      } : {})
     });
 
     return res.json(order);

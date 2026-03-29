@@ -47,6 +47,9 @@ interface Conversation {
   lastMessage: string;
   intent?: string;
   updatedAt: string;
+  // 🆕 Assignment information from backend
+  assignedTo?: { id: string; name: string } | null;
+  status?: string;
 }
 
 export default function Conversations() {
@@ -214,6 +217,22 @@ export default function Conversations() {
     const onConversationAssigned = (data: { conversationId: string }) => {
       if (selectedRef.current?.id === data.conversationId) fetchMessages(selectedRef.current);
     };
+    // 🆕 Handle conversation removal (when assigned to another agent)
+    const onConversationRemoved = (data: { conversationId: string }) => {
+      setConversations(prev => prev.filter(c => c.id !== data.conversationId));
+      if (selectedRef.current?.id === data.conversationId) {
+        setSelected(null);
+        setMessages([]);
+      }
+    };
+    // 🆕 Handle conversation addition (when unassigned or assigned to me)
+    const onConversationAdded = (data: any) => {
+      setConversations(prev => {
+        // Remove if exists, then add to beginning
+        const filtered = prev.filter(c => c.id !== data.id);
+        return [data, ...filtered];
+      });
+    };
 
     // 🆕 LISTEN FOR GHOST ORDERS
     const onOrderDetected = (order: any) => {
@@ -232,6 +251,8 @@ export default function Conversations() {
     socket.on("mode_changed", onModeChanged);
     socket.on("conversation_updated", onConversationUpdated);
     socket.on("conversation_assigned", onConversationAssigned);
+    socket.on("conversation_removed", onConversationRemoved); // 🆕
+    socket.on("conversation_added", onConversationAdded); // 🆕
     socket.on("order_detected", onOrderDetected); // 🆕
     socket.on("order_updated", onOrderUpdated);   // 🆕
 
@@ -255,6 +276,8 @@ export default function Conversations() {
       socket.off("mode_changed", onModeChanged);
       socket.off("conversation_updated", onConversationUpdated);
       socket.off("conversation_assigned", onConversationAssigned);
+      socket.off("conversation_removed", onConversationRemoved); // 🆕
+      socket.off("conversation_added", onConversationAdded); // 🆕
       socket.off("order_detected", onOrderDetected);
       socket.off("order_updated", onOrderUpdated);
       socket.off("agent_typing", onAgentTyping);
@@ -584,6 +607,12 @@ export default function Conversations() {
                       {conv.intent && (
                         <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 uppercase tracking-tighter">
                           {conv.intent.replace("_", " ")}
+                        </span>
+                      )}
+                      {/* 🆕 Assignment status indicator */}
+                      {conv.assignedTo && (
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200">
+                          Assigned to {conv.assignedTo.name}
                         </span>
                       )}
                       <TagChips convId={conv.id} max={2} />

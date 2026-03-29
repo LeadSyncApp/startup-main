@@ -124,6 +124,10 @@ router.get("/", authMiddleware, async (req: AuthRequest, res) => {
         pendingOrderSummary: lead.pendingOrderSummary,
         pendingOrderAmount: lead.pendingOrderAmount,
 
+        // 🆕 Agent assignment info for pending orders
+        canCurrentUserClaim: lead.pendingOrderState === "PENDING_APPROVAL" && !lead.pendingOrderClaimedById,
+        isPendingOrderOwnedByCurrentAgent: lead.pendingOrderClaimedById === req.user?.userId,
+
         // AI Intelligence
         aiScore,
         suggestedAction,
@@ -195,7 +199,14 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
 
     // Check if already claimed
     if (lead.pendingOrderClaimedById) {
-      return res.status(409).json({ message: "Pending order already claimed" });
+      // Only allow if current user is admin/owner or the same agent
+      if (lead.pendingOrderClaimedById !== userId && !["ADMIN", "OWNER"].includes(role)) {
+        return res.status(409).json({ message: "Pending order already claimed by another agent" });
+      }
+      // If same agent, return success (idempotent)
+      if (lead.pendingOrderClaimedById === userId) {
+        return res.json(lead);
+      }
     }
 
     // Update lead with claim information

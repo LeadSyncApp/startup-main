@@ -460,6 +460,7 @@ export default function Leads() {
           onSelect={handleSelect}
           onSelectAll={handleSelectAll}
           allSelected={selectedLeads.size > 0 && selectedLeads.size === filteredLeads.length}
+          currentUser={user ? { id: user.id, role: user.role } : undefined}
         />
       )}
 
