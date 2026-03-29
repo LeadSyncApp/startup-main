@@ -503,9 +503,18 @@ router.get(
             isDeleted: false,
           },
         }).catch(() => 0),
-        // Active bot-mode conversations
+        // Active bot-mode conversations (exclude those with completed/delivered orders)
         prisma.conversation.count({
-          where: { companyId, mode: "BOT" },
+          where: { 
+            companyId, 
+            mode: "BOT",
+            orders: {
+              none: {
+                status: { in: ["DELIVERED", "COMPLETED"] as any },
+                isDeleted: false
+              }
+            }
+          },
         }).catch(() => 0),
       ]);
 
