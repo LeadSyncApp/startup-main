@@ -62,6 +62,12 @@ enum LeadStatus {
     ARCHIVED
 }
 
+enum PendingOrderState {
+    NONE
+    PENDING_APPROVAL
+    CLAIMED_FOR_APPROVAL
+}
+
 enum LeadSegment {
   NEW
   REGULAR
@@ -276,6 +282,14 @@ model Lead {
   lastActiveAt DateTime    @default(now())
   segment      LeadSegment @default(NEW)
 
+  // 🆕 Pending Order Approval Fields
+  pendingOrderState        PendingOrderState @default(NONE)
+  pendingOrderId           String?           // Reference to the order awaiting approval
+  pendingOrderClaimedById  String?           // Agent who claimed this pending order
+  pendingOrderClaimedAt    DateTime?         // When it was claimed
+  pendingOrderSummary      String?           // Brief summary for quick display
+  pendingOrderAmount       Float?            // Order amount for quick display
+
   company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversations Conversation[]
   orders        Order[]
@@ -285,6 +299,8 @@ model Lead {
   @@index([totalSpend])
   @@index([lastActiveAt])
   @@index([status]) // 🆕 Index for filtering
+  @@index([pendingOrderState]) // 🆕 Index for pending orders
+  @@index([pendingOrderClaimedById]) // 🆕 Index for claimed pending orders
 }
 
 // ... existing models ...

@@ -59,7 +59,30 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       }
     });
 
+    // 🆕 Update lead with pending order approval state
+    await (prisma.lead as any).update({
+      where: { id: conversation.leadId },
+      data: {
+        pendingOrderState: "PENDING_APPROVAL",
+        pendingOrderId: order.id,
+        pendingOrderSummary: summary,
+        pendingOrderAmount: amount ?? 0
+      }
+    });
+
     safeEmitConversationUpdate(conversation, "order_created", order);
+    
+    // 🆕 Emit lead update for pending order
+    const { emitToCompany } = await import("../lib/socket");
+    emitToCompany(companyId, "lead_updated", {
+      leadId: conversation.leadId,
+      companyId,
+      hasPendingOrderApproval: true,
+      pendingOrderState: "PENDING_APPROVAL",
+      pendingOrderId: order.id,
+      pendingOrderSummary: summary,
+      pendingOrderAmount: amount ?? 0
+    });
 
     return res.json(order);
   } catch (error) {
@@ -144,6 +167,30 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
       version
     );
 
+    // 🆕 Clear pending order state from lead when order is approved
+    if (result.order) {
+      await (prisma.lead as any).update({
+        where: { id: result.order.leadId },
+        data: {
+          pendingOrderState: "NONE",
+          pendingOrderId: null,
+          pendingOrderClaimedById: null,
+          pendingOrderClaimedAt: null,
+          pendingOrderSummary: null,
+          pendingOrderAmount: null
+        }
+      });
+      
+      // 🆕 Emit lead update for all agents
+      const { emitToCompany } = await import("../lib/socket");
+      emitToCompany(req.user!.companyId, "lead_updated", {
+        leadId: result.order.leadId,
+        companyId: req.user!.companyId,
+        hasPendingOrderApproval: false,
+        pendingOrderState: "NONE"
+      });
+    }
+
     return res.json(result.order);
   } catch (error: any) {
     if (error.message?.includes("CONCURRENCY")) {
@@ -172,6 +219,30 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
       },
       version
     );
+
+    // 🆕 Clear pending order state from lead when order is rejected
+    if (result.order) {
+      await (prisma.lead as any).update({
+        where: { id: result.order.leadId },
+        data: {
+          pendingOrderState: "NONE",
+          pendingOrderId: null,
+          pendingOrderClaimedById: null,
+          pendingOrderClaimedAt: null,
+          pendingOrderSummary: null,
+          pendingOrderAmount: null
+        }
+      });
+      
+      // 🆕 Emit lead update for all agents
+      const { emitToCompany } = await import("../lib/socket");
+      emitToCompany(req.user!.companyId, "lead_updated", {
+        leadId: result.order.leadId,
+        companyId: req.user!.companyId,
+        hasPendingOrderApproval: false,
+        pendingOrderState: "NONE"
+      });
+    }
 
     return res.json(result.order);
   } catch (error: any) {

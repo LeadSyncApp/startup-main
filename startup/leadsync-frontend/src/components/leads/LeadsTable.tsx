@@ -1,9 +1,11 @@
 import { motion } from "framer-motion";
+import { Package, Clock, UserCheck } from "lucide-react";
 
 interface LeadsTableProps {
   leads: any[];
   onRowClick?: (lead: any) => void;
   onClaim?: (conversationId: string, e: any) => void;
+  onClaimPendingOrder?: (leadId: string, e: any) => void;
   // bulk select
   selectedIds?: Set<string>;
   onSelect?: (id: string) => void;
@@ -38,7 +40,31 @@ const IntentBadge = ({ intent }: { intent: string }) => {
   );
 };
 
-export default function LeadsTable({ leads, onRowClick, onClaim, selectedIds, onSelect, onSelectAll, allSelected }: LeadsTableProps) {
+const PendingOrderBadge = ({ state, claimedBy }: { state: string; claimedBy?: string }) => {
+  if (state === "NONE") return null;
+  
+  if (state === "PENDING_APPROVAL") {
+    return (
+      <span className="px-2 py-0.5 rounded text-[10px] font-medium border bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1">
+        <Clock size={10} />
+        Pending Order
+      </span>
+    );
+  }
+  
+  if (state === "CLAIMED_FOR_APPROVAL") {
+    return (
+      <span className="px-2 py-0.5 rounded text-[10px] font-medium border bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1">
+        <UserCheck size={10} />
+        Claimed by {claimedBy || "Agent"}
+      </span>
+    );
+  }
+  
+  return null;
+};
+
+export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingOrder, selectedIds, onSelect, onSelectAll, allSelected }: LeadsTableProps) {
   const hasSelect = !!onSelect;
   return (
     <>
@@ -98,6 +124,21 @@ export default function LeadsTable({ leads, onRowClick, onClaim, selectedIds, on
                   <div className="text-xs text-slate-500 truncate max-w-[180px]">
                     {lead.lastMessage || "No messages yet"}
                   </div>
+                  {lead.hasPendingOrderApproval && (
+                    <div className="mt-1">
+                      <PendingOrderBadge state={lead.pendingOrderState} claimedBy={lead.agentAssigned} />
+                      {lead.pendingOrderAmount && (
+                        <div className="text-xs font-semibold text-amber-600 mt-1">
+                          Order: ₹{lead.pendingOrderAmount.toLocaleString()}
+                        </div>
+                      )}
+                      {lead.pendingOrderSummary && (
+                        <div className="text-xs text-slate-500 mt-0.5 truncate max-w-[180px]">
+                          {lead.pendingOrderSummary}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {lead.suggestedAction && lead.suggestedAction !== "Monitor" && (
                     <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mt-1 inline-block">
                       → {lead.suggestedAction}
@@ -152,7 +193,16 @@ export default function LeadsTable({ leads, onRowClick, onClaim, selectedIds, on
                       <span>{new Date(lead.lastActiveAt || lead.createdAt).toLocaleDateString()}</span>
                       <span>{new Date(lead.lastActiveAt || lead.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
-                    {!lead.agentAssigned && lead.conversationId && (
+                    {lead.hasPendingOrderApproval && lead.pendingOrderState === "PENDING_APPROVAL" && (
+                      <button
+                        onClick={(e) => onClaimPendingOrder?.(lead.id, e)}
+                        className="bg-amber-600 text-white text-xs px-3 py-1.5 rounded-md shadow-sm hover:bg-amber-700 transition font-medium whitespace-nowrap ml-auto active:scale-95 flex items-center gap-1"
+                      >
+                        <Package size={12} />
+                        Claim Order
+                      </button>
+                    )}
+                    {!lead.agentAssigned && lead.conversationId && !lead.hasPendingOrderApproval && (
                       <button
                         onClick={(e) => onClaim?.(lead.conversationId, e)}
                         className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-md shadow-sm hover:bg-indigo-700 transition font-medium whitespace-nowrap ml-auto active:scale-95"
@@ -205,6 +255,21 @@ export default function LeadsTable({ leads, onRowClick, onClaim, selectedIds, on
                   <p className="text-xs text-slate-500 truncate max-w-[200px]">
                     {lead.lastMessage || "No messages yet"}
                   </p>
+                  {lead.hasPendingOrderApproval && (
+                    <div className="mt-1">
+                      <PendingOrderBadge state={lead.pendingOrderState} claimedBy={lead.agentAssigned} />
+                      {lead.pendingOrderAmount && (
+                        <div className="text-xs font-semibold text-amber-600 mt-1">
+                          Order: ₹{lead.pendingOrderAmount.toLocaleString()}
+                        </div>
+                      )}
+                      {lead.pendingOrderSummary && (
+                        <div className="text-xs text-slate-500 mt-0.5 truncate max-w-[200px]">
+                          {lead.pendingOrderSummary}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <span className="bg-slate-100 px-2 py-1 rounded text-[10px] font-semibold text-slate-600 shrink-0">
@@ -218,7 +283,16 @@ export default function LeadsTable({ leads, onRowClick, onClaim, selectedIds, on
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs font-semibold text-slate-700">₹{lead.totalSpend?.toLocaleString() || "0"}</span>
-                {!lead.agentAssigned && lead.conversationId && (
+                {lead.hasPendingOrderApproval && lead.pendingOrderState === "PENDING_APPROVAL" && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onClaimPendingOrder?.(lead.id, e); }}
+                    className="bg-amber-600 text-white text-xs px-3 py-1.5 rounded-md shadow-sm font-medium active:scale-95 flex items-center gap-1"
+                  >
+                    <Package size={12} />
+                    Claim Order
+                  </button>
+                )}
+                {!lead.agentAssigned && lead.conversationId && !lead.hasPendingOrderApproval && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onClaim?.(lead.conversationId, e); }}
                     className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-md shadow-sm font-medium active:scale-95"

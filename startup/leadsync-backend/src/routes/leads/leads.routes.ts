@@ -80,7 +80,9 @@ router.get("/", authMiddleware, async (req: AuthRequest, res) => {
 
       // Suggested action — ordered from highest to lowest priority
       let suggestedAction = "Monitor";
-      if (conversation?.intent === "ORDERING") suggestedAction = "Close order";
+      if (lead.pendingOrderState === "PENDING_APPROVAL") suggestedAction = "Review order";
+      else if (lead.pendingOrderState === "CLAIMED_FOR_APPROVAL") suggestedAction = "Process order";
+      else if (conversation?.intent === "ORDERING") suggestedAction = "Close order";
       else if (lead.segment === "CHURN_RISK") suggestedAction = "Win back";
       else if (lead.segment === "VIP") suggestedAction = "Retain & reward";
       else if (daysSinceActive > 14) suggestedAction = "Re-engage";
@@ -112,6 +114,15 @@ router.get("/", authMiddleware, async (req: AuthRequest, res) => {
 
         priority,
         agentAssigned: conversation?.assignedTo?.name || null,
+
+        // 🆕 Pending Order Approval Data
+        hasPendingOrderApproval: lead.pendingOrderState !== "NONE",
+        pendingOrderState: lead.pendingOrderState,
+        pendingOrderId: lead.pendingOrderId,
+        pendingOrderClaimedById: lead.pendingOrderClaimedById,
+        pendingOrderClaimedAt: lead.pendingOrderClaimedAt,
+        pendingOrderSummary: lead.pendingOrderSummary,
+        pendingOrderAmount: lead.pendingOrderAmount,
 
         // AI Intelligence
         aiScore,
@@ -153,6 +164,106 @@ router.patch("/:id", authMiddleware, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error("Patch lead error:", error);
     res.status(500).json({ message: "Failed to update lead" });
+  }
+});
+
+/* =========================================
+   POST /api/leads/:id/claim-pending-order
+   Claim pending order approval from Leads page
+========================================= */
+router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { userId, companyId, role } = req.user!;
+    const { id } = req.params;
+
+    // Only agents can claim pending orders
+    if (!["AGENT", "ADMIN", "OWNER"].includes(role)) {
+      return res.status(403).json({ message: "Only agents can claim pending orders" });
+    }
+
+    const lead = await (prisma.lead as any).findFirst({
+      where: { 
+        id, 
+        companyId,
+        pendingOrderState: "PENDING_APPROVAL" // Must have pending approval
+      }
+    });
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found or no pending order" });
+    }
+
+    // Check if already claimed
+    if (lead.pendingOrderClaimedById) {
+      return res.status(409).json({ message: "Pending order already claimed" });
+    }
+
+    // Update lead with claim information
+    const updatedLead = await (prisma.lead as any).update({
+      where: { id },
+      data: {
+        pendingOrderState: "CLAIMED_FOR_APPROVAL",
+        pendingOrderClaimedById: userId,
+        pendingOrderClaimedAt: new Date()
+      },
+      include: {
+        conversations: {
+          select: {
+            id: true,
+            assignedToId: true,
+            assignedTo: {
+              select: { id: true, name: true }
+            }
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 1
+        }
+      }
+    });
+
+    // Also assign the conversation to this agent if not already assigned
+    const conversation = updatedLead.conversations[0];
+    if (conversation && !conversation.assignedToId) {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { assignedToId: userId }
+      });
+    }
+
+    // Create notification for the claiming agent
+    const { notificationService } = await import("../../services/notification.service");
+    await notificationService.notifyUser(
+      userId,
+      "Pending Order Claimed",
+      `You have claimed the pending order for ${lead.name || lead.contact}`,
+      "ORDER"
+    );
+
+    // Emit socket events
+    const { safeEmitConversationUpdate, emitToAgent, emitToCompany } = await import("../../lib/socket");
+    if (conversation) {
+      safeEmitConversationUpdate(conversation, "conversation_assigned", {
+        conversationId: conversation.id,
+        assignedTo: { id: userId, name: "Agent" }
+      });
+    }
+    emitToAgent(userId, "pending_order_claimed", updatedLead);
+    
+    // 🆕 Emit lead update for all agents
+    emitToCompany(companyId, "lead_updated", {
+      leadId: updatedLead.id,
+      companyId,
+      hasPendingOrderApproval: true,
+      pendingOrderState: "CLAIMED_FOR_APPROVAL",
+      pendingOrderClaimedById: userId,
+      pendingOrderClaimedAt: new Date(),
+      agentAssigned: "Agent"
+    });
+
+    res.json(updatedLead);
+  } catch (error: any) {
+    console.error("Claim pending order error:", error);
+    res.status(500).json({ message: "Failed to claim pending order" });
   }
 });
 

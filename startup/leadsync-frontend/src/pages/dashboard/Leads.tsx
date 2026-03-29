@@ -114,12 +114,36 @@ export default function Leads() {
       }).filter(Boolean) as any[]);
     };
 
+    // 🆕 Handle lead updates for pending orders
+    const onLeadUpdated = (data: any) => {
+      setLeads(prev => prev.map(lead => {
+        if (lead.id === data.leadId) {
+          return {
+            ...lead,
+            hasPendingOrderApproval: data.hasPendingOrderApproval,
+            pendingOrderState: data.pendingOrderState,
+            pendingOrderId: data.pendingOrderId,
+            pendingOrderClaimedById: data.pendingOrderClaimedById,
+            pendingOrderClaimedAt: data.pendingOrderClaimedAt,
+            pendingOrderSummary: data.pendingOrderSummary,
+            pendingOrderAmount: data.pendingOrderAmount,
+            agentAssigned: data.agentAssigned,
+            suggestedAction: data.pendingOrderState === "PENDING_APPROVAL" ? "Review order" : 
+                           data.pendingOrderState === "CLAIMED_FOR_APPROVAL" ? "Process order" : lead.suggestedAction
+          };
+        }
+        return lead;
+      }));
+    };
+
     socket.on("lead_created", onNewLead);
     socket.on("conversation_assigned", onAssigned);
+    socket.on("lead_updated", onLeadUpdated);
 
     return () => {
       socket.off("lead_created", onNewLead);
       socket.off("conversation_assigned", onAssigned);
+      socket.off("lead_updated", onLeadUpdated);
     };
   }, [socket, filter, user]);
 
@@ -138,6 +162,39 @@ export default function Leads() {
     } catch (err) {
       console.error("Failed to claim chat", err);
       alert("Could not claim chat. Someone else might have taken it.");
+    }
+  };
+
+  const handleClaimPendingOrder = async (leadId: string, e: any) => {
+    e.stopPropagation();
+    if (!user?.id) return;
+
+    try {
+      await api.post(`/leads/${leadId}/claim-pending-order`);
+      // Optimistic UI update
+      setLeads(prev => prev.map(l =>
+        l.id === leadId
+          ? { 
+              ...l, 
+              pendingOrderState: "CLAIMED_FOR_APPROVAL",
+              agentAssigned: user.name, 
+              assignedTo: { id: user.id, name: user.name },
+              suggestedAction: "Process order"
+            }
+          : l
+      ));
+      toast.success("Pending order claimed! Opening conversation...");
+      
+      // Navigate to conversation after a short delay
+      setTimeout(() => {
+        const lead = leads.find(l => l.id === leadId);
+        if (lead?.conversationId) {
+          navigate(`/dashboard/conversations?conversationId=${lead.conversationId}`);
+        }
+      }, 1000);
+    } catch (err: any) {
+      console.error("Failed to claim pending order", err);
+      toast.error(err.response?.data?.message || "Could not claim pending order. Someone else might have taken it.");
     }
   };
 
@@ -323,6 +380,7 @@ export default function Leads() {
           leads={filteredLeads}
           onRowClick={(lead: any) => setSelectedLead(lead)}
           onClaim={handleClaim}
+          onClaimPendingOrder={handleClaimPendingOrder}
           selectedIds={selectedLeads}
           onSelect={handleSelect}
           onSelectAll={handleSelectAll}
