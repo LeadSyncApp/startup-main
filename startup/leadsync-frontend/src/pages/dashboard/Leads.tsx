@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../context/SocketContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,7 +10,7 @@ import { api } from "../../lib/api";
 import { TableSkeleton } from "../../components/ui/Skeleton";
 import { EmptyLeads } from "../../components/ui/EmptyState";
 import { PageTransition } from "../../components/ui/Animations";
-import { Search, X, CheckSquare, UserCheck, AlertTriangle, LayoutGrid, List } from "lucide-react";
+import { Search, X, CheckSquare, UserCheck, AlertTriangle, LayoutGrid, List, ShoppingCart } from "lucide-react";
 import LeadsKanban from "../../components/leads/LeadsKanban";
 import toast from "react-hot-toast";
 
@@ -18,9 +18,19 @@ export default function Leads() {
   const { token, companyId, user } = useAuth();
   const navigate = useNavigate();
   const { socket } = useSocket();
+  const [searchParams] = useSearchParams();
 
   // Filter State for Shared Inbox
-  const [filter, setFilter] = useState("all"); // 'all', 'me', 'unassigned'
+  const [filter, setFilter] = useState(() => {
+    // Check for pendingApproval filter in URL
+    const urlFilter = searchParams.get('filter');
+    return urlFilter === 'pendingApproval' ? 'all' : 'all'; // Start with 'all' but will filter by pending approval
+  });
+  
+  // Pending approval filter flag
+  const [showPendingApprovalOnly, setShowPendingApprovalOnly] = useState(() => {
+    return searchParams.get('filter') === 'pendingApproval';
+  });
 
   // Drawer & search state
   const [selectedLead, setSelectedLead] = useState<any>(null);
@@ -237,12 +247,14 @@ export default function Leads() {
         lead.contact?.includes(search);
       const matchesChannel = channelFilter === "ALL" || lead.channel === channelFilter;
       const matchesPriority = priorityFilter === "ALL" || lead.priority === priorityFilter;
-      return matchesSearch && matchesChannel && matchesPriority;
+      const matchesPendingApproval = !showPendingApprovalOnly || 
+        (lead.pendingOrderState && lead.pendingOrderState !== "NONE");
+      return matchesSearch && matchesChannel && matchesPriority && matchesPendingApproval;
     });
-  }, [leads, search, channelFilter, priorityFilter]);
+  }, [leads, search, channelFilter, priorityFilter, showPendingApprovalOnly]);
 
   // Clear bulk selection when filters change
-  useEffect(() => { setSelectedLeads(new Set()); }, [filter, search, channelFilter, priorityFilter]);
+  useEffect(() => { setSelectedLeads(new Set()); }, [filter, search, channelFilter, priorityFilter, showPendingApprovalOnly]);
 
   const channels = useMemo(() => {
     const unique = [...new Set(leads.map(l => l.channel).filter(Boolean))];
@@ -254,8 +266,8 @@ export default function Leads() {
       {/* Header row */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <SectionSummary
-          title={filter === 'me' ? "My Inbox" : filter === 'unassigned' ? "Team Inbox" : "All Leads"}
-          description="Manage customer sales and support tickets."
+          title={showPendingApprovalOnly ? "Orders Awaiting Approval" : filter === 'me' ? "My Inbox" : filter === 'unassigned' ? "Team Inbox" : "All Leads"}
+          description={showPendingApprovalOnly ? "Review and claim pending order approvals from leads." : "Manage customer sales and support tickets."}
           stats={[
             { label: "Visible", value: String(filteredLeads.length) },
             ...(leads.length !== filteredLeads.length ? [{ label: "Total", value: String(leads.length) }] : []),
@@ -299,7 +311,24 @@ export default function Leads() {
 
       {/* Search + Filter bar */}
       {!loading && leads.length > 0 && (
-        <div className="flex flex-col sm:flex-row gap-3">
+        <>
+          {showPendingApprovalOnly && (
+            <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2">
+                <ShoppingCart size={16} className="text-amber-600" />
+                <span className="text-amber-800 font-medium text-sm">
+                  Showing only leads with pending order approvals
+                </span>
+              </div>
+              <button
+                onClick={() => navigate('/dashboard/leads')}
+                className="text-amber-600 hover:text-amber-800 text-xs font-medium underline"
+              >
+                Clear filter
+              </button>
+            </div>
+          )}
+          <div className="flex flex-col sm:flex-row gap-3">
           {/* Search */}
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
@@ -353,7 +382,7 @@ export default function Leads() {
               </button>
             ))}
           </div>
-        </div>
+        </>
       )}
 
       {loading ? (

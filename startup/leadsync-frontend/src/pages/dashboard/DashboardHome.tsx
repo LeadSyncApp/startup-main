@@ -110,7 +110,7 @@ export default function DashboardHome() {
             )}
             {alertKpis.pendingOrders > 0 && (
               <Link
-                to="/dashboard/orders"
+                to="/dashboard/leads?filter=pendingApproval"
                 className="flex items-center gap-2 px-3 py-2 bg-amber-500/20 border border-amber-500/30 rounded-xl text-amber-400 text-xs font-bold hover:bg-amber-500/30 transition active:scale-95 group"
               >
                 <ShoppingCart size={13} />
