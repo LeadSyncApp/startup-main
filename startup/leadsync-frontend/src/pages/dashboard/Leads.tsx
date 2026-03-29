@@ -20,15 +20,17 @@ export default function Leads() {
   const { socket } = useSocket();
   const [searchParams] = useSearchParams();
 
-  // Filter State for Shared Inbox
+  // Filter State for Shared Inbox + Pending Approval toggle
   const [filter, setFilter] = useState(() => {
     // Check for pendingApproval filter in URL
     const urlFilter = searchParams.get('filter');
-    return urlFilter === 'pendingApproval' ? 'all' : 'all'; // Start with 'all' but will filter by pending approval
+    return urlFilter === 'pendingApproval' ? 'all' : 'all';
   });
   
-  // Pending approval filter flag
-  const showPendingApprovalOnly = searchParams.get('filter') === 'pendingApproval';
+  // Pending approval filter flag - now as a separate toggle state
+  const [showPendingApprovalOnly, setShowPendingApprovalOnly] = useState(() => {
+    return searchParams.get('filter') === 'pendingApproval';
+  });
 
   // Drawer & search state
   const [selectedLead, setSelectedLead] = useState<any>(null);
@@ -251,6 +253,25 @@ export default function Leads() {
     });
   }, [leads, search, channelFilter, priorityFilter, showPendingApprovalOnly]);
 
+  // Sync URL with pending approval filter state
+  useEffect(() => {
+    const currentFilter = searchParams.get('filter');
+    const shouldShowPending = currentFilter === 'pendingApproval';
+    if (shouldShowPending !== showPendingApprovalOnly) {
+      setShowPendingApprovalOnly(shouldShowPending);
+    }
+  }, [searchParams]);
+
+  // Update URL when pending approval toggle changes
+  const togglePendingApproval = (show: boolean) => {
+    setShowPendingApprovalOnly(show);
+    if (show) {
+      navigate('/dashboard/leads?filter=pendingApproval', { replace: true });
+    } else {
+      navigate('/dashboard/leads', { replace: true });
+    }
+  };
+
   // Clear bulk selection when filters change
   useEffect(() => { setSelectedLeads(new Set()); }, [filter, search, channelFilter, priorityFilter, showPendingApprovalOnly]);
 
@@ -264,16 +285,16 @@ export default function Leads() {
       {/* Header row */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <SectionSummary
-          title={showPendingApprovalOnly ? "Orders Awaiting Approval" : filter === 'me' ? "My Inbox" : filter === 'unassigned' ? "Team Inbox" : "All Leads"}
-          description={showPendingApprovalOnly ? "Review and claim pending order approvals from leads." : "Manage customer sales and support tickets."}
+          title="Leads CRM"
+          description="Manage customer sales and support tickets."
           stats={[
             { label: "Visible", value: String(filteredLeads.length) },
             ...(leads.length !== filteredLeads.length ? [{ label: "Total", value: String(leads.length) }] : []),
           ]}
         />
 
-        {/* View toggle + Inbox Tabs */}
-        <div className="flex items-center gap-2">
+        {/* View toggle + Filter Tabs */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex bg-slate-100 p-1 rounded-lg">
             <button
               onClick={() => setViewMode("table")}
@@ -290,20 +311,46 @@ export default function Leads() {
               <LayoutGrid size={15} />
             </button>
           </div>
-          <div className="flex bg-slate-100 p-1 rounded-lg self-start">
-          {["all", "me", "unassigned"].map((f) => (
+          
+          {/* Pending Approval Toggle */}
+          <div className="flex bg-slate-100 p-1 rounded-lg">
             <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium rounded-md transition ${filter === f
+              onClick={() => togglePendingApproval(false)}
+              className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium rounded-md transition ${!showPendingApprovalOnly
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
                 }`}
             >
-              {f === "all" ? "All" : f === "me" ? "Mine" : "Unassigned"}
+              All Leads
             </button>
-          ))}
+            <button
+              onClick={() => togglePendingApproval(true)}
+              className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium rounded-md transition ${showPendingApprovalOnly
+                  ? "bg-white text-amber-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+                }`}
+            >
+              Pending Approval
+            </button>
           </div>
+          
+          {/* Inbox Filter Tabs */}
+          {!showPendingApprovalOnly && (
+            <div className="flex bg-slate-100 p-1 rounded-lg">
+            {["all", "me", "unassigned"].map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium rounded-md transition ${filter === f
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                  }`}
+              >
+                {f === "all" ? "All" : f === "me" ? "Mine" : "Unassigned"}
+              </button>
+            ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -319,7 +366,7 @@ export default function Leads() {
                 </span>
               </div>
               <button
-                onClick={() => navigate('/dashboard/leads')}
+                onClick={() => togglePendingApproval(false)}
                 className="text-amber-600 hover:text-amber-800 text-xs font-medium underline"
               >
                 Clear filter
