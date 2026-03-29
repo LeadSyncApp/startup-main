@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../context/SocketContext";
@@ -28,9 +28,7 @@ export default function Leads() {
   });
   
   // Pending approval filter flag
-  const [showPendingApprovalOnly, setShowPendingApprovalOnly] = useState(() => {
-    return searchParams.get('filter') === 'pendingApproval';
-  });
+  const showPendingApprovalOnly = searchParams.get('filter') === 'pendingApproval';
 
   // Drawer & search state
   const [selectedLead, setSelectedLead] = useState<any>(null);
@@ -311,7 +309,7 @@ export default function Leads() {
 
       {/* Search + Filter bar */}
       {!loading && leads.length > 0 && (
-        <>
+        <React.Fragment>
           {showPendingApprovalOnly && (
             <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
               <div className="flex items-center gap-2">
@@ -382,7 +380,8 @@ export default function Leads() {
               </button>
             ))}
           </div>
-        </>
+        </div>
+        </React.Fragment>
       )}
 
       {loading ? (
