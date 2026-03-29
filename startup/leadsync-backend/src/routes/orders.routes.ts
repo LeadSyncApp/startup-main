@@ -216,6 +216,124 @@ router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Respon
 });
 
 /* ===============================
+   CLAIM ORDER (Agent Assignment)
+================================== */
+router.post("/:id/claim", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { version } = req.body;
+    const { userId, companyId, role } = req.user!;
+
+    // Only agents can claim orders
+    if (!["AGENT", "ADMIN", "OWNER"].includes(role)) {
+      return res.status(403).json({ message: "Only agents can claim orders" });
+    }
+
+    // Atomic claim: only if unclaimed
+    const order = await prisma.order.findFirst({
+      where: { 
+        id, 
+        companyId,
+        processedById: null // Must be unclaimed
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found or already claimed" });
+    }
+
+    // Update with claim
+    const updatedOrder = await prisma.order.update({
+      where: { id },
+      data: {
+        processedById: userId,
+        status: OrderStatus.PENDING, // Move to PENDING after claim
+        updatedAt: new Date()
+      },
+      include: {
+        lead: { select: { name: true, contact: true } },
+        processedBy: { select: { id: true, name: true } },
+        conversation: { select: { id: true } }
+      }
+    });
+
+    // Create notification for the claiming agent
+    const { notificationService } = await import("../services/notification.service");
+    await notificationService.notifyUser(
+      userId,
+      "Order Claimed",
+      `You have claimed order for ${updatedOrder.lead.name || updatedOrder.lead.contact}`,
+      "ORDER"
+    );
+
+    // Emit socket events
+    const { safeEmitConversationUpdate, emitToAgent } = await import("../lib/socket");
+    safeEmitConversationUpdate(updatedOrder.conversation, "order_updated", updatedOrder);
+    emitToAgent(userId, "order_claimed", updatedOrder);
+
+    return res.json(updatedOrder);
+  } catch (error: any) {
+    console.error("Claim order error:", error);
+    return res.status(500).json({ message: "Failed to claim order" });
+  }
+});
+
+/* ===============================
+   GET AWAITING ORDERS (Agent-specific)
+================================== */
+router.get("/awaiting", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { companyId, userId, role } = req.user!;
+
+    let whereCondition: any = { 
+      companyId,
+      isDeleted: false,
+      status: { in: ["BOT_CREATED_ORDER", "PENDING"] } // Awaiting orders
+    };
+
+    // Agents only see their claimed orders + unclaimed ones
+    if (role === "AGENT") {
+      whereCondition.OR = [
+        { processedById: null }, // Unclaimed
+        { processedById: userId } // Claimed by me
+      ];
+    }
+
+    const orders = await prisma.order.findMany({
+      where: whereCondition,
+      include: {
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            contact: true,
+            channel: true,
+            totalSpend: true,
+            segment: true,
+          }
+        },
+        processedBy: {
+          select: { id: true, name: true }
+        },
+        conversation: {
+          select: { id: true }
+        }
+      },
+      orderBy: [
+        { priorityScore: "desc" },
+        { createdAt: "desc" }
+      ],
+      take: 50,
+    });
+
+    return res.json(orders);
+  } catch (error) {
+    console.error("Fetch awaiting orders error:", error);
+    return res.status(500).json({ message: "Failed to fetch awaiting orders" });
+  }
+});
+
+/* ===============================
    SOFT DELETE ORDER (History Archive)
    🔒 Restricted to: OWNER, ADMIN
 ================================== */

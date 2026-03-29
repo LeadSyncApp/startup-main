@@ -656,6 +656,46 @@ router.post("/:id/notes", authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+/* =========================================
+   UPDATE SESSION STATE (Clear AI Cart)
+========================================= */
+router.patch("/:id/session-state", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { sessionState } = req.body;
+    const companyId = req.user!.companyId;
+
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: req.params.id,
+        companyId,
+      },
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    const updated = await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        sessionState: sessionState || null,
+        updatedAt: new Date(),
+      },
+    });
+
+    // Emit socket event for real-time updates
+    safeEmitConversationUpdate(updated, "session_state_updated", {
+      conversationId: conversation.id,
+      sessionState: sessionState
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error("Session state update error:", error);
+    res.status(500).json({ message: "Failed to update session state" });
+  }
+});
+
 router.delete("/:convId/notes/:noteId", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { companyId, userId, role } = req.user!;

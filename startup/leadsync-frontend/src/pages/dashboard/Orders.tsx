@@ -23,8 +23,12 @@ interface Order {
     contact: string;
     segment: string;
     totalSpend: number;
+    channel: string;
   };
-  processedBy?: { name: string };
+  processedBy?: { 
+    id: string; 
+    name: string; 
+  };
   createdAt: string;
   completedAt?: string;
   version: number;
@@ -35,7 +39,7 @@ interface Order {
 }
 
 export default function Orders() {
-  const { token, company, isOwner, isAdmin } = useAuth();
+  const { token, company, isOwner, isAdmin, user } = useAuth();
   const { socket } = useSocket();
 
   const industry = useMemo(() => getIndustryConfig(company?.botBusinessType), [company]);
@@ -47,8 +51,10 @@ export default function Orders() {
   ], [industry]);
 
   const [orders, setOrders] = useState<Order[]>([]);
-  const [view, setView] = useState<'active' | 'history'>('active');
+  const [awaitingOrders, setAwaitingOrders] = useState<Order[]>([]);
+  const [view, setView] = useState<'active' | 'history' | 'awaiting'>('active');
   const [loading, setLoading] = useState(true);
+  const [awaitingLoading, setAwaitingLoading] = useState(false);
 
   // Modal State
   const [actionOrder, setActionOrder] = useState<Order | null>(null);
@@ -74,10 +80,27 @@ export default function Orders() {
     }
   };
 
+  // Fetch Awaiting Orders
+  const fetchAwaitingOrders = async () => {
+    try {
+      setAwaitingLoading(true);
+      const data = await api.get(`/orders/awaiting?t=${Date.now()}`);
+      setAwaitingOrders(data);
+    } catch (err) {
+      console.error("Failed to load awaiting orders", err);
+    } finally {
+      setAwaitingLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
     setOrders([]);
-    fetchOrders(view);
+    if (view === 'awaiting') {
+      fetchAwaitingOrders();
+    } else {
+      fetchOrders(view);
+    }
   }, [token, view]);
 
   // Real-Time Listener
@@ -126,6 +149,29 @@ export default function Orders() {
           return next;
         }
       });
+
+      // Update awaiting orders if in that view
+      if (view === 'awaiting') {
+        setAwaitingOrders(prev => {
+          const index = prev.findIndex(o => o.id === updated.id);
+          const isAwaitingStatus = ['BOT_CREATED_ORDER', 'PENDING'].includes(status);
+          
+          if (!isAwaitingStatus) {
+            // Remove from awaiting if no longer awaiting
+            return prev.filter(o => o.id !== updated.id);
+          }
+          
+          if (index === -1) {
+            // Add to awaiting if new awaiting order
+            return [updated, ...prev];
+          }
+          
+          // Update existing
+          const next = [...prev];
+          next[index] = updated;
+          return next;
+        });
+      }
     };
 
     const handleCreate = (newOrder: Order) => {
@@ -134,6 +180,14 @@ export default function Orders() {
 
       if (view === 'active' && !isTerminal) {
         setOrders(prev => {
+          if (prev.some(o => o.id === newOrder.id)) return prev;
+          return [newOrder, ...prev];
+        });
+      }
+
+      // Add to awaiting orders if it's an awaiting order
+      if (view === 'awaiting' && ['BOT_CREATED_ORDER', 'PENDING'].includes(status)) {
+        setAwaitingOrders(prev => {
           if (prev.some(o => o.id === newOrder.id)) return prev;
           return [newOrder, ...prev];
         });
@@ -149,6 +203,29 @@ export default function Orders() {
   }, [socket, view]);
 
   // Actions
+  const handleClaimOrder = async (orderId: string) => {
+    try {
+      const orderToUpdate = awaitingOrders.find(o => o.id === orderId);
+      if (!orderToUpdate) return;
+
+      // Optimistic update
+      setAwaitingOrders(prev => prev.map(o => 
+        o.id === orderId 
+          ? { ...o, processedBy: { id: user?.id || '', name: user?.name || 'Agent' }, status: 'PENDING' }
+          : o
+      ));
+
+      await api.post(`/orders/${orderId}/claim`, { version: orderToUpdate.version });
+      toast.success("Order claimed successfully!");
+      
+      // Refresh awaiting orders
+      fetchAwaitingOrders();
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Failed to claim order");
+      fetchAwaitingOrders(); // Revert optimistic update
+    }
+  };
+
   const handleConfirmAction = async () => {
     if (!actionOrder || !actionType) return;
     const orderId = actionOrder.id;
@@ -309,12 +386,13 @@ export default function Orders() {
           )}
           <div className="bg-slate-100 p-1 rounded-lg flex">
             <button onClick={() => setView('active')} className={`px-3 lg:px-4 py-1.5 rounded-md text-xs lg:text-sm font-medium transition ${view === 'active' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>Live Board</button>
+            <button onClick={() => setView('awaiting')} className={`px-3 lg:px-4 py-1.5 rounded-md text-xs lg:text-sm font-medium transition ${view === 'awaiting' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>Awaiting Orders</button>
             <button onClick={() => setView('history')} className={`px-3 lg:px-4 py-1.5 rounded-md text-xs lg:text-sm font-medium transition ${view === 'history' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>History</button>
           </div>
         </div>
       </div>
 
-      {loading ? (
+      {loading || (view === 'awaiting' && awaitingLoading) ? (
         <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
           {[1, 2, 3].map(i => (
             <div key={i} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 space-y-3 animate-pulse">
@@ -328,6 +406,29 @@ export default function Orders() {
               ))}
             </div>
           ))}
+        </div>
+      ) : view === 'awaiting' ? (
+        <div className="flex-1 overflow-y-auto">
+          {awaitingOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <div className="h-20 w-20 bg-amber-50 rounded-2xl flex items-center justify-center mb-4">
+                <Package className="h-10 w-10 text-amber-400" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">No Awaiting Orders</h3>
+              <p className="text-slate-400 max-w-sm">AI-detected orders that need agent review will appear here.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+              {awaitingOrders.map(order => (
+                <AwaitingOrderCard 
+                  key={order.id} 
+                  order={order} 
+                  onClaim={() => handleClaimOrder(order.id)}
+                  currentUser={user?.id}
+                />
+              ))}
+            </div>
+          )}
         </div>
       ) : view === 'active' ? (
         orders.length === 0 ? (
@@ -683,6 +784,99 @@ function OrderTimeline({ status }: { status: string }) {
         })}
       </div>
     </div>
+  );
+}
+
+function AwaitingOrderCard({ order, onClaim, currentUser }: { 
+  order: Order; 
+  onClaim: () => void; 
+  currentUser?: string; 
+}) {
+  const isClaimed = order.processedBy?.id === currentUser;
+  const isUnclaimed = !order.processedBy;
+  const isClaimedByOthers = order.processedBy && order.processedBy.id !== currentUser;
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.9 }} 
+      animate={{ opacity: 1, scale: 1 }} 
+      className={`bg-white p-4 rounded-xl shadow-sm border relative group ${
+        isClaimed ? 'border-indigo-200 bg-indigo-50/30' : 
+        isUnclaimed ? 'border-amber-200 bg-amber-50/30' : 
+        'border-slate-200'
+      }`}
+    >
+      {/* Status Badge */}
+      <div className="absolute top-3 right-3">
+        {isClaimed && (
+          <span className="text-[9px] font-black bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full uppercase">
+            Claimed by You
+          </span>
+        )}
+        {isUnclaimed && (
+          <span className="text-[9px] font-black bg-amber-100 text-amber-700 px-2 py-1 rounded-full uppercase animate-pulse">
+            Unclaimed
+          </span>
+        )}
+        {isClaimedByOthers && (
+          <span className="text-[9px] font-black bg-slate-100 text-slate-600 px-2 py-1 rounded-full uppercase">
+            Claimed by {order.processedBy?.name}
+          </span>
+        )}
+      </div>
+
+      <div className="flex justify-between items-start mb-3">
+        <span className="font-bold text-lg text-slate-900">₹{order.amount}</span>
+        <span className="text-[10px] text-slate-400 font-mono">
+          {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+
+      <h4 className="font-semibold text-slate-800 text-sm leading-tight mb-3 pr-16">
+        {order.summary}
+      </h4>
+
+      <div className="space-y-2 mb-4">
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <span className="font-medium">👤 Customer:</span>
+          <span className="font-medium">{order.lead?.name || 'Unknown'}</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <span className="font-medium">📞 Contact:</span>
+          <span className="font-medium">{order.lead?.contact}</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <span className="font-medium">📱 Channel:</span>
+          <span className="font-medium">{order.lead?.channel}</span>
+        </div>
+        {order.isUrgent && (
+          <div className="flex items-center gap-2 text-xs text-red-600 font-bold">
+            <span className="h-2 w-2 bg-red-500 rounded-full animate-pulse"></span>
+            <span>URGENT ORDER</span>
+          </div>
+        )}
+      </div>
+
+      {/* Action Button */}
+      {isUnclaimed && (
+        <button
+          onClick={onClaim}
+          className="w-full py-2 px-4 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition shadow-md active:scale-95"
+        >
+          Claim Order
+        </button>
+      )}
+      {isClaimed && (
+        <div className="w-full py-2 px-4 rounded-lg bg-indigo-100 text-indigo-700 text-xs font-bold text-center border border-indigo-200">
+          ✓ Claimed - Move to Live Board to process
+        </div>
+      )}
+      {isClaimedByOthers && (
+        <div className="w-full py-2 px-4 rounded-lg bg-slate-100 text-slate-500 text-xs font-medium text-center border border-slate-200">
+          Claimed by {order.processedBy?.name}
+        </div>
+      )}
+    </motion.div>
   );
 }
 

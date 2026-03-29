@@ -293,6 +293,51 @@ export default function Conversations() {
     }
   };
 
+  // 🆕 Manual finalize actions for HUMAN mode
+  const handleManualFinalize = async (action: 'accept' | 'reject' | 'complete') => {
+    if (!activeOrder) return;
+    
+    try {
+      if (action === 'accept') {
+        await api.post(`/orders/${activeOrder.id}/approve`, { version: activeOrder.version });
+        toast.success("Order finalized and moved to processing");
+      } else if (action === 'reject') {
+        await api.post(`/orders/${activeOrder.id}/reject`, { version: activeOrder.version });
+        toast.success("Order rejected");
+      } else if (action === 'complete') {
+        await api.patch(`/orders/${activeOrder.id}/status`, { 
+          status: 'COMPLETED', 
+          version: activeOrder.version 
+        });
+        toast.success("Order marked as completed");
+      }
+      
+      // Clear the AI session state after manual finalization
+      setActiveOrder(null);
+      setSessionState(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || `Failed to ${action} order`);
+    }
+  };
+
+  const handleClearAICart = async () => {
+    if (!selected) return;
+    
+    try {
+      // Clear the session state on the backend
+      await api.patch(`/conversations/${selected.id}/session-state`, { 
+        sessionState: null 
+      });
+      
+      // Clear local state
+      setActiveOrder(null);
+      setSessionState(null);
+      toast.success("AI cart state cleared");
+    } catch (err) {
+      toast.error("Failed to clear AI cart state");
+    }
+  };
+
   /* SELECT HANDLER */
   const handleSelect = (conv: Conversation) => {
     setSelected(conv);
@@ -855,7 +900,9 @@ export default function Conversations() {
                   <div className="p-6 border-b border-slate-50">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-black text-[11px] uppercase tracking-[0.2em] text-slate-400">Live Cart</h3>
-                      <div className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[9px] font-black uppercase">AI Tracking</div>
+                      <div className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[9px] font-black uppercase">
+                        {selected.mode === 'BOT' ? 'AI Tracking' : 'Manual Review'}
+                      </div>
                     </div>
                     <p className="text-sm font-bold text-slate-800">Detected Items</p>
                   </div>
@@ -892,9 +939,39 @@ export default function Conversations() {
                       <span className="text-lg font-black tracking-tight">₹{sessionState.cart.total}</span>
                     </div>
 
-                    <div className="bg-amber-100/50 p-3 rounded-xl border border-amber-200/50">
-                      <p className="text-[9px] font-bold text-amber-700 leading-tight">AI is holding these in session. Switch to HUMAN mode if you want to manually finalize or send invoice.</p>
-                    </div>
+                    {selected.mode === 'BOT' ? (
+                      <div className="bg-amber-100/50 p-3 rounded-xl border border-amber-200/50">
+                        <p className="text-[9px] font-bold text-amber-700 leading-tight">AI is holding these in session. Switch to HUMAN mode if you want to manually finalize or send invoice.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="bg-rose-100/50 p-3 rounded-xl border border-rose-200/50">
+                          <p className="text-[9px] font-bold text-rose-700 leading-tight mb-2">🛑 Stale AI Cart Detected</p>
+                          <p className="text-[9px] text-rose-600 leading-tight">This cart was created by AI. You can manually finalize or clear it.</p>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-2">
+                          <button 
+                            onClick={() => handleManualFinalize('accept')}
+                            className="py-2 px-3 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition active:scale-95"
+                          >
+                            Accept & Process
+                          </button>
+                          <button 
+                            onClick={() => handleManualFinalize('reject')}
+                            className="py-2 px-3 rounded-lg bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition active:scale-95"
+                          >
+                            Reject Order
+                          </button>
+                          <button 
+                            onClick={handleClearAICart}
+                            className="py-2 px-3 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-300 transition active:scale-95"
+                          >
+                            Clear AI Cart
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
