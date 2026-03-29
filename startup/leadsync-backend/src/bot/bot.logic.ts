@@ -1,7 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { OrderStatus } from "@prisma/client";
 import { generateShopReply } from "../services/ai.service";
-import { getSession, updateSession, getMenuSnapshot, calculateRetrieval } from "../utils/shop-ai.utils";
+import { getSession, updateSession, getMenuSnapshot, calculateRetrieval, createFreshSessionState } from "../utils/shop-ai.utils";
 
 /* =====================================================
    SWITCH TO BOT MODE
@@ -132,18 +132,34 @@ CALLBACK: VIEW_MENU`;
       content: m.content
     }));
 
-  // 4️⃣ Fetch Order History
+  // 4️⃣ Fetch Order History (COMPLETED ORDERS ONLY for reference)
+  // IMPORTANT: Only send completed orders as history, not active ones
   const orderHistory = await prisma.order.findMany({
     where: {
       conversationId,
       isDeleted: false,
+      status: {
+        in: ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED'] // Only completed orders
+      }
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: 'desc' },
     take: 3,
     select: { summary: true, amount: true, createdAt: true }
   });
 
-  // 5️⃣ Check for recent unconfirmed orders (Ghost orders)
+  // 5️⃣ Check for ACTIVE orders (exclude completed from history)
+  const activeOrder = await prisma.order.findFirst({
+    where: {
+      conversationId,
+      isDeleted: false,
+      status: {
+        in: ['BOT_CREATED_ORDER', 'PENDING', 'NEW', 'PROCESSING', 'PREPARING', 'READY', 'SHIPPED']
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  // 5.5️⃣ Check for recent unconfirmed orders (Ghost orders)
   const pendingOrder = await prisma.order.findFirst({
     where: {
       conversationId,
@@ -153,13 +169,12 @@ CALLBACK: VIEW_MENU`;
     }
   });
 
-  // 5.5️⃣ Fetch latest order for status updates
-  const latestOrder = await prisma.order.findFirst({
+  // 5.6️⃣ Fetch latest order for status updates
+  const latestOrder = activeOrder || await prisma.order.findFirst({
     where: { conversationId, isDeleted: false },
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: 'desc' },
     select: { status: true, summary: true }
   });
-
 
   // 5.6️⃣ Resolve Session & Retrieval (Phase 1 & 2C)
   const tenant_id = conversation.companyId;
@@ -171,26 +186,42 @@ CALLBACK: VIEW_MENU`;
   const menuSnapshot = getMenuSnapshot(company?.botStructuredMenu);
   const retrievedItems = calculateRetrieval(userMessage, menuSnapshot);
 
-  // 6️⃣ Generate AI reply grounded to structured menu (Phase 1 & 2C)
+  // 6️⃣ Determine if we should start a fresh cart session
+  // Clear session state if:
+  // - No active orders exist (fresh start)
+  // - Last order was completed/cancelled/rejected
+  // - User explicitly wants to start fresh (detected by keywords)
+  const shouldStartFresh = !activeOrder || 
+    (latestOrder && ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED'].includes(latestOrder.status)) ||
+    /\b(start|new|fresh|begin|clear|reset)\b.*\b(order|cart)\b/i.test(userMessage);
+
+  let cleanSessionState = session_state;
+  if (shouldStartFresh) {
+    // Start with a clean cart state
+    cleanSessionState = createFreshSessionState();
+    console.log(`🧹 [Bot] Starting fresh cart session for Conv ${conversationId}`);
+  }
+
+  // 7️⃣ Generate AI reply grounded to structured menu (Phase 1 & 2C)
   const result = await generateShopReply({
     tenant_id,
     user_message: userMessage,
     detected_language: detectedLanguage,
-    session_state,
+    session_state: cleanSessionState,
     retrieved_items: retrievedItems,
     learned_knowledge_text: enrichedKnowledge,
     menu_snapshot: menuSnapshot,
     shop_policies: (company as any)?.botPolicies || "",
-    order_history: orderHistory,
+    order_history: orderHistory, // Only completed orders
     latest_order_status: latestOrder?.status,
     modality: modality
   });
 
-  // 7️⃣ Update Session (DB + Memory Sync)
+  // 8️⃣ Update Session (DB + Memory Sync)
   let finalReply = result.replyText;
 
   if (result.stateUpdates) {
-    let updatedState = { ...session_state, ...result.stateUpdates };
+    let updatedState = { ...cleanSessionState, ...result.stateUpdates };
 
     // 🆕 PHASE 2C: Handle Order Finalization
     if (result.orderFinalized && updatedState.cart?.items?.length > 0) {

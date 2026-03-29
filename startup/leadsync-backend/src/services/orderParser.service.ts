@@ -24,6 +24,22 @@ class OrderParserService {
         menu?: any
     ) {
         try {
+            // 0️⃣ Check if there's already an active order session
+            const existingActiveOrder = await prisma.order.findFirst({
+                where: {
+                    conversationId,
+                    isDeleted: false,
+                    status: {
+                        in: ['BOT_CREATED_ORDER', 'PENDING', 'NEW', 'PROCESSING', 'PREPARING', 'READY', 'SHIPPED']
+                    }
+                },
+                orderBy: { createdAt: 'desc' }
+            });
+
+            if (existingActiveOrder) {
+                console.log(`🚫 [OrderParser] Active order already exists for Conv ${conversationId}. Skipping new detection.`);
+                return;
+            }
             // 1. Parse content (Regex First)
             let items: ParsedItem[] = this.parseItemsRegex(text, menu);
 
@@ -74,7 +90,7 @@ class OrderParserService {
                 return;
             }
 
-            console.log(`🍔 [OrderParser] Detected ${items.length} items for Conv ${conversationId}`);
+            console.log(`🍔 [OrderParser] Detected ${items.length} items for Conv ${conversationId} (fresh order)`);
 
             const isUrgent = totalAmount > 0; // Alert on ANY amount > 0, not just > 500
 

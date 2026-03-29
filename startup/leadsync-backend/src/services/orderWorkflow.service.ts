@@ -106,12 +106,16 @@ export class OrderWorkflowService {
                 })
             ]);
 
-            // ⛔ CLEAR ORDERING INTENT for completed orders
+            // ⛔ CLEAR ORDERING INTENT and SESSION STATE for completed orders
             if (['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED'].includes(newStatus)) {
                 await prisma.conversation.update({
                     where: { id: order.conversationId },
-                    data: { intent: null }
+                    data: { 
+                        intent: null,
+                        sessionState: undefined // Clear AI cart session state
+                    }
                 });
+                console.log(`🧹 [OrderWorkflow] Cleared intent and session state for completed order in Conv ${order.conversationId}`);
             }
 
             // ⛔ STRICT PERSISTENCE: Re-fetch fresh state to ensure no race conditions

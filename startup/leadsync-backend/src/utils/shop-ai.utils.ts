@@ -148,3 +148,23 @@ export function sanitizeReply(text: string): string {
     // Removed the aggressive emoji filter regex.
     return cleaned;
 }
+
+/**
+ * Clear session state for a fresh cart session
+ */
+export function createFreshSessionState(): SessionState {
+    return {
+        last_category: null,
+        last_item_names: [],
+        preferences: {
+            color: null,
+            size: null,
+            budget_max: null,
+            purpose: null,
+        },
+        cart: {
+            items: [],
+            total: 0
+        }
+    };
+}
