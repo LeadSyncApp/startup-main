@@ -141,6 +141,19 @@ export default function Conversations() {
   const [activeOrder, setActiveOrder] = useState<any>(null); // State for Ghost Order
   const [sessionState, setSessionState] = useState<any>(null); // 🆕 Phase 2C
 
+  // Helper functions to determine active order session state
+  const isOrderSessionActive = useMemo(() => {
+    if (!activeOrder) return false;
+    // Only consider session active for pending/processing orders
+    return ['BOT_CREATED_ORDER', 'PENDING', 'NEW', 'PROCESSING', 'PREPARING', 'READY', 'SHIPPED'].includes(activeOrder.status);
+  }, [activeOrder]);
+
+  const isPendingAiReview = useMemo(() => {
+    if (!activeOrder) return false;
+    // Only show accept/reject for ghost orders pending review
+    return activeOrder.status === 'BOT_CREATED_ORDER';
+  }, [activeOrder]);
+
   /* FETCH MESSAGES */
   const fetchMessages = async (conv: Conversation) => {
     try {
@@ -617,7 +630,7 @@ export default function Conversations() {
 
             {/* 🆕 ORDER PREVIEW CARD (Sticky Top) */}
             <AnimatePresence>
-              {activeOrder && activeOrder.status === 'BOT_CREATED_ORDER' && (
+              {isPendingAiReview && (
                 <motion.div
                   initial={{ y: -20, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
@@ -837,7 +850,7 @@ export default function Conversations() {
               </div>
 
               {/* LIVE CART PANEL (PHASE 2C) */}
-              {sessionState?.cart?.items?.length > 0 && (
+              {isOrderSessionActive && sessionState?.cart?.items?.length > 0 && (
                 <div className="hidden xl:flex w-80 flex-col bg-white border-l border-slate-100 animate-in slide-in-from-right duration-500 shadow-[20px_0_60px_-15px_rgba(0,0,0,0.05)]">
                   <div className="p-6 border-b border-slate-50">
                     <div className="flex items-center justify-between mb-2">

@@ -106,6 +106,14 @@ export class OrderWorkflowService {
                 })
             ]);
 
+            // ⛔ CLEAR ORDERING INTENT for completed orders
+            if (['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED'].includes(newStatus)) {
+                await prisma.conversation.update({
+                    where: { id: order.conversationId },
+                    data: { intent: null }
+                });
+            }
+
             // ⛔ STRICT PERSISTENCE: Re-fetch fresh state to ensure no race conditions
             const updatedOrder = await prisma.order.findUnique({
                 where: { id: orderId },
