@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prisma";
-import { 
+import { Prisma, 
     OrderStatus, 
     OrderPriority, 
     OrderSource, 
@@ -69,7 +69,7 @@ export class NewOrderArrivalService {
                 leadId,
                 summary,
                 amount,
-                items: items || null,
+                items: items ?? undefined,
                 status: OrderStatus.NEW, // Start as NEW for intake queue
                 source: source || OrderSource.BOT_DETECTED,
                 priority: priority || (amount > 0 ? OrderPriority.URGENT : OrderPriority.NORMAL),
