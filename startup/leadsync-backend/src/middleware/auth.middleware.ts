@@ -7,6 +7,7 @@ export interface AuthRequest extends Request {
     companyId: string;
     role: "OWNER" | "ADMIN" | "AGENT";
     staffId?: string;
+    name?: string; // Add name field for user identification
   };
 }
 
@@ -15,6 +16,7 @@ interface JwtPayload extends DefaultJwtPayload {
   companyId: string;
   role: "OWNER" | "ADMIN" | "AGENT";
   staffId?: string;
+  name?: string; // Add name to JWT payload
 }
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -60,6 +62,7 @@ export const authMiddleware = (
       companyId: decoded.companyId,
       role: decoded.role,
       staffId: decoded.staffId,
+      name: decoded.name, // Include name in user object
     };
 
     next();

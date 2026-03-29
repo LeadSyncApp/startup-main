@@ -25,6 +25,9 @@ import broadcastsRoutes from "./routes/broadcasts.routes";
 import botKnowledgeRoutes from "./routes/bot-knowledge.routes";
 import automationRoutes from "./routes/automation.routes";
 
+// 🆕 Import New Order Arrivals routes
+import newOrderArrivalsRoutes from "./routes/newOrderArrivals.routes";
+
 console.log("🔥 app.ts loaded");
 
 const app = express();
@@ -112,6 +115,9 @@ app.use("/api/webhook", webhookRoutes);
 app.use("/api/broadcasts", broadcastsRoutes);
 app.use("/api/bot-knowledge", botKnowledgeRoutes);
 app.use("/api/automation", automationRoutes);
+
+// 🆕 Add New Order Arrivals routes
+app.use("/api/newOrderArrivals", newOrderArrivalsRoutes);
 
 /* 🩺 DIAGNOSTIC ROUTE */
 app.get("/api/debug/system", async (req, res) => {

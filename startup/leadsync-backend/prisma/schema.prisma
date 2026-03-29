@@ -273,6 +273,7 @@ model Lead {
   channel   Channel
   companyId String
   createdAt DateTime @default(now())
+  deletedAt DateTime? // Add soft delete tracking
 
   status LeadStatus @default(NEW)  // 🆕 Lifecycle Status
 
@@ -301,6 +302,7 @@ model Lead {
   @@index([status]) // 🆕 Index for filtering
   @@index([pendingOrderState]) // 🆕 Index for pending orders
   @@index([pendingOrderClaimedById]) // 🆕 Index for claimed pending orders
+  @@index([deletedAt]) // 🆕 Index for soft delete tracking
 }
 
 // ... existing models ...

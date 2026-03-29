@@ -9,18 +9,51 @@ const router = Router();
 
 /* =========================================
    GET ALL CONVERSATIONS
+   Updated to exclude conversations with unclaimed NEW orders
 ========================================= */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { companyId, userId, role } = req.user!;
 
     // 🔒 PRIVACY FILTER: Agents only see Unclaimed OR Their Own
+    // 🆕 NEW ORDER ARRIVALS FILTER: Exclude conversations with unclaimed NEW orders
     const whereClause: any = { companyId };
+    
+    // Role-based visibility
     if (role === "AGENT") {
       whereClause.OR = [
         { assignedToId: null },
         { assignedToId: userId }
       ];
+    }
+
+    // 🆕 UNIFIED WORKFLOW: Exclude conversations with unclaimed NEW orders from active conversation list
+    // These should only appear in New Order Arrivals, not in active Conversations
+    const conversationsWithNewOrders = await prisma.order.findMany({
+      where: {
+        companyId,
+        status: "NEW",
+        processedById: null // Unclaimed orders
+      },
+      select: { conversationId: true }
+    });
+
+    const excludedConversationIds = conversationsWithNewOrders.map(o => o.conversationId);
+    
+    // Add exclusion to where clause
+    if (excludedConversationIds.length > 0) {
+      if (whereClause.OR) {
+        whereClause.OR = whereClause.OR.map((condition: any) => {
+          if (condition.assignedToId === null) {
+            return { ...condition, id: { notIn: excludedConversationIds } };
+          } else if (condition.assignedToId === userId) {
+            return { ...condition, id: { notIn: excludedConversationIds } };
+          }
+          return condition;
+        });
+      } else {
+        whereClause.id = { notIn: excludedConversationIds };
+      }
     }
 
     const conversations = await prisma.conversation.findMany({

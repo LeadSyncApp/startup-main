@@ -380,6 +380,16 @@ export default function Leads() {
           {/* New Order Arrivals Toggle */}
           <div className="flex bg-slate-100 p-1 rounded-lg">
             <button
+              onClick={() => navigate('/dashboard/new-order-arrivals', { replace: true })}
+              className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium rounded-md transition ${true
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+                }`}
+            >
+              <ShoppingCart size={14} className="mr-2" />
+              New Order Arrivals
+            </button>
+            <button
               onClick={() => toggleNewOrderArrivals(false)}
               className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium rounded-md transition ${!showNewOrderArrivalsOnly
                   ? "bg-white text-blue-600 shadow-sm"
@@ -387,15 +397,6 @@ export default function Leads() {
                 }`}
             >
               All Leads
-            </button>
-            <button
-              onClick={() => toggleNewOrderArrivals(true)}
-              className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium rounded-md transition ${showNewOrderArrivalsOnly
-                  ? "bg-white text-blue-600 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-                }`}
-            >
-              New Order Arrivals
             </button>
           </div>
           

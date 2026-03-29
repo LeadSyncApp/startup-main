@@ -1,36 +1,34 @@
-# LeadSync CRM Privacy & Assignment Workflow Test Guide
+# LeadSync CRM Privacy & Assignment# Unified Order Workflow Implementation - Test Guide
 
-## Test Scenarios
+## Overview
+This guide provides comprehensive testing scenarios for the new unified New Order Arrivals workflow that ensures ALL incoming orders follow the same claim-first process regardless of customer history.
 
-### 1. Agent Conversation Privacy Test
-**Objective**: Verify agents cannot see other agents' conversations
+## Core Implementation Changes
 
-**Steps**:
-1. Login as Agent A
-2. Start a conversation with Customer 1
-3. Login as Agent B (different browser/incognito)
-4. Verify Agent B cannot see Customer 1's conversation
-5. Verify Agent B gets 403 error trying to access Customer 1's messages directly
+### Backend Changes
+1. **NewOrderArrival Service** (`src/services/newOrderArrival.service.ts`)
+   - Universal intake for all orders
+   - Customer history tracking
+   - Claim-first assignment logic
+   - Historical ownership preservation
 
-**Expected Results**:
-- Agent B's conversation list only shows unassigned conversations
-- Direct API access to Agent A's conversations returns 403
-- Real-time updates prevent Agent B from seeing Agent A's conversations
+2. **Order Parser Updates** (`src/services/orderParser.service.ts`)
+   - Routes ALL orders through New Order Arrivals
+   - Removed direct order creation bypass
+   - Unified notification system
 
-### 2. Pending Order Assignment Test
-**Objective**: Verify AI-detected orders stay with assigned agent
+3. **Conversation Gating** (`src/routes/conversations.routes.ts`)
+   - Excludes unclaimed NEW orders from conversation list
+   - Enforces claim-before-conversation visibility
 
-**Steps**:
-1. Login as Agent A
-2. Start conversation with Customer 1
-3. Assign conversation to Agent A
-4. Trigger AI order detection (send ordering message)
-5. Verify pending order appears in Agent A's Leads page
-6. Login as Agent B
-7. Verify Agent B cannot see or claim the pending order
+4. **New API Routes** (`src/routes/newOrderArrivals.routes.ts`)
+   - GET `/api/newOrderArrivals` - Fetch unclaimed orders
+   - POST `/api/newOrderArrivals/:id/claim` - Claim orders
+   - GET `/api/newOrderArrivals/claimed` - View claimed orders
 
-**Expected Results**:
-- Order automatically assigned to Agent A (conversation handler)
+5. **Schema Updates** (`prisma/schema.prisma`)
+   - Added `deletedAt` to Lead model for soft delete
+   - Enhanced indexing for performance
 - Agent B sees "Claimed by Agent A" or cannot see the order at all
 - Backend shows `pendingOrderClaimedById = Agent A's ID`
 

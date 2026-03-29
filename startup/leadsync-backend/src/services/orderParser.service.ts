@@ -4,6 +4,7 @@ import { emitToCompany, emitToConversation, emitToAgent, emitToCompanyAdmin, saf
 import { notificationService } from "./notification.service";
 import { generateStructuredOrder } from "./ai.service";
 import { sarvamService } from "./sarvam.service";
+import { newOrderArrivalService } from "./newOrderArrival.service";
 
 interface ParsedItem {
     name: string;
@@ -90,47 +91,46 @@ class OrderParserService {
                 return;
             }
 
-            console.log(`🍔 [OrderParser] Detected ${items.length} items for Conv ${conversationId} (fresh order)`);
+            console.log(`🍔 [OrderParser] Detected ${items.length} items for Conv ${conversationId} (unified new order arrival)`);
 
             const isUrgent = totalAmount > 0; // Alert on ANY amount > 0, not just > 500
 
-            // 4. Create Order
-            const order = await prisma.order.create({
-                data: {
-                    companyId,
-                    conversationId,
-                    leadId,
-                    summary,
-                    amount: totalAmount,
-                    status: OrderStatus.BOT_CREATED_ORDER, // 🆕 Created as Ghost order
-                    source: OrderSource.BOT_DETECTED,
-                    priority: isUrgent ? OrderPriority.URGENT : OrderPriority.NORMAL,
-                    priorityScore: isUrgent ? 100 : 50,
-                    predictedValue: totalAmount
-                },
-                include: { conversation: { include: { lead: true } } }
+            // 🆕 UNIFIED WORKFLOW: Route ALL orders through New Order Arrivals
+            // This bypasses the old direct order creation and ensures universal intake
+            const orderArrival = await newOrderArrivalService.processNewOrderArrival({
+                companyId,
+                conversationId,
+                leadId,
+                summary,
+                amount: totalAmount,
+                items: items.map(item => ({
+                    name: item.name,
+                    quantity: item.quantity,
+                    price: item.price || 0
+                })),
+                source: OrderSource.BOT_DETECTED,
+                priority: isUrgent ? OrderPriority.URGENT : OrderPriority.NORMAL,
+                detectedLanguage: "en-IN" // This could be detected from the message
             });
 
-            // 5. Update Conversation & Lead Stats (CRITICAL FOR CRM VALUE)
+            // 5. Update Conversation & Lead Stats (CRM value tracking)
             await this.updateStats(conversationId, leadId, totalAmount);
 
-            // 6. Notify & Emit
-            await this.notifyNewOrder(companyId, order);
-            safeEmitConversationUpdate(order.conversation, "order_detected", order);
+            // 6. Emit events for the new order arrival (not direct order creation)
+            safeEmitConversationUpdate(orderArrival.order.conversation, "new_order_arrival", orderArrival);
 
-            // 7. System Message (Order Card Indicator) - ONLY for Human agents or if not in BOT mode
-            // Stop redundant "Order Detected" messages if the BOT is already handling the conversation
-            if (order.conversation.mode !== "BOT") {
+            // 7. System Message (Order Card Indicator) - Only for Human agents or if not in BOT mode
+            if (orderArrival.order.conversation.mode !== "BOT") {
                 const sysMsg = await prisma.message.create({
                     data: {
                         conversationId,
                         sender: MessageSender.SYSTEM,
-                        content: `📝 Order Detected: ${summary} (Total: ₹${totalAmount}). Waiting for confirmation.`
+                        content: `� New Order Arrival: ${summary} (Total: ₹${totalAmount}). This order is now available in the New Order Arrivals queue for claiming.`
                     }
                 });
                 emitToConversation(conversationId, "new_message", sysMsg);
             } else {
-                console.log(`🤖 [OrderParser] Bot is active. Skipping redundant system message for Conv ${conversationId}.`);
+                console.log(`🤖 [OrderParser] Bot is active. Order routed to New Order Arrivals queue without system message for Conv ${conversationId}.`);
             }
 
         } catch (error) {
@@ -219,30 +219,10 @@ class OrderParserService {
         });
     }
 
+    // Legacy method - now handled by newOrderArrivalService
+    // Keeping for backwards compatibility but no longer used
     async notifyNewOrder(companyId: string, order: any) {
-        // 1. DATA SYNC: Send 'order_detected' to conversation participants
-        // Use 'order_detected' so dashboard doesn't show it immediately
-        emitToCompanyAdmin(companyId, "order_detected", order); // Admins can audit
-
-        // 2. ALERT: Notify Assigned Agent (Primary)
-        if (order.conversation?.assignedToId) {
-            emitToAgent(order.conversation.assignedToId, "order_detected", order);
-
-            await notificationService.notifyUser(
-                order.conversation.assignedToId,
-                `New Order Detected: ₹${order.amount}`,
-                `Check conversation with ${order.conversation?.lead?.contact}`,
-                "ORDER"
-            );
-        } else {
-            // Fallback: Notify Admins if unassigned
-            await notificationService.notifyCompanyAdmins(
-                companyId,
-                `New Order (Unassigned): ₹${order.amount}`,
-                `From ${order.conversation?.lead?.contact}`,
-                "ORDER"
-            );
-        }
+        console.log(`📋 [OrderParser] Legacy notifyNewOrder called - order processing now handled by NewOrderArrival service`);
     }
 }
 
