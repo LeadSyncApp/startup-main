@@ -325,4 +325,27 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
   }
 });
 
+/* =========================================
+   DELETE /api/leads/:id
+   Delete a lead (ADMIN/OWNER only)
+========================================= */
+router.delete("/:id", authMiddleware, authorizeRoles("ADMIN", "OWNER"), async (req: AuthRequest, res) => {
+  try {
+    const { companyId } = req.user!;
+    const { id } = req.params;
+
+    const lead = await (prisma.lead as any).findFirst({ where: { id, companyId } });
+    if (!lead) return res.status(404).json({ message: "Lead not found" });
+
+    // Soft delete by marking as deleted (if your schema supports it)
+    // or hard delete if you prefer
+    await (prisma.lead as any).delete({ where: { id } });
+
+    res.json({ message: "Lead deleted successfully" });
+  } catch (error) {
+    console.error("Delete lead error:", error);
+    res.status(500).json({ message: "Failed to delete lead" });
+  }
+});
+
 export default router;

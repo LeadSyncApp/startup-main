@@ -10,7 +10,7 @@ import { api } from "../../lib/api";
 import { TableSkeleton } from "../../components/ui/Skeleton";
 import { EmptyLeads } from "../../components/ui/EmptyState";
 import { PageTransition } from "../../components/ui/Animations";
-import { Search, X, CheckSquare, UserCheck, AlertTriangle, LayoutGrid, List, ShoppingCart } from "lucide-react";
+import { Search, X, CheckSquare, UserCheck, AlertTriangle, LayoutGrid, List, ShoppingCart, Trash } from "lucide-react";
 import LeadsKanban from "../../components/leads/LeadsKanban";
 import toast from "react-hot-toast";
 
@@ -243,6 +243,36 @@ export default function Leads() {
       clearSelection();
     } catch {
       toast.error("Some updates failed");
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedLeads.size === 0) return;
+    
+    // Check permissions - only ADMIN and OWNER can delete
+    if (!["ADMIN", "OWNER"].includes(user?.role || "")) {
+      toast.error("Only admins and owners can delete leads");
+      return;
+    }
+
+    const ids = Array.from(selectedLeads);
+    const leadCount = ids.length;
+    
+    // Confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${leadCount} lead${leadCount !== 1 ? "s" : ""}? This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      await Promise.all(ids.map(id => api.delete(`/leads/${id}`)));
+      setLeads(prev => prev.filter(l => !ids.includes(l.id)));
+      toast.success(`Deleted ${leadCount} lead${leadCount !== 1 ? "s" : ""}`);
+      clearSelection();
+    } catch (error) {
+      console.error("Bulk delete error:", error);
+      toast.error("Some deletions failed");
     }
   };
 
@@ -505,6 +535,16 @@ export default function Leads() {
             >
               High Priority
             </button>
+            {/* Only show delete button for ADMIN and OWNER roles */}
+            {["ADMIN", "OWNER"].includes(user?.role || "") && (
+              <button
+                onClick={handleBulkDelete}
+                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-xl transition active:scale-95"
+              >
+                <Trash size={13} />
+                Delete
+              </button>
+            )}
             <div className="w-px h-5 bg-slate-700 mx-1" />
             <button
               onClick={clearSelection}
