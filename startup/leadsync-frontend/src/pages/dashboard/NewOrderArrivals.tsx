@@ -426,6 +426,7 @@ export default function NewOrderArrivals() {
                           )}
                         </div>
                       </div>
+                    </div>
                     </motion.div>
                 );
               })}
