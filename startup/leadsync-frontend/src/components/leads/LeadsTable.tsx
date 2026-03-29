@@ -47,16 +47,16 @@ const PendingOrderBadge = ({ state, claimedBy }: { state: string; claimedBy?: st
   
   if (state === "PENDING_APPROVAL") {
     return (
-      <span className="px-2 py-0.5 rounded text-[10px] font-medium border bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1">
+      <span className="px-2 py-0.5 rounded text-[10px] font-medium border bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1">
         <Clock size={10} />
-        Pending Order
+        New Order Arrival
       </span>
     );
   }
   
   if (state === "CLAIMED_FOR_APPROVAL") {
     return (
-      <span className="px-2 py-0.5 rounded text-[10px] font-medium border bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1">
+      <span className="px-2 py-0.5 rounded text-[10px] font-medium border bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
         <UserCheck size={10} />
         Claimed by {claimedBy || "Agent"}
       </span>
@@ -130,13 +130,26 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                     <div className="mt-1">
                       <PendingOrderBadge state={lead.pendingOrderState} claimedBy={lead.agentAssigned} />
                       {lead.pendingOrderAmount && (
-                        <div className="text-xs font-semibold text-amber-600 mt-1">
+                        <div className="text-xs font-semibold text-blue-600 mt-1">
                           Order: ₹{lead.pendingOrderAmount.toLocaleString()}
                         </div>
                       )}
                       {lead.pendingOrderSummary && (
                         <div className="text-xs text-slate-500 mt-0.5 truncate max-w-[180px]">
                           {lead.pendingOrderSummary}
+                        </div>
+                      )}
+                      {/* 🆕 Customer history context */}
+                      {lead.isExistingCustomer && (
+                        <div className="mt-2 space-y-1">
+                          <div className="text-xs text-slate-600 font-medium">
+                            📦 Existing Customer ({lead.previousOrderCount} orders, ₹{lead.previousSpend?.toLocaleString()})
+                          </div>
+                          {lead.previousAgentName && (
+                            <div className="text-xs text-slate-500 italic">
+                              Previously handled by: {lead.previousAgentName}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -201,7 +214,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                         disabled={!lead.canCurrentUserClaim && currentUser?.role !== "ADMIN" && currentUser?.role !== "OWNER"}
                         className={`text-xs px-3 py-1.5 rounded-md shadow-sm transition font-medium whitespace-nowrap ml-auto active:scale-95 flex items-center gap-1 ${
                           lead.canCurrentUserClaim || currentUser?.role === "ADMIN" || currentUser?.role === "OWNER"
-                            ? "bg-amber-600 text-white hover:bg-amber-700"
+                            ? "bg-blue-600 text-white hover:bg-blue-700"
                             : "bg-slate-300 text-slate-500 cursor-not-allowed"
                         }`}
                       >
@@ -266,13 +279,26 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                     <div className="mt-1">
                       <PendingOrderBadge state={lead.pendingOrderState} claimedBy={lead.agentAssigned} />
                       {lead.pendingOrderAmount && (
-                        <div className="text-xs font-semibold text-amber-600 mt-1">
+                        <div className="text-xs font-semibold text-blue-600 mt-1">
                           Order: ₹{lead.pendingOrderAmount.toLocaleString()}
                         </div>
                       )}
                       {lead.pendingOrderSummary && (
                         <div className="text-xs text-slate-500 mt-0.5 truncate max-w-[200px]">
                           {lead.pendingOrderSummary}
+                        </div>
+                      )}
+                      {/* 🆕 Customer history context */}
+                      {lead.isExistingCustomer && (
+                        <div className="mt-2 space-y-1">
+                          <div className="text-xs text-slate-600 font-medium">
+                            📦 Existing Customer ({lead.previousOrderCount} orders, ₹{lead.previousSpend?.toLocaleString()})
+                          </div>
+                          {lead.previousAgentName && (
+                            <div className="text-xs text-slate-500 italic">
+                              Previously handled by: {lead.previousAgentName}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -296,7 +322,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                     disabled={!lead.canCurrentUserClaim && currentUser?.role !== "ADMIN" && currentUser?.role !== "OWNER"}
                     className={`text-xs px-3 py-1.5 rounded-md shadow-sm font-medium active:scale-95 flex items-center gap-1 ${
                       lead.canCurrentUserClaim || currentUser?.role === "ADMIN" || currentUser?.role === "OWNER"
-                        ? "bg-amber-600 text-white"
+                        ? "bg-blue-600 text-white"
                         : "bg-slate-300 text-slate-500 cursor-not-allowed"
                     }`}
                   >

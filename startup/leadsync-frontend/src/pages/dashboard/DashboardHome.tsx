@@ -110,11 +110,11 @@ export default function DashboardHome() {
             )}
             {alertKpis.pendingOrders > 0 && (
               <Link
-                to="/dashboard/leads?filter=pendingApproval"
-                className="flex items-center gap-2 px-3 py-2 bg-amber-500/20 border border-amber-500/30 rounded-xl text-amber-400 text-xs font-bold hover:bg-amber-500/30 transition active:scale-95 group"
+                to="/dashboard/leads?filter=newOrderArrivals"
+                className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 border border-blue-500/30 rounded-xl text-blue-400 text-xs font-bold hover:bg-blue-500/30 transition active:scale-95 group"
               >
                 <ShoppingCart size={13} />
-                {alertKpis.pendingOrders} Order{alertKpis.pendingOrders !== 1 ? "s" : ""} Awaiting Approval
+                {alertKpis.pendingOrders} New Order Arrival{alertKpis.pendingOrders !== 1 ? "s" : ""}
                 <ArrowUpRight size={11} className="opacity-0 group-hover:opacity-100 transition" />
               </Link>
             )}

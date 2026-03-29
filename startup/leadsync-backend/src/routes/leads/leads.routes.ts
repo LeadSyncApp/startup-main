@@ -80,7 +80,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res) => {
 
       // Suggested action — ordered from highest to lowest priority
       let suggestedAction = "Monitor";
-      if (lead.pendingOrderState === "PENDING_APPROVAL") suggestedAction = "Review order";
+      if (lead.pendingOrderState === "PENDING_APPROVAL") suggestedAction = "Claim order";
       else if (lead.pendingOrderState === "CLAIMED_FOR_APPROVAL") suggestedAction = "Process order";
       else if (conversation?.intent === "ORDERING") suggestedAction = "Close order";
       else if (lead.segment === "CHURN_RISK") suggestedAction = "Win back";
@@ -115,7 +115,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res) => {
         priority,
         agentAssigned: conversation?.assignedTo?.name || null,
 
-        // 🆕 Pending Order Approval Data
+        // 🆕 New Order Arrivals Data
         hasPendingOrderApproval: lead.pendingOrderState !== "NONE",
         pendingOrderState: lead.pendingOrderState,
         pendingOrderId: lead.pendingOrderId,
@@ -124,9 +124,14 @@ router.get("/", authMiddleware, async (req: AuthRequest, res) => {
         pendingOrderSummary: lead.pendingOrderSummary,
         pendingOrderAmount: lead.pendingOrderAmount,
 
-        // 🆕 Agent assignment info for pending orders
+        // 🆕 Agent assignment info for new order arrivals
         canCurrentUserClaim: lead.pendingOrderState === "PENDING_APPROVAL" && !lead.pendingOrderClaimedById,
         isPendingOrderOwnedByCurrentAgent: lead.pendingOrderClaimedById === req.user?.userId,
+
+        // 🆕 Customer history context
+        isExistingCustomer: lead.orderCount > 0,
+        previousOrderCount: lead.orderCount,
+        previousSpend: lead.totalSpend,
 
         // AI Intelligence
         aiScore,
@@ -209,6 +214,36 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
       }
     }
 
+    // 🆕 Get customer history and previous agent information
+    const [previousOrders, previousAgent] = await Promise.all([
+      (prisma.order as any).findMany({
+        where: { 
+          leadId: lead.id, 
+          companyId,
+          isDeleted: false,
+          status: { notIn: ["BOT_CREATED_ORDER", "REJECTED", "CANCELLED"] }
+        },
+        include: {
+          processedBy: { select: { id: true, name: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        take: 5
+      }),
+      // Find the last agent who processed an order for this customer
+      (prisma.order as any).findFirst({
+        where: { 
+          leadId: lead.id, 
+          companyId,
+          isDeleted: false,
+          processedById: { not: null }
+        },
+        include: {
+          processedBy: { select: { id: true, name: true } }
+        },
+        orderBy: { createdAt: "desc" }
+      })
+    ]);
+
     // Update lead with claim information
     const updatedLead = await (prisma.lead as any).update({
       where: { id },
@@ -260,7 +295,7 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
     }
     emitToAgent(userId, "pending_order_claimed", updatedLead);
     
-    // 🆕 Emit lead update for all agents
+    // 🆕 Emit lead update for all agents with customer history
     emitToCompany(companyId, "lead_updated", {
       leadId: updatedLead.id,
       companyId,
@@ -268,7 +303,19 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
       pendingOrderState: "CLAIMED_FOR_APPROVAL",
       pendingOrderClaimedById: userId,
       pendingOrderClaimedAt: new Date(),
-      agentAssigned: "Agent"
+      agentAssigned: "Agent",
+      // 🆕 Include customer history context
+      isExistingCustomer: lead.orderCount > 0,
+      previousOrderCount: lead.orderCount,
+      previousSpend: lead.totalSpend,
+      previousAgentName: previousAgent?.processedBy?.name,
+      previousAgentId: previousAgent?.processedBy?.id,
+      recentOrders: previousOrders.slice(0, 3).map((o: any) => ({
+        id: o.id,
+        amount: o.amount,
+        createdAt: o.createdAt,
+        processedBy: o.processedBy?.name
+      }))
     });
 
     res.json(updatedLead);

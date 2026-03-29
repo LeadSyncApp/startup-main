@@ -27,9 +27,9 @@ export default function Leads() {
     return urlFilter === 'pendingApproval' ? 'all' : 'all';
   });
   
-  // Pending approval filter flag - now as a separate toggle state
-  const [showPendingApprovalOnly, setShowPendingApprovalOnly] = useState(() => {
-    return searchParams.get('filter') === 'pendingApproval';
+  // New Order Arrivals filter flag - now as a separate toggle state
+  const [showNewOrderArrivalsOnly, setShowNewOrderArrivalsOnly] = useState(() => {
+    return searchParams.get('filter') === 'newOrderArrivals';
   });
 
   // Drawer & search state
@@ -124,7 +124,7 @@ export default function Leads() {
       }).filter(Boolean) as any[]);
     };
 
-    // 🆕 Handle lead updates for pending orders
+    // 🆕 Handle lead updates for new order arrivals
     const onLeadUpdated = (data: any) => {
       setLeads(prev => prev.map(lead => {
         if (lead.id === data.leadId) {
@@ -138,8 +138,14 @@ export default function Leads() {
             pendingOrderSummary: data.pendingOrderSummary,
             pendingOrderAmount: data.pendingOrderAmount,
             agentAssigned: data.agentAssigned,
-            suggestedAction: data.pendingOrderState === "PENDING_APPROVAL" ? "Review order" : 
-                           data.pendingOrderState === "CLAIMED_FOR_APPROVAL" ? "Process order" : lead.suggestedAction
+            suggestedAction: data.pendingOrderState === "PENDING_APPROVAL" ? "Claim order" : 
+                           data.pendingOrderState === "CLAIMED_FOR_APPROVAL" ? "Process order" : lead.suggestedAction,
+            // 🆕 Customer history context
+            isExistingCustomer: data.isExistingCustomer,
+            previousOrderCount: data.previousOrderCount,
+            previousSpend: data.previousSpend,
+            previousAgentName: data.previousAgentName,
+            previousAgentId: data.previousAgentId
           };
         }
         return lead;
@@ -247,33 +253,33 @@ export default function Leads() {
         lead.contact?.includes(search);
       const matchesChannel = channelFilter === "ALL" || lead.channel === channelFilter;
       const matchesPriority = priorityFilter === "ALL" || lead.priority === priorityFilter;
-      const matchesPendingApproval = !showPendingApprovalOnly || 
+      const matchesNewOrderArrivals = !showNewOrderArrivalsOnly || 
         (lead.pendingOrderState && lead.pendingOrderState !== "NONE");
-      return matchesSearch && matchesChannel && matchesPriority && matchesPendingApproval;
+      return matchesSearch && matchesChannel && matchesPriority && matchesNewOrderArrivals;
     });
-  }, [leads, search, channelFilter, priorityFilter, showPendingApprovalOnly]);
+  }, [leads, search, channelFilter, priorityFilter, showNewOrderArrivalsOnly]);
 
-  // Sync URL with pending approval filter state
+  // Sync URL with new order arrivals filter state
   useEffect(() => {
     const currentFilter = searchParams.get('filter');
-    const shouldShowPending = currentFilter === 'pendingApproval';
-    if (shouldShowPending !== showPendingApprovalOnly) {
-      setShowPendingApprovalOnly(shouldShowPending);
+    const shouldShowNewArrivals = currentFilter === 'newOrderArrivals';
+    if (shouldShowNewArrivals !== showNewOrderArrivalsOnly) {
+      setShowNewOrderArrivalsOnly(shouldShowNewArrivals);
     }
   }, [searchParams]);
 
-  // Update URL when pending approval toggle changes
-  const togglePendingApproval = (show: boolean) => {
-    setShowPendingApprovalOnly(show);
+  // Update URL when new order arrivals toggle changes
+  const toggleNewOrderArrivals = (show: boolean) => {
+    setShowNewOrderArrivalsOnly(show);
     if (show) {
-      navigate('/dashboard/leads?filter=pendingApproval', { replace: true });
+      navigate('/dashboard/leads?filter=newOrderArrivals', { replace: true });
     } else {
       navigate('/dashboard/leads', { replace: true });
     }
   };
 
   // Clear bulk selection when filters change
-  useEffect(() => { setSelectedLeads(new Set()); }, [filter, search, channelFilter, priorityFilter, showPendingApprovalOnly]);
+  useEffect(() => { setSelectedLeads(new Set()); }, [filter, search, channelFilter, priorityFilter, showNewOrderArrivalsOnly]);
 
   const channels = useMemo(() => {
     const unique = [...new Set(leads.map(l => l.channel).filter(Boolean))];
@@ -312,11 +318,11 @@ export default function Leads() {
             </button>
           </div>
           
-          {/* Pending Approval Toggle */}
+          {/* New Order Arrivals Toggle */}
           <div className="flex bg-slate-100 p-1 rounded-lg">
             <button
-              onClick={() => togglePendingApproval(false)}
-              className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium rounded-md transition ${!showPendingApprovalOnly
+              onClick={() => toggleNewOrderArrivals(false)}
+              className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium rounded-md transition ${!showNewOrderArrivalsOnly
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
                 }`}
@@ -324,18 +330,18 @@ export default function Leads() {
               All Leads
             </button>
             <button
-              onClick={() => togglePendingApproval(true)}
-              className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium rounded-md transition ${showPendingApprovalOnly
-                  ? "bg-white text-amber-600 shadow-sm"
+              onClick={() => toggleNewOrderArrivals(true)}
+              className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium rounded-md transition ${showNewOrderArrivalsOnly
+                  ? "bg-white text-blue-600 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
                 }`}
             >
-              Pending Approval
+              New Order Arrivals
             </button>
           </div>
           
           {/* Inbox Filter Tabs */}
-          {!showPendingApprovalOnly && (
+          {!showNewOrderArrivalsOnly && (
             <div className="flex bg-slate-100 p-1 rounded-lg">
             {["all", "me", "unassigned"].map((f) => (
               <button
@@ -357,17 +363,17 @@ export default function Leads() {
       {/* Search + Filter bar */}
       {!loading && leads.length > 0 && (
         <React.Fragment>
-          {showPendingApprovalOnly && (
-            <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          {showNewOrderArrivalsOnly && (
+            <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
               <div className="flex items-center gap-2">
-                <ShoppingCart size={16} className="text-amber-600" />
-                <span className="text-amber-800 font-medium text-sm">
-                  Showing only leads with pending order approvals
+                <ShoppingCart size={16} className="text-blue-600" />
+                <span className="text-blue-800 font-medium text-sm">
+                  Showing only new order arrivals - any available agent can claim these orders
                 </span>
               </div>
               <button
-                onClick={() => togglePendingApproval(false)}
-                className="text-amber-600 hover:text-amber-800 text-xs font-medium underline"
+                onClick={() => toggleNewOrderArrivals(false)}
+                className="text-blue-600 hover:text-blue-800 text-xs font-medium underline"
               >
                 Clear filter
               </button>

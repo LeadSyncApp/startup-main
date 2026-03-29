@@ -490,17 +490,16 @@ router.get(
     try {
       const { companyId } = req.user!;
 
-      const [urgentLeads, pendingOrders, botConversations] = await Promise.all([
+      const [urgentLeads, newOrderArrivals, botConversations] = await Promise.all([
         // Conversations with negative sentiment → shown as "urgent leads"
         prisma.conversation.count({
           where: { companyId, sentimentScore: { lt: -3 } },
         }).catch(() => 0),
-        // Orders awaiting agent approval
-        prisma.order.count({
+        // New Order Arrivals (replaces pending orders)
+        (prisma.lead as any).count({
           where: {
             companyId,
-            status: { in: ["NEW", "BOT_CREATED_ORDER", "PENDING"] as any },
-            isDeleted: false,
+            pendingOrderState: "PENDING_APPROVAL"
           },
         }).catch(() => 0),
         // Active bot-mode conversations (exclude those with completed/delivered orders)
@@ -518,7 +517,7 @@ router.get(
         }).catch(() => 0),
       ]);
 
-      res.json({ urgentLeads, pendingOrders, botConversations });
+      res.json({ urgentLeads, pendingOrders: newOrderArrivals, botConversations });
     } catch (error) {
       console.error("Alerts KPI error:", error);
       res.status(500).json({ message: "Failed to fetch alerts" });
