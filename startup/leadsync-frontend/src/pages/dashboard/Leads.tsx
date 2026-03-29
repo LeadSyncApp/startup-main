@@ -266,13 +266,42 @@ export default function Leads() {
     if (!confirmed) return;
 
     try {
-      await Promise.all(ids.map(id => api.delete(`/leads/${id}`)));
-      setLeads(prev => prev.filter(l => !ids.includes(l.id)));
-      toast.success(`Deleted ${leadCount} lead${leadCount !== 1 ? "s" : ""}`);
-      clearSelection();
+      // Track individual delete results
+      const results = await Promise.allSettled(
+        ids.map(id => api.delete(`/leads/${id}`))
+      );
+      
+      const succeeded = results.filter(r => r.status === "fulfilled").length;
+      const failed = results.filter(r => r.status === "rejected").length;
+      
+      // Remove only successfully deleted leads from UI
+      const successfulIds: string[] = [];
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          successfulIds.push(ids[index]);
+        }
+      });
+      
+      if (successfulIds.length > 0) {
+        setLeads(prev => prev.filter(l => !successfulIds.includes(l.id)));
+      }
+      
+      // Provide precise feedback
+      if (failed === 0) {
+        toast.success(`Deleted ${succeeded} lead${succeeded !== 1 ? "s" : ""}`);
+      } else if (succeeded === 0) {
+        toast.error(`Failed to delete any leads`);
+      } else {
+        toast.error(`Deleted ${succeeded} of ${leadCount} leads (${failed} failed)`);
+      }
+      
+      // Clear selection only if all were successful
+      if (failed === 0) {
+        clearSelection();
+      }
     } catch (error) {
       console.error("Bulk delete error:", error);
-      toast.error("Some deletions failed");
+      toast.error("Delete operation failed");
     }
   };
 
