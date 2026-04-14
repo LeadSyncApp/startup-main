@@ -1,0 +1,13 @@
+{
+  "name": "startup-backup",
+  "private": true,
+  "version": "1.0.1",
+  "scripts": {
+    "build": "cd startup/startup-frontend && npm install && npm run build",
+    "start": "cd startup/leadsync-backend && npm start",
+    "install:backend": "cd startup/leadsync-backend && npm install",
+    "install:frontend": "cd startup/startup-frontend && npm install",
+    "install:all": "npm run install:backend && npm run install:frontend"
+  },
+  "description": "LeadSync CRM application with frontend and backend"
+}

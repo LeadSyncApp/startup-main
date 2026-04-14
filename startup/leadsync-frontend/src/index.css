@@ -1,0 +1,193 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles for LeadSync CRM - Color system and typography */
+@layer base {
+  body {
+    @apply antialiased text-slate-900 bg-slate-50;
+    font-feature-settings: "rlig" 1 "calt" 1;
+  }
+
+  h1 {
+    @apply font-bold tracking-tight text-slate-900;
+  }
+
+  h2 {
+    @apply font-bold text-slate-900;
+  }
+
+  h3 {
+    @apply font-semibold text-slate-900;
+  }
+
+  button {
+    @apply transition-all duration-200;
+  }
+
+  input, textarea, select {
+    @apply transition-colors duration-200;
+  }
+}
+
+/* Custom components using color system */
+@layer components {
+  /* Primary CTA Buttons */
+  .btn-primary {
+    @apply rounded-lg bg-cyan-600 px-4 py-2.5 font-semibold text-white shadow-sm hover:bg-cyan-700 hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply rounded-lg border-2 border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-900 hover:border-slate-400 hover:bg-slate-50 transition-all duration-200 disabled:opacity-50;
+  }
+
+  .btn-ghost {
+    @apply px-3 py-2 font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors duration-200;
+  }
+
+  .btn-icon {
+    @apply inline-flex items-center justify-center h-10 w-10 rounded-lg hover:bg-slate-100 transition-colors duration-200;
+  }
+
+  /* Card components with consistent shadows */
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow duration-200;
+  }
+
+  .card-compact {
+    @apply rounded-lg border border-slate-200 bg-white shadow-sm;
+  }
+
+  /* Badge/Status components */
+  .badge-success {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold;
+  }
+
+  .badge-error {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold;
+  }
+
+  .badge-warning {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold;
+  }
+
+  .badge-info {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full bg-sky-100 text-sky-700 text-xs font-semibold;
+  }
+
+  /* Input styling with focus states */
+  .input-base {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-slate-900 placeholder-slate-400 placeholder-opacity-100 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200;
+  }
+
+  .input-error {
+    @apply border-red-500 focus:border-red-500 focus:ring-red-500/20;
+  }
+
+  /* Typography utilities */
+  .text-xs-light {
+    @apply text-xs font-medium text-slate-500;
+  }
+
+  .text-sm-muted {
+    @apply text-sm text-slate-600;
+  }
+
+  /* Backdrop blur for modals */
+  .backdrop-blur-modal {
+    @apply backdrop-blur-sm bg-black/50;
+  }
+
+  /* Responsive container */
+  .container-responsive {
+    @apply px-4 sm:px-6 lg:px-8 py-6 lg:py-8;
+  }
+
+  /* Smooth scroll for chat panels */
+  .scroll-smooth-list {
+    @apply scrollbar-thin scroll-smooth;
+  }
+}
+
+/* Custom scrollbar for chat panels - WebKit browsers */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Animation utilities for smooth transitions */
+  .animate-slide-in-bottom {
+    animation: slideInBottom 0.3s ease-out;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-pulse-gentle {
+    animation: pulseGentle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Focus ring utilities - accessible */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2;
+  }
+
+  /* Disabled state utilities */
+  .disabled-state {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  /* Group hover states */
+  .group-item-hover {
+    @apply group-hover:bg-slate-50 transition-colors duration-200;
+  }
+}
+
+@keyframes slideInBottom {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulseGentle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
