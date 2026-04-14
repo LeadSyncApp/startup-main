@@ -1,19 +1,11 @@
 [build]
-<<<<<<< HEAD
-buildCommand = "npm install && npm run build"
+builder = "NIXPACKS"
+buildCommand = "cd leadsync-backend && npm ci --include=dev && npm run build"
 
 [deploy]
-startCommand = "npx serve -s dist -l $PORT"
+startCommand = "cd leadsync-backend && npm start"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 
-=======
-builder = "NIXPACKS"
-
-[deploy]
-startCommand = "cd startup/leadsync-backend && npm start"
-buildCommand = "cd startup/leadsync-backend && npm ci --include=dev && npm run build"
-
 [env]
 NODE_ENV = "production"
->>>>>>> 095f20a17d52cddda178f20db52629e41e1c0265
