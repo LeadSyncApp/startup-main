@@ -1,0 +1,42 @@
+import { generateBotReply, generateStructuredMenu } from "./ai.service";
+
+type Task = () => Promise<any>;
+
+class TaskQueue {
+    private queue: Task[] = [];
+    private processing = false;
+    private concurrency = 20; // Increased for Groq speed (was 5)
+    private activeCount = 0;
+
+    async add<T>(task: () => Promise<T>): Promise<T> {
+        return new Promise((resolve, reject) => {
+            const wrappedTask = async () => {
+                try {
+                    const result = await task();
+                    resolve(result);
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            this.queue.push(wrappedTask);
+            this.process();
+        });
+    }
+
+    private async process() {
+        if (this.queue.length === 0) return;
+        if (this.activeCount >= this.concurrency) return;
+
+        this.activeCount++;
+        const task = this.queue.shift();
+
+        if (task) {
+            task().finally(() => {
+                this.activeCount--;
+                this.process();
+            });
+        }
+    }
+}
+
+export const aiQueue = new TaskQueue();
