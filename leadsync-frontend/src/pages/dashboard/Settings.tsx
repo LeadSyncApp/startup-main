@@ -459,6 +459,13 @@ export default function Settings() {
     }
   };
 
+  // Shared input class
+  const inputClass = "w-full bg-background-tertiary border border-border rounded-xl px-3 py-2 text-sm text-text-primary placeholder:text-text-disabled focus:border-accent focus:ring-1 focus:ring-accent outline-none transition";
+  const textareaClass = "w-full bg-background-tertiary border border-border rounded-xl px-3 py-2 text-sm text-text-primary placeholder:text-text-disabled focus:border-accent focus:ring-1 focus:ring-accent outline-none transition";
+  const labelClass = "text-xs font-bold text-text-disabled uppercase tracking-widest";
+  const sectionClass = "bg-background-secondary p-6 rounded-2xl shadow-card border border-border space-y-4";
+  const headingClass = "text-lg font-semibold text-text-primary";
+
   /* ===============================
      UI
   =============================== */
@@ -467,14 +474,14 @@ export default function Settings() {
     return (
       <PageTransition className="space-y-8 max-w-4xl pb-12">
         <div className="space-y-2 animate-pulse">
-          <div className="h-8 bg-slate-200 rounded w-48" />
-          <div className="h-4 bg-slate-200 rounded w-80" />
+          <div className="h-8 bg-background-tertiary rounded w-48" />
+          <div className="h-4 bg-background-tertiary rounded w-80" />
         </div>
         {[1, 2, 3].map(i => (
-          <div key={i} className="rounded-2xl border bg-white p-6 space-y-4 animate-pulse">
-            <div className="h-5 bg-slate-200 rounded w-1/3" />
-            <div className="h-10 bg-slate-100 rounded-xl w-full" />
-            <div className="h-10 bg-slate-100 rounded-xl w-full" />
+          <div key={i} className="rounded-2xl border border-border bg-background-secondary p-6 space-y-4 animate-pulse">
+            <div className="h-5 bg-background-tertiary rounded w-1/3" />
+            <div className="h-10 bg-background-tertiary rounded-xl w-full" />
+            <div className="h-10 bg-background-tertiary rounded-xl w-full" />
           </div>
         ))}
       </PageTransition>
@@ -485,50 +492,50 @@ export default function Settings() {
     <PageTransition className="space-y-8 max-w-4xl pb-12">
 
       {/* PROFILE */}
-      <div className="bg-white p-6 rounded-2xl shadow border">
-        <h2 className="text-lg font-semibold mb-3">Profile</h2>
-        <p><strong>Name:</strong> {user?.name}</p>
-        <p><strong>Email:</strong> {user?.email}</p>
-        <p><strong>Role:</strong> {user?.role}</p>
+      <div className={sectionClass}>
+        <h2 className={headingClass}>Profile</h2>
+        <p className="text-text-secondary"><strong className="text-text-primary">Name:</strong> {user?.name}</p>
+        <p className="text-text-secondary"><strong className="text-text-primary">Email:</strong> {user?.email}</p>
+        <p className="text-text-secondary"><strong className="text-text-primary">Role:</strong> {user?.role}</p>
       </div>
 
       {/* BUSINESS DETAILS (FOR INVOICING) */}
-      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
+      <div className={sectionClass}>
+        <h2 className={`${headingClass} flex items-center gap-2`}>
           <span>🏢</span> Business Details (for Invoices)
         </h2>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-text-muted">
           These details will appear on the invoices generated for your customers.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Legal Business Name</label>
+            <label className={labelClass}>Legal Business Name</label>
             <input
               type="text"
               placeholder="Ex: Green Earth Cafe"
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
-              className="w-full border rounded-xl px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+              className={inputClass}
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">GSTIN (Optional)</label>
+            <label className={labelClass}>GSTIN (Optional)</label>
             <input
               type="text"
               placeholder="Ex: 29AAAAA0000A1Z5"
               value={gstin}
               onChange={(e) => setGstin(e.target.value)}
-              className="w-full border rounded-xl px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+              className={inputClass}
             />
           </div>
           <div className="md:col-span-2 space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Registered Address</label>
+            <label className={labelClass}>Registered Address</label>
             <textarea
               placeholder="Full address for invoice header..."
               value={businessAddress}
               onChange={(e) => setBusinessAddress(e.target.value)}
-              className="w-full border rounded-xl px-3 py-2 text-sm focus:border-indigo-500 outline-none h-20"
+              className={`${textareaClass} h-20`}
             />
           </div>
         </div>
@@ -536,7 +543,7 @@ export default function Settings() {
         <div className="flex justify-end">
           <button
             onClick={handleSaveBusinessDetails}
-            className="bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 transition shadow-sm font-bold"
+            className="bg-accent text-white px-5 py-2 rounded-lg hover:bg-accent-hover transition shadow-sm font-bold"
           >
             Save Business Details
           </button>
@@ -544,23 +551,23 @@ export default function Settings() {
       </div>
 
       {/* SAVED REPLIES */}
-      <div className="bg-white p-6 rounded-2xl shadow border border-slate-100">
+      <div className={sectionClass}>
         <SavedRepliesManager />
       </div>
 
       {/* BOT KNOWLEDGE */}
-      <div className="bg-white p-6 rounded-2xl shadow border border-slate-100">
+      <div className={sectionClass}>
         <BotKnowledgeManager />
       </div>
 
       {/* AUTOMATION RULES */}
-      <div className="bg-white p-6 rounded-2xl shadow border border-slate-100">
+      <div className={sectionClass}>
         <AutomationManager />
       </div>
 
       {/* TELEGRAM */}
-      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
-        <h2 className="text-lg font-semibold">
+      <div className={sectionClass}>
+        <h2 className={headingClass}>
           Telegram Integration
         </h2>
 
@@ -571,7 +578,7 @@ export default function Settings() {
               placeholder="Ex: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
               value={botToken}
               onChange={(e) => setBotToken(e.target.value)}
-              className="flex-1 border rounded-lg px-3 py-2"
+              className={`flex-1 ${inputClass}`}
             />
             <button
               onClick={handleConnectTelegram}
@@ -582,16 +589,16 @@ export default function Settings() {
             </button>
           </div>
         ) : (
-          <div className="flex justify-between items-center bg-green-50 p-4 rounded-xl border border-green-100">
+          <div className="flex justify-between items-center bg-green-500/10 p-4 rounded-xl border border-green-500/20">
             <div className="flex items-center gap-3">
-              <div className="bg-green-100 p-2 rounded-full text-green-600">
+              <div className="bg-green-500/20 p-2 rounded-full text-green-400">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.17 2.06c.36-.08.73.13.84.48.06.19.03.39-.08.55L11.54 18.5l-6-3.8 2.5-1.55L19.42 3.12a.6.6 0 0 1 1.75-1.06zM2 12v3l5 3v-3H2z" /></svg>
               </div>
               <div>
-                <p className="font-medium text-green-900">
+                <p className="font-medium text-green-400">
                   Bot Active
                 </p>
-                <p className="text-sm text-green-700">
+                <p className="text-sm text-green-500/70">
                   {telegramUsername ? `@${telegramUsername}` : "Connected"}
                 </p>
               </div>
@@ -599,49 +606,49 @@ export default function Settings() {
 
             <button
               onClick={handleDisconnectTelegram}
-              className="text-red-500 text-sm hover:underline hover:text-red-600 px-3 py-1 bg-white border border-red-100 rounded-lg shadow-sm"
+              className="text-red-400 text-sm hover:underline hover:text-red-500 px-3 py-1 bg-background-tertiary border border-border rounded-lg shadow-sm"
             >
               Disconnect
             </button>
           </div>
         )}
 
-        <p className="text-xs text-slate-500 mt-2">
-          Paste your bot token from <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-blue-500 underline">BotFather</a> to connect.
+        <p className="text-xs text-text-muted mt-2">
+          Paste your bot token from <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-blue-400 underline">BotFather</a> to connect.
         </p>
       </div>
 
       {/* INSTAGRAM */}
-      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
+      <div className={sectionClass}>
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Instagram Integration</h2>
-            <p className="text-xs text-slate-500">Receive and reply to Instagram DMs via your AI bot</p>
+            <h2 className={headingClass}>Instagram Integration</h2>
+            <p className="text-xs text-text-muted">Receive and reply to Instagram DMs via your AI bot</p>
           </div>
         </div>
 
         {!instagramConnected ? (
           <div className="space-y-3">
             {/* Webhook URL hint */}
-            <div className="bg-slate-50 rounded-xl px-4 py-3 border border-slate-100 space-y-1">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Step 1 — Register Webhook in Meta Developer Console</p>
-              <p className="text-xs text-slate-500">Callback URL (paste this in your Meta App → Webhooks):</p>
-              <code className="block text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 font-mono text-indigo-700 break-all select-all">
+            <div className="bg-background-tertiary rounded-xl px-4 py-3 border border-border space-y-1">
+              <p className="text-xs font-bold text-text-muted uppercase tracking-wide">Step 1 — Register Webhook in Meta Developer Console</p>
+              <p className="text-xs text-text-muted">Callback URL (paste this in your Meta App → Webhooks):</p>
+              <code className="block text-xs bg-background-elevated border border-border rounded-lg px-3 py-2 font-mono text-indigo-400 break-all select-all">
                 {DISPLAY_WEBHOOK_URL}
               </code>
-              <p className="text-xs text-slate-400 mt-1">Verify Token: use <span className="font-mono bg-slate-100 px-1 rounded">{igVerifyToken || "leadsync_ig_verify_2026"}</span> in Meta App verification.</p>
+              <p className="text-xs text-text-disabled mt-1">Verify Token: use <span className="font-mono bg-background-elevated px-1 rounded">{igVerifyToken || "leadsync_ig_verify_2026"}</span> in Meta App verification.</p>
             </div>
 
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Step 2 — Enter Page Credentials</p>
+            <p className="text-xs font-bold text-text-muted uppercase tracking-wide">Step 2 — Enter Page Credentials</p>
             <input
               type="text"
               placeholder="Instagram Page ID (numeric, e.g. 1234567890)"
               value={igPageIdInput}
               onChange={(e) => setIgPageIdInput(e.target.value)}
-              className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+              className={inputClass}
             />
             <div className="flex gap-3">
               <input
@@ -649,7 +656,7 @@ export default function Settings() {
                 placeholder="Long-lived Page Access Token"
                 value={igTokenInput}
                 onChange={(e) => setIgTokenInput(e.target.value)}
-                className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+                className={`flex-1 ${inputClass}`}
               />
               <button
                 onClick={handleConnectInstagram}
@@ -662,27 +669,27 @@ export default function Settings() {
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex justify-between items-center bg-pink-50 p-4 rounded-xl border border-pink-100">
+            <div className="flex justify-between items-center bg-pink-500/10 p-4 rounded-xl border border-pink-500/20">
               <div className="flex items-center gap-3">
-                <div className="bg-pink-100 p-2 rounded-full text-pink-600">
+                <div className="bg-pink-500/20 p-2 rounded-full text-pink-400">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
                 </div>
                 <div>
-                  <p className="font-semibold text-pink-900">Instagram Active</p>
-                  <p className="text-xs text-pink-600 font-mono">Page ID: {instagramPageId}</p>
+                  <p className="font-semibold text-pink-400">Instagram Active</p>
+                  <p className="text-xs text-pink-400/70 font-mono">Page ID: {instagramPageId}</p>
                 </div>
               </div>
               <button
                 onClick={handleDisconnectInstagram}
-                className="text-red-500 text-sm hover:text-red-600 px-3 py-1.5 bg-white border border-red-100 rounded-lg shadow-sm transition"
+                className="text-red-400 text-sm hover:text-red-500 px-3 py-1.5 bg-background-tertiary border border-border rounded-lg shadow-sm transition"
               >
                 Disconnect
               </button>
             </div>
             {/* Webhook URL reminder when connected */}
-            <div className="bg-slate-50 rounded-xl px-4 py-3 border border-slate-100">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Webhook URL (for Meta App)</p>
-              <code className="text-xs font-mono text-indigo-700 break-all select-all">
+            <div className="bg-background-tertiary rounded-xl px-4 py-3 border border-border">
+              <p className="text-xs font-bold text-text-muted uppercase tracking-wide mb-1">Webhook URL (for Meta App)</p>
+              <code className="text-xs font-mono text-indigo-400 break-all select-all">
                 {DISPLAY_WEBHOOK_URL}
               </code>
             </div>
@@ -691,34 +698,34 @@ export default function Settings() {
       </div>
 
       {/* COMMERCE AI ONBOARDING WIZARD */}
-      <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 space-y-6 relative overflow-hidden">
+      <div className="bg-background-secondary p-8 rounded-3xl shadow-xl border border-border space-y-6 relative overflow-hidden">
         {/* Abstract Background Decoration */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full -mr-16 -mt-16 opacity-50"></div>
 
         <div className="relative">
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+          <h2 className="text-2xl font-black text-text-primary tracking-tight flex items-center gap-2">
             <span>📦</span> Commerce Onboarding
           </h2>
-          <p className="text-slate-500 text-sm mt-1">Populate your shop menu using AI paste or manual entry.</p>
+          <p className="text-text-muted text-sm mt-1">Populate your shop menu using AI paste or manual entry.</p>
         </div>
 
         {/* Tab Selector */}
-        <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
+        <div className="flex p-1 bg-background-tertiary rounded-xl w-fit">
           <button
             onClick={() => setOnboardingMode('PASTE')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'PASTE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'PASTE' ? 'bg-background-secondary text-accent shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
           >
             ✨ AI Smart Paste
           </button>
           <button
             onClick={() => setOnboardingMode('MANUAL')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'MANUAL' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'MANUAL' ? 'bg-background-secondary text-accent shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
           >
             🧱 Manual Entry
           </button>
           <button
             onClick={() => setOnboardingMode('FILE')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'FILE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'FILE' ? 'bg-background-secondary text-accent shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
           >
             🧾 Upload Document
           </button>
@@ -726,9 +733,9 @@ export default function Settings() {
 
         {onboardingMode === 'PASTE' ? (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50">
-              <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-2">Instructions</p>
-              <p className="text-sm text-indigo-900/70">Paste your raw product list, price menu, or even a WhatsApp message. Our AI will extract items and prices for you.</p>
+            <div className="bg-indigo-500/10 p-4 rounded-2xl border border-indigo-500/20">
+              <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-2">Instructions</p>
+              <p className="text-sm text-indigo-300/80">Paste your raw product list, price menu, or even a WhatsApp message. Our AI will extract items and prices for you.</p>
             </div>
 
             <textarea
@@ -738,14 +745,14 @@ Latte - 300
 Cheese Croissant 180..."
               value={shopDescription}
               onChange={(e) => setShopDescription(e.target.value)}
-              className="w-full border-2 border-slate-100 rounded-2xl px-4 py-4 h-48 focus:border-indigo-500 focus:ring-0 transition-all text-sm font-medium bg-slate-50/30"
+              className={`${textareaClass} h-48 border-2 border-border focus:border-accent`}
             />
 
             <div className="flex items-center gap-3">
               <button
                 onClick={handleAnalyzeSmartPaste}
                 disabled={isGenerating || !shopDescription.trim()}
-                className={`bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-indigo-100 active:scale-95 ${isGenerating ? "opacity-50 cursor-not-allowed" : "hover:bg-indigo-700 hover:shadow-indigo-200"}`}
+                className={`bg-accent text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-accent/10 active:scale-95 ${isGenerating ? "opacity-50 cursor-not-allowed" : "hover:bg-accent-hover hover:shadow-accent/20"}`}
               >
                 {isGenerating ? "Analyzing..." : "Analyze & Preview"}
               </button>
@@ -756,36 +763,36 @@ Cheese Croissant 180..."
                   id="mergeCheck"
                   checked={mergeWithExisting}
                   onChange={(e) => setMergeWithExisting(e.target.checked)}
-                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="rounded border-border text-accent focus:ring-accent"
                 />
-                <label htmlFor="mergeCheck" className="text-xs font-bold text-slate-500 cursor-pointer">Merge with existing items</label>
+                <label htmlFor="mergeCheck" className="text-xs font-bold text-text-muted cursor-pointer">Merge with existing items</label>
               </div>
             </div>
           </div>
         ) : onboardingMode === 'FILE' ? (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100/50 flex justify-between items-center">
+            <div className="bg-indigo-500/10 p-6 rounded-2xl border border-indigo-500/20 flex justify-between items-center">
               <div>
-                <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-1">Document Analysis</p>
-                <p className="text-sm text-indigo-900/70">Upload PDF, Word, Excel, or CSV catalogs.</p>
+                <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-1">Document Analysis</p>
+                <p className="text-sm text-indigo-300/80">Upload PDF, Word, Excel, or CSV catalogs.</p>
               </div>
               <div className="flex gap-4">
                 <button
                   onClick={downloadCsvTemplate}
-                  className="text-xs font-bold text-indigo-600 hover:underline"
+                  className="text-xs font-bold text-indigo-400 hover:underline"
                 >
                   Download CSV Template ↓
                 </button>
               </div>
             </div>
 
-            <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-200 rounded-3xl cursor-pointer hover:bg-slate-50 hover:border-indigo-400 transition-all group">
+            <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-border rounded-3xl cursor-pointer hover:bg-background-tertiary hover:border-accent transition-all group">
               <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
-                <div className="bg-indigo-50 p-4 rounded-full text-indigo-600 mb-3 group-hover:scale-110 transition-transform">
+                <div className="bg-indigo-500/10 p-4 rounded-full text-indigo-400 mb-3 group-hover:scale-110 transition-transform">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                 </div>
-                <p className="text-sm font-bold text-slate-600">Click to upload catalog</p>
-                <p className="text-xs text-slate-400 mt-1">Supports PDF, DOCX, XLSX, CSV (Max 10MB)</p>
+                <p className="text-sm font-bold text-text-secondary">Click to upload catalog</p>
+                <p className="text-xs text-text-disabled mt-1">Supports PDF, DOCX, XLSX, CSV (Max 10MB)</p>
               </div>
               <input type="file" className="hidden" accept=".pdf,.docx,.xlsx,.csv,.txt" onChange={handleFileUpload} />
             </label>
@@ -794,30 +801,30 @@ Cheese Croissant 180..."
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Business Category</label>
+                <label className={labelClass}>Business Category</label>
                 <input
                   type="text"
                   placeholder="e.g. Organic Cafe"
                   value={botBusinessType}
                   onChange={(e) => setBotBusinessType(e.target.value)}
-                  className="w-full border rounded-xl px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+                  className={inputClass}
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Bot Welcome Message</label>
+                <label className={labelClass}>Bot Welcome Message</label>
                 <input
                   type="text"
                   placeholder="e.g. Welcome to our store!"
                   value={botWelcomeMessage}
                   onChange={(e) => setBotWelcomeMessage(e.target.value)}
-                  className="w-full border rounded-xl px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+                  className={inputClass}
                 />
               </div>
             </div>
-            <p className="text-xs text-slate-500 italic">Use the "Edit Menu" section below to manage your catalog once items are added.</p>
+            <p className="text-xs text-text-muted italic">Use the "Edit Menu" section below to manage your catalog once items are added.</p>
             <button
               onClick={saveEditedMenu}
-              className="bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-slate-900 transition-all text-sm"
+              className="bg-accent text-white px-6 py-2.5 rounded-xl font-bold hover:bg-accent-hover transition-all text-sm"
             >
               Save Basic Settings
             </button>
@@ -827,17 +834,17 @@ Cheese Croissant 180..."
 
       {/* PREVIEW MODAL / SECTION */}
       {previewMenu && (
-        <div className="bg-amber-50 p-8 rounded-3xl border-2 border-amber-200 shadow-xl space-y-6 animate-in zoom-in-95 duration-300">
+        <div className="bg-amber-500/10 p-8 rounded-3xl border-2 border-amber-500/30 shadow-xl space-y-6 animate-in zoom-in-95 duration-300">
           <div className="flex justify-between items-center">
             <div>
-              <h3 className="text-xl font-black text-amber-900 tracking-tight flex items-center gap-2">
+              <h3 className="text-xl font-black text-amber-400 tracking-tight flex items-center gap-2">
                 <span>👁️</span> Extraction Preview
               </h3>
-              <p className="text-amber-800/60 text-sm font-medium">Verify the data before committing to your shop.</p>
+              <p className="text-amber-500/60 text-sm font-medium">Verify the data before committing to your shop.</p>
             </div>
             <button
               onClick={() => setPreviewMenu(null)}
-              className="text-amber-900/40 hover:text-amber-900 transition-colors"
+              className="text-amber-400/40 hover:text-amber-400 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
@@ -845,13 +852,13 @@ Cheese Croissant 180..."
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
             {previewMenu.categories.map((cat, ci) => (
-              <div key={ci} className="bg-white p-4 rounded-2xl border border-amber-100 shadow-sm">
-                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2 px-1">{cat.name}</p>
+              <div key={ci} className="bg-background-secondary p-4 rounded-2xl border border-amber-500/20 shadow-sm">
+                <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2 px-1">{cat.name}</p>
                 <div className="space-y-1.5">
                   {cat.items.map((item, ii) => (
-                    <div key={ii} className="flex justify-between text-sm py-1 border-b border-slate-50 last:border-0">
-                      <span className="text-slate-700 font-medium">{item.name}</span>
-                      <span className="text-indigo-600 font-bold">₹{item.price}</span>
+                    <div key={ii} className="flex justify-between text-sm py-1 border-b border-border last:border-0">
+                      <span className="text-text-secondary font-medium">{item.name}</span>
+                      <span className="text-indigo-400 font-bold">₹{item.price}</span>
                     </div>
                   ))}
                 </div>
@@ -862,13 +869,13 @@ Cheese Croissant 180..."
           <div className="flex gap-3 pt-4">
             <button
               onClick={handleConfirmPreview}
-              className="flex-1 bg-green-600 text-white px-6 py-4 rounded-2xl font-black text-lg shadow-lg shadow-green-100 hover:bg-green-700 hover:shadow-green-200 transition-all active:scale-95"
+              className="flex-1 bg-green-600 text-white px-6 py-4 rounded-2xl font-black text-lg shadow-lg shadow-green-600/10 hover:bg-green-700 hover:shadow-green-600/20 transition-all active:scale-95"
             >
               Confirm & Save to Menu ✅
             </button>
             <button
               onClick={() => setPreviewMenu(null)}
-              className="bg-white text-slate-500 px-6 py-4 rounded-2xl font-bold border border-slate-200 hover:bg-slate-50 transition-all"
+              className="bg-background-tertiary text-text-muted px-6 py-4 rounded-2xl font-bold border border-border hover:bg-background-elevated transition-all"
             >
               Cancel
             </button>
@@ -877,36 +884,36 @@ Cheese Croissant 180..."
       )}
 
       {/* AI KNOWLEDGE BASE & LEARNING */}
-      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
+      <div className={sectionClass}>
+        <h2 className={`${headingClass} flex items-center gap-2`}>
           <span>🧠</span> AI Shop Knowledge (Advanced Tuning)
         </h2>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-text-muted">
           Enter detailed descriptions, suggestions, or "facts" about your products here. The AI will learn from this to answer customer questions better.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            <label className={labelClass}>
               1. Raw Item Descriptions / Notes
             </label>
             <textarea
               placeholder="Ex: 'Our Tracksuits are 100% cotton and perfect for gym. Suggest them if customers ask for breathable fabric.'"
               value={botKnowledgeBase}
               onChange={(e) => setBotKnowledgeBase(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 h-48 text-sm font-mono"
+              className={`${textareaClass} h-48 font-mono`}
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            <label className={labelClass}>
               2. What the AI Learnt (Editable)
             </label>
             <textarea
               placeholder="AI summary will appear here..."
               value={botLearnedContext}
               onChange={(e) => setBotLearnedContext(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 h-48 text-sm bg-slate-50 italic"
+              className={`${textareaClass} h-48 italic`}
             />
           </div>
         </div>
@@ -915,7 +922,7 @@ Cheese Croissant 180..."
           <button
             onClick={handleTrainAI}
             disabled={isTraining}
-            className={`bg-indigo-600 text-white px-5 py-2 rounded-lg transition shadow-sm ${isTraining ? "opacity-50 cursor-not-allowed" : "hover:bg-indigo-700"
+            className={`bg-accent text-white px-5 py-2 rounded-lg transition shadow-sm ${isTraining ? "opacity-50 cursor-not-allowed" : "hover:bg-accent-hover"
               }`}
           >
             {isTraining ? "AI is Learning..." : "Train AI Now 🚀"}
@@ -923,7 +930,7 @@ Cheese Croissant 180..."
 
           <button
             onClick={handleSaveKnowledge}
-            className="border border-slate-200 text-slate-600 px-5 py-2 rounded-lg hover:bg-slate-50 transition"
+            className="border border-border text-text-secondary px-5 py-2 rounded-lg hover:bg-background-tertiary transition"
           >
             Save Knowledge Manually
           </button>
@@ -931,11 +938,11 @@ Cheese Croissant 180..."
       </div>
 
       {/* SHOP POLICIES */}
-      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
+      <div className={sectionClass}>
+        <h2 className={`${headingClass} flex items-center gap-2`}>
           <span>📜</span> Shop Policies (Grounded Rules)
         </h2>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-text-muted">
           Define your delivery times, return policies, or store rules. The AI will use these to answer customer queries.
         </p>
 
@@ -943,13 +950,13 @@ Cheese Croissant 180..."
           placeholder="Ex: 'Delivery takes 2 days. No returns on food items. Open from 9 AM to 9 PM.'"
           value={botPolicies}
           onChange={(e) => setBotPolicies(e.target.value)}
-          className="w-full border rounded-lg px-3 py-2 h-32 text-sm font-mono"
+          className={`${textareaClass} h-32 font-mono`}
         />
 
         <div className="flex justify-end">
           <button
             onClick={handleSaveKnowledge}
-            className="bg-slate-800 text-white px-5 py-2 rounded-lg hover:bg-slate-900 transition shadow-sm"
+            className="bg-accent text-white px-5 py-2 rounded-lg hover:bg-accent-hover transition shadow-sm"
           >
             Save Policies
           </button>
@@ -958,24 +965,24 @@ Cheese Croissant 180..."
 
       {/* MENU EDITOR */}
       {generatedMenu && (
-        <div className="bg-white p-6 rounded-2xl shadow border space-y-6">
-          <h2 className="text-lg font-semibold">
+        <div className={sectionClass}>
+          <h2 className={headingClass}>
             Edit Menu (with Pricing)
           </h2>
 
           {generatedMenu.categories.map((cat: Category, cIndex: number) => (
-            <div key={cIndex} className="border p-4 rounded-xl space-y-4">
+            <div key={cIndex} className="border border-border p-4 rounded-xl space-y-4">
               <div className="flex justify-between items-center">
                 <input
                   value={cat.name}
                   onChange={(e) =>
                     updateCategoryName(cIndex, e.target.value)
                   }
-                  className="border px-2 py-1 rounded text-sm font-semibold"
+                  className={`${inputClass} w-auto font-semibold`}
                 />
                 <button
                   onClick={() => deleteCategory(cIndex)}
-                  className="text-red-500 text-xs"
+                  className="text-red-400 text-xs hover:text-red-500"
                 >
                   Delete
                 </button>
@@ -993,7 +1000,7 @@ Cheese Croissant 180..."
                         e.target.value
                       )
                     }
-                    className="flex-1 border px-2 py-1 rounded text-sm"
+                    className={`flex-1 ${inputClass}`}
                   />
 
                   <input
@@ -1007,12 +1014,12 @@ Cheese Croissant 180..."
                         e.target.value
                       )
                     }
-                    className="w-24 border px-2 py-1 rounded text-sm"
+                    className={`w-24 ${inputClass}`}
                   />
 
                   <button
                     onClick={() => deleteItem(cIndex, iIndex)}
-                    className="text-red-400 text-xs"
+                    className="text-red-400 text-xs hover:text-red-500"
                   >
                     Remove
                   </button>
@@ -1021,7 +1028,7 @@ Cheese Croissant 180..."
 
               <button
                 onClick={() => addItem(cIndex)}
-                className="text-indigo-600 text-sm"
+                className="text-accent text-sm hover:underline"
               >
                 + Add Item
               </button>
@@ -1030,7 +1037,7 @@ Cheese Croissant 180..."
 
           <button
             onClick={addCategory}
-            className="text-indigo-600 text-sm"
+            className="text-accent text-sm hover:underline"
           >
             + Add Category
           </button>
@@ -1038,7 +1045,7 @@ Cheese Croissant 180..."
           <div>
             <button
               onClick={saveEditedMenu}
-              className="bg-green-600 text-white px-5 py-2 rounded-lg"
+              className="bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 transition"
             >
               Save Menu Changes
             </button>

@@ -15,9 +15,9 @@ interface KnowledgeItem {
 }
 
 const TYPE_CONFIG = {
-  FAQ: { label: "FAQ", color: "bg-blue-100 text-blue-700 border-blue-200" },
-  RULE: { label: "Rule", color: "bg-amber-100 text-amber-700 border-amber-200" },
-  PRODUCT: { label: "Product", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  FAQ: { label: "FAQ", color: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+  RULE: { label: "Rule", color: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
+  PRODUCT: { label: "Product", color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
 };
 
 export function BotKnowledgeManager() {
@@ -90,9 +90,9 @@ export function BotKnowledgeManager() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Brain size={18} className="text-indigo-600" />
-          <h2 className="text-lg font-bold text-slate-900">Bot Knowledge Base</h2>
-          <span className="text-xs bg-indigo-50 text-indigo-600 font-bold px-2 py-0.5 rounded-full border border-indigo-100">
+          <Brain size={18} className="text-indigo-400" />
+          <h2 className="text-lg font-bold text-text-primary">Bot Knowledge Base</h2>
+          <span className="text-xs bg-indigo-500/10 text-indigo-400 font-bold px-2 py-0.5 rounded-full border border-indigo-500/20">
             {items.filter(i => i.isActive).length} active
           </span>
         </div>
@@ -107,7 +107,7 @@ export function BotKnowledgeManager() {
         )}
       </div>
 
-      <p className="text-xs text-slate-500 mb-4">
+      <p className="text-xs text-text-muted mb-4">
         Teach your AI bot specific FAQs, business rules, and product details. Active items are injected into every bot reply.
       </p>
 
@@ -120,13 +120,13 @@ export function BotKnowledgeManager() {
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4 space-y-3">
+            <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 mb-4 space-y-3">
               <div className="flex gap-2">
                 {(["FAQ", "RULE", "PRODUCT"] as const).map(t => (
                   <button
                     key={t}
                     onClick={() => setNewType(t)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${newType === t ? TYPE_CONFIG[t].color + " shadow-sm" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${newType === t ? TYPE_CONFIG[t].color + " shadow-sm" : "bg-background-tertiary border-border text-text-muted hover:border-accent"}`}
                   >
                     {TYPE_CONFIG[t].label}
                   </button>
@@ -138,7 +138,7 @@ export function BotKnowledgeManager() {
                 value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
                 maxLength={120}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                className="w-full border border-border bg-background-tertiary rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-accent"
               />
               <div>
                 <textarea
@@ -147,12 +147,12 @@ export function BotKnowledgeManager() {
                   onChange={e => setNewContent(e.target.value)}
                   rows={3}
                   maxLength={600}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                  className="w-full border border-border bg-background-tertiary rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-accent resize-none"
                 />
-                <div className="text-right text-[10px] text-slate-400 -mt-1">{newContent.length}/600</div>
+                <div className="text-right text-[10px] text-text-disabled -mt-1">{newContent.length}/600</div>
               </div>
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700 px-3 py-1.5">Cancel</button>
+                <button onClick={() => setShowForm(false)} className="text-sm text-text-muted hover:text-text-primary px-3 py-1.5">Cancel</button>
                 <button
                   onClick={handleAdd}
                   disabled={saving || !newTitle.trim() || !newContent.trim()}
@@ -170,11 +170,11 @@ export function BotKnowledgeManager() {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse" />
+            <div key={i} className="h-16 bg-background-tertiary rounded-xl animate-pulse" />
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="text-center py-10 text-slate-400">
+        <div className="text-center py-10 text-text-disabled">
           <Brain size={36} className="mx-auto mb-2 opacity-30" />
           <p className="text-sm">No knowledge items yet.</p>
           <p className="text-xs">Add FAQs, rules, and product info to make your bot smarter.</p>
@@ -188,7 +188,7 @@ export function BotKnowledgeManager() {
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className={`border rounded-xl p-3.5 transition-all ${item.isActive ? "bg-white border-slate-200" : "bg-slate-50 border-slate-100 opacity-60"}`}
+                className={`border rounded-xl p-3.5 transition-all ${item.isActive ? "bg-background-secondary border-border" : "bg-background-tertiary border-border opacity-60"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -196,15 +196,15 @@ export function BotKnowledgeManager() {
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${TYPE_CONFIG[item.type].color}`}>
                         {TYPE_CONFIG[item.type].label}
                       </span>
-                      <span className="text-sm font-semibold text-slate-800 truncate">{item.title}</span>
+                      <span className="text-sm font-semibold text-text-primary truncate">{item.title}</span>
                     </div>
-                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{item.content}</p>
+                    <p className="text-xs text-text-muted line-clamp-2 leading-relaxed">{item.content}</p>
                   </div>
                   {!isAgent && (
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         onClick={() => handleToggle(item)}
-                        className="text-slate-400 hover:text-indigo-600 transition"
+                        className="text-text-disabled hover:text-indigo-400 transition"
                         title={item.isActive ? "Deactivate" : "Activate"}
                       >
                         {item.isActive
@@ -214,7 +214,7 @@ export function BotKnowledgeManager() {
                       </button>
                       <button
                         onClick={() => handleDelete(item.id)}
-                        className="text-slate-300 hover:text-red-500 transition"
+                        className="text-text-disabled hover:text-red-400 transition"
                         title="Delete"
                       >
                         <Trash2 size={14} />

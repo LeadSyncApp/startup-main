@@ -35,52 +35,52 @@ export default function Reports() {
   return (
     <PageTransition className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">Reports & Analytics</h1>
-        <p className="mt-1 text-slate-500">
+        <h1 className="text-3xl font-bold text-text-primary">Reports & Analytics</h1>
+        <p className="mt-1 text-text-muted">
           General business performance reports.
         </p>
       </div>
 
       <div className="grid gap-4 lg:gap-6 md:grid-cols-2">
         {/* Performance Summary */}
-        <div className="rounded-2xl border bg-white p-6 shadow-sm space-y-4">
+        <div className="rounded-2xl border border-border bg-background-secondary p-6 shadow-card space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-slate-900">Performance Overview</h2>
-            <BarChart3 className="h-5 w-5 text-slate-400" />
+            <h2 className="font-semibold text-text-primary">Performance Overview</h2>
+            <BarChart3 className="h-5 w-5 text-text-disabled" />
           </div>
 
           {!stats ? (
             <div className="space-y-3 animate-pulse">
               {[1, 2, 3, 4].map(i => (
-                <div key={i} className="flex justify-between py-2 border-b border-slate-50">
-                  <div className="h-4 bg-slate-200 rounded w-1/3" />
-                  <div className="h-4 bg-slate-200 rounded w-1/5" />
+                <div key={i} className="flex justify-between py-2 border-b border-border">
+                  <div className="h-4 bg-background-tertiary rounded w-1/3" />
+                  <div className="h-4 bg-background-tertiary rounded w-1/5" />
                 </div>
               ))}
             </div>
           ) : (
           <div className="space-y-3">
-            <div className="flex justify-between text-sm py-2 border-b border-slate-50">
-              <span className="text-slate-500">Total Generated Revenue</span>
-              <span className="font-bold text-slate-900">{formatINR(stats?.totalRevenue || 0)}</span>
+            <div className="flex justify-between text-sm py-2 border-b border-border">
+              <span className="text-text-muted">Total Generated Revenue</span>
+              <span className="font-bold text-text-primary">{formatINR(stats?.totalRevenue || 0)}</span>
             </div>
-            <div className="flex justify-between text-sm py-2 border-b border-slate-50">
-              <span className="text-slate-500">Total Delivered Orders</span>
-              <span className="font-bold text-slate-900">{stats?.orderCount || 0}</span>
+            <div className="flex justify-between text-sm py-2 border-b border-border">
+              <span className="text-text-muted">Total Delivered Orders</span>
+              <span className="font-bold text-text-primary">{stats?.orderCount || 0}</span>
             </div>
-            <div className="flex justify-between text-sm py-2 border-b border-slate-50">
-              <span className="text-slate-500">Avg. Order Value</span>
-              <span className="font-bold text-slate-900">{formatINR(stats?.avgOrderValue || 0)}</span>
+            <div className="flex justify-between text-sm py-2 border-b border-border">
+              <span className="text-text-muted">Avg. Order Value</span>
+              <span className="font-bold text-text-primary">{formatINR(stats?.avgOrderValue || 0)}</span>
             </div>
             <div className="flex justify-between text-sm py-2">
-              <span className="text-slate-500">vs Previous Period</span>
+              <span className="text-text-muted">vs Previous Period</span>
               {trend !== null ? (
-                <span className={`font-medium flex items-center gap-1 ${trendPositive ? "text-emerald-600" : "text-red-500"}`}>
+                <span className={`font-medium flex items-center gap-1 ${trendPositive ? "text-emerald-400" : "text-red-400"}`}>
                   {trendPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                   {Math.abs(trend).toFixed(1)}% {trendPositive ? "growth" : "decline"}
                 </span>
               ) : (
-                <span className="text-slate-400 text-xs">Not enough data</span>
+                <span className="text-text-disabled text-xs">Not enough data</span>
               )}
             </div>
           </div>
@@ -88,12 +88,12 @@ export default function Reports() {
         </div>
 
         {/* Export Center */}
-        <div className="rounded-2xl border bg-slate-900 p-6 shadow-sm text-white space-y-4">
+        <div className="rounded-2xl border border-border bg-background-secondary p-6 shadow-card text-text-primary space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">Export Data</h2>
-            <Download className="h-5 w-5 text-slate-400" />
+            <Download className="h-5 w-5 text-text-disabled" />
           </div>
-          <p className="text-sm text-slate-400">Download your order and lead history for external analysis.</p>
+          <p className="text-sm text-text-muted">Download your order and lead history for external analysis.</p>
 
           <div className="grid grid-cols-2 gap-3 pt-2">
             <button
@@ -127,13 +127,13 @@ export default function Reports() {
       </div>
 
       {/* Info Card */}
-      <div className="bg-cyan-50 border border-cyan-100 rounded-2xl p-6 flex gap-4">
-        <div className="bg-cyan-100 p-2 rounded-lg h-fit">
-          <Info className="text-cyan-600" size={20} />
+      <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-2xl p-6 flex gap-4">
+        <div className="bg-cyan-500/20 p-2 rounded-lg h-fit">
+          <Info className="text-cyan-400" size={20} />
         </div>
         <div>
-          <h3 className="text-cyan-900 font-semibold text-sm">Automated Reporting</h3>
-          <p className="text-cyan-700 text-xs mt-1 leading-relaxed">
+          <h3 className="text-cyan-300 font-semibold text-sm">Automated Reporting</h3>
+          <p className="text-cyan-400/80 text-xs mt-1 leading-relaxed">
             LeadSync tracks all deliveries and revenue automatically using the Telegram integration.
             Detailed per-agent performance reports are available on the Revenue page.
           </p>

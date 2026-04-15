@@ -20,12 +20,6 @@ export default function OrderTracking() {
     useEffect(() => {
         const fetchOrder = async () => {
             try {
-                // Use the public endpoint (no auth required)
-                // Adjust api.get to NOT require auth if strictly public, 
-                // but 'api' client might attach token if present. 
-                // For public pages, we should use a raw fetch or ensure api client handles no-token.
-                // Assuming api client is fine or we use fetch.
-                // Let's use fetch to be safe and avoid AuthContext dependency issues if strictly public.
                 const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/public/orders/${id}`);
                 if (!res.ok) throw new Error("Order not found");
                 const data = await res.json();
@@ -40,18 +34,18 @@ export default function OrderTracking() {
     }, [id]);
 
     if (loading) return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="min-h-screen bg-background-primary flex items-center justify-center">
             <div className="h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
         </div>
     );
 
     if (error || !order) return (
-        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-            <div className="h-16 w-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4">
+        <div className="min-h-screen bg-background-primary flex flex-col items-center justify-center p-6 text-center">
+            <div className="h-16 w-16 bg-rose-500/10 text-rose-400 rounded-full flex items-center justify-center mb-4">
                 <AlertCircle size={32} />
             </div>
-            <h1 className="text-xl font-bold text-slate-900">Tracking Unavailable</h1>
-            <p className="text-slate-500 mt-2">{error}</p>
+            <h1 className="text-xl font-bold text-text-primary">Tracking Unavailable</h1>
+            <p className="text-text-muted mt-2">{error}</p>
         </div>
     );
 
@@ -74,10 +68,10 @@ export default function OrderTracking() {
     const isCancelled = order.status === "CANCELLED" || order.status === "REJECTED";
 
     return (
-        <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-background-primary py-12 px-4 sm:px-6 lg:px-8">
             {/* {order.status === "DELIVERED" && <Confetti numberOfPieces={200} recycle={false} />} */}
 
-            <div className="max-w-md mx-auto bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+            <div className="max-w-md mx-auto bg-background-secondary rounded-3xl shadow-xl overflow-hidden border border-border">
 
                 {/* Header */}
                 <div className="bg-indigo-600 p-8 text-center relative overflow-hidden">
@@ -95,14 +89,14 @@ export default function OrderTracking() {
 
                 {/* Content */}
                 <div className="p-8">
-                    <div className="flex justify-between items-center mb-8 pb-8 border-b border-slate-100">
+                    <div className="flex justify-between items-center mb-8 pb-8 border-b border-border">
                         <div>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Customer</p>
-                            <p className="font-bold text-slate-900 text-lg">{order.lead?.name || "Guest"}</p>
+                            <p className="text-xs font-bold text-text-disabled uppercase tracking-widest">Customer</p>
+                            <p className="font-bold text-text-primary text-lg">{order.lead?.name || "Guest"}</p>
                         </div>
                         <div className="text-right">
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Amount</p>
-                            <p className="font-bold text-slate-900 text-lg">₹{order.amount}</p>
+                            <p className="text-xs font-bold text-text-disabled uppercase tracking-widest">Amount</p>
+                            <p className="font-bold text-text-primary text-lg">₹{order.amount}</p>
                         </div>
                     </div>
 
@@ -110,7 +104,7 @@ export default function OrderTracking() {
                     {!isCancelled && (
                         <div className="space-y-8 relative">
                             {/* Vertical Line */}
-                            <div className="absolute left-6 top-2 bottom-6 w-0.5 bg-slate-100 -z-10" />
+                            <div className="absolute left-6 top-2 bottom-6 w-0.5 bg-border -z-10" />
 
                             {STATUS_STEPS.map((step, index) => {
                                 const isActive = index <= activeStep;
@@ -128,17 +122,16 @@ export default function OrderTracking() {
                                         <div className={`
                         h-12 w-12 rounded-full flex items-center justify-center border-4 transition-all z-10
                         ${isActive
-                                                ? `bg-indigo-600 border-indigo-100 text-white shadow-lg shadow-indigo-500/30 ${isCurrent ? 'scale-110 ring-4 ring-indigo-50' : ''}`
-                                                : 'bg-white border-slate-100 text-slate-300'}
-                      `}>
+                                                ? `bg-indigo-600 border-indigo-500/30 text-white shadow-lg shadow-indigo-500/30 ${isCurrent ? 'scale-110 ring-4 ring-indigo-500/20' : ''}`
+                                                : 'bg-background-tertiary border-border text-text-disabled'}`}>
                                             <Icon size={isCurrent ? 24 : 18} />
                                         </div>
                                         <div>
-                                            <h3 className={`font-bold text-sm ${isActive ? 'text-slate-900' : 'text-slate-400'}`}>
+                                            <h3 className={`font-bold text-sm ${isActive ? 'text-text-primary' : 'text-text-disabled'}`}>
                                                 {step.label}
                                             </h3>
                                             {isCurrent && (
-                                                <p className="text-xs text-indigo-500 font-medium mt-0.5">
+                                                <p className="text-xs text-indigo-400 font-medium mt-0.5">
                                                     Current Status
                                                 </p>
                                             )}
@@ -150,20 +143,20 @@ export default function OrderTracking() {
                     )}
 
                     {isCancelled && (
-                        <div className="p-4 bg-rose-50 text-rose-700 rounded-2xl text-center text-sm font-bold border border-rose-100">
+                        <div className="p-4 bg-rose-500/10 text-rose-400 rounded-2xl text-center text-sm font-bold border border-rose-500/20">
                             This order has been cancelled.
                         </div>
                     )}
 
-                    <div className="mt-10 pt-6 border-t border-slate-100">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Order Summary</h4>
-                        <p className="text-slate-700 font-medium bg-slate-50 p-4 rounded-2xl border border-slate-100 text-sm leading-relaxed">
+                    <div className="mt-10 pt-6 border-t border-border">
+                        <h4 className="text-xs font-bold text-text-disabled uppercase tracking-widest mb-3">Order Summary</h4>
+                        <p className="text-text-secondary font-medium bg-background-tertiary p-4 rounded-2xl border border-border text-sm leading-relaxed">
                             {order.summary}
                         </p>
                     </div>
 
                     <div className="mt-8 text-center">
-                        <a href="/" className="text-indigo-600 font-bold text-sm hover:underline">
+                        <a href="/" className="text-indigo-400 font-bold text-sm hover:underline">
                             Need Help? Contact Support
                         </a>
                     </div>
@@ -171,7 +164,7 @@ export default function OrderTracking() {
                 </div>
             </div>
 
-            <p className="text-center text-slate-400 text-xs mt-8">
+            <p className="text-center text-text-disabled text-xs mt-8">
                 Powered by LeadSync
             </p>
         </div>

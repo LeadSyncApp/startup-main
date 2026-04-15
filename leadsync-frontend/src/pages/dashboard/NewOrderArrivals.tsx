@@ -181,22 +181,22 @@ export default function NewOrderArrivals() {
   };
 
   const getPriorityColor = (priorityScore: number) => {
-    if (priorityScore >= 80) return "text-red-600 bg-red-50 border-red-200";
-    if (priorityScore >= 60) return "text-orange-600 bg-orange-50 border-orange-200";
-    return "text-blue-600 bg-blue-50 border-blue-200";
+    if (priorityScore >= 80) return "text-red-400 bg-red-500/10 border-red-500/20";
+    if (priorityScore >= 60) return "text-orange-400 bg-orange-500/10 border-orange-500/20";
+    return "text-blue-400 bg-blue-500/10 border-blue-500/20";
   };
 
   const getCustomerTypeBadge = (history: CustomerHistory) => {
     if (history.wasDeleted) {
-      return { text: "Returning Deleted", color: "bg-purple-100 text-purple-700 border-purple-200" };
+      return { text: "Returning Deleted", color: "bg-purple-500/10 text-purple-400 border-purple-500/20" };
     }
     if (history.wasClosed) {
-      return { text: "Returning Closed", color: "bg-indigo-100 text-indigo-700 border-indigo-200" };
+      return { text: "Returning Closed", color: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20" };
     }
     if (history.isExistingCustomer) {
-      return { text: "Returning Customer", color: "bg-green-100 text-green-700 border-green-200" };
+      return { text: "Returning Customer", color: "bg-green-500/10 text-green-400 border-green-500/20" };
     }
-    return { text: "New Customer", color: "bg-gray-100 text-gray-700 border-gray-200" };
+    return { text: "New Customer", color: "bg-background-elevated text-text-muted border-border" };
   };
 
   const handleSelect = (orderId: string) => {
@@ -220,7 +220,7 @@ export default function NewOrderArrivals() {
     return (
       <PageTransition className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-black text-slate-900">New Order Arrivals</h1>
+          <h1 className="text-3xl font-black text-text-primary">New Order Arrivals</h1>
         </div>
         <TableSkeleton rows={8} cols={6} />
       </PageTransition>
@@ -232,23 +232,23 @@ export default function NewOrderArrivals() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3">
-            <ShoppingCart className="text-indigo-600" />
+          <h1 className="text-3xl font-black text-text-primary flex items-center gap-3">
+            <ShoppingCart className="text-indigo-400" />
             New Order Arrivals
           </h1>
-          <p className="text-slate-500 mt-2">
+          <p className="text-text-muted mt-2">
             All incoming orders requiring claim - universal intake queue
           </p>
         </div>
         
         {selectedOrders.size > 0 && (
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-slate-600">
+            <span className="text-sm font-medium text-text-secondary">
               {selectedOrders.size} selected
             </span>
             <button
               onClick={handleBulkClaim}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition active:scale-95"
+              className="px-4 py-2 bg-accent text-white rounded-xl font-medium hover:bg-accent-hover transition active:scale-95"
             >
               Claim All Selected
             </button>
@@ -258,79 +258,79 @@ export default function NewOrderArrivals() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200">
+        <div className="bg-background-secondary p-6 rounded-2xl border border-border shadow-card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">In Queue</p>
-              <p className="text-2xl font-bold text-slate-900">{orders.length}</p>
+              <p className="text-sm font-medium text-text-muted">In Queue</p>
+              <p className="text-2xl font-bold text-text-primary">{orders.length}</p>
             </div>
-            <Clock className="text-slate-400" size={20} />
+            <Clock className="text-text-disabled" size={20} />
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-2xl border border-slate-200">
+        <div className="bg-background-secondary p-6 rounded-2xl border border-border shadow-card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">New Customers</p>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-sm font-medium text-text-muted">New Customers</p>
+              <p className="text-2xl font-bold text-text-primary">
                 {orders.filter(o => !o.customerHistory.isExistingCustomer).length}
               </p>
             </div>
-            <User className="text-slate-400" size={20} />
+            <User className="text-text-disabled" size={20} />
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-2xl border border-slate-200">
+        <div className="bg-background-secondary p-6 rounded-2xl border border-border shadow-card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">Returning</p>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-sm font-medium text-text-muted">Returning</p>
+              <p className="text-2xl font-bold text-text-primary">
                 {orders.filter(o => o.customerHistory.isExistingCustomer).length}
               </p>
             </div>
-            <User className="text-slate-400" size={20} />
+            <User className="text-text-disabled" size={20} />
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-2xl border border-slate-200">
+        <div className="bg-background-secondary p-6 rounded-2xl border border-border shadow-card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">High Priority</p>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-sm font-medium text-text-muted">High Priority</p>
+              <p className="text-2xl font-bold text-text-primary">
                 {orders.filter(o => o.priorityScore >= 70).length}
               </p>
             </div>
-            <AlertCircle className="text-slate-400" size={20} />
+            <AlertCircle className="text-text-disabled" size={20} />
           </div>
         </div>
       </div>
 
       {/* Orders Table */}
       {orders.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
-          <ShoppingCart className="mx-auto text-slate-300 mb-4" size={48} />
-          <h3 className="text-xl font-bold text-slate-900 mb-2">No new orders</h3>
-          <p className="text-slate-500">All orders have been claimed. Check back later for new arrivals.</p>
+        <div className="bg-background-secondary rounded-2xl border border-border p-12 text-center">
+          <ShoppingCart className="mx-auto text-text-disabled mb-4" size={48} />
+          <h3 className="text-xl font-bold text-text-primary mb-2">No new orders</h3>
+          <p className="text-text-muted">All orders have been claimed. Check back later for new arrivals.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="bg-background-secondary rounded-2xl border border-border overflow-hidden shadow-card">
           {/* Table Header */}
-          <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
+          <div className="bg-background-tertiary px-6 py-4 border-b border-border">
             <div className="flex items-center gap-4">
               <input
                 type="checkbox"
                 checked={selectedOrders.size === orders.length}
                 onChange={handleSelectAll}
-                className="rounded border-slate-300"
+                className="rounded border-border"
               />
-              <span className="text-sm font-medium text-slate-700">
+              <span className="text-sm font-medium text-text-secondary">
                 {selectedOrders.size > 0 ? `${selectedOrders.size} selected` : "Select all"}
               </span>
             </div>
           </div>
 
           {/* Orders List */}
-          <div className="divide-y divide-slate-200">
+          <div className="divide-y divide-border">
             <AnimatePresence>
               {orders.map((order) => {
                 const customerBadge = getCustomerTypeBadge(order.customerHistory);
@@ -342,21 +342,21 @@ export default function NewOrderArrivals() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    className="p-6 hover:bg-slate-50 transition-colors"
+                    className="p-6 hover:bg-background-tertiary/50 transition-colors"
                   >
                     <div className="flex items-start gap-4">
                       <input
                         type="checkbox"
                         checked={selectedOrders.has(order.id)}
                         onChange={() => handleSelect(order.id)}
-                        className="mt-1 rounded border-slate-300"
+                        className="mt-1 rounded border-border"
                       />
                       
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-4 mb-3">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
-                              <h3 className="font-bold text-slate-900">
+                              <h3 className="font-bold text-text-primary">
                                 {order.lead.name || "Customer"}
                               </h3>
                               <span className={`text-xs font-bold px-2 py-1 rounded-full border ${customerBadge.color}`}>
@@ -367,10 +367,10 @@ export default function NewOrderArrivals() {
                               </span>
                             </div>
                             
-                            <div className="flex items-center gap-4 text-sm text-slate-600">
+                            <div className="flex items-center gap-4 text-sm text-text-secondary">
                               <span className="flex items-center gap-1">
                                 <span>{order.lead.contact}</span>
-                                <span className="text-slate-400">•</span>
+                                <span className="text-text-disabled">•</span>
                                 <span>{order.lead.channel}</span>
                               </span>
                               <span className="flex items-center gap-1">
@@ -382,7 +382,7 @@ export default function NewOrderArrivals() {
                           
                           <button
                             onClick={(e) => handleClaim(order.id, e)}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition active:scale-95 flex items-center gap-2"
+                            className="px-4 py-2 bg-accent text-white rounded-xl font-medium hover:bg-accent-hover transition active:scale-95 flex items-center gap-2"
                           >
                             Claim Order
                             <ArrowRight size={16} />
@@ -391,34 +391,34 @@ export default function NewOrderArrivals() {
                         
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-slate-700">Order:</span>
-                            <span className="font-bold text-slate-900">{order.summary}</span>
+                            <span className="text-sm font-medium text-text-secondary">Order:</span>
+                            <span className="font-bold text-text-primary">{order.summary}</span>
                           </div>
                           
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-slate-700">Value:</span>
-                            <span className="font-bold text-green-600">₹{order.amount.toLocaleString()}</span>
+                            <span className="text-sm font-medium text-text-secondary">Value:</span>
+                            <span className="font-bold text-green-400">₹{order.amount.toLocaleString()}</span>
                           </div>
                           
                           {order.customerHistory.isExistingCustomer && (
-                            <div className="bg-slate-50 rounded-lg p-3 space-y-1">
+                            <div className="bg-background-tertiary rounded-lg p-3 space-y-1">
                               <div className="flex items-center gap-2 text-sm">
-                                <History size={14} className="text-slate-500" />
-                                <span className="font-medium text-slate-700">Customer History:</span>
+                                <History size={14} className="text-text-muted" />
+                                <span className="font-medium text-text-secondary">Customer History:</span>
                               </div>
                               <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div>
-                                  <span className="text-slate-500">Previous Orders:</span>
-                                  <span className="font-medium text-slate-900">{order.customerHistory.previousOrderCount}</span>
+                                  <span className="text-text-muted">Previous Orders:</span>
+                                  <span className="font-medium text-text-primary"> {order.customerHistory.previousOrderCount}</span>
                                 </div>
                                 <div>
-                                  <span className="text-slate-500">Previous Spend:</span>
-                                  <span className="font-medium text-slate-900">₹{order.customerHistory.previousSpend.toLocaleString()}</span>
+                                  <span className="text-text-muted">Previous Spend:</span>
+                                  <span className="font-medium text-text-primary"> ₹{order.customerHistory.previousSpend.toLocaleString()}</span>
                                 </div>
                                 {order.customerHistory.previousAgent && (
                                   <div className="col-span-2">
-                                    <span className="text-slate-500">Previous Agent:</span>
-                                    <span className="font-medium text-slate-900">{order.customerHistory.previousAgent.name}</span>
+                                    <span className="text-text-muted">Previous Agent:</span>
+                                    <span className="font-medium text-text-primary"> {order.customerHistory.previousAgent.name}</span>
                                   </div>
                                 )}
                               </div>

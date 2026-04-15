@@ -17,9 +17,9 @@ interface LeadsTableProps {
 
 const PriorityBadge = ({ priority }: { priority: string }) => {
   const colors: Record<string, string> = {
-    URGENT: "bg-red-100 text-red-700 border-red-200",
-    HIGH: "bg-orange-100 text-orange-700 border-orange-200",
-    NORMAL: "bg-slate-100 text-slate-600 border-slate-200",
+    URGENT: "bg-red-500/10 text-red-400 border-red-500/20",
+    HIGH: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+    NORMAL: "bg-background-elevated text-text-muted border-border",
   };
   return (
     <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${colors[priority] || colors.NORMAL}`}>
@@ -31,12 +31,12 @@ const PriorityBadge = ({ priority }: { priority: string }) => {
 const IntentBadge = ({ intent }: { intent: string }) => {
   if (!intent || intent === "BROWSING") return null;
   const colors: Record<string, string> = {
-    ORDERING: "text-green-600 bg-green-50 border-green-200",
-    COMPLAINT: "text-red-600 bg-red-50 border-red-200",
-    SUPPORT: "text-blue-600 bg-blue-50 border-blue-200",
+    ORDERING: "text-green-400 bg-green-500/10 border-green-500/20",
+    COMPLAINT: "text-red-400 bg-red-500/10 border-red-500/20",
+    SUPPORT: "text-blue-400 bg-blue-500/10 border-blue-500/20",
   };
   return (
-    <span className={`px-2 py-0.5 ml-2 rounded text-[10px] font-medium border ${colors[intent] || "text-gray-500"}`}>
+    <span className={`px-2 py-0.5 ml-2 rounded text-[10px] font-medium border ${colors[intent] || "text-text-muted"}`}>
       {intent}
     </span>
   );
@@ -47,7 +47,7 @@ const PendingOrderBadge = ({ state, claimedBy }: { state: string; claimedBy?: st
   
   if (state === "PENDING_APPROVAL") {
     return (
-      <span className="px-2 py-0.5 rounded text-[10px] font-medium border bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1">
+      <span className="px-2 py-0.5 rounded text-[10px] font-medium border bg-blue-500/10 text-blue-400 border-blue-500/20 flex items-center gap-1">
         <Clock size={10} />
         New Order Arrival
       </span>
@@ -56,7 +56,7 @@ const PendingOrderBadge = ({ state, claimedBy }: { state: string; claimedBy?: st
   
   if (state === "CLAIMED_FOR_APPROVAL") {
     return (
-      <span className="px-2 py-0.5 rounded text-[10px] font-medium border bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
+      <span className="px-2 py-0.5 rounded text-[10px] font-medium border bg-green-500/10 text-green-400 border-green-500/20 flex items-center gap-1">
         <UserCheck size={10} />
         Claimed by {claimedBy || "Agent"}
       </span>
@@ -71,9 +71,9 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
   return (
     <>
       {/* Desktop Table */}
-      <div className="hidden md:block bg-white rounded-xl shadow border overflow-hidden">
+      <div className="hidden md:block bg-background-secondary rounded-xl shadow-card border border-border overflow-hidden">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-600 font-semibold tracking-wide">
+          <thead className="bg-background-tertiary text-xs uppercase text-text-muted font-semibold tracking-wide">
             <tr>
               {hasSelect && (
                 <th className="px-4 py-3 w-10">
@@ -81,7 +81,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                     type="checkbox"
                     checked={!!allSelected}
                     onChange={onSelectAll}
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 cursor-pointer accent-indigo-600"
+                    className="h-4 w-4 rounded border-border text-accent cursor-pointer accent-indigo-500"
                     title="Select all"
                   />
                 </th>
@@ -94,7 +94,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
               <th className="px-6 py-3 text-left w-[20%]">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-border">
             {leads.map((lead) => {
               const isSelected = selectedIds?.has(lead.id);
               return (
@@ -104,8 +104,8 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                 animate={{ opacity: 1 }}
                 onClick={() => onRowClick?.(lead)}
                 className={`cursor-pointer transition duration-150 group ${
-                  isSelected ? "bg-indigo-50/60" :
-                  lead.priority === "URGENT" ? "bg-red-50/30 hover:bg-red-50" : "hover:bg-slate-50"
+                  isSelected ? "bg-indigo-500/10" :
+                  lead.priority === "URGENT" ? "bg-red-500/5 hover:bg-red-500/10" : "hover:bg-background-tertiary/50"
                 }`}
               >
                 {hasSelect && (
@@ -114,39 +114,39 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                       type="checkbox"
                       checked={!!isSelected}
                       onChange={() => onSelect?.(lead.id)}
-                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 cursor-pointer accent-indigo-600"
+                      className="h-4 w-4 rounded border-border text-accent cursor-pointer accent-indigo-500"
                     />
                   </td>
                 )}
                 <td className="px-6 py-4">
-                  <div className="font-bold text-slate-900 flex items-center gap-2">
+                  <div className="font-bold text-text-primary flex items-center gap-2">
                     {lead.name || "Unknown"}
                     {lead.segment === "VIP" && <span className="text-yellow-500 text-xs">⭐</span>}
                   </div>
-                  <div className="text-xs text-slate-500 truncate max-w-[180px]">
+                  <div className="text-xs text-text-muted truncate max-w-[180px]">
                     {lead.lastMessage || "No messages yet"}
                   </div>
                   {lead.hasPendingOrderApproval && (
                     <div className="mt-1">
                       <PendingOrderBadge state={lead.pendingOrderState} claimedBy={lead.agentAssigned} />
                       {lead.pendingOrderAmount && (
-                        <div className="text-xs font-semibold text-blue-600 mt-1">
+                        <div className="text-xs font-semibold text-blue-400 mt-1">
                           Order: ₹{lead.pendingOrderAmount.toLocaleString()}
                         </div>
                       )}
                       {lead.pendingOrderSummary && (
-                        <div className="text-xs text-slate-500 mt-0.5 truncate max-w-[180px]">
+                        <div className="text-xs text-text-muted mt-0.5 truncate max-w-[180px]">
                           {lead.pendingOrderSummary}
                         </div>
                       )}
                       {/* 🆕 Customer history context */}
                       {lead.isExistingCustomer && (
                         <div className="mt-2 space-y-1">
-                          <div className="text-xs text-slate-600 font-medium">
+                          <div className="text-xs text-text-secondary font-medium">
                             📦 Existing Customer ({lead.previousOrderCount} orders, ₹{lead.previousSpend?.toLocaleString()})
                           </div>
                           {lead.previousAgentName && (
-                            <div className="text-xs text-slate-500 italic">
+                            <div className="text-xs text-text-muted italic">
                               Previously handled by: {lead.previousAgentName}
                             </div>
                           )}
@@ -155,7 +155,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                     </div>
                   )}
                   {lead.suggestedAction && lead.suggestedAction !== "Monitor" && (
-                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mt-1 inline-block">
+                    <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded mt-1 inline-block">
                       → {lead.suggestedAction}
                     </span>
                   )}
@@ -163,10 +163,10 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                 <td className="px-6 py-4">
                   <div className="flex flex-col gap-1 w-16">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-slate-700">{lead.aiScore ?? 0}</span>
-                      <span className="text-[9px] text-slate-400">/100</span>
+                      <span className="text-[10px] font-black text-text-secondary">{lead.aiScore ?? 0}</span>
+                      <span className="text-[9px] text-text-disabled">/100</span>
                     </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-background-tertiary rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all ${
                           (lead.aiScore ?? 0) >= 70 ? "bg-emerald-500" :
@@ -176,7 +176,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                       />
                     </div>
                     {(lead.daysSinceActive ?? 0) > 7 && (
-                      <span className="text-[9px] text-red-500 font-bold">{lead.daysSinceActive}d inactive</span>
+                      <span className="text-[9px] text-red-400 font-bold">{lead.daysSinceActive}d inactive</span>
                     )}
                   </div>
                 </td>
@@ -185,26 +185,26 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                     <PriorityBadge priority={lead.priority} />
                     <IntentBadge intent={lead.intent} />
                     {lead.agentAssigned ? (
-                      <span className="text-[10px] text-slate-500 font-mono mt-1 bg-slate-100 rounded px-1">
+                      <span className="text-[10px] text-text-muted font-mono mt-1 bg-background-tertiary rounded px-1">
                         {lead.agentAssigned}
                       </span>
                     ) : (
-                      <span className="text-[10px] text-slate-400 italic mt-1">Unassigned</span>
+                      <span className="text-[10px] text-text-disabled italic mt-1">Unassigned</span>
                     )}
                   </div>
                 </td>
-                <td className="px-6 py-4 text-slate-600">
+                <td className="px-6 py-4 text-text-secondary">
                   <div className="flex flex-col text-xs">
-                    <span className="font-semibold text-slate-900">₹{lead.totalSpend?.toLocaleString() || "0"}</span>
-                    <span className="text-slate-400">{lead.orderCount || 0} Orders</span>
+                    <span className="font-semibold text-text-primary">₹{lead.totalSpend?.toLocaleString() || "0"}</span>
+                    <span className="text-text-disabled">{lead.orderCount || 0} Orders</span>
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <span className="bg-slate-100 px-2 py-1 rounded text-xs font-semibold text-slate-600">{lead.channel}</span>
+                  <span className="bg-background-tertiary px-2 py-1 rounded text-xs font-semibold text-text-secondary">{lead.channel}</span>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex flex-col text-xs text-slate-400">
+                    <div className="flex flex-col text-xs text-text-disabled">
                       <span>{new Date(lead.lastActiveAt || lead.createdAt).toLocaleDateString()}</span>
                       <span>{new Date(lead.lastActiveAt || lead.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
@@ -215,7 +215,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                         className={`text-xs px-3 py-1.5 rounded-md shadow-sm transition font-medium whitespace-nowrap ml-auto active:scale-95 flex items-center gap-1 ${
                           lead.canCurrentUserClaim || currentUser?.role === "ADMIN" || currentUser?.role === "OWNER"
                             ? "bg-blue-600 text-white hover:bg-blue-700"
-                            : "bg-slate-300 text-slate-500 cursor-not-allowed"
+                            : "bg-background-elevated text-text-disabled cursor-not-allowed"
                         }`}
                       >
                         <Package size={12} />
@@ -225,7 +225,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                     {!lead.agentAssigned && lead.conversationId && !lead.hasPendingOrderApproval && (
                       <button
                         onClick={(e) => onClaim?.(lead.conversationId, e)}
-                        className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-md shadow-sm hover:bg-indigo-700 transition font-medium whitespace-nowrap ml-auto active:scale-95"
+                        className="bg-accent text-white text-xs px-3 py-1.5 rounded-md shadow-sm hover:bg-accent-hover transition font-medium whitespace-nowrap ml-auto active:scale-95"
                       >
                         Claim Chat
                       </button>
@@ -249,9 +249,9 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={() => onRowClick?.(lead)}
-            className={`bg-white rounded-xl border p-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all ${
-              isSelected ? "border-indigo-300 bg-indigo-50/40 ring-1 ring-indigo-200" :
-              lead.priority === "URGENT" ? "border-red-200 bg-red-50/30" : "border-slate-200"
+            className={`bg-background-secondary rounded-xl border p-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all ${
+              isSelected ? "border-indigo-500/50 bg-indigo-500/10 ring-1 ring-indigo-500/30" :
+              lead.priority === "URGENT" ? "border-red-500/30 bg-red-500/5" : "border-border"
             }`}
           >
             <div className="flex items-start justify-between mb-2">
@@ -262,40 +262,40 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                       type="checkbox"
                       checked={!!isSelected}
                       onChange={() => onSelect?.(lead.id)}
-                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 cursor-pointer accent-indigo-600"
+                      className="h-4 w-4 rounded border-border text-accent cursor-pointer accent-indigo-500"
                       onClick={e => e.stopPropagation()}
                     />
                   </div>
                 )}
                 <div>
-                  <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                  <p className="font-bold text-text-primary flex items-center gap-1.5">
                     {lead.name || "Unknown"}
                     {lead.segment === "VIP" && <span className="text-yellow-500 text-xs">⭐</span>}
                   </p>
-                  <p className="text-xs text-slate-500 truncate max-w-[200px]">
+                  <p className="text-xs text-text-muted truncate max-w-[200px]">
                     {lead.lastMessage || "No messages yet"}
                   </p>
                   {lead.hasPendingOrderApproval && (
                     <div className="mt-1">
                       <PendingOrderBadge state={lead.pendingOrderState} claimedBy={lead.agentAssigned} />
                       {lead.pendingOrderAmount && (
-                        <div className="text-xs font-semibold text-blue-600 mt-1">
+                        <div className="text-xs font-semibold text-blue-400 mt-1">
                           Order: ₹{lead.pendingOrderAmount.toLocaleString()}
                         </div>
                       )}
                       {lead.pendingOrderSummary && (
-                        <div className="text-xs text-slate-500 mt-0.5 truncate max-w-[200px]">
+                        <div className="text-xs text-text-muted mt-0.5 truncate max-w-[200px]">
                           {lead.pendingOrderSummary}
                         </div>
                       )}
                       {/* 🆕 Customer history context */}
                       {lead.isExistingCustomer && (
                         <div className="mt-2 space-y-1">
-                          <div className="text-xs text-slate-600 font-medium">
+                          <div className="text-xs text-text-secondary font-medium">
                             📦 Existing Customer ({lead.previousOrderCount} orders, ₹{lead.previousSpend?.toLocaleString()})
                           </div>
                           {lead.previousAgentName && (
-                            <div className="text-xs text-slate-500 italic">
+                            <div className="text-xs text-text-muted italic">
                               Previously handled by: {lead.previousAgentName}
                             </div>
                           )}
@@ -305,7 +305,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                   )}
                 </div>
               </div>
-              <span className="bg-slate-100 px-2 py-1 rounded text-[10px] font-semibold text-slate-600 shrink-0">
+              <span className="bg-background-tertiary px-2 py-1 rounded text-[10px] font-semibold text-text-secondary shrink-0">
                 {lead.channel}
               </span>
             </div>
@@ -315,7 +315,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                 <IntentBadge intent={lead.intent} />
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-slate-700">₹{lead.totalSpend?.toLocaleString() || "0"}</span>
+                <span className="text-xs font-semibold text-text-secondary">₹{lead.totalSpend?.toLocaleString() || "0"}</span>
                 {lead.hasPendingOrderApproval && lead.pendingOrderState === "PENDING_APPROVAL" && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onClaimPendingOrder?.(lead.id, e); }}
@@ -323,7 +323,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                     className={`text-xs px-3 py-1.5 rounded-md shadow-sm font-medium active:scale-95 flex items-center gap-1 ${
                       lead.canCurrentUserClaim || currentUser?.role === "ADMIN" || currentUser?.role === "OWNER"
                         ? "bg-blue-600 text-white"
-                        : "bg-slate-300 text-slate-500 cursor-not-allowed"
+                        : "bg-background-elevated text-text-disabled cursor-not-allowed"
                     }`}
                   >
                     <Package size={12} />
@@ -333,7 +333,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                 {!lead.agentAssigned && lead.conversationId && !lead.hasPendingOrderApproval && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onClaim?.(lead.conversationId, e); }}
-                    className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-md shadow-sm font-medium active:scale-95"
+                    className="bg-accent text-white text-xs px-3 py-1.5 rounded-md shadow-sm font-medium active:scale-95"
                   >
                     Claim
                   </button>

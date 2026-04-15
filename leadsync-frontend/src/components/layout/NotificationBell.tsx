@@ -132,16 +132,16 @@ export default function NotificationBell() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.97 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden"
+            className="absolute right-0 mt-2 w-80 bg-background-secondary rounded-2xl shadow-2xl border border-border z-50 overflow-hidden"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">Notifications</h3>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <h3 className="text-sm font-bold text-text-primary">Notifications</h3>
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
                   disabled={markingAll}
-                  className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                  className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
                 >
                   <CheckCheck className="w-3.5 h-3.5" />
                   {markingAll ? "Marking..." : "Mark all read"}
@@ -150,14 +150,14 @@ export default function NotificationBell() {
             </div>
 
             {/* List */}
-            <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+            <div className="max-h-80 overflow-y-auto divide-y divide-border">
               {loading && (
-                <div className="py-8 text-center text-slate-400 text-sm animate-pulse">Loading...</div>
+                <div className="py-8 text-center text-text-disabled text-sm animate-pulse">Loading...</div>
               )}
               {!loading && notifications.length === 0 && (
                 <div className="py-10 text-center">
-                  <Bell className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                  <p className="text-sm text-slate-400">All caught up!</p>
+                  <Bell className="w-8 h-8 text-text-disabled mx-auto mb-2" />
+                  <p className="text-sm text-text-disabled">All caught up!</p>
                 </div>
               )}
               {!loading && notifications.map((n) => (
@@ -165,18 +165,18 @@ export default function NotificationBell() {
                   key={n.id}
                   onClick={() => !n.isRead && markAsRead(n.id)}
                   className={`flex gap-3 px-4 py-3 cursor-pointer transition-colors ${
-                    n.isRead ? "bg-white" : "bg-indigo-50/50 hover:bg-indigo-50"
+                    n.isRead ? "bg-background-secondary" : "bg-indigo-500/5 hover:bg-indigo-500/10"
                   }`}
                 >
                   {/* Type icon */}
-                  <div className="mt-0.5 flex-shrink-0 w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
+                  <div className="mt-0.5 flex-shrink-0 w-7 h-7 rounded-full bg-background-tertiary flex items-center justify-center">
                     {TYPE_ICON[n.type] ?? TYPE_ICON.SYSTEM}
                   </div>
                   {/* Body */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-800 truncate">{n.title}</p>
-                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.body}</p>
-                    <p className="text-[10px] text-slate-400 mt-1">{timeAgo(n.createdAt)}</p>
+                    <p className="text-xs font-semibold text-text-primary truncate">{n.title}</p>
+                    <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{n.body}</p>
+                    <p className="text-[10px] text-text-disabled mt-1">{timeAgo(n.createdAt)}</p>
                   </div>
                   {/* Unread dot */}
                   {!n.isRead && (
@@ -188,8 +188,8 @@ export default function NotificationBell() {
 
             {/* Footer */}
             {notifications.length > 0 && (
-              <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50/50">
-                <p className="text-[10px] text-center text-slate-400">Showing last {notifications.length} notifications</p>
+              <div className="px-4 py-2.5 border-t border-border bg-background-tertiary">
+                <p className="text-[10px] text-center text-text-disabled">Showing last {notifications.length} notifications</p>
               </div>
             )}
           </motion.div>
