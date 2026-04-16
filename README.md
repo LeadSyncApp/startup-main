@@ -1,4 +1,4 @@
-# **LeadSync CRM** – Professional SaaS Lead Management Platform
+##**LeadSync CRM** – Professional SaaS Lead Management Platform
 
 > **Production-ready frontend** for a multi-tenant, industry-agnostic SaaS CRM. Built with **React 18**, **TypeScript**, **Tailwind CSS**, and **mock data placeholders**. Deploy ready, backend-agnostic, works for any vertical (Retail, Bakery, E-Commerce, Services, Real Estate, etc.).
 
