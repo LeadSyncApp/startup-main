@@ -2,6 +2,7 @@ import { Router, Response } from "express";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { prisma } from "../lib/prisma";
 import { newOrderArrivalService } from "../services/newOrderArrival.service";
+import { emitToCompany } from "../lib/socket";
 
 const router = Router();
 
@@ -186,6 +187,87 @@ router.get("/customer/:leadId/history", authMiddleware, async (req: AuthRequest,
   } catch (error) {
     console.error("Get customer history error:", error);
     res.status(500).json({ message: "Failed to fetch customer history" });
+  }
+});
+
+/* ===============================
+   AGENT MANUAL ORDER CONFIRMATION
+================================== */
+router.post("/confirm-order/:orderId", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const agentId = req.user!.userId;
+    const agentName = req.user!.name;
+    const agentRole = req.user!.role;
+
+    // Verify the order exists and is in NEW status
+    const order = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+        status: "NEW",
+        processedById: agentId, // Must be claimed by this agent
+      },
+      include: {
+        conversation: { include: { lead: true } },
+        lead: true
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({ 
+        message: "Order not found or not eligible for confirmation" 
+      });
+    }
+
+    // Update order to PENDING status - this moves it to Orders page
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: "PENDING", // Move to Orders page
+        updatedAt: new Date()
+      },
+      include: {
+        conversation: { include: { lead: true } },
+        processedBy: { select: { id: true, name: true } },
+        lead: true
+      }
+    });
+
+    // Update lead state
+    await prisma.lead.update({
+      where: { id: order.leadId },
+      data: {
+        pendingOrderState: "CLAIMED_FOR_APPROVAL",
+        lastActiveAt: new Date()
+      }
+    });
+
+    // Emit events
+    emitToCompany(order.companyId, "order_manually_confirmed", {
+      orderId: order.id,
+      conversationId: order.conversationId,
+      leadId: order.leadId,
+      confirmedBy: { id: agentId, name: agentName },
+      order: updatedOrder
+    });
+
+    // Remove from New Order Arrivals queue
+    emitToCompany(order.companyId, "order_arrival_confirmed", {
+      orderId: order.id,
+      conversationId: order.conversationId,
+      confirmedBy: { id: agentId, name: agentName }
+    });
+
+    console.log(`\u2705 [NewOrderArrival] Order ${orderId} manually confirmed by ${agentName}`);
+
+    res.json({
+      message: "Order confirmed and moved to Orders page",
+      order: updatedOrder
+    });
+
+  } catch (error) {
+    console.error("Manual order confirmation error:", error);
+    res.status(500).json({ message: "Failed to confirm order" });
   }
 });
 

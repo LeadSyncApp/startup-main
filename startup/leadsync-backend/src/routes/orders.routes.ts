@@ -46,7 +46,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         leadId: conversation.leadId,
         summary,
         priority: priority || OrderPriority.NORMAL,
-        status: OrderStatus.PENDING,
+        status: OrderStatus.NEW,
         amount: amount ?? 0,
         approvalStatus: OrderApprovalStatus.PENDING,
 
