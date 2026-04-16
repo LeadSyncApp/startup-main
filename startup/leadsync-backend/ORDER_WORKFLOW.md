@@ -4,6 +4,7 @@
 
 ### 1. User Places Order
 - **Status**: `OrderStatus.NEW`
+- **Creation Path**: All orders (user & bot) go through unified `newOrderArrivalService.processNewOrderArrival()`
 - **Visibility**: Only appears in:
   - Conversation page (for the specific conversation)
   - New Order Arrivals page (for agents to claim)
