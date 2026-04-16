@@ -183,6 +183,7 @@ model User {
   processedOrders       Order[]        @relation("ProcessedOrders")
   assignedConversations Conversation[] @relation("AssignedConversations")
   notifications Notification[]
+  internalNotes        InternalNote[] @relation("InternalNotes")
 
   @@unique([email, companyId])
   @@index([companyId])
@@ -460,6 +461,7 @@ model InternalNote {
   createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author       User?       @relation("InternalNotes", fields: [authorId], references: [id])
 
   @@index([conversationId])
   @@index([companyId])
