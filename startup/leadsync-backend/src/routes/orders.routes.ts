@@ -46,7 +46,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         leadId: conversation.leadId,
         summary,
         priority: priority || OrderPriority.NORMAL,
-        status: OrderStatus.NEW,
+        status: OrderStatus.PENDING,
         amount: amount ?? 0,
         approvalStatus: OrderApprovalStatus.PENDING,
 
@@ -115,9 +115,9 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       // History: Completed, Delivered, Cancelled, Archived, Shipped
       whereCondition.status = { in: ["DELIVERED", "COMPLETED", "CANCELLED", "ARCHIVED", "REJECTED", "SHIPPED"] };
     } else {
-      // Active Board: Include all non-terminal stages
+      // Active Board: Include all non-terminal stages EXCEPT NEW (NEW orders appear in conversations for claiming)
       whereCondition.status = {
-        in: ["NEW", "PENDING", "BOT_CREATED_ORDER", "CONFIRMED", "PROCESSING", "PREPARING", "READY"]
+        in: ["PENDING", "BOT_CREATED_ORDER", "CONFIRMED", "PROCESSING", "PREPARING", "READY"]
       };
     }
 

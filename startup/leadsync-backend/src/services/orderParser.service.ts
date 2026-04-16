@@ -76,7 +76,6 @@ class OrderParserService {
                             OrderStatus.PREPARING,
                             OrderStatus.READY,
                             OrderStatus.SHIPPED,
-                            OrderStatus.NEW,
                             OrderStatus.PENDING,
                             OrderStatus.CONFIRMED
                         ]

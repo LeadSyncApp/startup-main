@@ -307,7 +307,7 @@ export class NewOrderArrivalService {
             where: { id: orderId },
             data: {
                 processedById: agentId,
-                status: OrderStatus.PROCESSING, // Move to active processing
+                status: OrderStatus.PENDING, // Move to Orders page as claimed order
                 updatedAt: new Date()
             },
             include: {
