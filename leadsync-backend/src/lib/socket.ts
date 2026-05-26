@@ -1,6 +1,8 @@
 import { Server as HttpServer } from "http";
 import { Server } from "socket.io";
 import { prisma } from "./prisma";
+import axios from "axios";
+import { IS_LOCAL } from "../services/telegramSelector.service";
 
 let io: Server | null = null;
 
@@ -81,9 +83,33 @@ export const emitToAgent = (userId: string, event: string, data: any) => {
     if (io) io.to(`user:${userId}`).emit(event, data);
 };
 
+/**
+ * Helper to relay socket events to the Cloud server when running on local PRIMARY instance.
+ */
+const relayToCloud = async (type: "new_message" | "conversation_updated", payload: any) => {
+    try {
+        if (!IS_LOCAL) return;
+
+        const baseUrl = process.env.API_BASE_URL;
+        if (!baseUrl || !baseUrl.includes("run.app")) return;
+
+        await axios.post(`${baseUrl.trim()}/api/public/socket-relay`, {
+            apiKey: process.env.JWT_SECRET || "internal-key",
+            type,
+            payload
+        }, { timeout: 3000 });
+    } catch (err: any) {
+        // Silently swallow errors (e.g., if cloud backend is unreachable)
+    }
+};
+
 // ✅ HELPER: Emit to conversation (legacy/debugging)
 export const emitToConversation = (conversationId: string, event: string, data: any) => {
     if (io) io.to(conversationId).emit(event, data);
+
+    if (event === "new_message") {
+        relayToCloud("new_message", { conversationId, message: data }).catch(() => {});
+    }
 };
 
 /**
@@ -95,20 +121,31 @@ export const emitToConversation = (conversationId: string, event: string, data: 
  * - Assigned: Emit ONLY to Assigned Agent + Admins
  */
 export const safeEmitConversationUpdate = (conversation: any, event: string, data: any) => {
-    if (!io) return;
+    if (io) {
+        const companyId = conversation.companyId;
+        const assignedToId = conversation.assignedToId;
 
-    const companyId = conversation.companyId;
-    const assignedToId = conversation.assignedToId;
+        // 1. Always notify Admins
+        emitToCompanyAdmin(companyId, event, data);
 
-    // 1. Always notify Admins
-    emitToCompanyAdmin(companyId, event, data);
+        // 2. Routing Logic
+        if (assignedToId) {
+            // 🔒 PRIVATE: Only the assigned agent sees this
+            emitToAgent(assignedToId, event, data);
+        } else {
+            // 🔓 PUBLIC: Unclaimed, so all agents in company valid to see it
+            emitToCompany(companyId, event, data);
+        }
+    }
 
-    // 2. Routing Logic
-    if (assignedToId) {
-        // 🔒 PRIVATE: Only the assigned agent sees this
-        emitToAgent(assignedToId, event, data);
-    } else {
-        // 🔓 PUBLIC: Unclaimed, so all agents in company valid to see it
-        emitToCompany(companyId, event, data);
+    if (event === "conversation_updated") {
+        // Pass standard, safe-to-serialize representation of the conversation payload
+        relayToCloud("conversation_updated", {
+            conversation: {
+                companyId: conversation.companyId,
+                assignedToId: conversation.assignedToId
+            },
+            data
+        }).catch(() => {});
     }
 };

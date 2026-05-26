@@ -14,14 +14,16 @@ const OrderTracking = lazy(() => import("./pages/OrderTracking"));
 
 // ─── Lazy dashboard pages ────────────────────────────────────────
 const DashboardHome  = lazy(() => import("./pages/dashboard/DashboardHome"));
-const Leads          = lazy(() => import("./pages/dashboard/Leads"));
+const AgentInbox     = lazy(() => import("./pages/dashboard/AgentInbox"));
 const Conversations  = lazy(() => import("./pages/dashboard/Conversations"));
+const Leads          = lazy(() => import("./pages/dashboard/Leads"));
 const Orders         = lazy(() => import("./pages/dashboard/Orders"));
 const Revenue        = lazy(() => import("./pages/dashboard/Revenue"));
 const Reports        = lazy(() => import("./pages/dashboard/Reports"));
 const Settings       = lazy(() => import("./pages/dashboard/Settings"));
 const UserManagement = lazy(() => import("./pages/dashboard/UserManagement"));
 const Broadcasts     = lazy(() => import("./pages/dashboard/Broadcasts"));
+const OwnerDashboard = lazy(() => import("./pages/dashboard/OwnerDashboard"));
 
 // ─── Route-level loading fallback ───────────────────────────────
 function PageFallback() {
@@ -61,7 +63,24 @@ export default function App() {
       >
         {/* Everyone logged in */}
         <Route index element={<DashboardHome />} />
-        <Route path="conversations" element={<Conversations />} />
+        
+        <Route
+          path="inbox"
+          element={
+            <ProtectedRoute allowedRoles={["OWNER", "ADMIN", "AGENT"]}>
+              <AgentInbox />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="conversations"
+          element={
+            <ProtectedRoute allowedRoles={["OWNER", "ADMIN", "AGENT"]}>
+              <Conversations />
+            </ProtectedRoute>
+          }
+        />
 
         {/* OWNER + ADMIN */}
         <Route
@@ -124,6 +143,15 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
               <Broadcasts />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="owner-dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+              <OwnerDashboard />
             </ProtectedRoute>
           }
         />

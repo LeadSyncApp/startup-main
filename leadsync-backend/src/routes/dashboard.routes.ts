@@ -31,46 +31,35 @@ router.get(
       }
 
       /* =====================================================
-         OPTIMIZED: Parallel Queries + GroupBy Aggregation
+         OPTIMIZED: Sequential Queries to hold/release 1 DB connection
       ===================================================== */
-      const [
-        leads,
-        conversations,
-        agents,
-        orders, // Total orders count
-        orderStats, // Grouped by approvalStatus
-        deliveredStats, // Grouped by status (for DELIVERED)
-        botStats, // Grouped by source (for BOT_DETECTED)
-        revenueData,
-      ] = await Promise.all([
-        prisma.lead.count({ where: { companyId } }),
-        prisma.conversation.count({ where: { companyId } }),
-        prisma.user.count({ where: { companyId } }),
-        prisma.order.count({ where: { companyId } }),
+      const leads = await prisma.lead.count({ where: { companyId } });
+      const conversations = await prisma.conversation.count({ where: { companyId } });
+      const agents = await prisma.user.count({ where: { companyId } });
+      const orders = await prisma.order.count({ where: { companyId } });
 
-        // 1. Group by Approval Status (PENDING, APPROVED, REJECTED)
-        prisma.order.groupBy({
-          by: ["approvalStatus"],
-          where: { companyId },
-          _count: { approvalStatus: true },
-        }),
+      // 1. Group by Approval Status (PENDING, APPROVED, REJECTED)
+      const orderStats = await prisma.order.groupBy({
+        by: ["approvalStatus"],
+        where: { companyId },
+        _count: { approvalStatus: true },
+      });
 
-        // 2. Count DELIVERED explicitly (status field)
-        prisma.order.count({
-          where: { companyId, status: "DELIVERED" },
-        }),
+      // 2. Count DELIVERED and COMPLETED explicitly
+      const deliveredStats = await prisma.order.count({
+        where: { companyId, status: { in: ["DELIVERED", "COMPLETED"] } },
+      });
 
-        // 3. Count BOT_DETECTED (source field)
-        prisma.order.count({
-          where: { companyId, source: "BOT_DETECTED" },
-        }),
+      // 3. Count BOT_DETECTED (source field)
+      const botStats = await prisma.order.count({
+        where: { companyId, source: "BOT_DETECTED" },
+      });
 
-        // 4. Revenue Aggregate
-        prisma.order.aggregate({
-          where: { companyId, status: "DELIVERED" },
-          _sum: { amount: true },
-        }),
-      ]);
+      // 4. Revenue Aggregate
+      const revenueData = await prisma.order.aggregate({
+        where: { companyId, status: { in: ["DELIVERED", "COMPLETED"] } },
+        _sum: { amount: true },
+      });
 
       // Process Grouped Data
       const pendingOrders =
@@ -134,10 +123,43 @@ router.get(
           businessName: true,
           businessAddress: true,
           gstin: true,
+          assignmentStrategy: true,
         },
       });
 
-      res.json({ company });
+      const activeAgents = await prisma.user.findMany({
+        where: { companyId: req.user.companyId, isActive: true },
+        select: { id: true, name: true, role: true, isAvailable: true }
+      });
+
+      const conversationCounts = await prisma.conversation.groupBy({
+        by: ["assignedToId"],
+        where: {
+          companyId: req.user.companyId,
+          status: "OPEN",
+          assignedToId: { in: activeAgents.map(a => a.id) }
+        },
+        _count: {
+          _all: true
+        }
+      });
+
+      const countsMap = new Map<string, number>();
+      conversationCounts.forEach(c => {
+        if (c.assignedToId) {
+          countsMap.set(c.assignedToId, c._count._all || 0);
+        }
+      });
+
+      const agentWorkloads = activeAgents.map((agent) => ({
+        id: agent.id,
+        name: agent.name,
+        role: agent.role,
+        isAvailable: agent.isAvailable,
+        openChats: countsMap.get(agent.id) || 0
+      }));
+
+      res.json({ company, agentWorkloads });
     } catch (error) {
       console.error("Fetch bot config error:", error);
       res.status(500).json({
@@ -358,6 +380,40 @@ router.patch(
 );
 
 /* =====================================================
+   PATCH /api/dashboard/assignment-strategy
+===================================================== */
+router.patch(
+  "/assignment-strategy",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+      const { assignmentStrategy } = req.body;
+
+      if (!assignmentStrategy || !["MANUAL", "ROUND_ROBIN", "LOAD_BALANCED"].includes(assignmentStrategy)) {
+        return res.status(400).json({ message: "Invalid assignment strategy. Must be MANUAL, ROUND_ROBIN, or LOAD_BALANCED" });
+      }
+
+      const updated = await prisma.company.update({
+        where: { id: req.user.companyId },
+        data: {
+          assignmentStrategy
+        }
+      });
+
+      // Invalidate cache
+      cacheService.delete(cacheService.getCompanyKey(req.user.companyId));
+
+      res.json({ message: `Assignment strategy set to ${assignmentStrategy}`, company: updated });
+    } catch (error) {
+      console.error("Set assignment strategy error:", error);
+      res.status(500).json({ message: "Failed to set assignment strategy" });
+    }
+  }
+);
+
+/* =====================================================
    POST /api/dashboard/train-ai
 ===================================================== */
 router.post(
@@ -490,32 +546,32 @@ router.get(
     try {
       const { companyId } = req.user!;
 
-      const [urgentLeads, newOrderArrivals, botConversations] = await Promise.all([
-        // Conversations with negative sentiment → shown as "urgent leads"
-        prisma.conversation.count({
-          where: { companyId, sentimentScore: { lt: -3 } },
-        }).catch(() => 0),
-        // New Order Arrivals (replaces pending orders)
-        (prisma.lead as any).count({
-          where: {
-            companyId,
-            pendingOrderState: "PENDING_APPROVAL"
-          },
-        }).catch(() => 0),
-        // Active bot-mode conversations (exclude those with completed/delivered orders)
-        prisma.conversation.count({
-          where: { 
-            companyId, 
-            mode: "BOT",
-            orders: {
-              none: {
-                status: { in: ["DELIVERED", "COMPLETED"] as any },
-                isDeleted: false
-              }
+      // Conversations with negative sentiment → shown as "urgent leads"
+      const urgentLeads = await prisma.conversation.count({
+        where: { companyId, sentimentScore: { lt: -3 } },
+      }).catch(() => 0);
+
+      // New Order Arrivals (replaces pending orders)
+      const newOrderArrivals = await (prisma.lead as any).count({
+        where: {
+          companyId,
+          pendingOrderState: "PENDING_APPROVAL"
+        },
+      }).catch(() => 0);
+
+      // Active bot-mode conversations (exclude those with completed/delivered orders)
+      const botConversations = await prisma.conversation.count({
+        where: { 
+          companyId, 
+          mode: "BOT",
+          orders: {
+            none: {
+              status: { in: ["DELIVERED", "COMPLETED"] as any },
+              isDeleted: false
             }
-          },
-        }).catch(() => 0),
-      ]);
+          }
+        },
+      }).catch(() => 0);
 
       res.json({ urgentLeads, pendingOrders: newOrderArrivals, botConversations });
     } catch (error) {
@@ -528,18 +584,16 @@ router.get(
 /* =====================================================
    GET /api/dashboard/funnel
    Lead counts per segment + conversion to order rate
-===================================================== */
+ ===================================================== */
 router.get("/funnel", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { companyId } = req.user!;
 
-    const [newCount, regularCount, vipCount, churnCount, totalOrders] = await Promise.all([
-      (prisma.lead as any).count({ where: { companyId, segment: "NEW" } }),
-      (prisma.lead as any).count({ where: { companyId, segment: "REGULAR" } }),
-      (prisma.lead as any).count({ where: { companyId, segment: "VIP" } }),
-      (prisma.lead as any).count({ where: { companyId, segment: "CHURN_RISK" } }),
-      (prisma.order as any).count({ where: { companyId, isDeleted: false, status: { notIn: ["BOT_CREATED_ORDER", "REJECTED", "CANCELLED"] } } }),
-    ]);
+    const newCount = await (prisma.lead as any).count({ where: { companyId, segment: "NEW" } });
+    const regularCount = await (prisma.lead as any).count({ where: { companyId, segment: "REGULAR" } });
+    const vipCount = await (prisma.lead as any).count({ where: { companyId, segment: "VIP" } });
+    const churnCount = await (prisma.lead as any).count({ where: { companyId, segment: "CHURN_RISK" } });
+    const totalOrders = await (prisma.order as any).count({ where: { companyId, isDeleted: false, status: { notIn: ["BOT_CREATED_ORDER", "REJECTED", "CANCELLED"] } } });
 
     const total = newCount + regularCount + vipCount + churnCount;
     const conversionRate = total > 0 ? Math.round((totalOrders / total) * 100) : 0;
@@ -637,12 +691,53 @@ router.get("/agent-stats", authMiddleware, async (req: AuthRequest, res: Respons
 
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // last 7 days
 
-    const stats = await Promise.all(agents.map(async (agent) => {
-      const [conversations, orders] = await Promise.all([
-        prisma.conversation.count({ where: { companyId, assignedToId: agent.id } }),
-        (prisma.order as any).count({ where: { companyId, processedById: agent.id, isDeleted: false, createdAt: { gte: since } } }),
-      ]);
-      return { id: agent.id, name: agent.name, conversations, orders };
+    const agentIds = agents.map(a => a.id);
+
+    // Group conversations count by assignedToId in a single query
+    const conversationsGrouped = await prisma.conversation.groupBy({
+      by: ["assignedToId"],
+      where: {
+        companyId,
+        assignedToId: { in: agentIds }
+      },
+      _count: {
+        _all: true
+      }
+    });
+
+    // Group orders count by processedById in a single query
+    const ordersGrouped = await (prisma.order as any).groupBy({
+      by: ["processedById"],
+      where: {
+        companyId,
+        processedById: { in: agentIds },
+        isDeleted: false,
+        completedAt: { gte: since }
+      },
+      _count: {
+        _all: true
+      }
+    });
+
+    const convMap = new Map<string, number>();
+    conversationsGrouped.forEach((item: any) => {
+      if (item.assignedToId) {
+        convMap.set(item.assignedToId, item._count._all || 0);
+      }
+    });
+
+    const orderMap = new Map<string, number>();
+    ordersGrouped.forEach((item: any) => {
+      if (item.processedById) {
+        orderMap.set(item.processedById, item._count._all || 0);
+      }
+    });
+
+    const stats = agents.map(agent => ({
+      id: agent.id,
+      name: agent.name,
+      conversations: convMap.get(agent.id) || 0,
+      orders: orderMap.get(agent.id) || 0,
     }));
 
     res.json(stats.sort((a, b) => b.orders - a.orders));

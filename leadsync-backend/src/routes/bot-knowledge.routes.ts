@@ -9,7 +9,10 @@ router.get("/", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { companyId } = req.user!;
     const items = await (prisma.botKnowledge as any).findMany({
-      where: { companyId },
+      where: { 
+        companyId,
+        type: { not: "TELEGRAM_CONSUMER_LEASE" }
+      },
       orderBy: { createdAt: "asc" },
     });
     res.json(items);

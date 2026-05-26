@@ -1,10 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 
-declare global {
-  // eslint-disable-next-line no-var
-  var prisma: PrismaClient | undefined;
-}
-
 const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
@@ -12,15 +7,22 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const createPrismaClient = () =>
-  new PrismaClient({
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+// Create client with minimal lifecycle logging
+const createPrismaClient = () => {
+  console.log("🔌 [Prisma] Instantiating new PrismaClient (establishing connection pool)...");
+  return new PrismaClient({
     log: process.env.NODE_ENV === "development"
-      ? ["query", "error", "warn"]
+      ? ["error", "warn"]
       : ["error"],
   });
+};
 
-export const prisma = global.prisma || createPrismaClient();
+export const prisma = globalForPrisma.prisma || createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
-  global.prisma = prisma;
+  globalForPrisma.prisma = prisma;
 }

@@ -32,25 +32,34 @@ export class IntelligenceService {
             let assignedUserId: string | null = null;
             let assignedUserName: string | null = null;
 
-            // Only auto-assign if currently unassigned and important
+            // Only auto-assign if currently unassigned, important, AND assignment strategy allows it
             if (isHighIntent || isUrgent) {
-                // Force cast to access `assignedToId`
-                const existing = await (prisma.conversation as any).findUnique({
-                    where: { id: conversationId },
-                    select: { assignedToId: true }
+                // Fetch Company Strategy
+                const company = await prisma.company.findUnique({
+                    where: { id: companyId },
+                    select: { assignmentStrategy: true }
                 });
 
-                if (existing && !existing.assignedToId) {
-                    // FIND BEST AGENT (First Available Active Agent)
-                    // Fallback to sorting by creation since lastActiveAt might not exist on User schema
-                    const agent = await prisma.user.findFirst({
-                        where: { companyId, isActive: true },
-                        orderBy: { createdAt: 'asc' } // Assign to oldest agent/admin first (often the owner)
+                if (company?.assignmentStrategy === "MANUAL") {
+                    console.log(`[INTELLIGENCE] Skipping auto-assignment for conversation ${conversationId} due to MANUAL strategy.`);
+                } else {
+                    // Force cast to access `assignedToId`
+                    const existing = await (prisma.conversation as any).findUnique({
+                        where: { id: conversationId },
+                        select: { assignedToId: true }
                     });
 
-                    if (agent) {
-                        assignedUserId = agent.id;
-                        assignedUserName = agent.name;
+                    if (existing && !existing.assignedToId) {
+                        // FIND BEST AGENT (First Available Active Agent)
+                        const agent = await prisma.user.findFirst({
+                            where: { companyId, isActive: true },
+                            orderBy: { createdAt: 'asc' } 
+                        });
+
+                        if (agent) {
+                            assignedUserId = agent.id;
+                            assignedUserName = agent.name;
+                        }
                     }
                 }
             }

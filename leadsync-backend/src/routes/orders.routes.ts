@@ -9,7 +9,8 @@ import {
   MessageSender,
 } from "@prisma/client";
 import { sendTelegramMessage } from "../bot/telegram.sender";
-import { safeEmitConversationUpdate } from "../lib/socket";
+import { safeEmitConversationUpdate, emitToCompany, emitToAgent } from "../lib/socket";
+import { recalculateLeadCRM } from "../services/crm.service";
 
 const router = Router();
 
@@ -18,21 +19,81 @@ const router = Router();
 ================================== */
 router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { conversationId, summary, priority, amount, isUrgent } = req.body;
+    const { conversationId, summary, priority, amount, isUrgent, customerName, phoneNumber, location, agentName, city, state } = req.body;
 
-    if (!conversationId || !summary) {
-      return res.status(400).json({ message: "Missing fields" });
+    let targetConversationId = conversationId;
+    let targetSummary = summary;
+    let targetLocation = location || "";
+    if (city || state) {
+      targetLocation = [city, state].filter(Boolean).join(", ");
     }
 
     const companyId = req.user!.companyId;
 
+    if (!targetConversationId) {
+      if (!phoneNumber || !customerName) {
+        return res.status(400).json({ message: "Missing conversation ID, or customer details (name and phone) for manual order" });
+      }
+
+      // Find or create Lead
+      let lead = await prisma.lead.findFirst({
+        where: { contact: phoneNumber, companyId }
+      });
+
+      if (!lead) {
+        lead = await prisma.lead.create({
+          data: {
+            name: customerName,
+            contact: phoneNumber,
+            channel: "WEBSITE",
+            companyId,
+            status: "CLAIMED"
+          }
+        });
+      } else {
+        // Update client name if specified
+        lead = await prisma.lead.update({
+          where: { id: lead.id },
+          data: { name: customerName }
+        });
+      }
+
+      // Find or create Conversation
+      let conversation = await prisma.conversation.findFirst({
+        where: { leadId: lead.id, companyId, channel: "WEBSITE" }
+      });
+
+      if (!conversation) {
+        conversation = await prisma.conversation.create({
+          data: {
+            leadId: lead.id,
+            companyId,
+            channel: "WEBSITE",
+            mode: "HUMAN",
+            status: "ASSIGNED",
+            assignedToId: req.user!.userId,
+            summary: "Manually created conversation for order taking"
+          }
+        });
+      }
+
+      targetConversationId = conversation.id;
+    }
+
+    if (!targetConversationId || !targetSummary) {
+      return res.status(400).json({ message: "Missing fields" });
+    }
+
     const conversation = await prisma.conversation.findFirst({
-      where: { id: conversationId, companyId },
+      where: { id: targetConversationId, companyId },
     });
 
     if (!conversation) {
       return res.status(404).json({ message: "Conversation not found" });
     }
+
+    // Location appending removed per user request for manual orders
+
 
     let initialScore = 0;
     if (priority === "URGENT" || isUrgent) initialScore += 50;
@@ -44,7 +105,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         companyId,
         conversationId: conversation.id,
         leadId: conversation.leadId,
-        summary,
+        summary: targetSummary,
         priority: priority || OrderPriority.NORMAL,
         status: OrderStatus.NEW,
         amount: amount ?? 0,
@@ -53,6 +114,15 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         isUrgent: isUrgent || false,
         priorityScore: initialScore,
         predictedValue: amount,
+        processedById: conversation.assignedToId || req.user!.userId,
+        items: {
+          location: targetLocation,
+          baseSummary: summary,
+          agentName: agentName || req.user!.name || "Agent",
+          city: city || "",
+          state: state || "",
+          isManualLead: true,
+        },
       },
       include: {
         lead: { select: { name: true, contact: true } }
@@ -63,22 +133,21 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     await (prisma.lead as any).update({
       where: { id: conversation.leadId },
       data: {
-        pendingOrderState: "PENDING_APPROVAL",
+        pendingOrderState: "CLAIMED_FOR_APPROVAL",
         pendingOrderId: order.id,
         pendingOrderSummary: summary,
         pendingOrderAmount: amount ?? 0,
-        // 🆕 If conversation has assigned agent, automatically assign pending order to them
-        ...(conversation.assignedToId ? {
-          pendingOrderClaimedById: conversation.assignedToId,
-          pendingOrderClaimedAt: new Date()
-        } : {})
+        pendingOrderClaimedById: conversation.assignedToId || req.user!.userId,
+        pendingOrderClaimedAt: new Date()
       }
     });
+
+    // Dynamic CRM metrics recalculation
+    await recalculateLeadCRM(conversation.leadId, companyId);
 
     safeEmitConversationUpdate(conversation, "order_created", order);
     
     // 🆕 Emit lead update for pending order
-    const { emitToCompany } = await import("../lib/socket");
     emitToCompany(companyId, "lead_updated", {
       leadId: conversation.leadId,
       companyId,
@@ -108,17 +177,31 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user!.companyId;
     const view = req.query.view as string; // 'active' | 'history'
+    
+    console.log(`[DEBUG] Orders endpoint called with view: ${view}, query:`, req.query);
 
     let whereCondition: any = { companyId, isDeleted: false };
 
-    if (view === "history") {
+    if (view === "manual") {
+      whereCondition.source = "MANUAL";
+    } else if (view === "history") {
       // History: Completed, Delivered, Cancelled, Archived, Shipped
       whereCondition.status = { in: ["DELIVERED", "COMPLETED", "CANCELLED", "ARCHIVED", "REJECTED", "SHIPPED"] };
+      if (req.user!.role === "AGENT") {
+        whereCondition.processedById = req.user!.userId;
+      }
     } else {
-      // Active Board: Include all non-terminal stages
-      whereCondition.status = {
-        in: ["NEW", "PENDING", "BOT_CREATED_ORDER", "CONFIRMED", "PROCESSING", "PREPARING", "READY"]
-      };
+      // Active Board: Include all stages for agent view since they are scoped. Also support NEW/BOT_CREATED_ORDER for agents to see their own
+      if (req.user!.role === "AGENT") {
+        whereCondition.status = {
+          in: ["NEW", "PENDING", "CONFIRMED", "PROCESSING", "PREPARING", "READY"]
+        };
+        whereCondition.processedById = req.user!.userId;
+      } else {
+        whereCondition.status = {
+          in: ["PENDING", "CONFIRMED", "PROCESSING", "PREPARING", "READY"]
+        };
+      }
     }
 
     const orders = await (prisma.order as any).findMany({
@@ -132,7 +215,17 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
             channel: true,
             totalSpend: true,
             segment: true,
-            // ...
+            orderCount: true,
+            status: true,
+            createdAt: true,
+            lastActiveAt: true,
+            pendingOrderState: true,
+            pendingOrderId: true,
+            pendingOrderSummary: true,
+            pendingOrderAmount: true,
+            conversations: {
+              select: { id: true }
+            }
           }
         },
         processedBy: {
@@ -148,6 +241,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       take: 100,
     });
 
+    console.log(`[DEBUG] Orders returned:`, orders.map((o: any) => ({ id: o.id, status: o.status, summary: o.summary })));
     return res.json(orders);
   } catch (error) {
     console.error("Fetch orders error:", error);
@@ -179,6 +273,12 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
 
     // 🆕 Clear pending order state from lead when order is approved
     if (result.order) {
+      // Lock conversation ownership to this agent
+      await prisma.conversation.update({
+        where: { id: result.order.conversationId },
+        data: { assignedToId: req.user!.userId }
+      });
+
       await (prisma.lead as any).update({
         where: { id: result.order.leadId },
         data: {
@@ -192,7 +292,6 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
       });
       
       // 🆕 Emit lead update for all agents
-      const { emitToCompany } = await import("../lib/socket");
       emitToCompany(req.user!.companyId, "lead_updated", {
         leadId: result.order.leadId,
         companyId: req.user!.companyId,
@@ -232,6 +331,14 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
 
     // 🆕 Clear pending order state from lead when order is rejected
     if (result.order) {
+      await prisma.message.create({
+        data: {
+          content: "🚨 Order Rejected: Your order request has been rejected by the agent.",
+          sender: MessageSender.SYSTEM,
+          conversationId: result.order.conversationId
+        }
+      });
+
       await (prisma.lead as any).update({
         where: { id: result.order.leadId },
         data: {
@@ -245,7 +352,6 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
       });
       
       // 🆕 Emit lead update for all agents
-      const { emitToCompany } = await import("../lib/socket");
       emitToCompany(req.user!.companyId, "lead_updated", {
         leadId: result.order.leadId,
         companyId: req.user!.companyId,
@@ -338,17 +444,7 @@ router.post("/:id/claim", authMiddleware, async (req: AuthRequest, res: Response
       }
     });
 
-    // Create notification for the claiming agent
-    const { notificationService } = await import("../services/notification.service");
-    await notificationService.notifyUser(
-      userId,
-      "Order Claimed",
-      `You have claimed order for ${updatedOrder.lead.name || updatedOrder.lead.contact}`,
-      "ORDER"
-    );
-
     // Emit socket events
-    const { safeEmitConversationUpdate, emitToAgent } = await import("../lib/socket");
     safeEmitConversationUpdate(updatedOrder.conversation, "order_updated", updatedOrder);
     emitToAgent(userId, "order_claimed", updatedOrder);
 
@@ -369,15 +465,12 @@ router.get("/awaiting", authMiddleware, async (req: AuthRequest, res: Response) 
     let whereCondition: any = { 
       companyId,
       isDeleted: false,
-      status: { in: ["BOT_CREATED_ORDER", "PENDING"] } // Awaiting orders
+      status: { in: ["BOT_CREATED_ORDER", "PENDING", "NEW"] } // Awaiting orders
     };
 
-    // Agents only see their claimed orders + unclaimed ones
+    // Agents only see their own assigned/claimed orders
     if (role === "AGENT") {
-      whereCondition.OR = [
-        { processedById: null }, // Unclaimed
-        { processedById: userId } // Claimed by me
-      ];
+      whereCondition.processedById = userId;
     }
 
     const orders = await prisma.order.findMany({

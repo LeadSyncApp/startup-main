@@ -14,14 +14,14 @@ import { Tag, X } from "lucide-react";
 // ─── Config ─────────────────────────────────────────────────────────────────
 
 export const PREDEFINED_TAGS = [
-  { id: "follow_up",  label: "Follow-up",  color: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
-  { id: "hot_lead",   label: "Hot Lead",   color: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
-  { id: "vip",        label: "VIP",        color: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
-  { id: "support",    label: "Support",    color: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
-  { id: "spam",       label: "Spam",       color: "bg-background-elevated text-text-muted border-border" },
-  { id: "pending",    label: "Pending",    color: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
-  { id: "resolved",   label: "Resolved",   color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
-  { id: "escalated",  label: "Escalated",  color: "bg-red-500/10 text-red-400 border-red-500/20" },
+  { id: "follow_up",  label: "Follow-up",  color: "bg-blue-100 text-blue-700 border-blue-200" },
+  { id: "hot_lead",   label: "Hot Lead",   color: "bg-orange-100 text-orange-700 border-orange-200" },
+  { id: "vip",        label: "VIP",        color: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+  { id: "support",    label: "Support",    color: "bg-purple-100 text-purple-700 border-purple-200" },
+  { id: "spam",       label: "Spam",       color: "bg-slate-100 text-slate-500 border-slate-200" },
+  { id: "pending",    label: "Pending",    color: "bg-amber-100 text-amber-700 border-amber-200" },
+  { id: "resolved",   label: "Resolved",   color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  { id: "escalated",  label: "Escalated",  color: "bg-red-100 text-red-700 border-red-200" },
 ] as const;
 
 type TagId = typeof PREDEFINED_TAGS[number]["id"];
@@ -112,7 +112,7 @@ export function TagChips({ convId, max = 2 }: TagChipsProps) {
         );
       })}
       {overflow > 0 && (
-        <span className="text-[9px] font-black px-1.5 py-0.5 rounded border bg-background-elevated text-text-muted border-border">
+        <span className="text-[9px] font-black px-1.5 py-0.5 rounded border bg-slate-100 text-slate-500 border-slate-200">
           +{overflow}
         </span>
       )}
@@ -137,11 +137,11 @@ export function TagPicker({ convId, onClose }: TagPickerProps) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -6, scale: 0.97 }}
         transition={{ duration: 0.15 }}
-        className="absolute right-0 top-full mt-2 w-56 bg-background-secondary rounded-2xl shadow-2xl border border-border p-3 z-50"
+        className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-100 p-3 z-50"
       >
         <div className="flex items-center justify-between mb-2 px-1">
-          <span className="text-[10px] font-black text-text-disabled uppercase tracking-widest">Tag conversation</span>
-          <button onClick={onClose} className="p-1 hover:bg-background-tertiary rounded-lg transition text-text-disabled hover:text-text-primary">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tag conversation</span>
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-lg transition text-slate-400 hover:text-slate-600">
             <X size={12} />
           </button>
         </div>
@@ -155,7 +155,7 @@ export function TagPicker({ convId, onClose }: TagPickerProps) {
                 className={`text-[10px] font-bold px-2 py-1.5 rounded-xl border text-left transition active:scale-95 ${
                   active
                     ? `${tag.color} ring-1 ring-offset-1 ring-current`
-                    : "bg-background-secondary text-text-muted border-border hover:border-text-disabled"
+                    : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"
                 }`}
               >
                 {active ? "✓ " : ""}{tag.label}
@@ -185,8 +185,8 @@ export function TagButton({ convId }: TagButtonProps) {
         title="Tag conversation"
         className={`p-2.5 rounded-2xl transition active:scale-90 relative ${
           tags.length > 0
-            ? "bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20"
-            : "bg-background-tertiary text-text-muted hover:bg-background-elevated"
+            ? "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+            : "bg-slate-50 text-slate-500 hover:bg-slate-100"
         }`}
       >
         <Tag size={16} />

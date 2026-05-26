@@ -84,8 +84,8 @@ export default function Revenue() {
       <PageTransition className="space-y-8">
         <div className="flex items-center justify-between">
           <div className="space-y-2 animate-pulse">
-            <div className="h-8 bg-background-tertiary rounded w-48" />
-            <div className="h-4 bg-background-tertiary rounded w-64" />
+            <div className="h-8 bg-slate-200 rounded w-48" />
+            <div className="h-4 bg-slate-200 rounded w-64" />
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -135,8 +135,8 @@ export default function Revenue() {
       {/* HEADER */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-text-primary">Revenue Insights</h1>
-          <p className="mt-1 text-sm text-text-muted">Last 30 days · delivered &amp; paid orders</p>
+          <h1 className="text-3xl font-bold text-slate-900">Revenue Insights</h1>
+          <p className="mt-1 text-sm text-slate-500">Last 30 days · delivered &amp; paid orders</p>
         </div>
         <button
           onClick={handleExport}
@@ -150,16 +150,16 @@ export default function Revenue() {
 
       {/* KPI CARDS */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-border bg-background-secondary p-6 shadow-card">
+        <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
-              <DollarSign className="h-6 w-6 text-emerald-400" />
+            <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+              <DollarSign className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Total Revenue</p>
-              <p className="text-2xl font-bold text-text-primary">{formatINR(totalRevenue)}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Revenue</p>
+              <p className="text-2xl font-bold text-slate-900">{formatINR(totalRevenue)}</p>
               {trend !== null && (
-                <p className={`mt-0.5 text-xs font-medium flex items-center gap-0.5 ${trend >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                <p className={`mt-0.5 text-xs font-medium flex items-center gap-0.5 ${trend >= 0 ? "text-emerald-600" : "text-red-500"}`}>
                   {trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                   {Math.abs(trend).toFixed(1)}% vs prev period
                 </p>
@@ -168,35 +168,35 @@ export default function Revenue() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-background-secondary p-6 shadow-card">
+        <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="bg-cyan-500/10 p-3 rounded-xl border border-cyan-500/20">
-              <Receipt className="h-6 w-6 text-cyan-400" />
+            <div className="bg-cyan-50 p-3 rounded-xl border border-cyan-100">
+              <Receipt className="h-6 w-6 text-cyan-600" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Orders Delivered</p>
-              <p className="text-2xl font-bold text-text-primary">{orderCount}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Orders Delivered</p>
+              <p className="text-2xl font-bold text-slate-900">{orderCount}</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-background-secondary p-6 shadow-card">
+        <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
-              <TrendingUp className="h-6 w-6 text-amber-400" />
+            <div className="bg-amber-50 p-3 rounded-xl border border-amber-100">
+              <TrendingUp className="h-6 w-6 text-amber-600" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Avg. Order Value</p>
-              <p className="text-2xl font-bold text-text-primary">{formatINR(avgOrderValue)}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg. Order Value</p>
+              <p className="text-2xl font-bold text-slate-900">{formatINR(avgOrderValue)}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* REVENUE + FORECAST CHART */}
-      <div className="rounded-2xl border border-border bg-background-secondary p-6 shadow-card">
-        <h2 className="text-lg font-semibold text-text-primary mb-1">Revenue &amp; 14-Day Forecast</h2>
-        <p className="text-xs text-text-disabled mb-6">Solid = actual · dashed amber = AI linear regression forecast</p>
+      <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900 mb-1">Revenue &amp; 14-Day Forecast</h2>
+        <p className="text-xs text-slate-400 mb-6">Solid = actual · dashed amber = AI linear regression forecast</p>
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData}>
@@ -206,11 +206,11 @@ export default function Revenue() {
                   <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 11 }} interval={4} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 11 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} interval={4} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
               <Tooltip
-                contentStyle={{ borderRadius: "12px", border: "1px solid rgba(255,255,255,0.1)", background: "#1e293b", color: "#f1f5f9" }}
+                contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
                 formatter={(v: number, name: string) => [formatINR(v), name === "revenue" ? "Revenue" : "Forecast"]}
               />
               <Area type="monotone" dataKey="revenue" stroke="#06b6d4" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" connectNulls={false} />
@@ -222,25 +222,25 @@ export default function Revenue() {
 
       {/* SALES FUNNEL */}
       {funnelStages.length > 0 && (
-        <div className="rounded-2xl border border-border bg-background-secondary p-6 shadow-card">
+        <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <div className="flex items-center gap-2 mb-1">
-            <BarChart2 className="h-4 w-4 text-text-disabled" />
-            <h2 className="text-lg font-semibold text-text-primary">Sales Funnel</h2>
+            <BarChart2 className="h-4 w-4 text-slate-400" />
+            <h2 className="text-lg font-semibold text-slate-900">Sales Funnel</h2>
           </div>
-          <p className="text-xs text-text-disabled mb-5">
-            Conversion rate: <span className="font-bold text-emerald-400">{funnelData?.conversionRate ?? 0}%</span> of {funnelData?.totalLeads ?? 0} total leads
+          <p className="text-xs text-slate-400 mb-5">
+            Conversion rate: <span className="font-bold text-emerald-600">{funnelData?.conversionRate ?? 0}%</span> of {funnelData?.totalLeads ?? 0} total leads
           </p>
           <div className="space-y-3">
             {funnelStages.map((stage, i) => (
               <div key={i}>
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
-                    <ChevronRight size={12} className="text-text-disabled" />
-                    <span className="text-sm font-semibold text-text-secondary">{stage.label}</span>
+                    <ChevronRight size={12} className="text-slate-300" />
+                    <span className="text-sm font-semibold text-slate-700">{stage.label}</span>
                   </div>
-                  <span className="text-sm font-bold text-text-primary">{stage.value.toLocaleString()}</span>
+                  <span className="text-sm font-bold text-slate-900">{stage.value.toLocaleString()}</span>
                 </div>
-                <div className="h-3 bg-background-tertiary rounded-full overflow-hidden">
+                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-700"
                     style={{ width: `${(stage.value / funnelMax) * 100}%`, background: stage.color || "#6366f1" }}
@@ -254,31 +254,31 @@ export default function Revenue() {
 
       {/* AGENT PERFORMANCE + CHANNEL ATTRIBUTION */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-background-secondary overflow-hidden shadow-card">
-          <div className="px-6 py-4 border-b border-border flex items-center gap-2">
+        <div className="rounded-2xl border bg-white overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
             <Trophy className="h-4 w-4 text-amber-400" />
-            <h2 className="text-lg font-semibold text-text-primary">Agent Leaderboard</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Agent Leaderboard</h2>
           </div>
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-slate-100">
             {(agentStats.length > 0 ? agentStats : agentPerformance).length === 0 ? (
-              <p className="p-10 text-center text-text-disabled text-sm">No agent-processed orders yet.</p>
+              <p className="p-10 text-center text-slate-400 text-sm">No agent-processed orders yet.</p>
             ) : (
               (agentStats.length > 0 ? agentStats : agentPerformance).map((a: any, i: number) => (
-                <div key={i} className="px-6 py-4 flex items-center justify-between hover:bg-background-tertiary/50 transition">
+                <div key={i} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition">
                   <div className="flex items-center gap-3">
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white ${i === 0 ? "bg-amber-400" : i === 1 ? "bg-slate-400" : i === 2 ? "bg-orange-400" : "bg-background-elevated text-text-muted"}`}>
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white ${i === 0 ? "bg-amber-400" : i === 1 ? "bg-slate-400" : i === 2 ? "bg-orange-400" : "bg-slate-200 text-slate-600"}`}>
                       {i + 1}
                     </span>
                     <div>
-                      <p className="font-medium text-text-secondary">{a.name}</p>
-                      <p className="text-xs text-text-disabled">
+                      <p className="font-medium text-slate-800">{a.name}</p>
+                      <p className="text-xs text-slate-400">
                         {a.orders ?? 0} order{(a.orders ?? 0) !== 1 ? "s" : ""}
                         {a.conversations ? ` · ${a.conversations} convos` : a.avgValue ? ` · avg ${formatINR(a.avgValue)}` : ""}
                       </p>
                     </div>
                   </div>
                   {a.revenue != null && (
-                    <p className="font-bold text-emerald-400 text-sm">{formatINR(a.revenue)}</p>
+                    <p className="font-bold text-emerald-600 text-sm">{formatINR(a.revenue)}</p>
                   )}
                 </div>
               ))
@@ -286,22 +286,22 @@ export default function Revenue() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-background-secondary overflow-hidden shadow-card">
-          <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-            <Radio className="h-4 w-4 text-text-disabled" />
-            <h2 className="text-lg font-semibold text-text-primary">Channel Attribution</h2>
+        <div className="rounded-2xl border bg-white overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+            <Radio className="h-4 w-4 text-slate-400" />
+            <h2 className="text-lg font-semibold text-slate-900">Channel Attribution</h2>
           </div>
           <div className="px-6 py-6 space-y-5">
             {channelAttribution.length === 0 ? (
-              <p className="text-center text-text-disabled text-sm">No channel data yet.</p>
+              <p className="text-center text-slate-400 text-sm">No channel data yet.</p>
             ) : (
               channelAttribution.map((c: any, i: number) => (
                 <div key={i}>
                   <div className="flex justify-between text-sm mb-1.5">
-                    <span className="font-medium text-text-secondary">{c.channel}</span>
-                    <span className="text-text-muted">{formatINR(c.revenue)} · {c.percentage}%</span>
+                    <span className="font-medium text-slate-700">{c.channel}</span>
+                    <span className="text-slate-500">{formatINR(c.revenue)} · {c.percentage}%</span>
                   </div>
-                  <div className="h-2 rounded-full bg-background-tertiary overflow-hidden">
+                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${CHANNEL_COLORS[c.channel] || "bg-slate-400"}`}
                       style={{ width: `${c.percentage}%` }}
@@ -315,22 +315,22 @@ export default function Revenue() {
       </div>
 
       {/* RECENT DELIVERIES */}
-      <div className="rounded-2xl border border-border bg-background-secondary overflow-hidden shadow-card">
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-text-primary">Recent Deliveries</h2>
-          <Clock className="h-4 w-4 text-text-disabled" />
+      <div className="rounded-2xl border bg-white overflow-hidden shadow-sm">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">Recent Deliveries</h2>
+          <Clock className="h-4 w-4 text-slate-400" />
         </div>
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-slate-100">
           {recentOrders.length === 0 ? (
-            <p className="p-10 text-center text-text-disabled">No delivered orders found.</p>
+            <p className="p-10 text-center text-slate-400">No delivered orders found.</p>
           ) : (
             recentOrders.map((o: any, idx: number) => (
-              <div key={idx} className="px-6 py-4 flex items-center justify-between hover:bg-background-tertiary/50 transition">
+              <div key={idx} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition">
                 <div>
-                  <p className="font-medium text-text-primary">{o.customer}</p>
-                  <p className="text-xs text-text-disabled">{new Date(o.date).toLocaleDateString("en-IN")}</p>
+                  <p className="font-medium text-slate-900">{o.customer}</p>
+                  <p className="text-xs text-slate-400">{new Date(o.date).toLocaleDateString("en-IN")}</p>
                 </div>
-                <p className="font-bold text-emerald-400">{formatINR(o.amount)}</p>
+                <p className="font-bold text-emerald-600">{formatINR(o.amount)}</p>
               </div>
             ))
           )}

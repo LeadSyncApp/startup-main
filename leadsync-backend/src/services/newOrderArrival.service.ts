@@ -9,6 +9,7 @@ import { Prisma,
 } from "@prisma/client";
 import { emitToCompany, emitToCompanyAdmin, emitToAgent, safeEmitConversationUpdate } from "../lib/socket";
 import { notificationService } from "./notification.service";
+import { recalculateLeadCRM } from "./crm.service";
 
 /**
  * Unified New Order Arrival Service
@@ -30,6 +31,7 @@ export interface NewOrderArrivalData {
     source?: OrderSource;
     priority?: OrderPriority;
     detectedLanguage?: string;
+    status?: OrderStatus;
 }
 
 export interface CustomerHistory {
@@ -54,14 +56,36 @@ export class NewOrderArrivalService {
      * Implements universal intake rule
      */
     async processNewOrderArrival(data: NewOrderArrivalData): Promise<any> {
-        const { companyId, conversationId, leadId, summary, amount, items, source, priority } = data;
+        const { companyId, conversationId, leadId, summary, amount, items, source, priority, status } = data;
 
         console.log(`🆕 [NewOrderArrival] Processing new order arrival for lead ${leadId}`);
 
         // 1. Get customer history for context
         const customerHistory = await this.getCustomerHistory(companyId, leadId);
 
-        // 2. Create the order in NEW state (not BOT_CREATED_ORDER)
+        const initialStatus = status || OrderStatus.NEW;
+
+        // Find if conversation is assigned to active agent
+        const conversation = await prisma.conversation.findUnique({
+            where: { id: conversationId },
+            select: { assignedToId: true }
+        });
+        let assignedToId = conversation?.assignedToId || null;
+
+        // Try auto-assignment if unclaimed & strategy is active
+        if (!assignedToId) {
+            try {
+                const { assignmentService } = await import("./assignment.service.js");
+                const autoAssignedId = await assignmentService.autoAssignConversation(companyId, conversationId);
+                if (autoAssignedId) {
+                    assignedToId = autoAssignedId;
+                }
+            } catch (err) {
+                console.error("[AUTO-ASSIGN-ERROR] processNewOrderArrival auto assign failed:", err);
+            }
+        }
+
+        // 2. Create the order
         const order = await prisma.order.create({
             data: {
                 companyId,
@@ -70,12 +94,13 @@ export class NewOrderArrivalService {
                 summary,
                 amount,
                 items: items ?? undefined,
-                status: OrderStatus.NEW, // Start as NEW for intake queue
+                status: initialStatus,
                 source: source || OrderSource.BOT_DETECTED,
                 priority: priority || (amount > 0 ? OrderPriority.URGENT : OrderPriority.NORMAL),
                 priorityScore: this.calculatePriorityScore(amount, customerHistory),
                 predictedValue: amount,
                 isUrgent: amount > 0,
+                processedById: assignedToId,
             },
             include: {
                 conversation: {
@@ -85,22 +110,125 @@ export class NewOrderArrivalService {
             }
         });
 
-        // 3. Update lead with pending order state
-        await this.updateLeadWithPendingOrder(leadId, order, customerHistory);
+        // 3. Update lead with pending order state (only for confirmed orders)
+        if (initialStatus !== OrderStatus.BOT_CREATED_ORDER) {
+            await this.updateLeadWithPendingOrder(leadId, order, customerHistory);
+        }
 
-        // 4. Create New Order Arrival notification and socket events
-        await this.notifyNewOrderArrival(companyId, order, customerHistory);
+        // 4. Create New Order Arrival notification and socket events (only for confirmed orders)
+        if (initialStatus !== OrderStatus.BOT_CREATED_ORDER) {
+            await this.notifyNewOrderArrival(companyId, order, customerHistory);
+        }
 
         // 5. Log the arrival for audit
         await this.logOrderArrival(order.id, customerHistory);
 
-        console.log(`✅ [NewOrderArrival] Order ${order.id} queued for claim - Customer: ${customerHistory.isExistingCustomer ? 'Existing' : 'New'}`);
+        console.log(`✅ [NewOrderArrival] Order ${order.id} processed - Status: ${initialStatus} - Customer: ${customerHistory.isExistingCustomer ? 'Existing' : 'New'}`);
 
         return {
             order,
             customerHistory,
-            requiresClaim: true
+            requiresClaim: initialStatus !== OrderStatus.BOT_CREATED_ORDER && !assignedToId
         };
+    }
+
+    /**
+     * Get comprehensive customer histories in batch to avoid N+1 query overhead and prevent connection leaks
+     */
+    async getCustomerHistoryBatch(companyId: string, leadIds: string[]): Promise<Record<string, CustomerHistory>> {
+        if (!leadIds || leadIds.length === 0) {
+            return {};
+        }
+
+        const uniqueLeadIds = Array.from(new Set(leadIds));
+
+        // 1. Fetch all leads in batch
+        const leads = await prisma.lead.findMany({
+            where: { id: { in: uniqueLeadIds } },
+            select: {
+                id: true,
+                totalSpend: true,
+                orderCount: true,
+                status: true,
+                deletedAt: true
+            }
+        });
+
+        // 2. Fetch all previous orders in batch
+        const allPreviousOrders = await prisma.order.findMany({
+            where: {
+                companyId,
+                leadId: { in: uniqueLeadIds },
+                isDeleted: false,
+                status: { notIn: ["BOT_CREATED_ORDER", "REJECTED", "CANCELLED"] }
+            },
+            include: {
+                processedBy: { select: { id: true, name: true } }
+            },
+            orderBy: { createdAt: "desc" }
+        });
+
+        // 3. Fetch all last processed orders in batch
+        const allLastProcessedOrders = await prisma.order.findMany({
+            where: {
+                companyId,
+                leadId: { in: uniqueLeadIds },
+                isDeleted: false,
+                processedById: { not: null }
+            },
+            include: {
+                processedBy: { select: { id: true, name: true } }
+            },
+            orderBy: { createdAt: "desc" }
+        });
+
+        const leadMap = new Map(leads.map(l => [l.id, l]));
+        
+        // Group previous orders by leadId
+        const previousOrdersMap = new Map<string, typeof allPreviousOrders>();
+        allPreviousOrders.forEach(o => {
+            if (!previousOrdersMap.has(o.leadId)) {
+                previousOrdersMap.set(o.leadId, []);
+            }
+            previousOrdersMap.get(o.leadId)!.push(o);
+        });
+
+        // Group last processed orders by leadId
+        const lastProcessedMap = new Map<string, typeof allLastProcessedOrders[0]>();
+        allLastProcessedOrders.forEach(o => {
+            if (!lastProcessedMap.has(o.leadId)) {
+                lastProcessedMap.set(o.leadId, o);
+            }
+        });
+
+        const result: Record<string, CustomerHistory> = {};
+
+        for (const leadId of uniqueLeadIds) {
+            const lead = leadMap.get(leadId);
+            const prevOrders = previousOrdersMap.get(leadId) || [];
+            const lastProc = lastProcessedMap.get(leadId);
+
+            const isExistingCustomer = (lead?.orderCount || 0) > 0;
+            const wasDeleted = !!lead?.deletedAt;
+            const wasClosed = lead?.status === LeadStatus.ARCHIVED;
+
+            result[leadId] = {
+                isExistingCustomer,
+                previousOrderCount: lead?.orderCount || 0,
+                previousSpend: lead?.totalSpend || 0,
+                previousAgent: lastProc?.processedBy || undefined,
+                recentOrders: prevOrders.slice(0, 3).map(o => ({
+                    id: o.id,
+                    amount: o.amount,
+                    createdAt: o.createdAt,
+                    processedBy: o.processedBy?.name
+                })),
+                wasDeleted,
+                wasClosed
+            };
+        }
+
+        return result;
     }
 
     /**
@@ -197,48 +325,91 @@ export class NewOrderArrivalService {
         order: any, 
         history: CustomerHistory
     ): Promise<void> {
+        // Find if conversation is assigned
+        const conversation = await prisma.conversation.findUnique({
+            where: { id: order.conversationId },
+            select: { assignedToId: true }
+        });
+        const assignedToId = conversation?.assignedToId || null;
+
         await prisma.lead.update({
             where: { id: leadId },
             data: {
-                pendingOrderState: PendingOrderState.PENDING_APPROVAL,
+                pendingOrderState: assignedToId ? PendingOrderState.CLAIMED_FOR_APPROVAL : PendingOrderState.PENDING_APPROVAL,
                 pendingOrderId: order.id,
                 pendingOrderSummary: order.summary,
                 pendingOrderAmount: order.amount,
-                // Don't auto-assign - keep unclaimed for intake queue
-                pendingOrderClaimedById: null,
-                pendingOrderClaimedAt: null,
+                pendingOrderClaimedById: assignedToId,
+                pendingOrderClaimedAt: assignedToId ? new Date() : null,
                 // Update lead status if it was archived/deleted
                 status: LeadStatus.NEW,
                 lastActiveAt: new Date()
             }
         });
+
+        // Dynamic CRM metrics recalculation
+        await recalculateLeadCRM(leadId, order.companyId);
     }
 
     /**
      * Notify all eligible users about new order arrival
      */
-    private async notifyNewOrderArrival(
+    async notifyNewOrderArrival(
         companyId: string, 
         order: any, 
         history: CustomerHistory
     ): Promise<void> {
+        // Find if conversation is assigned
+        const conversation = await prisma.conversation.findUnique({
+            where: { id: order.conversationId },
+            select: { assignedToId: true }
+        });
+        const assignedToId = conversation?.assignedToId || null;
+
         // 1. Socket events for real-time updates
-        emitToCompany(companyId, "new_order_arrival", {
-            orderId: order.id,
-            leadId: order.leadId,
-            conversationId: order.conversationId,
-            summary: order.summary,
-            amount: order.amount,
-            priorityScore: order.priorityScore,
-            customerHistory: {
-                isExistingCustomer: history.isExistingCustomer,
-                previousOrderCount: history.previousOrderCount,
-                previousSpend: history.previousSpend,
-                previousAgent: history.previousAgent,
-                wasDeleted: history.wasDeleted,
-                wasClosed: history.wasClosed
-            },
-            createdAt: order.createdAt
+        if (assignedToId) {
+            // Minimize websocket broadcasts: emit ONLY to the assigned agent!
+            emitToAgent(assignedToId, "new_order_arrival", {
+                orderId: order.id,
+                leadId: order.leadId,
+                conversationId: order.conversationId,
+                summary: order.summary,
+                amount: order.amount,
+                priorityScore: order.priorityScore,
+                customerHistory: {
+                    isExistingCustomer: history.isExistingCustomer,
+                    previousOrderCount: history.previousOrderCount,
+                    previousSpend: history.previousSpend,
+                    previousAgent: history.previousAgent,
+                    wasDeleted: history.wasDeleted,
+                    wasClosed: history.wasClosed
+                },
+                createdAt: order.createdAt
+            });
+        } else {
+            // Only broadcast to everyone if still unassigned
+            emitToCompany(companyId, "new_order_arrival", {
+                orderId: order.id,
+                leadId: order.leadId,
+                conversationId: order.conversationId,
+                summary: order.summary,
+                amount: order.amount,
+                priorityScore: order.priorityScore,
+                customerHistory: {
+                    isExistingCustomer: history.isExistingCustomer,
+                    previousOrderCount: history.previousOrderCount,
+                    previousSpend: history.previousSpend,
+                    previousAgent: history.previousAgent,
+                    wasDeleted: history.wasDeleted,
+                    wasClosed: history.wasClosed
+                },
+                createdAt: order.createdAt
+            });
+        }
+
+        const updatedLead = await prisma.lead.findUnique({
+            where: { id: order.leadId },
+            select: { totalSpend: true, orderCount: true, segment: true }
         });
 
         // 2. Lead update event
@@ -246,22 +417,31 @@ export class NewOrderArrivalService {
             leadId: order.leadId,
             companyId,
             hasPendingOrderApproval: true,
-            pendingOrderState: "PENDING_APPROVAL",
+            pendingOrderState: assignedToId ? "CLAIMED_FOR_APPROVAL" : "PENDING_APPROVAL",
             pendingOrderId: order.id,
             pendingOrderSummary: order.summary,
             pendingOrderAmount: order.amount,
-            customerHistory: history
+            customerHistory: history,
+            totalSpend: updatedLead?.totalSpend,
+            orderCount: updatedLead?.orderCount,
+            segment: updatedLead?.segment,
+            isExistingCustomer: (updatedLead?.orderCount || 0) > 0,
+            previousOrderCount: updatedLead?.orderCount,
+            previousSpend: updatedLead?.totalSpend
         });
 
-        // 3. Notifications to all eligible roles
+        // 3. Notifications to all eligible roles (only needed if NOT assigned)
         const customerType = history.isExistingCustomer ? "Returning Customer" : "New Customer";
         const previousAgentInfo = history.previousAgent ? ` (Previously handled by ${history.previousAgent.name})` : "";
         
         const title = "New Order Arrival";
         const body = `${customerType}: ${order.summary} - ₹${order.amount}${previousAgentInfo}`;
 
-        await notificationService.notifyCompany(companyId, title, body, "ORDER");
-        await notificationService.notifyCompanyAdmins(companyId, title, body, "ORDER");
+        if (assignedToId) {
+            await notificationService.notifyUser(assignedToId, title, body, "ORDER");
+        } else {
+            await notificationService.notifyCompany(companyId, title, body, "ORDER");
+        }
     }
 
     /**
@@ -282,13 +462,39 @@ export class NewOrderArrivalService {
         agentName: string,
         agentRole: string
     ): Promise<any> {
-        // 1. Get the order and verify it's claimable
-        const order = await prisma.order.findFirst({
+        // 1. First, perform atomic update to reserve the order
+        const result = await prisma.order.updateMany({
             where: {
                 id: orderId,
-                status: OrderStatus.NEW, // Only NEW orders can be claimed
-                processedById: null // Must be unclaimed
+                status: OrderStatus.NEW,
+                processedById: null
             },
+            data: {
+                processedById: agentId,
+                updatedAt: new Date()
+            }
+        });
+
+        if (result.count === 0) {
+            // Find if already claimed by this agent:
+            const checkOrder = await prisma.order.findUnique({
+                where: { id: orderId },
+                include: {
+                    conversation: { include: { lead: true } },
+                    processedBy: { select: { id: true, name: true } },
+                    lead: true
+                }
+            });
+            if (checkOrder && checkOrder.processedById === agentId) {
+                // Return existing order for idempotency
+                return checkOrder;
+            }
+            throw new Error("Order not found or already claimed by another agent");
+        }
+
+        // Get fully loaded order since atomic update was successful
+        const order = await prisma.order.findUnique({
+            where: { id: orderId },
             include: {
                 conversation: { include: { lead: true } },
                 lead: true
@@ -296,18 +502,17 @@ export class NewOrderArrivalService {
         });
 
         if (!order) {
-            throw new Error("Order not found or already claimed");
+            throw new Error("Order not found");
         }
 
         // 2. Get customer history for notifications
         const customerHistory = await this.getCustomerHistory(order.companyId, order.leadId);
 
-        // 3. Update order with claim information
+        // 3. Update order with any additional details/status
         const updatedOrder = await prisma.order.update({
             where: { id: orderId },
             data: {
-                processedById: agentId,
-                status: OrderStatus.PROCESSING, // Move to active processing
+                status: OrderStatus.NEW, // Keep as NEW until agent manually confirms
                 updatedAt: new Date()
             },
             include: {

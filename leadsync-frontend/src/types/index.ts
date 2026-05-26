@@ -67,6 +67,37 @@ export interface Deal {
   closedAt?: string;
 }
 
+export interface Invoice {
+  pdfUrl: string;
+  invoiceNumber: string;
+}
+
+export type OrderStatus = 'PENDING' | 'NEW' | 'BOT_CREATED_ORDER' | 'USER_CONFIRMED_PENDING_AGENT' | 
+  'PROCESSING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'PAID' | 'SHIPPED' | 
+  'COMPLETED' | 'DELIVERED' | 'ARCHIVED' | 'CANCELLED' | 'REJECTED';
+
+export interface Order {
+  id: string;
+  summary: string;
+  amount: number;
+  status: OrderStatus;
+  createdAt: string;
+  completedAt?: string;
+  version: number;
+  lead?: {
+    name: string;
+    contact?: string;
+  };
+  processedBy?: {
+    id: string;
+    name: string;
+  };
+  invoice?: Invoice;
+  isUrgent?: boolean;
+  priorityScore?: number;
+  companyId?: string;
+}
+
 export interface ToastMessage {
   id: string;
   type: 'success' | 'error' | 'info' | 'warning';

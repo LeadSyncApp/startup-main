@@ -1,14 +1,35 @@
 import axios from "axios";
 import Groq from "groq-sdk";
+import { GoogleGenAI } from "@google/genai";
 import { safeJsonParse, sanitizeReply, getMenuSnapshot, calculateRetrieval } from "../utils/shop-ai.utils";
 
 // Initialize Groq
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "dummy" });
 
+// Initialize Gemini
+let geminiClient: GoogleGenAI | null = null;
+function getGeminiClient(): GoogleGenAI | null {
+  if (!geminiClient) {
+    const key = process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY; // Fallback to groq key is not possible, but check GEMINI_API_KEY
+    if (key) {
+      geminiClient = new GoogleGenAI({
+        apiKey: key,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+    }
+  }
+  return geminiClient;
+}
+
 // Model Hierarchy: Groq for Speed (Primary) - Sarvam only for STT/TTS/Lang Detection
 const MODELS = [
   { provider: "groq", id: "llama-3.3-70b-versatile" },
   { provider: "groq", id: "llama-3.1-8b-instant" }, // 🔥 Faster Fallback
+  { provider: "gemini", id: "gemini-3.5-flash" } // 🌟 Robust Gemini Grounding Fallback
 ];
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -58,6 +79,32 @@ async function generateWithFallback(
           `Groq ${model.id}`
         );
         content = completion.choices[0]?.message?.content || "";
+      } else if (model.provider === "gemini") {
+        const client = getGeminiClient();
+        if (client) {
+          const mappedContents = messages
+            .filter(m => m.content && m.content.trim())
+            .map(m => ({
+              role: m.role === "assistant" || m.role === "model" ? "model" : "user",
+              parts: [{ text: m.content }]
+            }));
+
+          const response = await withTimeout(
+            client.models.generateContent({
+              model: model.id,
+              contents: mappedContents,
+              config: {
+                systemInstruction: systemPrompt,
+                responseMimeType: isJson ? "application/json" : undefined,
+              }
+            }),
+            timeoutMs,
+            `Gemini ${model.id}`
+          );
+          content = response.text || "";
+        } else {
+          console.log("⚠️ Gemini Client not initialized (missing GEMINI_API_KEY)");
+        }
       }
 
       if (content.trim()) {

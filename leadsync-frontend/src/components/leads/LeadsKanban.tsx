@@ -5,22 +5,23 @@ import { api } from "../../lib/api";
 import toast from "react-hot-toast";
 
 const SEGMENTS = [
-  { key: "NEW",         label: "New",         color: "bg-blue-500",   light: "bg-blue-500/10 border-blue-500/20",  text: "text-blue-400"   },
-  { key: "REGULAR",     label: "Regular",     color: "bg-emerald-500",light: "bg-emerald-500/10 border-emerald-500/20", text: "text-emerald-400" },
-  { key: "VIP",         label: "VIP",         color: "bg-violet-500", light: "bg-violet-500/10 border-violet-500/20",  text: "text-violet-400"  },
-  { key: "CHURN_RISK",  label: "Churn Risk",  color: "bg-red-500",    light: "bg-red-500/10 border-red-500/20",     text: "text-red-400"    },
+  { key: "NEW",         label: "New",         color: "bg-blue-500",   light: "bg-blue-50 border-blue-200",  text: "text-blue-700"   },
+  { key: "REGULAR",     label: "Regular",     color: "bg-emerald-500",light: "bg-emerald-50 border-emerald-200", text: "text-emerald-700" },
+  { key: "VIP",         label: "VIP",         color: "bg-violet-500", light: "bg-violet-50 border-violet-200",  text: "text-violet-700"  },
+  { key: "CHURN_RISK",  label: "Churn Risk",  color: "bg-red-500",    light: "bg-red-50 border-red-200",     text: "text-red-700"    },
 ];
 
 const PRIORITY_COLOR: Record<string, string> = {
-  URGENT: "bg-red-500/10 text-red-400 border-red-500/20",
-  HIGH:   "bg-orange-500/10 text-orange-400 border-orange-500/20",
-  NORMAL: "bg-background-elevated text-text-muted border-border",
+  URGENT: "bg-red-100 text-red-700 border-red-200",
+  HIGH:   "bg-orange-100 text-orange-700 border-orange-200",
+  NORMAL: "bg-slate-100 text-slate-500 border-slate-200",
 };
 
 const CHANNEL_COLOR: Record<string, string> = {
-  TELEGRAM: "bg-blue-500/10 text-blue-400",
-  INSTAGRAM: "bg-pink-500/10 text-pink-400",
-  WHATSAPP:  "bg-green-500/10 text-green-400",
+  TELEGRAM: "bg-blue-100 text-blue-700",
+  INSTAGRAM: "bg-pink-100 text-pink-700",
+  WHATSAPP:  "bg-green-100 text-green-700",
+  OFFLINE:   "bg-[#F1F5F9] text-[#475569] border border-[#CBD5E1]",
 };
 
 interface Lead {
@@ -60,7 +61,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ type: "spring", stiffness: 340, damping: 28 }}
-      className="bg-background-secondary border border-border rounded-xl p-3.5 shadow-sm hover:shadow-md hover:border-accent/30 transition-all cursor-pointer group"
+      className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group"
       onClick={() => onRowClick(lead)}
     >
       {/* Avatar + name row */}
@@ -69,11 +70,11 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
           {initials}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-text-primary truncate leading-tight">
+          <p className="text-sm font-semibold text-slate-800 truncate leading-tight">
             {lead.name || lead.contact}
           </p>
           {lead.name && (
-            <p className="text-[11px] text-text-disabled truncate">{lead.contact}</p>
+            <p className="text-[11px] text-slate-400 truncate">{lead.contact}</p>
           )}
         </div>
       </div>
@@ -83,11 +84,11 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${PRIORITY_COLOR[priority]}`}>
           {priority}
         </span>
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${CHANNEL_COLOR[lead.channel] ?? "bg-background-elevated text-text-muted"}`}>
-          {lead.channel}
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${lead.channel?.toUpperCase() === "WEBSITE" ? CHANNEL_COLOR.OFFLINE : (CHANNEL_COLOR[lead.channel] ?? "bg-slate-100 text-slate-600")}`}>
+          {lead.channel?.toUpperCase() === "WEBSITE" ? "OFFLINE" : lead.channel}
         </span>
         {(lead.totalSpend ?? 0) > 0 && (
-          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-0.5">
             <TrendingUp size={9} />
             ₹{(lead.totalSpend ?? 0).toLocaleString("en-IN")}
           </span>
@@ -97,21 +98,21 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
       {/* Last message preview */}
       {lead.lastMessage && (
         <div className="flex items-start gap-1.5 mb-3">
-          <MessageCircle size={11} className="text-text-disabled mt-0.5 shrink-0" />
-          <p className="text-[11px] text-text-disabled leading-snug line-clamp-2">{lead.lastMessage}</p>
+          <MessageCircle size={11} className="text-slate-300 mt-0.5 shrink-0" />
+          <p className="text-[11px] text-slate-400 leading-snug line-clamp-2">{lead.lastMessage}</p>
         </div>
       )}
 
       {/* AI Score bar */}
       <div className="mb-3 px-0.5">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[9px] font-bold text-text-disabled uppercase tracking-wider">AI Score</span>
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">AI Score</span>
           <span className={`text-[10px] font-black ${
             (lead.aiScore ?? 0) >= 70 ? "text-emerald-600" :
             (lead.aiScore ?? 0) >= 40 ? "text-amber-600" : "text-red-500"
           }`}>{lead.aiScore ?? 0}</span>
         </div>
-        <div className="h-1.5 bg-background-tertiary rounded-full overflow-hidden">
+        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-700 ${
               (lead.aiScore ?? 0) >= 70 ? "bg-emerald-500" :
@@ -121,7 +122,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
           />
         </div>
         {lead.suggestedAction && lead.suggestedAction !== "Monitor" && (
-          <span className="text-[9px] font-bold text-indigo-400 mt-1 inline-block">⚡ {lead.suggestedAction}</span>
+          <span className="text-[9px] font-bold text-indigo-600 mt-1 inline-block">⚡ {lead.suggestedAction}</span>
         )}
       </div>
 
@@ -129,7 +130,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
       <div className="relative" onClick={e => e.stopPropagation()}>
         <button
           onClick={() => setMenuOpen(o => !o)}
-          className="flex items-center gap-1 text-[10px] font-bold text-text-disabled hover:text-indigo-400 transition py-0.5"
+          className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition py-0.5"
         >
           Move to <ChevronDown size={10} className={`transition-transform ${menuOpen ? "rotate-180" : ""}`} />
         </button>
@@ -140,13 +141,13 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -4, scale: 0.96 }}
               transition={{ duration: 0.12 }}
-              className="absolute bottom-full mb-1 left-0 bg-background-secondary border border-border rounded-xl shadow-xl z-30 overflow-hidden min-w-[140px]"
+              className="absolute bottom-full mb-1 left-0 bg-white border border-slate-200 rounded-xl shadow-xl z-30 overflow-hidden min-w-[140px]"
             >
               {SEGMENTS.filter(s => s.key !== lead.segment).map(seg => (
                 <button
                   key={seg.key}
                   onClick={() => { onSegmentChange(lead.id, seg.key); setMenuOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-background-tertiary transition flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition flex items-center gap-2"
                 >
                   <span className={`w-2 h-2 rounded-full ${seg.color}`} />
                   {seg.label}
@@ -207,9 +208,9 @@ export default function LeadsKanban({ leads, onRowClick, onSegmentChange }: Prop
                     key="empty"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="border-2 border-dashed border-border rounded-xl p-4 text-center"
+                    className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center"
                   >
-                    <p className="text-xs text-text-disabled font-medium">No leads</p>
+                    <p className="text-xs text-slate-300 font-medium">No leads</p>
                   </motion.div>
                 ) : (
                   col.map(lead => (

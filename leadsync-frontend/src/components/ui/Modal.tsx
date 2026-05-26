@@ -5,7 +5,18 @@
  * - Keyboard escape support
  * - Click-outside-to-close backdrop
  * - Responsive sizing with Tailwind CSS
- * - Dark theme consistent with app design
+ *
+ * Usage:
+ * const [isOpen, setIsOpen] = useState(false);
+ * <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Add Lead" size="lg">
+ *   <form> ... </form>
+ * </Modal>
+ *
+ * TODO: Backend Integration
+ * - Add onSubmit callback for form submissions
+ * - Handle loading states while submitting
+ * - Show error messages from API responses
+ * - Implement success callback after data update
  */
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
@@ -49,7 +60,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md', s
           {/* Backdrop with animation */}
           <motion.div
             key="backdrop"
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -68,7 +79,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md', s
             transition={{ duration: 0.2, type: 'spring', stiffness: 300, damping: 30 }}
           >
             <div
-              className={`relative w-full ${sizeClasses[size]} rounded-xl bg-background-secondary shadow-2xl border border-border overflow-hidden pointer-events-auto`}
+              className={`relative w-full ${sizeClasses[size]} rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden pointer-events-auto`}
               role="dialog"
               aria-modal="true"
               aria-labelledby={title ? 'modal-title' : undefined}
@@ -76,12 +87,12 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md', s
             >
               {/* Header */}
               {title && (
-                <div className="flex items-center justify-between border-b border-border bg-background-tertiary px-6 py-4">
-                  <h2 id="modal-title" className="text-xl font-semibold text-text-primary">{title}</h2>
+                <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-6 py-4">
+                  <h2 id="modal-title" className="text-xl font-semibold text-slate-900">{title}</h2>
                   {showCloseButton && (
                     <button
                       onClick={onClose}
-                      className="rounded-lg p-1.5 text-text-muted hover:bg-background-elevated hover:text-text-primary transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent"
+                      className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                       aria-label="Close modal"
                     >
                       <X className="h-5 w-5" />
@@ -91,7 +102,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md', s
               )}
 
               {/* Content */}
-              <div className="overflow-y-auto max-h-[calc(100vh-180px)] p-6 bg-background-secondary">
+              <div className="overflow-y-auto max-h-[calc(100vh-180px)] p-6">
                 {children}
               </div>
             </div>

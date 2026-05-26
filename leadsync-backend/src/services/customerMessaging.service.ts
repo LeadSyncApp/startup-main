@@ -14,8 +14,19 @@ export class CustomerMessagingService {
 
         if (!lead || !lead.contact) return;
 
+        // Fetch company prefix
+        let companyName = "our store";
+        try {
+            const company = await prisma.company.findUnique({ where: { id: companyId } });
+            if (company?.name) {
+                companyName = company.name;
+            }
+        } catch (e) {
+            console.error("Failed to read company details", e);
+        }
+
         // 1. Construct Message
-        const message = this.getStatusMessage(status, order.id, lead.name);
+        const message = this.getStatusMessageWithDetails(status, order, lead.name, companyName);
         if (!message) return; // No message for this status
 
         // 2. Send via Channel
@@ -58,9 +69,9 @@ export class CustomerMessagingService {
         }
     }
 
-    private getStatusMessage(status: string, orderId: string, customerName: string | null): string | null {
+    private getStatusMessageWithDetails(status: string, order: any, customerName: string | null, companyName: string): string | null {
         const name = customerName || "Customer";
-        const shortId = orderId.slice(0, 8);
+        const shortId = order.id.slice(0, 8);
 
         switch (status) {
             case "PROCESSING":
@@ -73,6 +84,14 @@ export class CustomerMessagingService {
                 return `Great news ${name}! Your order #${shortId} is out for delivery. 🚚`;
             case "DELIVERED":
                 return `Your order #${shortId} has been delivered. Enjoy! 🎉`;
+            case "COMPLETED":
+                return `Thank you for choosing ${companyName}! ❤️\n\n` +
+                       `Here is the summary of your order (Order #${shortId}):\n` +
+                       `----------------------------------\n` +
+                       `Items:\n${order.summary}\n\n` +
+                       `Total Amount: ₹${(order.amount ?? 0).toLocaleString("en-IN")}\n` +
+                       `----------------------------------\n\n` +
+                       `We look forward to serving you again! Have a wonderful day! ✨`;
             case "CANCELLED":
                 return `Hi ${name}, your order #${shortId} has been cancelled. Please contact support if this is a mistake.`;
             default:

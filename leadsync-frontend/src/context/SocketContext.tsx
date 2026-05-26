@@ -29,8 +29,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             return;
         }
 
-        // Derive socket base URL from VITE_API_URL (strip /api suffix)
-        const API_BASE = import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:4000";
+        // Derive socket base URL from dynamically available host or Vite config variable
+        const API_BASE = (typeof window !== 'undefined' ? window.location.origin : import.meta.env.VITE_API_URL?.replace("/api", "")) || "http://localhost:4000";
 
         const newSocket = io(API_BASE, {
             auth: { token },
@@ -59,6 +59,44 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         newSocket.on("disconnect", () => {
             console.log("🔴 Socket disconnected");
             setConnected(false);
+        });
+
+        // Global listener for agent inbox notes to keep active chats updated
+        newSocket.on("agent_inbox_new_note", (newNote: any) => {
+            let otherAgentId = null;
+            if (newNote.authorId === user.id) {
+                otherAgentId = newNote.mentionedIds?.find((id: string) => id !== user.id);
+            } else {
+                otherAgentId = newNote.authorId;
+            }
+            if (otherAgentId) {
+                try {
+                    const saved = localStorage.getItem("agent_active_chats");
+                    const activeChats = saved ? JSON.parse(saved) : [];
+                    if (!activeChats.includes(otherAgentId)) {
+                        localStorage.setItem("agent_active_chats", JSON.stringify([otherAgentId, ...activeChats]));
+                    }
+                } catch (e) {
+                    // Ignore JSON parse errors
+                }
+            }
+        });
+
+        // Global listener for cleared chats
+        newSocket.on("agent_chat_cleared", (data: any) => {
+            if (data.by) {
+                try {
+                    const saved = localStorage.getItem("agent_active_chats");
+                    let activeChats = saved ? JSON.parse(saved) : [];
+                    activeChats = activeChats.filter((id: string) => id !== data.by);
+                    localStorage.setItem("agent_active_chats", JSON.stringify(activeChats));
+                } catch (e) {
+                    // Ignore
+                }
+                
+                // Dispatch custom window event so AgentInbox can clear its notes array and UI immediately
+                window.dispatchEvent(new CustomEvent('agentChatClearedEvent', { detail: { targetId: data.by } }));
+            }
         });
 
         setSocket(newSocket);

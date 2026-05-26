@@ -17,7 +17,9 @@ import { intelligenceService } from "../services/intelligence.service";
 import { orderParserService } from "../services/orderParser.service";
 import { notificationService } from "../services/notification.service";
 import { sarvamService } from "../services/sarvam.service";
+import { assignmentService } from "../services/assignment.service";
 import { handleBotMessage } from "../bot/bot.logic";
+import { recalculateLeadCRM } from "../services/crm.service";
 
 /* ===============================
    TYPES
@@ -167,6 +169,131 @@ export class TelegramAdapter implements ChannelAdapter {
                 console.error("❌ Voice reply regeneration failed:", err);
             }
 
+        } else if (data === "CONFIRM_ORDER") {
+            try {
+                const conversation = await prisma.conversation.findFirst({
+                    where: { lead: { contact: chatId } },
+                    orderBy: { updatedAt: "desc" },
+                    include: { lead: true }
+                });
+                if (conversation) {
+                    const sessionState = conversation.sessionState as any;
+                    const cartItems = sessionState?.cart?.items || [];
+                    
+                    if (cartItems.length > 0) {
+                        const summaryText = cartItems.map((i: any) => `${i.quantity}x ${i.name}`).join(", ");
+                        const totalAmount = cartItems.reduce((sum: number, item: any) => sum + (item.price || 0) * item.quantity, 0);
+
+                        let existingOrder = await prisma.order.findFirst({
+                            where: {
+                                conversationId: conversation.id,
+                                status: { in: [OrderStatus.NEW, OrderStatus.BOT_CREATED_ORDER, OrderStatus.PENDING] },
+                                isDeleted: false
+                            },
+                            orderBy: { createdAt: "desc" }
+                        });
+
+                        let newOrder;
+                        if (existingOrder) {
+                            newOrder = await prisma.order.update({
+                                where: { id: existingOrder.id },
+                                data: {
+                                    summary: summaryText,
+                                    amount: totalAmount,
+                                    status: OrderStatus.PENDING,
+                                    items: cartItems,
+                                    approvalStatus: "PENDING",
+                                }
+                            });
+                        } else {
+                            newOrder = await prisma.order.create({
+                                data: {
+                                    companyId: conversation.companyId,
+                                    conversationId: conversation.id,
+                                    leadId: conversation.leadId,
+                                    summary: summaryText,
+                                    amount: totalAmount,
+                                    status: OrderStatus.PENDING,
+                                    items: cartItems,
+                                    approvalStatus: "PENDING",
+                                    source: "BOT_DETECTED",
+                                },
+                            });
+                        }
+
+                        await prisma.orderLog.create({
+                            data: {
+                                orderId: newOrder.id,
+                                actorId: "SYSTEM",
+                                actorName: "SYSTEM_BOT",
+                                actorRole: "SYSTEM",
+                                action: "STATUS_CHANGE",
+                                metadata: { to: OrderStatus.PENDING, version: 1 },
+                            }
+                        });
+
+                        const updatedState = { ...sessionState, cart: { items: [], total: 0 } };
+                        await prisma.conversation.update({
+                            where: { id: conversation.id },
+                            data: { sessionState: updatedState }
+                        });
+
+                        // Dynamic CRM metrics recalculation
+                        await recalculateLeadCRM(conversation.leadId, conversation.companyId);
+
+                        const replyMsg = "Your order has been confirmed successfully. Waiting for agent manual confirmation to process further.";
+                        
+                        const botMsg = await prisma.message.create({
+                            data: {
+                                content: replyMsg,
+                                sender: MessageSender.SYSTEM,
+                                conversationId: conversation.id,
+                            }
+                        });
+
+                        safeEmitConversationUpdate(conversation, "order_updated", newOrder);
+                        emitToConversation(conversation.id, "new_message", botMsg);
+                        emitToCompany(conversation.companyId, "order_updated", newOrder);
+
+                        await this.sendMessage(chatId, replyMsg);
+                    } else {
+                        await this.sendMessage(chatId, "No active order items in your cart to confirm. Please add items first!");
+                    }
+                }
+            } catch (err) {
+                console.error("❌ CONFIRM_ORDER callback failed:", err);
+            }
+        } else if (data === "CANCEL_ORDER") {
+            try {
+                const conversation = await prisma.conversation.findFirst({
+                    where: { lead: { contact: chatId } },
+                    orderBy: { updatedAt: "desc" }
+                });
+                if (conversation) {
+                    const sessionState = conversation.sessionState as any;
+                    const updatedState = { ...sessionState, cart: { items: [], total: 0 } };
+                    await prisma.conversation.update({
+                        where: { id: conversation.id },
+                        data: { sessionState: updatedState }
+                    });
+
+                    const replyMsg = "Your order has been cancelled successfully.";
+
+                    const botMsg = await prisma.message.create({
+                        data: {
+                            content: replyMsg,
+                            sender: MessageSender.SYSTEM,
+                            conversationId: conversation.id,
+                        }
+                    });
+
+                    emitToConversation(conversation.id, "new_message", botMsg);
+
+                    await this.sendMessage(chatId, replyMsg);
+                }
+            } catch (err) {
+                console.error("❌ CANCEL_ORDER callback failed:", err);
+            }
         } else if (data === "MENU" || data.startsWith("MENU") || data === "VIEW_MENU") {
             // Handle the dynamic MENU button from the AI
             try {
@@ -323,7 +450,7 @@ export class TelegramAdapter implements ChannelAdapter {
             });
 
             /* FIND / CREATE CONVERSATION (Safe against race conditions) */
-            const conversation = await prisma.conversation.upsert({
+            let conversation = await prisma.conversation.findUnique({
                 where: {
                     leadId_companyId_channel: {
                         leadId: lead.id,
@@ -331,14 +458,39 @@ export class TelegramAdapter implements ChannelAdapter {
                         channel: Channel.TELEGRAM,
                     },
                 },
-                update: {},
-                create: {
-                    leadId: lead.id,
-                    companyId,
-                    channel: Channel.TELEGRAM,
-                    mode: ConversationMode.BOT,
-                },
             });
+
+            if (!conversation) {
+                conversation = await prisma.conversation.create({
+                    data: {
+                        leadId: lead.id,
+                        companyId,
+                        channel: Channel.TELEGRAM,
+                        mode: ConversationMode.BOT,
+                    },
+                });
+
+                // Trigger Auto-Assignment strategy for a newly created conversation
+                try {
+                    const assignedAgentId = await assignmentService.autoAssignConversation(companyId, conversation.id);
+                    if (assignedAgentId) {
+                        conversation.assignedToId = assignedAgentId;
+                    }
+                } catch (err) {
+                    console.error("[AUTO-ASSIGN-ERROR] Telegram auto assign failed:", err);
+                }
+            } else if (!conversation.assignedToId) {
+                // Trigger Auto-Assignment strategy if the existing conversation has no assigned agent
+                try {
+                    console.log(`[TELEGRAM] Existing conversation ${conversation.id} has no agent. Triggering auto-assignment.`);
+                    const assignedAgentId = await assignmentService.autoAssignConversation(companyId, conversation.id);
+                    if (assignedAgentId) {
+                        conversation.assignedToId = assignedAgentId;
+                    }
+                } catch (err) {
+                    console.error("[AUTO-ASSIGN-ERROR] Existing Telegram conversation auto assign failed:", err);
+                }
+            }
 
             /* DEDUPLICATE CLIENT MESSAGE (Logic DB check) */
             const existingMessage = await prisma.message.findFirst({
@@ -361,10 +513,19 @@ export class TelegramAdapter implements ChannelAdapter {
                 },
             });
 
+            const fullConversation = await prisma.conversation.findUnique({
+                where: { id: conversation.id },
+                include: {
+                    lead: { select: { id: true, name: true, contact: true, channel: true } },
+                    assignedTo: { select: { id: true, name: true } }
+                }
+            });
+
             safeEmitConversationUpdate(conversation, "conversation_updated", {
                 conversationId: conversation.id,
                 lastMessage: text,
                 updatedAt: new Date(),
+                conversation: fullConversation || undefined
             });
             emitToConversation(conversation.id, "new_message", clientMsg);
 
@@ -372,12 +533,12 @@ export class TelegramAdapter implements ChannelAdapter {
             intelligenceService.analyzeMessage(companyId, lead.id, conversation.id, text).catch(() => { });
             orderParserService.processPotentialOrder(companyId, conversation.id, lead.id, text, company.botStructuredMenu).catch(() => { });
 
-            // 🔔 NOTIFICATION: Notify Assigned Agent & Admins
+            // 🔔 NOTIFICATION: Notify Assigned Agent & All Agents (if unclaimed)
             const notifyBody = `${name}: ${text.length > 50 ? text.slice(0, 50) + "..." : text}`;
             if (conversation.assignedToId) {
                 notificationService.notifyUser(conversation.assignedToId, "New Message", notifyBody, "MESSAGE");
             } else {
-                notificationService.notifyCompanyAdmins(companyId, "New Unassigned Message", notifyBody, "MESSAGE");
+                notificationService.notifyCompany(companyId, "New Unassigned Message", notifyBody, "MESSAGE");
             }
 
             if (conversation.mode === ConversationMode.HUMAN) return;
@@ -425,15 +586,19 @@ export class TelegramAdapter implements ChannelAdapter {
         for (const part of parts) {
             const lines = part.split("\n").map(l => l.trim());
             let messageText = "";
-            let buttonLabel = "";
-            let callbackData = "";
+            let buttonsList: {text: string, callback_data: string}[] = [];
+            let currentButton = "";
             let msgLines: string[] = [];
 
             for (const line of lines) {
                 if (line.startsWith("BUTTON:")) {
-                    buttonLabel = line.replace("BUTTON:", "").trim();
+                    currentButton = line.replace("BUTTON:", "").trim();
                 } else if (line.startsWith("CALLBACK:")) {
-                    callbackData = line.replace("CALLBACK:", "").trim();
+                    const callbackVal = line.replace("CALLBACK:", "").trim();
+                    if (currentButton) {
+                        buttonsList.push({ text: currentButton, callback_data: callbackVal });
+                        currentButton = "";
+                    }
                 } else {
                     // Collect all lines that are not buttons/callbacks
                     msgLines.push(line.replace(/^MESSAGE:/i, "").trim());
@@ -468,8 +633,12 @@ export class TelegramAdapter implements ChannelAdapter {
             };
 
             const buttons: any[] = [];
-            if (buttonLabel && callbackData) {
-                buttons.push([{ text: buttonLabel, callback_data: callbackData }]);
+            if (buttonsList.length > 0) {
+                if (buttonsList.length <= 2) {
+                    buttons.push(buttonsList.map(b => ({ text: b.text, callback_data: b.callback_data })));
+                } else {
+                    buttonsList.forEach(b => buttons.push([{ text: b.text, callback_data: b.callback_data }]));
+                }
             }
 
             if (isVoiceMsg) {

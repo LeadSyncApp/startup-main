@@ -1,7 +1,8 @@
 import { prisma } from "../lib/prisma";
 import { OrderStatus } from "@prisma/client";
-import { generateShopReply } from "../services/ai.service";
+import { newOrderArrivalService } from "../services/newOrderArrival.service";
 import { getSession, updateSession, getMenuSnapshot, calculateRetrieval, createFreshSessionState } from "../utils/shop-ai.utils";
+import { generateShopReply } from "../services/ai.service";
 
 /* =====================================================
    SWITCH TO BOT MODE
@@ -223,7 +224,12 @@ CALLBACK: VIEW_MENU`;
   if (result.stateUpdates) {
     let updatedState = { ...cleanSessionState, ...result.stateUpdates };
 
-    // 🆕 PHASE 2C: Handle Order Finalization
+    if (updatedState.cart?.items?.length > 0) {
+      // Keep the AI model's natural, contextual grounding reply intact, and append the interactive Call-To-Action buttons at the bottom.
+      finalReply = `${result.replyText}\n\nBUTTON: Confirm Order\nCALLBACK: CONFIRM_ORDER\nBUTTON: Cancel Order\nCALLBACK: CANCEL_ORDER`;
+    }
+
+    // 🆕 PHASE 2C: Handle Order Finalization (kept for compatibility, though buttons handle the finalization)
     if (result.orderFinalized && updatedState.cart?.items?.length > 0) {
       try {
         // Validate cart items against menu before creating order
@@ -247,20 +253,25 @@ CALLBACK: VIEW_MENU`;
           const summaryText = validCartItems.map((i: any) => `${i.quantity}x ${i.name}`).join(", ");
           const totalAmount = validCartItems.reduce((sum: number, item: any) => sum + (item.price || 0) * item.quantity, 0);
           
-          const newOrder = await (prisma.order as any).create({
-            data: {
-              companyId: conversation.companyId,
-              conversationId: conversation.id,
-              leadId: conversation.leadId,
-              summary: summaryText,
-              items: validCartItems,
-              amount: totalAmount,
-              status: OrderStatus.BOT_CREATED_ORDER, // Ghost Order for Agent approval
-              source: "BOT_DETECTED",
-              priority: "NORMAL",
-            }
+          // 🆕 UNIFIED WORKFLOW: Route ALL orders through New Order Arrivals
+          // This bypasses direct order creation and ensures universal intake
+          const orderArrival = await newOrderArrivalService.processNewOrderArrival({
+            companyId: conversation.companyId,
+            conversationId: conversation.id,
+            leadId: conversation.leadId,
+            summary: summaryText,
+            amount: totalAmount,
+            items: validCartItems.map((item: any) => ({
+              name: item.name,
+              quantity: item.quantity,
+              price: item.price || 0
+            })),
+            source: "BOT_DETECTED",
+            priority: totalAmount > 0 ? "URGENT" : "NORMAL",
+            detectedLanguage: detectedLanguage
           });
-          console.log("✅ Ghost Order created from AI finalization with validated items.");
+          
+          console.log("✅ Order routed through unified New Order Arrivals workflow.");
 
           // Clear cart after order is successfully recorded
           updatedState.cart = { items: [], total: 0 };

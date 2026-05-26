@@ -103,10 +103,10 @@ router.get('/orders/:id', async (req, res) => {
 router.get('/mock-payment/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { orderWorkflowService } = await import("../services/orderWorkflow.service");
-    const { invoiceService } = await import("../services/invoice.service");
+    const { orderWorkflowService } = await import("../services/orderWorkflow.service.js");
+    const { invoiceService } = await import("../services/invoice.service.js");
     const { MessageSender } = await import("@prisma/client");
-    const { emitToConversation } = await import("../lib/socket");
+    const { emitToConversation } = await import("../lib/socket.js");
 
     const order = await prisma.order.findUnique({
       where: { id },
@@ -128,17 +128,8 @@ router.get('/mock-payment/:id', async (req, res) => {
     const invoice = await invoiceService.ensureInvoiceForPaidOrder(id, "MOCK_PAY_" + Date.now());
 
     // 3. Update Lead Stats
-    const newOrderCount = (order.lead?.orderCount || 0) + 1;
-    const newTotalSpend = (order.lead?.totalSpend || 0) + order.amount;
-    await prisma.lead.update({
-      where: { id: order.leadId },
-      data: {
-        orderCount: newOrderCount,
-        totalSpend: newTotalSpend,
-        segment: newOrderCount > 1 ? "REGULAR" : "NEW",
-        lastActiveAt: new Date()
-      }
-    });
+    const { recalculateLeadCRM } = await import("../services/crm.service.js");
+    await recalculateLeadCRM(order.leadId, order.companyId);
 
     // 4. Confirmation Message
     let content = "✅ [MOCK] Payment Received successfully! Your order is now being processed.";

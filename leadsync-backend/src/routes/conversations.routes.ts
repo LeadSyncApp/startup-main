@@ -4,6 +4,10 @@ import { prisma } from "../lib/prisma";
 import { sendTelegramMessage } from "../bot/telegram.sender";
 import { ConversationMode, MessageSender, Role } from "@prisma/client";
 import { emitToCompany, emitToConversation, safeEmitConversationUpdate, emitToAgent, emitToCompanyAdmin } from "../lib/socket";
+import { sarvamService } from "../services/sarvam.service";
+import { TelegramAdapter } from "../adapters/telegram.adapter";
+import { generateAgentSuggestion, generateConversationSummary } from "../services/ai.service";
+import { notificationService } from "../services/notification.service";
 
 const router = Router();
 
@@ -13,26 +17,21 @@ const router = Router();
 ========================================= */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { companyId, userId, role } = req.user!;
+    const { companyId, userId } = req.user!;
 
-    // 🔒 PRIVACY FILTER: Agents only see Unclaimed OR Their Own
-    // 🆕 NEW ORDER ARRIVALS FILTER: Exclude conversations with unclaimed NEW orders
-    const whereClause: any = { companyId };
-    
-    // Role-based visibility
-    if (role === "AGENT") {
-      whereClause.OR = [
-        { assignedToId: null },
-        { assignedToId: userId }
-      ];
-    }
+    // 🔒 PRIVACY FILTER & ASSIGNED ONLY:
+    // Only fetch conversations that are explicitly claimed/assigned to the logged-in agent, operator, admin or owner.
+    // This successfully ensures that incoming, unassigned threads are not pulled into active operator inboxes until claimed.
+    const whereClause: any = { 
+      companyId,
+      assignedToId: userId
+    };
 
     // 🆕 UNIFIED WORKFLOW: Exclude conversations with unclaimed NEW orders from active conversation list
-    // These should only appear in New Order Arrivals, not in active Conversations
     const conversationsWithNewOrders = await prisma.order.findMany({
       where: {
         companyId,
-        status: "NEW",
+        status: 'NEW',
         processedById: null // Unclaimed orders
       },
       select: { conversationId: true }
@@ -42,18 +41,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     
     // Add exclusion to where clause
     if (excludedConversationIds.length > 0) {
-      if (whereClause.OR) {
-        whereClause.OR = whereClause.OR.map((condition: any) => {
-          if (condition.assignedToId === null) {
-            return { ...condition, id: { notIn: excludedConversationIds } };
-          } else if (condition.assignedToId === userId) {
-            return { ...condition, id: { notIn: excludedConversationIds } };
-          }
-          return condition;
-        });
-      } else {
-        whereClause.id = { notIn: excludedConversationIds };
-      }
+      whereClause.id = { notIn: excludedConversationIds };
     }
 
     const conversations = await prisma.conversation.findMany({
@@ -131,9 +119,9 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
       return res.status(404).json({ message: "Conversation not found" });
     }
 
-    // 🔒 STRICT PRIVACY: Prevent agents from peeking at others' conversations
-    if (userRole === "AGENT" && conversation.assignedToId && conversation.assignedToId !== userId) {
-      return res.status(403).json({ message: "⛔ Access Denied: This conversation is assigned to another agent." });
+    // 🔒 STRICT PRIVACY: Prevent peeking at others' conversations (exclusive assigned control)
+    if (conversation.assignedToId && conversation.assignedToId !== userId) {
+      return res.status(403).json({ message: "⛔ Access Denied: This conversation is exclusively assigned to another agent." });
     }
 
     const messages = await prisma.message.findMany({
@@ -174,7 +162,7 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
       mode: conversation.mode,
       messages,
       order: latestOrder || null,
-      isLocked: conversation.assignedToId && conversation.assignedToId !== userId && userRole === "AGENT",
+      isLocked: (userRole === "ADMIN" || userRole === "OWNER") ? conversation.assignedToId !== userId : (conversation.assignedToId && conversation.assignedToId !== userId),
       assignedTo: conversation.assignedTo,
       sessionState: conversation.sessionState
     });
@@ -214,9 +202,23 @@ router.post("/:id/send", authMiddleware, async (req: AuthRequest, res: Response)
       return res.status(404).json({ message: "Conversation not found" });
     }
 
-    // ENFORCE LOCK
-    if (conversation.assignedToId && conversation.assignedToId !== userId && userRole === "AGENT") {
-      return res.status(403).json({ message: "Conversation is locked by another agent." });
+    // ENFORCE LOCK & ROLE-BASED ACCESS CONTROL
+    const isAssignedToMe = conversation.assignedToId === userId;
+
+    if (userRole === "ADMIN" || userRole === "OWNER") {
+      // Admin/Owner can NEVER send messages in any conversation unless they have explicitly joined/taken over (assignedToId === userId).
+      if (!isAssignedToMe) {
+        return res.status(403).json({ message: "⛔ Access Denied: Admin/Owner cannot send messages or interfere unless they explicitly join/take over this conversation first." });
+      }
+    } else if (userRole === "AGENT") {
+      // AGENTs can send if:
+      // 1. Conversation is assigned to them (isAssignedToMe).
+      // 2. Or conversation is completely unassigned (assignedToId === null).
+      if (conversation.assignedToId && !isAssignedToMe) {
+        return res.status(403).json({ message: "⛔ Access Denied: This conversation is exclusively controlled by another assigned agent." });
+      }
+    } else {
+      return res.status(403).json({ message: "⛔ Access Denied: Unauthorized role." });
     }
 
     const message = await prisma.message.create({
@@ -267,6 +269,8 @@ router.patch("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response
   try {
     const { mode } = req.body;
     const companyId = req.user!.companyId;
+    const userId = req.user!.userId;
+    const userRole = req.user!.role;
 
     const conversation = await prisma.conversation.findFirst({
       where: {
@@ -277,6 +281,11 @@ router.patch("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response
 
     if (!conversation) {
       return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    const isLocked = (userRole === "ADMIN" || userRole === "OWNER") ? conversation.assignedToId !== userId : (conversation.assignedToId && conversation.assignedToId !== userId);
+    if (isLocked) {
+      return res.status(403).json({ message: "⛔ Access Denied: You cannot modify this conversation unless you are the assigned agent." });
     }
 
     const updated = await prisma.conversation.update({
@@ -363,6 +372,8 @@ router.patch("/:id/assign", authMiddleware, async (req: AuthRequest, res: Respon
   try {
     const { assignedToId } = req.body; // userId or null to unassign
     const companyId = req.user!.companyId;
+    const userId = req.user!.userId;
+    const userRole = req.user!.role;
 
     const conversation = await prisma.conversation.findFirst({
       where: { id: req.params.id, companyId },
@@ -370,38 +381,52 @@ router.patch("/:id/assign", authMiddleware, async (req: AuthRequest, res: Respon
 
     if (!conversation) return res.status(404).json({ message: "Conversation not found" });
 
-    // Update assignment - forceful cast to avoid IDE type errors
+    // Update assignment
     let updatedCalls;
+    const canOverride = userRole === "ADMIN" || userRole === "OWNER" || conversation.assignedToId === userId;
 
     if (assignedToId) {
-      // ✅ ATOMIC CLAIM: Only update if assignedToId is currently NULL
-      const result = await prisma.conversation.updateMany({
-        where: {
-          id: conversation.id,
-          assignedToId: null // 🔒 Lock: Must be unclaimed
-        },
-        data: {
-          assignedToId,
-          status: "ASSIGNED",
-          updatedAt: new Date()
-        }
-      });
-
-      if (result.count === 0) {
-        // Claim failed. Check why.
-        const fresh = await prisma.conversation.findUnique({ where: { id: conversation.id } });
-        if (fresh?.assignedToId === assignedToId) {
-          // Already assigned to me (idempotent success)
-          updatedCalls = fresh;
-        } else {
-          return res.status(409).json({ message: "⚠️ Too late! This conversation was just claimed by another agent." });
-        }
-      } else {
-        // Fetch the updated record
-        updatedCalls = await prisma.conversation.findUnique({
+      if (canOverride) {
+        // Can override/assign forcefully
+        updatedCalls = await prisma.conversation.update({
           where: { id: conversation.id },
+          data: {
+            assignedToId,
+            status: "ASSIGNED",
+            updatedAt: new Date()
+          },
           include: { assignedTo: { select: { id: true, name: true } } }
         });
+      } else {
+        // ✅ ATOMIC CLAIM: Only update if assignedToId is currently NULL
+        const result = await prisma.conversation.updateMany({
+          where: {
+            id: conversation.id,
+            assignedToId: null // 🔒 Lock: Must be unclaimed
+          },
+          data: {
+            assignedToId,
+            status: "ASSIGNED",
+            updatedAt: new Date()
+          }
+        });
+
+        if (result.count === 0) {
+          // Claim failed. Check why.
+          const fresh = await prisma.conversation.findUnique({ where: { id: conversation.id } });
+          if (fresh?.assignedToId === assignedToId) {
+            // Already assigned to me (idempotent success)
+            updatedCalls = fresh;
+          } else {
+            return res.status(409).json({ message: "⚠️ Too late! This conversation was just claimed by another agent." });
+          }
+        } else {
+          // Fetch the updated record
+          updatedCalls = await prisma.conversation.findUnique({
+            where: { id: conversation.id },
+            include: { assignedTo: { select: { id: true, name: true } } }
+          });
+        }
       }
     } else {
       // UNASSIGN (Release)
@@ -461,6 +486,8 @@ router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Respon
   try {
     const { status } = req.body; // OPEN, RESOLVED, SNOOZED
     const companyId = req.user!.companyId;
+    const userId = req.user!.userId;
+    const userRole = req.user!.role;
 
     // Explicit valid statuses
     const validStatuses = ["OPEN", "ASSIGNED", "RESOLVED", "SNOOZED"];
@@ -474,6 +501,11 @@ router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Respon
     });
 
     if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+
+    const isLocked = (userRole === "ADMIN" || userRole === "OWNER") ? conversation.assignedToId !== userId : (conversation.assignedToId && conversation.assignedToId !== userId);
+    if (isLocked) {
+      return res.status(403).json({ message: "⛔ Access Denied: You cannot modify this conversation unless you are the assigned agent." });
+    }
 
     // Forceful cast
     const updated = await (prisma.conversation as any).update({
@@ -530,9 +562,6 @@ router.post("/:id/voice-reply", authMiddleware, async (req: AuthRequest, res: Re
 
     if (!lastBotMsg) return res.status(404).json({ message: "No bot reply found to convert to voice" });
 
-    const { sarvamService } = await import("../services/sarvam.service");
-    const { TelegramAdapter } = await import("../adapters/telegram.adapter");
-
     const audioBuffer = await sarvamService.textToSpeech(lastBotMsg.content, "en-IN");
     if (!audioBuffer) return res.status(503).json({ message: "TTS generation failed. Try again." });
 
@@ -574,7 +603,6 @@ router.post("/:id/suggest-reply", authMiddleware, async (req: AuthRequest, res: 
     });
     messages.reverse();
 
-    const { generateAgentSuggestion } = await import("../services/ai.service");
     const suggestion = await generateAgentSuggestion(
       messages,
       conversation.company.name || "our business",
@@ -614,7 +642,6 @@ router.get("/:id/summary", authMiddleware, async (req: AuthRequest, res) => {
       select: { content: true, sender: true },
     });
 
-    const { generateConversationSummary } = await import("../services/ai.service");
     const summary = await generateConversationSummary(messages, conversation.company.name || "Business");
 
     // Cache in DB
@@ -669,22 +696,72 @@ router.post("/:id/notes", authMiddleware, async (req: AuthRequest, res) => {
         content: content.trim(),
         mentionedIds: mentionedIds || [],
       },
+      include: {
+        conversation: {
+          select: {
+            id: true,
+            assignedToId: true,
+            lead: {
+              select: {
+                name: true,
+                contact: true
+              }
+            }
+          }
+        }
+      }
     });
 
-    // Notify mentioned users via socket
+    // Get lead display name
+    const leadName = note.conversation?.lead?.name || note.conversation?.lead?.contact || "customer";
+
+    // Track user IDs we have notified to avoid double notification
+    const notifiedUserIds = new Set<string>();
+
+    // 1. Notify mentioned users via custom notification + socket
     if (Array.isArray(mentionedIds) && mentionedIds.length > 0) {
       for (const uid of mentionedIds) {
-        emitToAgent(uid, "internal_note_mention", {
-          noteId: note.id,
-          conversationId,
-          authorName: author?.name || "Agent",
-          preview: content.slice(0, 80),
-        });
+        if (uid !== userId) {
+          notifiedUserIds.add(uid);
+
+          // Socket event (inline editor sync)
+          emitToAgent(uid, "internal_note_mention", {
+            noteId: note.id,
+            conversationId,
+            authorName: author?.name || "Agent",
+            preview: content.slice(0, 80),
+          });
+
+          // Persistent DB & Live Notification
+          const title = "Mentioned in Note";
+          const body = `${author?.name || "An agent"} mentioned you in a note on conversation with ${leadName}: "${content.slice(0, 60)}..."`;
+          await notificationService.notifyUser(uid, title, body, "MESSAGE");
+
+          // Notify live Agent Inbox layout immediately
+          emitToAgent(uid, "agent_inbox_new_note", {
+            ...note,
+            authorInitials: (author?.name || "Agent").charAt(0).toUpperCase()
+          });
+        }
       }
+    }
+
+    // 2. Notify assigned user (if not the author and not already notified/mentioned)
+    if (conv.assignedToId && conv.assignedToId !== userId && !notifiedUserIds.has(conv.assignedToId)) {
+      const title = "New Note on Your Conversation";
+      const body = `${author?.name || "An agent"} left an internal note on your conversation with ${leadName}: "${content.slice(0, 60)}..."`;
+      await notificationService.notifyUser(conv.assignedToId, title, body, "MESSAGE");
+
+      // Notify live Agent Inbox layout immediately
+      emitToAgent(conv.assignedToId, "agent_inbox_new_note", {
+        ...note,
+        authorInitials: (author?.name || "Agent").charAt(0).toUpperCase()
+      });
     }
 
     res.status(201).json(note);
   } catch (e) {
+    console.error("Failed to create note:", e);
     res.status(500).json({ message: "Failed to create note" });
   }
 });

@@ -157,11 +157,11 @@ export default function GlobalSearch() {
       {/* Trigger button */}
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/15 border border-white/10 rounded-lg text-slate-400 text-sm transition-all group"
+        className="flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-lg text-slate-500 hover:text-slate-700 text-sm transition-all group"
       >
-        <Search className="w-4 h-4" />
-        <span className="hidden sm:inline">Search...</span>
-        <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono text-slate-500">
+        <Search className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
+        <span className="hidden sm:inline font-medium">Search...</span>
+        <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-slate-200/50 rounded text-[10px] font-mono text-slate-500">
           <Command className="w-3 h-3" />K
         </kbd>
       </button>
@@ -178,7 +178,7 @@ export default function GlobalSearch() {
             onClick={() => setOpen(false)}
           >
             {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
             {/* Dialog */}
             <motion.div
@@ -186,11 +186,11 @@ export default function GlobalSearch() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+              className="relative w-full max-w-lg bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Input */}
-              <div className="flex items-center gap-3 px-4 border-b border-white/10">
+              <div className="flex items-center gap-3 px-4 border-b border-slate-100">
                 <Search className="w-5 h-5 text-slate-400" />
                 <input
                   ref={inputRef}
@@ -198,10 +198,10 @@ export default function GlobalSearch() {
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Search leads, conversations, orders..."
-                  className="flex-1 py-4 bg-transparent text-white placeholder-slate-500 text-sm outline-none"
+                  className="flex-1 py-4 bg-transparent text-slate-800 placeholder-slate-400 text-sm outline-none"
                 />
                 {query && (
-                  <button onClick={() => setQuery("")} className="text-slate-500 hover:text-slate-300">
+                  <button onClick={() => setQuery("")} className="text-slate-400 hover:text-slate-600">
                     <X className="w-4 h-4" />
                   </button>
                 )}
@@ -210,13 +210,13 @@ export default function GlobalSearch() {
               {/* Results */}
               <div className="max-h-80 overflow-y-auto scrollbar-thin">
                 {loading && (
-                  <div className="px-4 py-8 text-center text-slate-500 text-sm">
-                    <div className="inline-block w-5 h-5 border-2 border-slate-600 border-t-cyan-400 rounded-full animate-spin" />
+                  <div className="px-4 py-8 text-center text-slate-400 text-sm">
+                    <div className="inline-block w-5 h-5 border-2 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
                   </div>
                 )}
 
                 {!loading && query && results.length === 0 && (
-                  <div className="px-4 py-8 text-center text-slate-500 text-sm">
+                  <div className="px-4 py-8 text-center text-slate-400 text-sm">
                     No results for "{query}"
                   </div>
                 )}
@@ -228,8 +228,8 @@ export default function GlobalSearch() {
                         key={`${r.type}-${r.id}`}
                         className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
                           i === selectedIndex
-                            ? "bg-white/10 text-white"
-                            : "text-slate-300 hover:bg-white/5"
+                            ? "bg-indigo-50 text-indigo-900 font-medium"
+                            : "text-slate-600 hover:bg-slate-50"
                         }`}
                         onClick={() => {
                           navigate(r.link);
@@ -239,10 +239,10 @@ export default function GlobalSearch() {
                       >
                         {typeIcon(r.type)}
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{r.title}</p>
-                          <p className="text-xs text-slate-500 truncate">{r.subtitle}</p>
+                          <p className="text-sm font-semibold truncate">{r.title}</p>
+                          <p className="text-xs text-slate-400 truncate mt-0.5">{r.subtitle}</p>
                         </div>
-                        <span className="text-[10px] uppercase tracking-wider text-slate-600 font-medium">
+                        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium bg-slate-100 px-1.5 py-0.5 rounded">
                           {r.type}
                         </span>
                       </li>
@@ -251,18 +251,18 @@ export default function GlobalSearch() {
                 )}
 
                 {!loading && !query && (
-                  <div className="px-4 py-8 text-center text-slate-600 text-sm">
+                  <div className="px-4 py-8 text-center text-slate-400 text-sm">
                     Type to search across leads, conversations, and orders
                   </div>
                 )}
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-between px-4 py-2 border-t border-white/10 text-[10px] text-slate-600">
+              <div className="flex items-center justify-between px-4 py-2 border-t border-slate-100 text-[10px] text-slate-400 bg-slate-50/50">
                 <div className="flex items-center gap-3">
-                  <span><kbd className="px-1 py-0.5 bg-white/10 rounded">↑↓</kbd> navigate</span>
-                  <span><kbd className="px-1 py-0.5 bg-white/10 rounded">↵</kbd> select</span>
-                  <span><kbd className="px-1 py-0.5 bg-white/10 rounded">esc</kbd> close</span>
+                  <span><kbd className="px-1 py-0.5 bg-white border border-slate-200 shadow-xs rounded text-slate-500 font-medium">↑↓</kbd> navigate</span>
+                  <span><kbd className="px-1 py-0.5 bg-white border border-slate-200 shadow-xs rounded text-slate-500 font-medium">↵</kbd> select</span>
+                  <span><kbd className="px-1 py-0.5 bg-white border border-slate-200 shadow-xs rounded text-slate-500 font-medium">esc</kbd> close</span>
                 </div>
               </div>
             </motion.div>

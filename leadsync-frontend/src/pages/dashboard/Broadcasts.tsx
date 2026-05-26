@@ -7,8 +7,8 @@ import { PageTransition } from "../../components/ui/Animations";
 import { EmptyBroadcasts } from "../../components/ui/EmptyState";
 
 const CHANNELS = [
-  { value: "TELEGRAM", label: "Telegram", color: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
-  { value: "INSTAGRAM", label: "Instagram", color: "bg-pink-500/10 text-pink-400 border-pink-500/20" },
+  { value: "TELEGRAM", label: "Telegram", color: "bg-blue-100 text-blue-700 border-blue-200" },
+  { value: "INSTAGRAM", label: "Instagram", color: "bg-pink-100 text-pink-700 border-pink-200" },
 ];
 
 const SEGMENTS = [
@@ -20,17 +20,17 @@ const SEGMENTS = [
 ];
 
 const STATUS_ICON: Record<string, JSX.Element> = {
-  PENDING: <Clock className="h-4 w-4 text-text-disabled" />,
-  SENDING: <Radio className="h-4 w-4 text-blue-400 animate-pulse" />,
-  DONE: <CheckCircle className="h-4 w-4 text-emerald-400" />,
-  FAILED: <AlertTriangle className="h-4 w-4 text-red-400" />,
+  PENDING: <Clock className="h-4 w-4 text-slate-400" />,
+  SENDING: <Radio className="h-4 w-4 text-blue-500 animate-pulse" />,
+  DONE: <CheckCircle className="h-4 w-4 text-emerald-500" />,
+  FAILED: <AlertTriangle className="h-4 w-4 text-red-500" />,
 };
 
 const STATUS_BADGE: Record<string, string> = {
-  PENDING: "bg-background-elevated text-text-muted",
-  SENDING: "bg-blue-500/10 text-blue-400",
-  DONE: "bg-emerald-500/10 text-emerald-400",
-  FAILED: "bg-red-500/10 text-red-400",
+  PENDING: "bg-slate-100 text-slate-600",
+  SENDING: "bg-blue-100 text-blue-700",
+  DONE: "bg-emerald-100 text-emerald-700",
+  FAILED: "bg-red-100 text-red-600",
 };
 
 export default function Broadcasts() {
@@ -92,23 +92,23 @@ export default function Broadcasts() {
     <PageTransition className="space-y-8 max-w-4xl">
       {/* HEADER */}
       <div>
-        <h1 className="text-3xl font-bold text-text-primary">Broadcasts</h1>
-        <p className="mt-1 text-sm text-text-muted">
+        <h1 className="text-3xl font-bold text-slate-900">Broadcasts</h1>
+        <p className="mt-1 text-sm text-slate-500">
           Send a message to a group of leads on a specific channel.
         </p>
       </div>
 
       {/* COMPOSE */}
-      <div className="rounded-2xl border border-border bg-background-secondary shadow-card overflow-hidden">
-        <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-          <Megaphone className="h-5 w-5 text-cyan-400" />
-          <h2 className="text-lg font-semibold text-text-primary">New Broadcast</h2>
+      <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+          <Megaphone className="h-5 w-5 text-cyan-600" />
+          <h2 className="text-lg font-semibold text-slate-900">New Broadcast</h2>
         </div>
 
         <div className="px-6 py-6 space-y-6">
           {/* Channel */}
           <div>
-            <label className="block text-sm font-semibold text-text-secondary mb-2">Channel</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Channel</label>
             <div className="flex gap-3">
               {CHANNELS.map((ch) => (
                 <button
@@ -116,8 +116,8 @@ export default function Broadcasts() {
                   onClick={() => setChannel(ch.value)}
                   className={`px-4 py-2 rounded-xl border text-sm font-medium transition ${
                     channel === ch.value
-                      ? ch.color + " ring-2 ring-offset-1 ring-offset-background-primary ring-current"
-                      : "bg-background-tertiary text-text-secondary border-border hover:bg-background-elevated"
+                      ? ch.color + " ring-2 ring-offset-1 ring-current"
+                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                   }`}
                 >
                   {ch.label}
@@ -128,7 +128,7 @@ export default function Broadcasts() {
 
           {/* Segment */}
           <div>
-            <label className="block text-sm font-semibold text-text-secondary mb-2">Target Segment</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Target Segment</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {SEGMENTS.map((seg) => (
                 <button
@@ -136,12 +136,12 @@ export default function Broadcasts() {
                   onClick={() => setSegment(seg.value)}
                   className={`p-3 rounded-xl border text-left transition ${
                     segment === seg.value
-                      ? "bg-accent text-white border-accent"
-                      : "bg-background-tertiary text-text-secondary border-border hover:bg-background-elevated"
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                   }`}
                 >
                   <p className="font-semibold text-sm">{seg.label}</p>
-                  <p className={`text-xs mt-0.5 ${segment === seg.value ? "text-white/70" : "text-text-disabled"}`}>
+                  <p className={`text-xs mt-0.5 ${segment === seg.value ? "text-slate-300" : "text-slate-400"}`}>
                     {seg.desc}
                   </p>
                 </button>
@@ -151,15 +151,15 @@ export default function Broadcasts() {
 
           {/* Message */}
           <div>
-            <label className="block text-sm font-semibold text-text-secondary mb-2">Message</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Message</label>
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value.slice(0, charLimit))}
               rows={5}
               placeholder="Hi! 👋 We have a special offer just for you…"
-              className="w-full rounded-xl border border-border bg-background-tertiary px-4 py-3 text-sm text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-accent resize-none"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
             />
-            <p className="mt-1 text-xs text-text-disabled text-right">
+            <p className="mt-1 text-xs text-slate-400 text-right">
               {message.length}/{charLimit}
             </p>
           </div>
@@ -180,31 +180,31 @@ export default function Broadcasts() {
 
       {/* CONFIRMATION MODAL */}
       {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-background-secondary rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4 border border-border"
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4"
           >
             <div className="flex items-center gap-3">
-              <div className="bg-amber-500/10 p-2 rounded-xl">
-                <Megaphone className="h-5 w-5 text-amber-400" />
+              <div className="bg-amber-100 p-2 rounded-xl">
+                <Megaphone className="h-5 w-5 text-amber-600" />
               </div>
-              <h3 className="text-lg font-bold text-text-primary">Confirm Broadcast</h3>
+              <h3 className="text-lg font-bold text-slate-900">Confirm Broadcast</h3>
             </div>
-            <p className="text-sm text-text-secondary">
+            <p className="text-sm text-slate-600">
               You are about to send a message to all{" "}
-              <span className="font-semibold text-text-primary">{selectedSegmentLabel}</span> leads on{" "}
-              <span className="font-semibold text-text-primary">{selectedChannelLabel}</span>. This cannot
+              <span className="font-semibold text-slate-900">{selectedSegmentLabel}</span> leads on{" "}
+              <span className="font-semibold text-slate-900">{selectedChannelLabel}</span>. This cannot
               be undone.
             </p>
-            <div className="bg-background-tertiary rounded-xl p-4 text-sm text-text-secondary italic border border-border">
+            <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-700 italic border border-slate-200">
               "{message.slice(0, 120)}{message.length > 120 ? "…" : ""}"
             </div>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setShowConfirm(false)}
-                className="px-4 py-2 text-sm text-text-secondary hover:bg-background-tertiary rounded-xl transition"
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-xl transition"
               >
                 Cancel
               </button>
@@ -220,9 +220,9 @@ export default function Broadcasts() {
       )}
 
       {/* HISTORY */}
-      <div className="rounded-2xl border border-border bg-background-secondary shadow-card overflow-hidden">
-        <div className="px-6 py-4 border-b border-border">
-          <h2 className="text-lg font-semibold text-text-primary">Broadcast History</h2>
+      <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100">
+          <h2 className="text-lg font-semibold text-slate-900">Broadcast History</h2>
         </div>
 
         {loadingHistory ? (
@@ -230,17 +230,17 @@ export default function Broadcasts() {
             {[1, 2, 3].map(i => (
               <div key={i} className="flex items-start gap-4">
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-background-tertiary rounded w-3/4" />
-                  <div className="h-3 bg-background-tertiary rounded w-1/3" />
+                  <div className="h-4 bg-slate-200 rounded w-3/4" />
+                  <div className="h-3 bg-slate-200 rounded w-1/3" />
                 </div>
-                <div className="h-6 w-16 bg-background-tertiary rounded-full" />
+                <div className="h-6 w-16 bg-slate-200 rounded-full" />
               </div>
             ))}
           </div>
         ) : history.length === 0 ? (
           <EmptyBroadcasts />
         ) : (
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-slate-100">
             {history.map((b: any) => {
               const total = (b.sentCount ?? 0) + (b.failedCount ?? 0);
               const successPct = total > 0 ? Math.round((b.sentCount / total) * 100) : 0;
@@ -248,20 +248,20 @@ export default function Broadcasts() {
               const isExpanded = expandedRows.has(b.id);
 
               return (
-              <div key={b.id} className="px-6 py-4 hover:bg-background-tertiary/50 transition">
+              <div key={b.id} className="px-6 py-4 hover:bg-slate-50 transition">
                 <div className="flex items-start justify-between gap-4">
                   <div
                     className="flex-1 min-w-0 cursor-pointer"
                     onClick={() => toggleRow(b.id)}
                   >
-                    <p className={`text-sm text-text-secondary ${isExpanded ? "" : "truncate"}`}>
+                    <p className={`text-sm text-slate-800 ${isExpanded ? "" : "truncate"}`}>
                       "{b.message}"
                     </p>
                     <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                      <span className="text-xs font-medium text-text-muted">
+                      <span className="text-xs font-medium text-slate-500">
                         {b.channel} · {b.targetSegment}
                       </span>
-                      <span className="text-xs text-text-disabled">
+                      <span className="text-xs text-slate-400">
                         {new Date(b.createdAt).toLocaleString("en-IN")}
                       </span>
                     </div>
@@ -274,10 +274,10 @@ export default function Broadcasts() {
                       {b.status}
                     </span>
                     {b.status === "DONE" && total > 0 && (
-                      <p className="text-xs text-text-disabled">
+                      <p className="text-xs text-slate-400">
                         ✅ {b.sentCount} sent
                         {b.failedCount > 0 && (
-                          <span className="text-red-400 ml-1">· ⚠️ {b.failedCount} failed</span>
+                          <span className="text-red-500 ml-1">· ⚠️ {b.failedCount} failed</span>
                         )}
                       </p>
                     )}
@@ -287,7 +287,7 @@ export default function Broadcasts() {
                 {/* Delivery progress bar (DONE rows with data) */}
                 {b.status === "DONE" && total > 0 && (
                   <div className="mt-3 space-y-1">
-                    <div className="flex h-2 rounded-full overflow-hidden bg-background-tertiary">
+                    <div className="flex h-2 rounded-full overflow-hidden bg-slate-100">
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${successPct}%` }}
@@ -302,9 +302,9 @@ export default function Broadcasts() {
                       />
                     </div>
                     <div className="flex justify-between text-[10px] font-semibold">
-                      <span className="text-emerald-400">{successPct}% delivered</span>
-                      {failPct > 0 && <span className="text-red-400">{failPct}% failed</span>}
-                      <span className="text-text-disabled">{total} total</span>
+                      <span className="text-emerald-600">{successPct}% delivered</span>
+                      {failPct > 0 && <span className="text-red-500">{failPct}% failed</span>}
+                      <span className="text-slate-400">{total} total</span>
                     </div>
                   </div>
                 )}

@@ -70,22 +70,10 @@ app.use(
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
 
-      // Allow localhost for development
-      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-        return callback(null, true);
-      }
-
-      // Allow any Vercel domain
-      if (origin.includes('vercel.app')) {
-        return callback(null, true);
-      }
-
-      // Allow configured origins
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
 
-      console.warn(`CORS blocked for origin: ${origin}`);
       return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
     credentials: true,

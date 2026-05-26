@@ -1,594 +1,315 @@
-import { useEffect, useRef } from 'react';
+/**
+ * Home / Marketing Page - Fully public, industry-agnostic
+ * Showcases CRM features for any SME (bakery, retailer, e-commerce, services, etc.)
+ * No sensitive company data visible. CTAs: Signup / Login
+ */
 import { Link } from 'react-router-dom';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import MarketingNav from '../components/layout/MarketingNav';
 import {
-  Users, MessageSquare, BarChart3, Zap, ArrowRight, CheckCircle2,
-  TrendingUp, Shield, Sparkles, Bot, Globe, Lock,
-  Play, Star, Quote
+  Users,
+  MessageSquare,
+  BarChart3,
+  Zap,
+  ArrowRight,
+  CheckCircle2,
+  TrendingUp,
+  Shield,
+  Sparkles,
 } from 'lucide-react';
 
 const features = [
   {
-    icon: Bot,
-    title: 'AI-Powered Conversations',
-    description: 'Let AI handle routine inquiries 24/7. Seamlessly hand off to human agents when needed.',
-  },
-  {
     icon: Users,
     title: 'Lead Aggregation',
-    description: 'Capture leads from website, Telegram, WhatsApp, and forms—all into one unified inbox.',
+    description: 'Capture leads from website forms, chat widgets, social media, and demo signups—into one unified inbox across all sources.',
   },
   {
     icon: MessageSquare,
-    title: 'Shared Inbox',
-    description: 'Team collaboration on conversations. See who\'s replying, assign tasks, never miss a lead.',
+    title: 'Shared Inbox & Chat',
+    description: 'Unified conversations per company. Any agent sees the same messages. Manual and automated responses for real-time engagement.',
   },
   {
     icon: BarChart3,
-    title: 'Revenue Analytics',
-    description: 'Real-time dashboards tracking deals, pipeline, and revenue across all channels.',
+    title: 'Revenue Dashboards',
+    description: 'Day, Month, Year views with company-wise breakdown. Track deals, pipeline, and revenue—flexible formatting.',
+  },
+  {
+    icon: TrendingUp,
+    title: 'Sales Pipeline',
+    description: 'Kanban-style view from qualified to closed won. Track deal value, agents, and progress across stages.',
   },
   {
     icon: Zap,
-    title: 'Smart Workflows',
-    description: 'Auto-assign leads, trigger notifications, and manage order approvals with AI assistance.',
+    title: 'Automation & Workflow',
+    description: 'Auto-response templates, lead assignment rules, and notification workflows (coming soon).',
   },
   {
     icon: Shield,
-    title: 'Enterprise-Grade Security',
-    description: 'Multi-tenant architecture with role-based access. Your data stays isolated and secure.',
+    title: 'Multi-Tenant & Secure',
+    description: 'Separate data per company/tenant. Role-based access (Admin, Manager, Agent). Industry-agnostic for any SME.',
   },
 ];
 
-const stats = [
-  { value: '₹25Cr+', label: 'Revenue Managed' },
-  { value: '50,000+', label: 'Leads Processed' },
-  { value: '92%', label: 'AI Response Rate' },
-  { value: '4.9★', label: 'Customer Rating' },
-];
+const industries = ['Retail', 'Bakery & Food', 'E-Commerce', 'Services', 'Real Estate', 'B2B SaaS', 'Consulting', 'Hospitality'];
 
 const testimonials = [
   {
     name: 'Priya Sharma',
-    role: 'CEO',
-    company: 'Premium Retail Co.',
-    quote: 'LeadSync transformed how we handle customer inquiries. The AI handles 90% of questions, and our team focuses on closing deals.',
+    company: 'Retail Shop 123',
+    quote: 'LeadSync helped us organize leads from all channels in one place. Our team closes more deals now.',
     rating: 5,
   },
   {
     name: 'Vikram Patel',
-    role: 'Operations Manager',
-    company: 'Bakery Fresh',
-    quote: 'We went from scattered WhatsApp messages to a proper CRM. The order management and AI responses are game changers.',
-    rating: 5,
-  },
-  {
-    name: 'Anjali Gupta',
-    role: 'Founder',
-    company: 'Style Studio',
-    quote: 'The best part is the shared inbox. My team can collaborate on customer conversations in real-time.',
+    company: 'Bakery XYZ',
+    quote: 'Perfect for small businesses. No complex setup. Just add leads, assign to team, and track revenue.',
     rating: 5,
   },
 ];
 
 export default function Home() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ['start start', 'end start'],
-  });
-
-  const r = { y: useTransform(scrollYProgress, [0, 1], ['0%', '50%']), opacity: useTransform(scrollYProgress, [0, 0.5], [1, 0]) };
-  Object.assign({}, r); // mark as used
-
-  useEffect(() => {
-    // Smooth scroll to section on hash change
-    const handleHashChange = () => {
-      const hash = window.location.hash;
-      if (hash) {
-        const element = document.querySelector(hash);
-        element?.scrollIntoView({ behavior: 'smooth' });
-      }
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
   return (
-    <div ref={containerRef} className="min-h-screen bg-background-primary text-text-primary">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background-primary/80 backdrop-blur-md border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-text-primary" />
-              </div>
-              <span className="font-bold text-lg">LeadSync</span>
-            </Link>
-
-            <div className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-sm text-text-secondary hover:text-text-primary transition-colors">Features</a>
-              <a href="#how-it-works" className="text-sm text-text-secondary hover:text-text-primary transition-colors">How it Works</a>
-              <a href="#testimonials" className="text-sm text-text-secondary hover:text-text-primary transition-colors">Testimonials</a>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Link
-                to="/login"
-                className="hidden sm:block text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
-              >
-                Log in
-              </Link>
-              <Link
-                to="/signup"
-                className="btn-gradient"
-              >
-                Start Free
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-white">
+      <MarketingNav />
 
       {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
-        {/* Animated Background */}
-        <div className="absolute inset-0 overflow-hidden">
-          <motion.div
-            className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-accent/10 rounded-full filter blur-[120px]"
-            animate={{
-              scale: [1, 1.2, 1],
-              opacity: [0.3, 0.5, 0.3],
-            }}
-            transition={{
-              duration: 8,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }}
-          />
-          <motion.div
-            className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-violet-500/10 rounded-full filter blur-[100px]"
-            animate={{
-              scale: [1, 1.3, 1],
-              opacity: [0.2, 0.4, 0.2],
-            }}
-            transition={{
-              duration: 10,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-mesh opacity-20" />
-
-          {/* Grid Pattern */}
-          <div
-            className="absolute inset-0 opacity-[0.02]"
-            style={{
-              backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-              backgroundSize: '60px 60px',
-            }}
-          />
+      <section className="relative py-20 sm:py-32 lg:py-40 px-4 sm:px-6 lg:px-8 overflow-hidden">
+        {/* Background gradient elements */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-100 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
         </div>
 
-        <motion.div
-          style={{ opacity: r.opacity }}
-          className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center"
-        >
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/10 border border-accent/20 mb-8"
-          >
-            <Sparkles className="h-4 w-4 text-accent" />
-            <span className="text-sm font-medium text-accent">Now with AI-Powered Conversations</span>
-          </motion.div>
+        <div className="relative mx-auto max-w-4xl text-center">
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-cyan-50 border border-cyan-200">
+            <Sparkles className="h-4 w-4 text-cyan-600" />
+            <span className="text-sm font-semibold text-cyan-700">Lead Management for SMEs</span>
+          </div>
 
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6"
-          >
-            <span className="text-gradient">AI-Powered CRM</span>
+          {/* Main heading */}
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6">
+            Sync Every Lead.
             <br />
-            <span className="text-text-primary">for Modern Teams</span>
-          </motion.h1>
+            <span className="bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">Close More Deals.</span>
+          </h1>
 
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-xl text-text-secondary max-w-2xl mx-auto mb-10"
-          >
-            Capture leads from any channel. Let AI handle routine conversations.
-            Your team focuses on what matters—closing deals.
-          </motion.p>
+          {/* Value Proposition - 3 lines */}
+          <div className="max-w-2xl mx-auto mb-8 space-y-3">
+            <p className="text-lg text-slate-600 font-medium">
+              Aggregate leads from chat, forms, websites, and social media into one unified inbox.
+            </p>
+            <p className="text-lg text-slate-600 font-medium">
+              Manage conversations, assign tasks, and track progress—all in real-time with your team.
+            </p>
+            <p className="text-lg text-slate-600 font-medium">
+              Scale your sales operations with automated workflows and revenue dashboards built for SMEs.
+            </p>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center"
-          >
+          {/* CTAs */}
+          <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
             <Link
               to="/signup"
-              className="group btn-gradient text-base px-8 py-4"
+              className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 px-8 py-3.5 text-base font-semibold text-white hover:shadow-xl hover:scale-105 transition-all duration-200"
             >
               Start Free Trial
-              <ArrowRight className="ml-2 h-5 w-5 inline group-hover:translate-x-1 transition-transform" />
+              <ArrowRight className="ml-2 h-5 w-5" />
             </Link>
-            <a
-              href="#demo"
-              className="btn-secondary text-base px-8 py-4"
+            <Link
+              to="/login"
+              className="inline-flex items-center justify-center rounded-lg border-2 border-slate-800 bg-white px-8 py-3.5 text-base font-semibold text-slate-900 hover:bg-slate-50 hover:border-cyan-600 transition-colors duration-200"
             >
-              <Play className="mr-2 h-5 w-5 inline" />
-              Watch Demo
-            </a>
-          </motion.div>
+              Log In
+            </Link>
+          </div>
 
-          {/* Trust badges */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
-            className="mt-12 flex flex-wrap justify-center gap-6 text-sm text-text-muted"
-          >
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-              14-day free trial
-            </span>
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-              No credit card required
-            </span>
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-              Cancel anytime
-            </span>
-          </motion.div>
-
-          {/* Stats */}
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.6 }}
-            className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8"
-          >
-            {stats.map((stat, _i) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-gradient">{stat.value}</div>
-                <div className="text-sm text-text-muted mt-1">{stat.label}</div>
-              </div>
-            ))}
-          </motion.div>
-        </motion.div>
-
-        {/* Scroll indicator */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-          className="absolute bottom-8 left-1/2 -translate-x-1/2"
-        >
-          <motion.div
-            animate={{ y: [0, 8, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-            className="w-6 h-10 rounded-full border-2 border-border flex items-start justify-center p-2"
-          >
-            <motion.div className="w-1.5 h-1.5 rounded-full bg-text-muted" />
-          </motion.div>
-        </motion.div>
+          {/* Trust indicators */}
+          <p className="mt-8 text-sm text-slate-500 font-medium">
+            ✓ No credit card required &nbsp;&nbsp;&nbsp;✓ 14-day free trial &nbsp;&nbsp;&nbsp;✓ Cancel anytime
+          </p>
+        </div>
       </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-24 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">Everything you need to manage leads</h2>
-            <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-              From first contact to closed deal—LeadSync provides all the tools your team needs
+      {/* Features Grid Section */}
+      <section className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-slate-50">
+        <div className="mx-auto max-w-7xl">
+          {/* Section header */}
+          <div className="text-center mb-16 sm:mb-20">
+            <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-4">
+              Everything You Need to Convert
+            </h2>
+            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+              From first touch to closed deal—LeadSync brings your lead management into one intelligent platform.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, _i) => (
-              <motion.div
-                key={feature.title}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: _i * 0.1 }}
-                whileHover={{ y: -4 }}
-                className="group p-6 rounded-2xl bg-background-secondary border border-border hover:border-accent/30 transition-colors"
+          {/* Features grid - 6 cards */}
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {features.map(({ icon: Icon, title, description }) => (
+              <div
+                key={title}
+                className="group rounded-2xl border border-slate-200 bg-white p-8 hover:border-cyan-300 hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 cursor-default"
               >
-                <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <feature.icon className="h-6 w-6 text-accent" />
+                {/* Icon container */}
+                <div className="rounded-xl bg-gradient-to-br from-cyan-100 to-blue-100 p-3 w-fit mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <Icon className="h-6 w-6 text-cyan-600" />
                 </div>
-                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                <p className="text-text-secondary text-sm">{feature.description}</p>
-              </motion.div>
+
+                {/* Content */}
+                <h3 className="text-xl font-bold text-slate-900 mb-3">{title}</h3>
+                <p className="text-slate-600 leading-relaxed">{description}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* How it Works */}
-      <section id="how-it-works" className="py-24 px-4 sm:px-6 lg:px-8 bg-background-secondary">
-        <div className="max-w-7xl mx-auto">
+      {/* Industries Section */}
+      <section className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white">
+        <div className="mx-auto max-w-6xl">
+          {/* Section header */}
           <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">How it works</h2>
-            <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-              Get started in minutes. Capture leads, automate responses, and close more deals.
+            <h2 className="text-4xl sm:text-5xl font-bold mb-4">Works for Any Industry</h2>
+            <p className="text-lg text-slate-300 max-w-2xl mx-auto">
+              LeadSync is built industry-agnostic. Perfect for SMEs across all verticals.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                step: '01',
-                title: 'Connect Channels',
-                description: 'Link your Telegram bot, website forms, or WhatsApp Business. All leads flow into one inbox.',
-                icon: Globe,
-              },
-              {
-                step: '02',
-                title: 'AI Takes Over',
-                description: 'AI responds to common questions, qualifies leads, and creates orders automatically.',
-                icon: Bot,
-              },
-              {
-                step: '03',
-                title: 'Your Team Closes',
-                description: 'Human agents get involved for complex deals. Track everything in the dashboard.',
-                icon: TrendingUp,
-              },
-            ].map((item, _i) => (
-              <motion.div
-                key={item.step}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: _i * 0.1 }}
-                className="relative"
+          {/* Industry tags - 8 cards */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {industries.map((industry) => (
+              <div
+                key={industry}
+                className="group rounded-xl border border-slate-700 bg-gradient-to-br from-slate-800 to-slate-900 px-6 py-4 text-center hover:border-cyan-500 hover:shadow-lg hover:shadow-cyan-500/20 transition-all duration-300 cursor-default"
               >
-                <div className="text-6xl font-bold text-background-elevated mb-4">{item.step}</div>
-                <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
-                  <item.icon className="h-6 w-6 text-accent" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">{item.title}</h3>
-                <p className="text-text-secondary">{item.description}</p>
-              </motion.div>
+                <p className="font-semibold text-white group-hover:text-cyan-400 transition-colors">{industry}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Dashboard Preview */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 overflow-hidden">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-                Powerful dashboards for
-                <span className="text-gradient"> data-driven decisions</span>
-              </h2>
-              <p className="text-text-secondary text-lg mb-8">
-                Track revenue, monitor pipeline, and analyze team performance in real-time.
-                Make informed decisions with beautiful, actionable insights.
-              </p>
-
-              <div className="space-y-4">
-                {[
-                  { icon: BarChart3, text: 'Real-time revenue tracking' },
-                  { icon: Users, text: 'Team performance metrics' },
-                  { icon: Lock, text: 'Enterprise-grade security' },
-                ].map((item) => (
-                  <div key={item.text} className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
-                      <item.icon className="h-4 w-4 text-accent" />
-                    </div>
-                    <span className="text-text-secondary">{item.text}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <motion.div
-              initial={{ opacity: 0, x: 50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-              className="relative"
-            >
-              <div className="absolute -inset-4 bg-gradient-brand opacity-20 blur-3xl rounded-full" />
-              <div className="relative bg-background-secondary border border-border rounded-2xl p-6 shadow-card-elevated">
-                {/* Mock Dashboard UI */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="h-4 w-32 bg-background-tertiary rounded" />
-                    <div className="h-8 w-24 bg-accent/20 rounded" />
-                  </div>
-                  <div className="grid grid-cols-4 gap-3">
-                    {['Revenue', 'Orders', 'Leads', 'AI Hit'].map((label) => (
-                      <div key={label} className="bg-background-tertiary rounded-lg p-3">
-                        <div className="h-3 w-16 bg-background-elevated rounded mb-2" />
-                        <div className="h-6 w-12 bg-accent/30 rounded" />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="h-32 bg-background-tertiary rounded-lg flex items-end p-4 gap-2">
-                    {[40, 65, 45, 80, 55, 90, 70].map((h, _i) => (
-                      <div
-                        key={_i}
-                        className="flex-1 bg-accent/30 rounded-t"
-                        style={{ height: `${h}%` }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section id="testimonials" className="py-24 px-4 sm:px-6 lg:px-8 bg-background-secondary">
-        <div className="max-w-7xl mx-auto">
+      {/* Testimonials Section */}
+      <section className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 bg-white">
+        <div className="mx-auto max-w-6xl">
+          {/* Section header */}
           <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">Loved by teams worldwide</h2>
-            <p className="text-text-secondary text-lg">See what our customers have to say</p>
+            <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-4">What Our Users Say</h2>
+            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+              Join hundreds of SMEs who trust LeadSync to manage their leads and close more deals.
+            </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map((testimonial, _i) => (
-              <motion.div
-                key={testimonial.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: _i * 0.1 }}
-                className="group p-6 rounded-2xl bg-background-primary border border-border hover:border-accent/30 transition-colors"
+          {/* Testimonial cards - 2 cards */}
+          <div className="grid gap-8 sm:grid-cols-2 max-w-4xl mx-auto">
+            {testimonials.map(({ name, company, quote, rating }) => (
+              <div
+                key={name}
+                className="group rounded-2xl border border-slate-200 bg-white p-8 hover:border-cyan-300 hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300"
               >
+                {/* Star rating */}
                 <div className="flex items-center gap-1 mb-4">
-                  {[...Array(testimonial.rating)].map((_, j) => (
-                    <Star key={j} className="h-4 w-4 fill-amber-400 text-amber-400" />
+                  {[...Array(rating)].map((_, i) => (
+                    <span key={i} className="text-amber-400 text-lg">★</span>
                   ))}
                 </div>
 
-                <Quote className="h-8 w-8 text-accent/20 mb-4" />
+                {/* Quote */}
+                <p className="text-lg text-slate-700 mb-6 leading-relaxed">"{quote}"</p>
 
-                <p className="text-text-secondary mb-6">{testimonial.quote}</p>
-
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-brand flex items-center justify-center text-text-primary font-semibold">
-                    {testimonial.name[0]}
-                  </div>
-                  <div>
-                    <div className="font-semibold text-sm">{testimonial.name}</div>
-                    <div className="text-text-muted text-xs">
-                      {testimonial.role}, {testimonial.company}
-                    </div>
-                  </div>
+                {/* Author */}
+                <div className="border-t border-slate-200 pt-4">
+                  <p className="font-bold text-slate-900">{name}</p>
+                  <p className="text-sm text-slate-500">{company}</p>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            className="relative bg-gradient-to-br from-accent/20 to-violet-500/20 rounded-3xl p-12 border border-accent/20"
-          >
-            <div className="relative z-10">
-              <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-                Ready to transform your sales?
+      {/* CTA Section with dark gradient */}
+      <section className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-slate-50">
+        <div className="mx-auto max-w-3xl">
+          <div className="relative rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-8 sm:px-12 py-16 sm:py-20 text-center border border-slate-700 shadow-2xl overflow-hidden">
+            {/* Background accent */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10"></div>
+            </div>
+
+            <div className="relative">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                Ready to sync your leads?
               </h2>
-              <p className="text-text-secondary text-lg mb-8 max-w-xl mx-auto">
-                Join hundreds of teams using LeadSync to capture leads, automate conversations, and close more deals.
+              <p className="text-lg text-slate-300 mb-8 max-w-lg mx-auto">
+                Join SMEs across all industries managing leads more effectively with LeadSync.
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              {/* CTAs */}
+              <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
                 <Link
                   to="/signup"
-                  className="btn-gradient text-base px-8 py-4"
+                  className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 px-8 py-3.5 font-semibold text-white hover:shadow-lg hover:shadow-cyan-500/50 hover:scale-105 transition-all duration-200"
                 >
                   Get Started Free
-                  <ArrowRight className="ml-2 h-5 w-5 inline" />
                 </Link>
-                <a
-                  href="mailto:sales@leadsync.io"
-                  className="btn-secondary text-base px-8 py-4"
+                <Link
+                  to="/login"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-500 bg-transparent px-8 py-3.5 font-semibold text-slate-200 hover:border-slate-300 hover:bg-slate-700/50 transition-all duration-200"
                 >
-                  Contact Sales
-                </a>
+                  Log In
+                </Link>
               </div>
 
-              <div className="mt-8 flex flex-wrap justify-center gap-6 text-sm text-text-muted">
-                <span className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  Free 14-day trial
-                </span>
-                <span className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  No setup required
-                </span>
-                <span className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  24/7 support
-                </span>
-              </div>
+              {/* Benefits */}
+              <ul className="mt-8 flex flex-wrap justify-center gap-4 sm:gap-6 text-sm text-slate-300">
+                {['No credit card required', '14-day free trial', 'Cancel anytime'].map((item) => (
+                  <li key={item} className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-cyan-400" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-          </motion.div>
+          </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
+      <footer className="border-t border-slate-200 bg-white py-12 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-8 sm:grid-cols-3 mb-8">
+            {/* Brand */}
             <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-text-primary" />
-                </div>
-                <span className="font-bold">LeadSync</span>
-              </div>
-              <p className="text-text-muted text-sm">
-                AI-powered CRM for modern sales teams.
-              </p>
+              <p className="font-bold text-slate-900 mb-2">LeadSync CRM</p>
+              <p className="text-sm text-slate-600">Lead management platform for SMEs across all industries.</p>
             </div>
 
+            {/* Quick links */}
             <div>
-              <h4 className="font-semibold mb-4">Product</h4>
-              <ul className="space-y-2 text-sm text-text-muted">
-                <li><a href="#features" className="hover:text-text-primary">Features</a></li>
-                <li><a href="#" className="hover:text-text-primary">Pricing</a></li>
-                <li><a href="#" className="hover:text-text-primary">Integrations</a></li>
-                <li><a href="#" className="hover:text-text-primary">Changelog</a></li>
+              <p className="font-semibold text-slate-900 mb-4">Quick Links</p>
+              <ul className="space-y-2 text-sm">
+                <li><a href="#" className="text-slate-600 hover:text-slate-900 transition-colors">Features</a></li>
+                <li><a href="#" className="text-slate-600 hover:text-slate-900 transition-colors">Pricing</a></li>
+                <li><a href="#" className="text-slate-600 hover:text-slate-900 transition-colors">Blog</a></li>
               </ul>
             </div>
 
+            {/* Legal */}
             <div>
-              <h4 className="font-semibold mb-4">Company</h4>
-              <ul className="space-y-2 text-sm text-text-muted">
-                <li><a href="#" className="hover:text-text-primary">About</a></li>
-                <li><a href="#" className="hover:text-text-primary">Blog</a></li>
-                <li><a href="#" className="hover:text-text-primary">Careers</a></li>
-                <li><a href="#" className="hover:text-text-primary">Contact</a></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-semibold mb-4">Legal</h4>
-              <ul className="space-y-2 text-sm text-text-muted">
-                <li><a href="#" className="hover:text-text-primary">Privacy</a></li>
-                <li><a href="#" className="hover:text-text-primary">Terms</a></li>
-                <li><a href="#" className="hover:text-text-primary">Security</a></li>
+              <p className="font-semibold text-slate-900 mb-4">Legal</p>
+              <ul className="space-y-2 text-sm">
+                <li><a href="#" className="text-slate-600 hover:text-slate-900 transition-colors">Privacy Policy</a></li>
+                <li><a href="#" className="text-slate-600 hover:text-slate-900 transition-colors">Terms of Service</a></li>
+                <li><a href="#" className="text-slate-600 hover:text-slate-900 transition-colors">Contact</a></li>
               </ul>
             </div>
           </div>
 
-          <div className="border-t border-border pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p className="text-text-muted text-sm">
-              © {new Date().getFullYear()} LeadSync. All rights reserved.
-            </p>
-            <div className="flex items-center gap-4">
-              <a href="#" className="text-text-muted hover:text-text-primary">
-                <Globe className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-text-muted hover:text-text-primary">
-                <MessageSquare className="h-5 w-5" />
-              </a>
-            </div>
+          {/* Copyright */}
+          <div className="border-t border-slate-200 pt-8 text-center text-sm text-slate-600">
+            <p>© {new Date().getFullYear()} LeadSync CRM. All rights reserved.</p>
           </div>
         </div>
       </footer>

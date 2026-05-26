@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../../lib/prisma";
 import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
+import { notificationService } from "../../services/notification.service";
+import { safeEmitConversationUpdate, emitToAgent, emitToCompany } from "../../lib/socket";
 
 const router = Router();
 
@@ -190,68 +192,36 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
       return res.status(403).json({ message: "Only agents can claim pending orders" });
     }
 
-    const lead = await (prisma.lead as any).findFirst({
-      where: { 
-        id, 
+    // Update lead with claim information atomically to prevent race conditions
+    const updateResult = await (prisma.lead as any).updateMany({
+      where: {
+        id,
         companyId,
-        pendingOrderState: "PENDING_APPROVAL" // Must have pending approval
-      }
-    });
-
-    if (!lead) {
-      return res.status(404).json({ message: "Lead not found or no pending order" });
-    }
-
-    // Check if already claimed
-    if (lead.pendingOrderClaimedById) {
-      // Only allow if current user is admin/owner or the same agent
-      if (lead.pendingOrderClaimedById !== userId && !["ADMIN", "OWNER"].includes(role)) {
-        return res.status(409).json({ message: "Pending order already claimed by another agent" });
-      }
-      // If same agent, return success (idempotent)
-      if (lead.pendingOrderClaimedById === userId) {
-        return res.json(lead);
-      }
-    }
-
-    // 🆕 Get customer history and previous agent information
-    const [previousOrders, previousAgent] = await Promise.all([
-      (prisma.order as any).findMany({
-        where: { 
-          leadId: lead.id, 
-          companyId,
-          isDeleted: false,
-          status: { notIn: ["BOT_CREATED_ORDER", "REJECTED", "CANCELLED"] }
-        },
-        include: {
-          processedBy: { select: { id: true, name: true } }
-        },
-        orderBy: { createdAt: "desc" },
-        take: 5
-      }),
-      // Find the last agent who processed an order for this customer
-      (prisma.order as any).findFirst({
-        where: { 
-          leadId: lead.id, 
-          companyId,
-          isDeleted: false,
-          processedById: { not: null }
-        },
-        include: {
-          processedBy: { select: { id: true, name: true } }
-        },
-        orderBy: { createdAt: "desc" }
-      })
-    ]);
-
-    // Update lead with claim information
-    const updatedLead = await (prisma.lead as any).update({
-      where: { id },
+        pendingOrderState: "PENDING_APPROVAL", // lock condition
+        pendingOrderClaimedById: null // lock condition
+      },
       data: {
         pendingOrderState: "CLAIMED_FOR_APPROVAL",
         pendingOrderClaimedById: userId,
         pendingOrderClaimedAt: new Date()
-      },
+      }
+    });
+
+    if (updateResult.count === 0) {
+      // Find if already claimed by this agent:
+      const checkLead = await (prisma.lead as any).findFirst({
+        where: { id, companyId }
+      });
+      if (checkLead && checkLead.pendingOrderClaimedById === userId) {
+        // Return existing lead for idempotency
+        return res.json(checkLead);
+      }
+      return res.status(409).json({ message: "⚠️ Already claimed by another agent or no pending order." });
+    }
+
+    // Fetch the updated lead
+    const updatedLead = await (prisma.lead as any).findUnique({
+      where: { id },
       include: {
         conversations: {
           select: {
@@ -267,30 +237,73 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
       }
     });
 
-    // Also assign the conversation to this agent if not already assigned
+    if (!updatedLead) {
+      return res.status(404).json({ message: "Lead not found after claiming." });
+    }
+
+    // 🆕 Get customer history and previous agent information
+    const [previousOrders, previousAgent, callingAgent] = await Promise.all([
+      (prisma.order as any).findMany({
+        where: { 
+          leadId: updatedLead.id, 
+          companyId,
+          isDeleted: false,
+          status: { notIn: ["BOT_CREATED_ORDER", "REJECTED", "CANCELLED"] }
+        },
+        include: {
+          processedBy: { select: { id: true, name: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        take: 5
+      }),
+      // Find the last agent who processed an order for this customer
+      (prisma.order as any).findFirst({
+        where: { 
+          leadId: updatedLead.id, 
+          companyId,
+          isDeleted: false,
+          processedById: { not: null }
+        },
+        include: {
+          processedBy: { select: { id: true, name: true } }
+        },
+        orderBy: { createdAt: "desc" }
+      }),
+      // Find calling agent's name
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true }
+      })
+    ]);
+
+    const agentName = callingAgent?.name || "Agent";
+
+    // Also assign the conversation to this agent to keep them in perfect sync
     const conversation = updatedLead.conversations[0];
-    if (conversation && !conversation.assignedToId) {
+    if (conversation) {
       await prisma.conversation.update({
         where: { id: conversation.id },
-        data: { assignedToId: userId }
+        data: {
+          assignedToId: userId,
+          status: "ASSIGNED",
+          updatedAt: new Date()
+        }
       });
     }
 
     // Create notification for the claiming agent
-    const { notificationService } = await import("../../services/notification.service");
     await notificationService.notifyUser(
       userId,
       "Pending Order Claimed",
-      `You have claimed the pending order for ${lead.name || lead.contact}`,
+      `You have claimed the pending order for ${updatedLead.name || updatedLead.contact}`,
       "ORDER"
     );
 
     // Emit socket events
-    const { safeEmitConversationUpdate, emitToAgent, emitToCompany } = await import("../../lib/socket");
     if (conversation) {
       safeEmitConversationUpdate(conversation, "conversation_assigned", {
         conversationId: conversation.id,
-        assignedTo: { id: userId, name: "Agent" }
+        assignedTo: { id: userId, name: agentName }
       });
     }
     emitToAgent(userId, "pending_order_claimed", updatedLead);
@@ -303,11 +316,11 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
       pendingOrderState: "CLAIMED_FOR_APPROVAL",
       pendingOrderClaimedById: userId,
       pendingOrderClaimedAt: new Date(),
-      agentAssigned: "Agent",
+      agentAssigned: agentName,
       // 🆕 Include customer history context
-      isExistingCustomer: lead.orderCount > 0,
-      previousOrderCount: lead.orderCount,
-      previousSpend: lead.totalSpend,
+      isExistingCustomer: updatedLead.orderCount > 0,
+      previousOrderCount: updatedLead.orderCount,
+      previousSpend: updatedLead.totalSpend,
       previousAgentName: previousAgent?.processedBy?.name,
       previousAgentId: previousAgent?.processedBy?.id,
       recentOrders: previousOrders.slice(0, 3).map((o: any) => ({

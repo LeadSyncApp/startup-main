@@ -66,8 +66,18 @@ router.post("/signup", async (req, res) => {
           },
         },
       },
-      include: {
-        users: true,
+      select: {
+        id: true,
+        name: true,
+        users: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            isAvailable: true,
+          },
+        },
       },
     });
 
@@ -86,6 +96,7 @@ router.post("/signup", async (req, res) => {
         email: owner.email,
         name: owner.name,
         role: owner.role,
+        isAvailable: owner.isAvailable,
       },
       company: {
         id: company.id,
@@ -119,7 +130,16 @@ router.post("/login", async (req, res) => {
         ],
         isActive: true, // 🔐 block disabled users
       },
-      include: { company: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isAvailable: true,
+        passwordHash: true,
+        companyId: true,
+        company: true,
+      },
     });
 
     if (!user) {
@@ -145,6 +165,7 @@ router.post("/login", async (req, res) => {
         email: user.email,
         name: user.name,
         role: user.role,
+        isAvailable: user.isAvailable,
       },
       company: {
         id: user.company.id,

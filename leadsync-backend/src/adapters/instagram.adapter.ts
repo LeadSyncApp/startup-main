@@ -1,5 +1,6 @@
 import { ChannelAdapter } from "./channel.adapter";
 import { prisma } from "../lib/prisma";
+import { handleBotMessage } from "../bot/bot.logic";
 import {
     Channel,
     MessageSender,
@@ -13,6 +14,7 @@ import { cacheService } from "../services/cache.service";
 import { intelligenceService } from "../services/intelligence.service";
 import { orderParserService } from "../services/orderParser.service";
 import { notificationService } from "../services/notification.service";
+import { assignmentService } from "../services/assignment.service";
 
 /* ===============================
    TYPES
@@ -126,6 +128,16 @@ export class InstagramAdapter implements ChannelAdapter {
                         mode: ConversationMode.BOT,
                     },
                 });
+
+                // Trigger Auto-Assignment strategy for a newly created conversation
+                try {
+                    const assignedAgentId = await assignmentService.autoAssignConversation(companyId, conversation.id);
+                    if (assignedAgentId) {
+                        conversation.assignedToId = assignedAgentId;
+                    }
+                } catch (err) {
+                    console.error("[AUTO-ASSIGN-ERROR] Instagram auto assign failed:", err);
+                }
             }
 
             /* DEDUPLICATE */
@@ -163,7 +175,7 @@ export class InstagramAdapter implements ChannelAdapter {
             if (conversation.assignedToId) {
                 notificationService.notifyUser(conversation.assignedToId, "New Message", notifyBody, "MESSAGE");
             } else {
-                notificationService.notifyCompanyAdmins(companyId, "New Unassigned Message", notifyBody, "MESSAGE");
+                notificationService.notifyCompany(companyId, "New Unassigned Message", notifyBody, "MESSAGE");
             }
 
             // 🍔 ORDER DETECTION
@@ -181,7 +193,6 @@ export class InstagramAdapter implements ChannelAdapter {
             this.sendTyping(psid).catch(() => { });
 
             try {
-                const { handleBotMessage } = await import("../bot/bot.logic");
                 const aiReply = await handleBotMessage(
                     conversation.id,
                     text,
@@ -193,9 +204,9 @@ export class InstagramAdapter implements ChannelAdapter {
                 if (!aiReply) return;
 
                 // Parse and send parts
-                const parts = aiReply.split(/(?=MESSAGE:)/g).filter(p => p.trim());
+                const parts = aiReply.split(/(?=MESSAGE:)/g).filter((p: string) => p.trim());
                 for (const part of parts) {
-                    const lines = part.split("\n").map(l => l.trim());
+                    const lines = part.split("\n").map((l: string) => l.trim());
                     let messageText = "";
                     let msgLines: string[] = [];
 

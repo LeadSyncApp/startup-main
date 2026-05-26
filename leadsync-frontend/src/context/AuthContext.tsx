@@ -20,6 +20,7 @@ export interface User {
   name: string;
   role: Role;
   companyId: string;
+  isAvailable?: boolean;
   staffId?: string;
 }
 
@@ -46,6 +47,7 @@ interface AuthContextValue {
 
   login: (user: User, company: Company, token: string) => void;
   logout: () => void;
+  updateUser: (userData: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -112,6 +114,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCompany(null);
   };
 
+  const updateUser = (userData: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...userData };
+      localStorage.setItem("user", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -128,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         login,
         logout,
+        updateUser,
       }}
     >
       {!isLoading && children}

@@ -3,145 +3,82 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../context/SocketContext";
 import { api } from "../../lib/api";
-import { getIndustryConfig } from "../../utils/industryConfig";
-import { Trash2, X } from "lucide-react";
-import toast from "react-hot-toast";
+import {
+  X,
+  TrendingUp,
+  Users,
+  UserCheck
+} from "lucide-react";
+import { toast } from "react-hot-toast";
 import { PageTransition } from "../../components/ui/Animations";
-import { EmptyOrders } from "../../components/ui/EmptyState";
-
-// --- Types ---
-interface Order {
-  id: string;
-  summary: string;
-  status: string;
-  approvalStatus: string;
-  amount: number;
-  priorityScore: number;
-  isUrgent: boolean;
-  lead: {
-    name: string;
-    contact: string;
-    segment: string;
-    totalSpend: number;
-    channel: string;
-  };
-  processedBy?: { 
-    id: string; 
-    name: string; 
-  };
-  createdAt: string;
-  completedAt?: string;
-  version: number;
-  invoice?: {
-    pdfUrl: string;
-    invoiceNumber: string;
-  };
-}
+import { Order, OrderStatus } from "../../types";
+import CompletedOrderTable from "../../components/dashboard/CompletedOrderTable";
 
 export default function Orders() {
-  const { token, company, isOwner, isAdmin } = useAuth();
+  const { token, isOwner, isAdmin } = useAuth();
   const { socket } = useSocket();
 
-  const industry = useMemo(() => getIndustryConfig(company?.botBusinessType), [company]);
-
-  const COLUMN_CONFIG = useMemo(() => [
-    { id: "NEW", title: industry.pipelineLabels.new, color: "border-info/30 bg-info/10", statuses: ["NEW", "PENDING"] },
-    { id: "PROCESSING", title: industry.pipelineLabels.processing, color: "border-accent/30 bg-accent/10", statuses: ["PROCESSING", "CONFIRMED", "PREPARING"] },
-    { id: "READY", title: industry.pipelineLabels.ready, color: "border-success/30 bg-success/10", statuses: ["READY"] },
-  ], [industry]);
-
   const [orders, setOrders] = useState<Order[]>([]);
-  const [view, setView] = useState<'active' | 'history'>('active');
   const [loading, setLoading] = useState(true);
-
-  // Modal State
+  const [activeTab, setActiveTab] = useState<"pending" | "processing" | "completed">("pending");
+  const [showDetailedBoard, setShowDetailedBoard] = useState(false);
   const [actionOrder, setActionOrder] = useState<Order | null>(null);
-  const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
-
-  // Invoice preview modal
+  const [actionType, setActionType] = useState<"approve" | "reject" | null>(null);
   const [invoicePreview, setInvoicePreview] = useState<{ url: string; invoiceNumber: string } | null>(null);
 
-  // History Selection State
-  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
-  const [isDeletingBatch, setIsDeletingBatch] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  // Fetch Orders
-  const fetchOrders = async (currentView: string) => {
+
+
+  const isManager = isOwner || isAdmin;
+
+  // Fetch Orders - Fetch both active and history for holistic view
+  const fetchOrders = async () => {
     try {
       setLoading(true);
-      const data = await api.get(`/orders?view=${currentView}&t=${Date.now()}`);
-      if (currentView === view) setOrders(data);
+      const [activeData, historyData] = await Promise.all([
+        api.get(`/orders?view=active&t=${Date.now()}`),
+        api.get(`/orders?view=history&t=${Date.now()}`)
+      ]);
+      // De-duplicate and combine
+      const combined = [...activeData, ...historyData];
+      const uniqueMap = new Map<string, Order>();
+      combined.forEach(o => uniqueMap.set(o.id, o));
+      setOrders(Array.from(uniqueMap.values()));
     } catch (err) {
       console.error("Failed to load orders", err);
+      toast.error("Could not load fresh orders");
     } finally {
-      if (currentView === view) setLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     if (!token) return;
-    setOrders([]);
-    fetchOrders(view);
-  }, [token, view]);
+    fetchOrders();
+  }, [token]);
 
-  // Real-Time Listener
+  // Real-time integration
   useEffect(() => {
     if (!socket) return;
 
-    const RANKS: Record<string, number> = {
-      'BOT_CREATED_ORDER': 0, 'PENDING': 1, 'NEW': 1, 'CONFIRMED': 2, 'PROCESSING': 3,
-      'PREPARING': 4, 'READY': 5, 'SHIPPED': 6, 'DELIVERED': 7,
-      'COMPLETED': 8, 'CANCELLED': 9, 'REJECTED': 9, 'ARCHIVED': 10
-    };
-    const TERMINAL = ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED', 'SHIPPED'];
-
     const handleUpdate = (updated: Order) => {
-      const status = (updated.status || "NEW").toUpperCase();
-      const isTerminal = TERMINAL.includes(status);
-
       setOrders(prev => {
         const index = prev.findIndex(o => o.id === updated.id);
-
-        if (view === 'active') {
-          if (isTerminal) return prev.filter(o => o.id !== updated.id);
-
-          if (index === -1) {
-            // Re-addition guard
-            const isGenuinelyNew = ['NEW', 'PENDING', 'BOT_CREATED_ORDER'].includes(status);
-            if (isGenuinelyNew) return [updated, ...prev];
-            return prev;
-          }
-
-          // Regression guard
-          const currentRank = RANKS[prev[index].status.toUpperCase()] || 0;
-          const newRank = RANKS[status] || 0;
-          if (newRank < currentRank) return prev;
-
-          const next = [...prev];
-          next[index] = updated;
-          return next;
-        } else {
-          // History View
-          if (!isTerminal) return prev.filter(o => o.id !== updated.id);
-          if (index === -1) return [updated, ...prev];
-
-          const next = [...prev];
-          next[index] = updated;
-          return next;
+        if (index === -1) {
+          return [updated, ...prev];
         }
+        const next = [...prev];
+        next[index] = updated;
+        return next;
       });
     };
 
     const handleCreate = (newOrder: Order) => {
-      const status = (newOrder.status || "NEW").toUpperCase();
-      const isTerminal = TERMINAL.includes(status);
-
-      if (view === 'active' && !isTerminal) {
-        setOrders(prev => {
-          if (prev.some(o => o.id === newOrder.id)) return prev;
-          return [newOrder, ...prev];
-        });
-      }
+      setOrders(prev => {
+        if (prev.some(o => o.id === newOrder.id)) return prev;
+        return [newOrder, ...prev];
+      });
     };
 
     socket.on("order_created", handleCreate);
@@ -150,346 +87,530 @@ export default function Orders() {
       socket.off("order_created", handleCreate);
       socket.off("order_updated", handleUpdate);
     };
-  }, [socket, view]);
+  }, [socket]);
 
-  // Actions
+  // Metrics Calculations
+  const metrics = useMemo(() => {
+    const todayStr = new Date().toDateString();
+    
+    const todayOrders = orders.filter(o => new Date(o.createdAt).toDateString() === todayStr);
+    
+    const revenueToday = todayOrders
+      .filter(o => !["CANCELLED", "REJECTED"].includes(o.status.toUpperCase()))
+      .reduce((sum, o) => sum + (o.amount || 0), 0);
+
+    const pendingCount = orders.filter(o =>
+      ["PENDING", "NEW", "BOT_CREATED_ORDER", "USER_CONFIRMED_PENDING_AGENT"].includes(o.status.toUpperCase())
+    ).length;
+
+    const processingCount = orders.filter(o =>
+      ["PROCESSING", "CONFIRMED", "PREPARING", "READY", "PAID", "SHIPPED"].includes(o.status.toUpperCase())
+    ).length;
+
+    const completedCount = orders.filter(o =>
+      ["COMPLETED", "DELIVERED", "ARCHIVED"].includes(o.status.toUpperCase())
+    ).length;
+
+    // Active Agent Counting
+    const activeAgentsMap = new Map<string, { name: string; completedCount: number }>();
+    orders.forEach(o => {
+      if (o.processedBy?.id) {
+        const key = o.processedBy.id;
+        const current = activeAgentsMap.get(key) || { name: o.processedBy.name, completedCount: 0 };
+        if (["COMPLETED", "DELIVERED"].includes(o.status.toUpperCase())) {
+          current.completedCount += 1;
+        }
+        activeAgentsMap.set(key, current);
+      }
+    });
+
+    const activeAgentsCount = activeAgentsMap.size;
+    
+    let topAgent = { name: "N/A", count: 0 };
+    activeAgentsMap.forEach((val) => {
+      if (val.completedCount > topAgent.count) {
+        topAgent = { name: val.name, count: val.completedCount };
+      }
+    });
+
+    return {
+      revenueToday,
+      pendingCount,
+      processingCount,
+      completedCount,
+      activeAgentsCount,
+      topAgent
+    };
+  }, [orders]);
+
+  // Single Accept / Reject actions from pending states
   const handleConfirmAction = async () => {
     if (!actionOrder || !actionType) return;
     const orderId = actionOrder.id;
     const type = actionType;
 
-    // Optimistic Update
-    setOrders(prev => prev.filter(o => {
-      if (view === 'active' && type === 'reject' && o.id === orderId) return false;
-      return true;
-    }));
+    // Optimistic status update before DB feedback
+    const nextStatus = type === "approve" ? "PROCESSING" : "CANCELLED";
+    setOrders(prev =>
+      prev.map(o => (o.id === orderId ? { ...o, status: nextStatus, version: o.version + 1 } : o))
+    );
 
     setActionOrder(null);
     setActionType(null);
 
     try {
-      if (type === 'approve') {
+      if (type === "approve") {
         await api.post(`/orders/${orderId}/approve`, { version: actionOrder.version });
+        toast.success("Order accepted for handling");
       } else {
         await api.post(`/orders/${orderId}/reject`, { version: actionOrder.version });
+        toast.success("Order request rejected");
       }
-      toast.success(type === 'approve' ? "Order Accepted" : "Order Rejected");
-    } catch (e: any) {
-      if (e.response?.status === 409) {
-        toast.error("Order updated by another agent. Refreshing...");
-        fetchOrders(view);
-      } else {
-        toast.error("Action failed");
-        fetchOrders(view); // Revert optimistic
-      }
-    }
-  };
-
-  const handleMoveStatus = async (id: string, status: string) => {
-    const orderToUpdate = orders.find(o => o.id === id);
-    if (!orderToUpdate) return;
-
-    const oldOrders = [...orders];
-    const nextVersion = (orderToUpdate.version || 0) + 1;
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status, version: nextVersion } : o));
-
-    const TERMINAL = ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED'];
-    if (view === 'active' && TERMINAL.includes(status.toUpperCase())) {
-      setOrders(prev => prev.filter(o => o.id !== id));
-    }
-
-    try {
-      await api.patch(`/orders/${id}/status`, { status, version: orderToUpdate.version });
     } catch (e: any) {
       console.error(e);
-      setOrders(oldOrders);
-      if (e.response?.status === 409) {
-        toast.error("Concurrency Conflict. Refreshing...");
-        fetchOrders(view);
-      } else if (e.response?.status === 400) {
-        toast.error(e.response.data.message || "Invalid status transition");
-      }
+      toast.error(e.response?.data?.message || "Action failed. Reverting...");
+      fetchOrders();
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to archive this order?")) return;
+  const handleUpdateStatus = async (id: string, newStatus: OrderStatus, version: number) => {
+    // Optimistic UI state
+    setOrders(prev =>
+      prev.map(o => (o.id === id ? { ...o, status: newStatus, version: version + 1 } : o))
+    );
+
+    try {
+      await api.patch(`/orders/${id}/status`, { status: newStatus, version });
+      toast.success(`Order moved to ${newStatus.toLowerCase()}`);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.response?.data?.message || "Transition rejected. Refreshing...");
+      fetchOrders();
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirmId) return;
+    const id = deleteConfirmId;
+    setDeleteConfirmId(null);
     try {
       await api.delete(`/orders/${id}`);
       setOrders(prev => prev.filter(o => o.id !== id));
-      setSelectedOrders(prev => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      toast.success("Order Archived");
+      toast.success("Order record archived");
     } catch (e) {
-      toast.error("Failed to archive");
+      toast.error("Failed to archive order");
     }
   };
 
-  const handleBatchDelete = async () => {
-    if (selectedOrders.size === 0) return;
-    if (!confirm(`Are you sure you want to archive ${selectedOrders.size} orders?`)) return;
-
-    setIsDeletingBatch(true);
-    const toastId = toast.loading(`Archiving ${selectedOrders.size} orders...`);
-
-    try {
-      // Assuming backend supports batch delete or we do it sequentially
-      // For now, let's do it sequentially to match existing API
-      await Promise.all(Array.from(selectedOrders).map(id => api.delete(`/orders/${id}`)));
-
-      setOrders(prev => prev.filter(o => !selectedOrders.has(o.id)));
-      setSelectedOrders(new Set());
-      toast.success(`${selectedOrders.size} orders archived`, { id: toastId });
-    } catch (e) {
-      toast.error("Failed to archive some orders", { id: toastId });
-    } finally {
-      setIsDeletingBatch(false);
-    }
-  };
-
-  const toggleSelectOrder = (id: string) => {
-    setSelectedOrders(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  // Divide orders into three active work state tabs
+  const tabFilteredOrders = useMemo(() => {
+    return orders.filter(o => {
+      const status = (o.status || "").toUpperCase();
+      if (activeTab === "pending") {
+        return ["PENDING", "NEW", "BOT_CREATED_ORDER", "USER_CONFIRMED_PENDING_AGENT"].includes(status);
+      }
+      if (activeTab === "processing") {
+        return ["PROCESSING", "CONFIRMED", "PREPARING", "READY", "PAID", "SHIPPED"].includes(status);
+      }
+      if (activeTab === "completed") {
+        return ["COMPLETED", "DELIVERED", "ARCHIVED", "CANCELLED", "REJECTED"].includes(status);
+      }
+      return false;
     });
-  };
-
-  const toggleSelectAll = (ids: string[]) => {
-    if (selectedOrders.size === ids.length) {
-      setSelectedOrders(new Set());
-    } else {
-      setSelectedOrders(new Set(ids));
-    }
-  };
-
-  const activeOrdersCount = useMemo(() => orders.filter(o =>
-    !['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ARCHIVED', 'SHIPPED'].includes(o.status.toUpperCase())
-  ).length, [orders]);
-
-  const revenueToday = useMemo(() => orders
-    .filter(o => !['CANCELLED', 'REJECTED', 'ARCHIVED'].includes(o.status.toUpperCase()))
-    .reduce((acc, o) => acc + (o.amount || 0), 0), [orders]);
-
-  // Group History
-  const groupedOrders = useMemo(() => {
-    if (view !== 'history') return {};
-    const groups: Record<string, Order[]> = { 'Today': [], 'Yesterday': [], 'This Week': [], 'Older': [] };
-
-    orders.forEach(order => {
-      const date = new Date(order.completedAt || order.createdAt);
-      const today = new Date();
-      const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
-
-      if (date.toDateString() === today.toDateString()) groups['Today'].push(order);
-      else if (date.toDateString() === yesterday.toDateString()) groups['Yesterday'].push(order);
-      else if (today.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) groups['This Week'].push(order);
-      else groups['Older'].push(order);
-    });
-    return groups;
-  }, [orders, view]);
+  }, [orders, activeTab]);
 
   return (
     <PageTransition className="h-[calc(100vh-6rem)] flex flex-col gap-4 lg:gap-6 relative">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 flex-shrink-0">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4 w-full md:w-auto">
-          <StatCard title={view === 'active' ? "Active Pipeline" : "Total Revenue"} value={`₹${revenueToday.toLocaleString()}`} icon="💰" />
-          <StatCard title="Orders" value={view === 'active' ? activeOrdersCount : orders.length} icon="📦" />
-        </div>
-        <div className="flex items-center gap-2 self-end">
-          {view === 'history' && (isOwner || isAdmin) && selectedOrders.size > 0 && (
-            <button
-              onClick={handleBatchDelete}
-              disabled={isDeletingBatch}
-              className="flex items-center gap-2 px-3 py-2 bg-danger text-text-primary rounded-lg hover:bg-danger/80 transition shadow-lg text-xs font-bold"
-            >
-              <Trash2 size={14} />
-              Archive ({selectedOrders.size})
-            </button>
-          )}
-          <div className="bg-background-tertiary p-1 rounded-lg flex">
-            <button onClick={() => setView('active')} className={`px-3 lg:px-4 py-1.5 rounded-md text-xs lg:text-sm font-medium transition ${view === 'active' ? 'bg-background-secondary shadow text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}>Live Board</button>
-            <button onClick={() => setView('history')} className={`px-3 lg:px-4 py-1.5 rounded-md text-xs lg:text-sm font-medium transition ${view === 'history' ? 'bg-background-secondary shadow text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}>History</button>
+      {isManager && !showDetailedBoard ? (
+        // --- 1. ADMIN/OWNER METRICS OVERVIEW DASHBOARD ---
+        <div className="space-y-6 overflow-y-auto pr-1 flex-1 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">Business Control Center</h2>
+              <p className="text-xs text-slate-500">
+                Performance dashboard for SME workflow, revenue monitoring, and staff assignment
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+
+              <button
+                id="view-detailed-reports-btn"
+                onClick={() => setShowDetailedBoard(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-lg transition"
+              >
+                📊 View Detailed Reports
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Revenue Today</span>
+              <div className="mt-2 text-2xl font-black text-slate-800">₹{metrics.revenueToday.toLocaleString()}</div>
+              <span className="text-[10px] text-emerald-500 font-semibold mt-1 flex items-center gap-1">
+                <TrendingUp size={12} /> Today's Sales
+              </span>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Pending Accept</span>
+              <div className="mt-2 text-2xl font-black text-amber-500">{metrics.pendingCount}</div>
+              <span className="text-[10px] text-slate-500 font-semibold mt-1">Awaiting agents</span>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Processing Count</span>
+              <div className="mt-2 text-2xl font-black text-indigo-500">{metrics.processingCount}</div>
+              <span className="text-[10px] text-slate-500 font-semibold mt-1">Active handling</span>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Completed Count</span>
+              <div className="mt-2 text-2xl font-black text-emerald-600">{metrics.completedCount}</div>
+              <span className="text-[10px] text-slate-500 font-semibold mt-1">History archived</span>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Active Agents</span>
+              <div className="mt-2 text-2xl font-black text-blue-600">{metrics.activeAgentsCount}</div>
+              <span className="text-[100%] text-slate-500 font-semibold mt-1 flex items-center gap-1">
+                <Users size={12} /> Working now
+              </span>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Top Performing Agent</span>
+              <div className="mt-2 text-base font-black text-slate-800 truncate" title={metrics.topAgent.name}>
+                {metrics.topAgent.name}
+              </div>
+              <span className="text-[10px] text-indigo-600 font-semibold mt-1 flex items-center gap-1">
+                <UserCheck size={12} /> {metrics.topAgent.count} Completed
+              </span>
+            </div>
+          </div>
+
+          {/* Quick Info Grid panel for overview */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="font-bold text-slate-800 text-sm">Active Agent Pipelines</h3>
+              <button
+                onClick={() => setShowDetailedBoard(true)}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline"
+              >
+                Inspect Live Workspace →
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(
+                orders.reduce<Record<string, { name: string; completed: number; pending: number; totalVolume: number }>>((acc, o) => {
+                  if (o.processedBy?.id) {
+                    const id = o.processedBy.id;
+                    if (!acc[id]) {
+                      acc[id] = { name: o.processedBy.name, completed: 0, pending: 0, totalVolume: 0 };
+                    }
+                    if (["COMPLETED", "DELIVERED"].includes(o.status.toUpperCase())) {
+                      acc[id].completed += 1;
+                    } else if (!["CANCELLED", "REJECTED"].includes(o.status.toUpperCase())) {
+                      acc[id].pending += 1;
+                    }
+                    acc[id].totalVolume += o.amount || 0;
+                  }
+                  return acc;
+                }, {})
+              ).map(([id, stat]) => (
+                <div key={id} className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-2">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="font-bold text-sm text-slate-800">{stat.name}</span>
+                      <div className="text-[10px] text-slate-400">Total processed volume: ₹{stat.totalVolume.toLocaleString()}</div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-bold">
+                      Agent Profile
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                    <div className="bg-white p-2 rounded-lg border border-slate-100">
+                      <div className="text-[10px] text-slate-400">Completed</div>
+                      <div className="font-bold text-emerald-600">{stat.completed} orders</div>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-slate-100">
+                      <div className="text-[10px] text-slate-400">Active Handling</div>
+                      <div className="font-bold text-amber-500">{stat.pending} in pipeline</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {orders.filter(o => o.processedBy?.id).length === 0 && (
+                <div className="col-span-2 text-center py-8 text-slate-400 italic text-xs">
+                  No active agent assignments detected today.
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        // --- 2. STREAMLINED CLIENT WORKSPACE / TABBED ACTIVE INTERFACE ---
+        <>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
+            <div>
+              {isManager && (
+                <button
+                  id="back-to-metrics-btn"
+                  onClick={() => setShowDetailedBoard(false)}
+                  className="mb-2 inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg border border-slate-300 transition"
+                >
+                  ← Back to Metrics Dashboard
+                </button>
+              )}
+              <h2 className="text-xl font-bold text-slate-900">
+                {isManager ? "Global Orders Management" : "My Orders Workspace"}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {isManager
+                  ? 'Detailed workspace overview of incoming, active, and completed orders'
+                  : 'Receive, transition, and complete client orders within a simplified click flow'}
+              </p>
+            </div>
 
-      {loading ? (
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="rounded-xl border border-border bg-background-secondary p-3 space-y-3 animate-pulse">
-              <div className="h-5 bg-background-elevated rounded w-1/3 mb-4" />
-              {[1, 2].map(j => (
-                <div key={j} className="bg-background-secondary p-4 rounded-xl border border-border space-y-2">
-                  <div className="h-4 bg-background-elevated rounded w-1/4" />
-                  <div className="h-3 bg-background-elevated rounded w-3/4" />
-                  <div className="h-3 bg-background-elevated rounded w-1/2" />
+            {/* Compact tab selectors */}
+            <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
+
+              <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto self-stretch sm:self-auto">
+              {(["pending", "processing", "completed"] as const).map(tabKey => {
+                const count = orders.filter(o => {
+                  const s = (o.status || "").toUpperCase();
+                  if (tabKey === "pending") {
+                    return ["PENDING", "NEW", "BOT_CREATED_ORDER", "USER_CONFIRMED_PENDING_AGENT"].includes(s);
+                  }
+                  if (tabKey === "processing") {
+                    return ["PROCESSING", "CONFIRMED", "PREPARING", "READY", "PAID", "SHIPPED"].includes(s);
+                  }
+                  return ["COMPLETED", "DELIVERED", "ARCHIVED", "CANCELLED", "REJECTED"].includes(s);
+                }).length;
+
+                return (
+                  <button
+                    key={tabKey}
+                    id={`tab-btn-${tabKey}`}
+                    onClick={() => setActiveTab(tabKey)}
+                    className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                      activeTab === tabKey
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {tabKey === "pending" && "⏳ Pending"}
+                    {tabKey === "processing" && "⚙️ Processing"}
+                    {tabKey === "completed" && "🏁 Completed"}
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[9px] ${
+                        activeTab === tabKey
+                          ? "bg-indigo-50 text-indigo-700 font-extrabold"
+                          : "bg-slate-200/65 text-slate-600"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+              </div>
+            </div>
+          </div>
+
+          {/* Tab Work Panel View */}
+          {loading ? (
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[1, 2, 3].map(i => (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 space-y-3 animate-pulse"
+                >
+                  <div className="h-4 bg-slate-200 rounded w-1/3 mb-4" />
+                  <div className="h-20 bg-white rounded-xl border border-slate-100" />
+                  <div className="h-20 bg-white rounded-xl border border-slate-100" />
                 </div>
               ))}
             </div>
-          ))}
-        </div>
-      ) : view === 'active' ? (
-        orders.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center">
-            <EmptyOrders />
-          </div>
-        ) : (
-          <>
-            {/* Desktop Kanban */}
-            <div className="flex-1 overflow-x-auto overflow-y-hidden hidden md:block">
-              <div className="h-full flex gap-4 min-w-[900px]">
-            {COLUMN_CONFIG.map(col => (
-              <div key={col.id} className={`flex-1 flex flex-col rounded-xl border ${col.color} p-3`}>
-                <h3 className="font-bold text-text-secondary mb-3 flex justify-between items-center text-sm">
-                  {col.title}
-                  <span className="bg-background-secondary/50 px-2 py-0.5 rounded text-[10px] tabular-nums">
-                    {orders.filter(o => col.statuses.includes((o.status || "").toUpperCase())).length}
-                  </span>
-                </h3>
-                <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
-                  {orders.filter(o => col.statuses.includes((o.status || "").toUpperCase())).map(order => (
-                    <OrderCard key={order.id} order={order} onApprove={() => { setActionOrder(order); setActionType('approve'); }} onReject={() => { setActionOrder(order); setActionType('reject'); }} onMove={(s: string) => handleMoveStatus(order.id, s)} onPreviewInvoice={(url: string, num: string) => setInvoicePreview({ url, invoiceNumber: num })} />
-                  ))}
-                  {orders.filter(o => col.statuses.includes((o.status || "").toUpperCase())).length === 0 && (
-                    <div className="h-40 flex items-center justify-center text-text-muted text-xs italic border-2 border-dashed border-border/50 rounded-xl">No orders</div>
-                  )}
+          ) : tabFilteredOrders.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 p-8">
+              <div className="text-center max-w-sm">
+                <div className="mx-auto w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-xl mb-4 text-slate-400">
+                  📦
                 </div>
+                <h3 className="font-bold text-slate-800 text-sm mb-1 uppercase tracking-tight">
+                  No orders found
+                </h3>
+                <p className="text-xs text-slate-400">
+                  There are no orders resting inside the <strong>{activeTab}</strong> workflow stage.
+                </p>
               </div>
-            ))}
-          </div>
-        </div>
-
-            {/* Mobile Stacked View */}
-            <div className="flex-1 overflow-y-auto md:hidden space-y-4">
-              {COLUMN_CONFIG.map(col => {
-                const colOrders = orders.filter(o => col.statuses.includes((o.status || "").toUpperCase()));
-                if (colOrders.length === 0) return null;
-                return (
-                  <div key={col.id} className={`rounded-xl border ${col.color} p-3`}>
-                    <h3 className="font-bold text-text-secondary mb-3 flex justify-between items-center text-sm">
-                      {col.title}
-                      <span className="bg-background-secondary/50 px-2 py-0.5 rounded text-[10px] tabular-nums">{colOrders.length}</span>
-                    </h3>
-                    <div className="space-y-3">
-                      {colOrders.map(order => (
-                        <OrderCard key={order.id} order={order} onApprove={() => { setActionOrder(order); setActionType('approve'); }} onReject={() => { setActionOrder(order); setActionType('reject'); }} onMove={(s: string) => handleMoveStatus(order.id, s)} onPreviewInvoice={(url: string, num: string) => setInvoicePreview({ url, invoiceNumber: num })} />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
             </div>
-          </>
-        )
-      ) : (
-        <div className="bg-background-secondary rounded-xl shadow border overflow-hidden flex-1 overflow-y-auto">
-          {Object.entries(groupedOrders).map(([label, group]) => group.length > 0 && (
-            <div key={label}>
-              <div className="bg-background-secondary px-6 py-2 text-xs font-bold text-text-muted uppercase tracking-wider sticky top-0 z-10 border-b border-t border-border flex items-center gap-4">
-                {(isOwner || isAdmin) && (
-                  <input
-                    type="checkbox"
-                    checked={group.every(o => selectedOrders.has(o.id))}
-                    onChange={() => toggleSelectAll(group.map(o => o.id))}
-                    className="w-4 h-4 rounded text-accent focus:ring-indigo-500 border-border pointer-events-auto"
-                  />
-                )}
-                {label} ({group.length})
-              </div>
-              <table className="min-w-full text-sm">
-                <tbody className="divide-y divide-slate-100">
-                  {group.map(order => (
-                    <tr key={order.id} className={`hover:bg-accent/10/30 transition ${selectedOrders.has(order.id) ? 'bg-accent/10/50' : ''}`}>
-                      <td className="px-6 py-4 w-10">
-                        {(isOwner || isAdmin) && (
-                          <input
-                            type="checkbox"
-                            checked={selectedOrders.has(order.id)}
-                            onChange={() => toggleSelectOrder(order.id)}
-                            className="w-4 h-4 rounded text-accent focus:ring-indigo-500 border-border pointer-events-auto"
-                          />
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-text-muted w-32">
-                        {new Date(order.completedAt || order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td className="px-6 py-4 font-medium text-text-primary">
-                        {order.lead?.name || 'Unknown'}
-                        <div className="text-[10px] text-text-muted">{order.lead?.contact}</div>
-                      </td>
-                      <td className="px-6 py-4 text-text-secondary line-clamp-1 max-w-[200px]">{order.summary}</td>
-                      <td className="px-6 py-4 font-bold text-text-primary">₹{order.amount}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <StatusBadge status={order.status} />
-                          {order.status.toUpperCase() === "SHIPPED" && (
-                            <button
-                              onClick={() => handleMoveStatus(order.id, "DELIVERED")}
-                              className="text-[10px] bg-background-elevated text-text-primary px-2 py-1 rounded hover:bg-background-tertiary transition font-bold"
-                            >
-                              Complete
-                            </button>
+          ) : activeTab === "completed" ? (
+            <CompletedOrderTable orders={tabFilteredOrders} />
+          ) : (
+            <div className="flex-1 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-4">
+                <AnimatePresence mode="popLayout">
+                  {tabFilteredOrders.map(order => (
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                      key={order.id}
+                      className={`bg-white p-5 rounded-2xl shadow-sm border relative flex flex-col justify-between ${
+                        order.isUrgent || (order.priorityScore && order.priorityScore > 50)
+                          ? "border-red-200 ring-2 ring-red-50"
+                          : "border-slate-100"
+                      }`}
+                    >
+                      <div>
+                        {/* Card Header information */}
+                        <div className="flex justify-between items-start mb-3">
+                          <span className="text-lg font-black text-indigo-600">₹{order.amount}</span>
+                          <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded font-mono font-medium">
+                            {new Date(order.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit"
+                            })}
+                          </span>
+                        </div>
+
+                        {/* Order Summary details */}
+                        <h4 className="font-bold text-slate-800 text-sm leading-snug mb-2">{order.summary}</h4>
+
+                        {/* Customer context info */}
+                        <div className="text-xs text-slate-500 flex items-center gap-1.5 py-2 border-b border-dashed border-slate-100 mb-3">
+                          <span className="text-slate-400">👤 Contact:</span>
+                          <span className="font-medium text-slate-700">{order.lead?.name || "Anonymous Client"}</span>
+                          {order.lead?.contact && (
+                            <span className="text-[10px] text-slate-400">({order.lead.contact})</span>
                           )}
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {order.invoice?.pdfUrl ? (
-                          <button
-                            onClick={() => setInvoicePreview({ url: order.invoice!.pdfUrl, invoiceNumber: order.invoice!.invoiceNumber })}
-                            className="flex items-center gap-1.5 text-accent hover:text-accent-hover font-bold group"
-                          >
-                            <span className="bg-accent/10 p-1.5 rounded-lg group-hover:bg-accent/20 transition">📄</span>
-                            <div className="flex flex-col">
-                              <span className="text-[10px] uppercase tracking-tighter text-text-muted">Invoice</span>
-                              <span className="text-xs">{order.invoice.invoiceNumber}</span>
+
+                        {/* Invoice rendering */}
+                        {order.invoice?.pdfUrl && (
+                          <div className="mb-4">
+                            <button
+                              id={`preview-invoice-${order.id}`}
+                              onClick={() =>
+                                setInvoicePreview({
+                                  url: order.invoice!.pdfUrl,
+                                  invoiceNumber: order.invoice!.invoiceNumber
+                                })
+                              }
+                              className="w-full inline-flex items-center justify-between px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition"
+                            >
+                              <span className="flex items-center gap-1.5">📄 View Invoice File</span>
+                              <span className="text-[10px] text-indigo-500">{order.invoice.invoiceNumber}</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Managed agent metadata */}
+                        {isManager && order.processedBy && (
+                          <div className="mb-4 text-[11px] text-slate-500 bg-slate-50 px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+                            <span className="text-slate-400 flex items-center gap-1">👨‍💻 Handler Agent:</span>
+                            <span className="font-bold text-slate-700">{order.processedBy.name}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* --- TIGHTLY COUPLED SIMPLE CLICK STATE TRIGGERS --- */}
+                      <div className="pt-2">
+                        {activeTab === "pending" && (
+                          <div className="grid grid-cols-2 gap-2 w-full">
+                            <button
+                              id={`reject-btn-${order.id}`}
+                              onClick={() => {
+                                setActionOrder(order);
+                                setActionType("reject");
+                              }}
+                              className="px-3 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-bold hover:bg-red-50 hover:border-red-300 transition"
+                            >
+                              Reject
+                            </button>
+                            <button
+                              id={`accept-btn-${order.id}`}
+                              onClick={() => {
+                                setActionOrder(order);
+                                setActionType("approve");
+                              }}
+                              className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-100 transition"
+                            >
+                              Accept Order
+                            </button>
+                          </div>
+                        )}
+
+                        {activeTab === "processing" && (
+                          <div className="flex flex-col gap-2 w-full">
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                id={`cancel-btn-${order.id}`}
+                                onClick={() => handleUpdateStatus(order.id, "CANCELLED", order.version)}
+                                className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-bold rounded-xl hover:bg-slate-50 hover:text-red-500 hover:border-red-200 transition"
+                              >
+                                Cancel Order
+                              </button>
+                              <button
+                                id={`complete-btn-${order.id}`}
+                                onClick={() => handleUpdateStatus(order.id, "COMPLETED", order.version)}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition"
+                              >
+                                Complete Work
+                              </button>
                             </div>
-                          </button>
-                        ) : (
-                          <span className="text-slate-300 italic text-xs">Not Paid</span>
+                          </div>
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        {(isOwner || isAdmin) && (
-                          <button onClick={() => handleDelete(order.id)} className="p-2 text-text-muted hover:text-danger transition">
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
+                      </div>
+                    </motion.div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
-          {orders.length === 0 && (
-            <div className="flex flex-col items-center justify-center">
-              <div className="h-10 w-10 bg-background-tertiary rounded-2xl flex items-center justify-center mb-3">
-                <span className="text-xl">📦</span>
+                </AnimatePresence>
               </div>
-              <p className="text-text-muted font-medium">No completed orders yet.</p>
             </div>
           )}
-        </div>
+        </>
       )}
 
-      {/* --- MODAL --- */}
+      {/* --- Delete Confirmation Modal --- */}
       <AnimatePresence>
-        {actionOrder && (
+        {deleteConfirmId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setActionOrder(null)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-background-secondary rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative z-10">
-              <div className={`h-2 w-full ${actionType === 'approve' ? 'bg-success' : 'bg-danger'}`} />
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setDeleteConfirmId(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 border border-slate-100"
+            >
+              <div className="h-2 w-full bg-red-500" />
               <div className="p-6">
-                <h3 className="text-xl font-bold text-text-primary mb-2">{actionType === 'approve' ? 'Accept Order?' : 'Reject Order?'}</h3>
-                <p className="text-text-secondary mb-6">{actionType === 'approve' ? `Accept order for ₹${actionOrder.amount}?` : `Reject this order?`}</p>
-                <div className="flex gap-3 justify-end">
-                  <button onClick={() => setActionOrder(null)} className="px-4 py-2 text-text-secondary font-medium hover:bg-background-tertiary rounded-lg">Cancel</button>
-                  <button onClick={handleConfirmAction} className={`px-6 py-2 text-text-primary font-bold rounded-lg shadow-lg ${actionType === 'approve' ? 'bg-success hover:bg-success/80' : 'bg-danger hover:bg-danger/80'}`}>Confirm</button>
+                <h3 className="text-base font-bold text-slate-900 mb-1">Archive Order?</h3>
+                <p className="text-xs text-slate-500 leading-normal mb-5">
+                  Are you sure you want to archive or remove this order record? This action removes it from the active views.
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setDeleteConfirmId(null)}
+                    className="px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-xl text-xs font-bold border border-slate-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="px-4 py-2 text-white text-xs font-bold rounded-xl shadow-lg bg-red-600 hover:bg-red-700 shadow-red-100"
+                  >
+                    Confirm Delete
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -497,7 +618,66 @@ export default function Orders() {
         )}
       </AnimatePresence>
 
-      {/* Invoice Preview Modal */}
+      {/* --- ACCEPT/REJECT PENDING APPROVAL DIALOG MODAL --- */}
+      <AnimatePresence>
+        {actionOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => {
+                setActionOrder(null);
+                setActionType(null);
+              }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 border border-slate-100"
+            >
+              <div
+                className={`h-2 w-full ${actionType === "approve" ? "bg-indigo-600" : "bg-red-500"}`}
+              />
+              <div className="p-6">
+                <h3 className="text-base font-bold text-slate-900 mb-1">
+                  {actionType === "approve" ? "Accept Client Order Request?" : "Reject Order Request?"}
+                </h3>
+                <p className="text-xs text-slate-500 leading-normal mb-5">
+                  {actionType === "approve"
+                    ? `You are claiming order for client amount ₹${actionOrder.amount}. It will transition immediately into your active processing list.`
+                    : "Are you sure you want to reject and decline this inbound order request?"}
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => {
+                      setActionOrder(null);
+                      setActionType(null);
+                    }}
+                    className="px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-xl text-xs font-bold border border-slate-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmAction}
+                    className={`px-4 py-2 text-white text-xs font-bold rounded-xl shadow-lg ${
+                      actionType === "approve"
+                        ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100"
+                        : "bg-red-600 hover:bg-red-700 shadow-red-100"
+                    }`}
+                  >
+                    Confirm Action
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* --- PDF INVOICE EMBEDDED PREVIEW MODAL --- */}
       <AnimatePresence>
         {invoicePreview && (
           <div
@@ -516,190 +696,41 @@ export default function Orders() {
               initial={{ opacity: 0, scale: 0.97, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.97, y: 16 }}
-              transition={{ type: "spring", stiffness: 340, damping: 28 }}
-              className="relative z-10 flex flex-col m-4 md:m-8 bg-background-secondary rounded-2xl shadow-2xl overflow-hidden flex-1"
+              className="relative z-10 flex flex-col m-4 md:m-8 bg-white rounded-2xl shadow-2xl overflow-hidden flex-1"
             >
-              {/* Modal header */}
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-background-secondary shrink-0">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50 shrink-0">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">📄</span>
-                  <span className="font-bold text-text-primary">{invoicePreview.invoiceNumber}</span>
+                  <span className="font-bold text-slate-800">{invoicePreview.invoiceNumber}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <a
                     href={invoicePreview.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-xs font-bold text-accent hover:text-accent-hover px-3 py-1.5 bg-accent/10 hover:bg-accent/20 rounded-lg transition"
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition"
                   >
-                    Open in new tab ↗
+                    Open in tab ↗
                   </a>
                   <button
                     onClick={() => setInvoicePreview(null)}
-                    className="p-2 text-text-muted hover:text-text-secondary hover:bg-background-elevated rounded-lg transition"
+                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg transition"
                   >
                     <X size={16} />
                   </button>
                 </div>
               </div>
-              {/* PDF iframe */}
               <iframe
                 src={invoicePreview.url}
                 className="w-full flex-1 border-0"
-                title="Invoice Preview"
+                title="Invoice Document Preview"
               />
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
+
     </PageTransition>
-  );
-}
-
-function OrderCard({ order, onApprove, onReject, onMove, onPreviewInvoice }: any) {
-  const currentStatus = (order.status || "").toUpperCase();
-  const isNew = currentStatus === "NEW" || currentStatus === "PENDING" || currentStatus === "BOT_CREATED_ORDER";
-  const isUrgent = order.isUrgent || order.priorityScore > 50;
-
-  return (
-    <motion.div layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className={`bg-background-secondary p-4 rounded-xl shadow-sm border border-border relative group ${isUrgent ? "ring-2 ring-red-100" : ""}`}>
-      <div className="flex justify-between items-start mb-2">
-        <span className="font-bold text-accent">₹{order.amount}</span>
-        <span className="text-[10px] text-text-muted font-mono">{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-      </div>
-      <h4 className="font-semibold text-text-primary text-sm leading-tight mb-3">{order.summary}</h4>
-      <div className="flex justify-between items-center mb-3">
-        <div className="text-xs text-text-muted">👤 {order.lead?.name}</div>
-        {order.invoice?.pdfUrl && (
-          <button
-            onClick={e => { e.stopPropagation(); onPreviewInvoice?.(order.invoice.pdfUrl, order.invoice.invoiceNumber); }}
-            title="Preview Invoice"
-            className="text-xs bg-accent/10 text-indigo-700 px-2 py-1 rounded hover:bg-accent/20 transition font-bold flex items-center gap-1"
-          >
-            📄 Invoice
-          </button>
-        )}
-      </div>
-      <OrderTimeline status={currentStatus} />
-      {isNew ? (
-        <div className="grid grid-cols-2 gap-2 mt-3">
-          <button onClick={onReject} className="px-3 py-2 rounded-lg border border-red-200 text-red-600 text-xs font-bold hover:bg-red-50 transition">Reject</button>
-          <button onClick={onApprove} className="px-3 py-2 rounded-lg bg-indigo-600 text-text-primary text-xs font-bold hover:bg-indigo-700 shadow-md transition">Accept</button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2 mt-3">
-          {(currentStatus === "PROCESSING" || currentStatus === "CONFIRMED") && (
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
-              <button onClick={() => onMove("PREPARING")} className="flex-1 text-xs bg-accent/10 text-indigo-700 px-3 py-2 rounded font-semibold hover:bg-accent/20 italic">Start Prep</button>
-            </div>
-          )}
-          {currentStatus === "PREPARING" && (
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
-              <button onClick={() => onMove("READY")} className="flex-1 text-xs bg-emerald-50 text-emerald-700 px-3 py-2 rounded font-semibold hover:bg-emerald-100">Mark Ready</button>
-            </div>
-          )}
-          {currentStatus === "READY" && (
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => onMove("CANCELLED")} className="text-[10px] text-red-500 font-bold hover:underline">Cancel</button>
-              <button onClick={() => onMove("SHIPPED")} className="flex-1 text-xs bg-amber-50 text-amber-700 px-3 py-2 rounded font-semibold hover:bg-amber-100 italic font-bold">Deliver Now</button>
-            </div>
-          )}
-        </div>
-      )}
-    </motion.div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    DELIVERED: "bg-emerald-100 text-emerald-700",
-    CANCELLED: "bg-red-100 text-red-700",
-    REJECTED: "bg-red-100 text-red-700",
-    NEW: "bg-blue-100 text-blue-700",
-    CONFIRMED: "bg-accent/20 text-indigo-700",
-    COMPLETED: "bg-emerald-100 text-emerald-700",
-    SHIPPED: "bg-amber-100 text-amber-700",
-    PROCESSING: "bg-accent/20 text-indigo-700",
-    PREPARING: "bg-accent/20 text-indigo-700"
-  };
-  return <span className={`px-2 py-1 rounded text-xs font-bold ${styles[status] || "bg-background-tertiary text-text-secondary"}`}>{status}</span>;
-}
-
-// ─── Order Status Timeline ───────────────────────────────────────────────────
-const TIMELINE_STEPS = [
-  { key: "NEW",        label: "New",      icon: "📋" },
-  { key: "PROCESSING", label: "Accepted", icon: "✅" },
-  { key: "PREPARING",  label: "Preparing",icon: "👨‍🍳" },
-  { key: "READY",      label: "Ready",    icon: "📦" },
-  { key: "SHIPPED",    label: "Shipped",  icon: "🚚" },
-  { key: "DELIVERED",  label: "Done",     icon: "🎉" },
-];
-
-const STATUS_RANK: Record<string, number> = {
-  BOT_CREATED_ORDER: -1, PENDING: 0, NEW: 0,
-  CONFIRMED: 1, PROCESSING: 1,
-  PREPARING: 2, READY: 3, SHIPPED: 4,
-  DELIVERED: 5, COMPLETED: 5,
-};
-
-function OrderTimeline({ status }: { status: string }) {
-  const cancelled = ["CANCELLED", "REJECTED", "ARCHIVED"].includes(status.toUpperCase());
-  const currentRank = STATUS_RANK[status.toUpperCase()] ?? 0;
-
-  if (cancelled) {
-    return (
-      <div className="mt-3 pt-3 border-t border-border">
-        <span className="text-[10px] font-black text-red-500 bg-red-50 border border-red-200 px-2 py-1 rounded-lg uppercase tracking-wider">
-          ✕ {status}
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-3 pt-3 border-t border-border">
-      <div className="flex items-center justify-between relative">
-        {/* Connector line */}
-        <div className="absolute left-0 right-0 top-[11px] h-0.5 bg-background-tertiary z-0" />
-        <div
-          className="absolute left-0 top-[11px] h-0.5 bg-indigo-400 z-0 transition-all duration-700"
-          style={{ width: `${Math.min(100, (currentRank / (TIMELINE_STEPS.length - 1)) * 100)}%` }}
-        />
-        {TIMELINE_STEPS.map((step, i) => {
-          const done = i < currentRank;
-          const active = i === currentRank;
-          return (
-            <div key={step.key} className="flex flex-col items-center relative z-10 flex-1">
-              <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] border-2 transition-all duration-300 ${
-                done    ? "bg-accent/100 border-indigo-500 text-text-primary shadow-md shadow-indigo-200" :
-                active  ? "bg-background-secondary border-indigo-500 text-accent shadow-md shadow-indigo-100 scale-110" :
-                          "bg-background-secondary border-border text-slate-300"
-              }`}>
-                {done ? "✓" : step.icon}
-              </div>
-              {active && (
-                <span className="mt-1 text-[8px] font-black text-accent leading-none text-center whitespace-nowrap">
-                  {step.label}
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ title, value, icon }: any) {
-  return (
-    <div className="bg-background-secondary p-4 rounded-xl border border-border shadow-sm flex items-center gap-3">
-      <span className="text-2xl">{icon}</span>
-      <div>
-        <p className="text-[10px] text-text-muted uppercase font-bold tracking-wider">{title}</p>
-        <p className="text-xl font-bold text-text-primary">{value}</p>
-      </div>
-    </div>
   );
 }

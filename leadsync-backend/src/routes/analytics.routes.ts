@@ -25,11 +25,11 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(now.getDate() - 30);
 
-        // 2. Fetch Orders (Delivered only)
+        // 2. Fetch Orders (Delivered or Completed)
         const orders = await prisma.order.findMany({
             where: {
                 companyId,
-                status: "DELIVERED",
+                status: { in: ["DELIVERED", "COMPLETED"] },
                 createdAt: { gte: thirtyDaysAgo }
             },
             select: {
@@ -79,7 +79,9 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
             lines.forEach(line => {
                 // Remove quantity prefix (e.g., "2 x ")
                 // Regex: Start with number, optional x, space
-                const cleanName = line.replace(/^\d+\s*x\s*/i, "").trim();
+                let cleanName = line.replace(/^\d+\s*x\s*/i, "").trim();
+                // Remove optional (Location: ...) text
+                cleanName = cleanName.replace(/\s*\(Location:\s*.*?\)$/i, "").trim();
                 if (cleanName) {
                     productMap[cleanName] = (productMap[cleanName] || 0) + 1;
                 }
