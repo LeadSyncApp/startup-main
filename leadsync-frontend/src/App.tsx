@@ -14,7 +14,7 @@ const OrderTracking = lazy(() => import("./pages/OrderTracking"));
 
 // ─── Lazy dashboard pages ────────────────────────────────────────
 const DashboardHome  = lazy(() => import("./pages/dashboard/DashboardHome"));
-const AgentInbox     = lazy(() => import("./pages/dashboard/AgentInbox"));
+const AgentInbox     = lazy(() => import("./pages/dashboard/agent-inbox/AgentInbox"));
 const Conversations  = lazy(() => import("./pages/dashboard/Conversations"));
 const Leads          = lazy(() => import("./pages/dashboard/Leads"));
 const Orders         = lazy(() => import("./pages/dashboard/Orders"));

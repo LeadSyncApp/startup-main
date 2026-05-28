@@ -75,6 +75,7 @@ SMTP_PASS="your-app-password"
 ```
 
 **Where to get API Keys:**
+
 - **Groq**: https://console.groq.com/ (Free tier available)
 - **Google Gemini**: https://makersuite.google.com/app/apikey (Free tier available)
 - **Telegram Bot**: https://t.me/BotFather
@@ -107,22 +108,27 @@ npm run seed
 ### Step 5: Start the Development Servers
 
 **Terminal 1 - Backend Server:**
+
 ```bash
 cd leadsync-backend
 npm run dev
 ```
+
 Backend will run on `http://localhost:4000`
 
 **Terminal 2 - Frontend Application:**
+
 ```bash
 cd leadsync-frontend
 npm run dev
 ```
+
 Frontend will run on `http://localhost:5173`
 
 ### Step 6: Access the Application
 
 Open your browser and navigate to:
+
 ```
 http://localhost:5173
 ```
@@ -136,13 +142,14 @@ http://localhost:5173
 #### Option A: Local PostgreSQL Installation
 
 1. **Create a database:**
+
    ```bash
    psql -U postgres
    postgres=# CREATE DATABASE leadsync;
    postgres=# \q
    ```
-
 2. **Update `.env` with your connection string:**
+
    ```env
    DATABASE_URL="postgresql://postgres:password@localhost:5432/leadsync"
    DIRECT_URL="postgresql://postgres:password@localhost:5432/leadsync"
@@ -220,27 +227,28 @@ npm run repo:map         # Generate repository documentation
 
 ### Backend (.env)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | ✅ | PostgreSQL connection string |
-| `DIRECT_URL` | ✅ | Direct PostgreSQL connection (for migrations) |
-| `JWT_SECRET` | ✅ | Secret key for JWT tokens |
-| `FRONTEND_URL` | ✅ | Frontend application URL |
-| `CORS_ORIGIN` | ✅ | Comma-separated allowed CORS origins |
-| `GROQ_API_KEY` | ⚠️ | Groq API key (at least one AI provider needed) |
-| `GEMINI_API_KEY` | ⚠️ | Google Gemini API key (alternative to Groq) |
-| `TELEGRAM_BOT_TOKEN` | ❌ | Telegram bot token (for Telegram integration) |
-| `TELEGRAM_POLLING` | ❌ | Enable Telegram polling (default: false) |
-| `SMTP_HOST` | ❌ | SMTP server for emails |
-| `SMTP_PORT` | ❌ | SMTP port (usually 587) |
-| `SMTP_USER` | ❌ | SMTP username |
-| `SMTP_PASS` | ❌ | SMTP password |
+| Variable               | Required | Description                                    |
+| ---------------------- | -------- | ---------------------------------------------- |
+| `DATABASE_URL`       | ✅       | PostgreSQL connection string                   |
+| `DIRECT_URL`         | ✅       | Direct PostgreSQL connection (for migrations)  |
+| `JWT_SECRET`         | ✅       | Secret key for JWT tokens                      |
+| `FRONTEND_URL`       | ✅       | Frontend application URL                       |
+| `CORS_ORIGIN`        | ✅       | Comma-separated allowed CORS origins           |
+| `GROQ_API_KEY`       | ⚠️     | Groq API key (at least one AI provider needed) |
+| `GEMINI_API_KEY`     | ⚠️     | Google Gemini API key (alternative to Groq)    |
+| `TELEGRAM_BOT_TOKEN` | ❌       | Telegram bot token (for Telegram integration)  |
+| `TELEGRAM_POLLING`   | ❌       | Enable Telegram polling (default: false)       |
+| `SMTP_HOST`          | ❌       | SMTP server for emails                         |
+| `SMTP_PORT`          | ❌       | SMTP port (usually 587)                        |
+| `SMTP_USER`          | ❌       | SMTP username                                  |
+| `SMTP_PASS`          | ❌       | SMTP password                                  |
 
 ---
 
 ## 🐛 Troubleshooting
 
 ### "Cannot find module 'prisma'"
+
 ```bash
 # Reinstall dependencies
 rm -rf node_modules
@@ -252,6 +260,7 @@ npm install
 If port 4000 (backend) or 5173 (frontend) is already in use:
 
 **Backend:**
+
 ```bash
 # Set a different port
 export PORT=5000  # On Windows: set PORT=5000
@@ -259,6 +268,7 @@ npm run dev
 ```
 
 **Frontend:**
+
 ```bash
 npm run dev -- --port 3000
 ```
@@ -301,6 +311,7 @@ yarn install
 ## 📚 Technology Stack
 
 ### Backend
+
 - **Runtime:** Node.js (v20.16.0+)
 - **Framework:** Express.js
 - **Language:** TypeScript
@@ -311,6 +322,7 @@ yarn install
 - **Communication:** Telegram Bot API, Instagram API
 
 ### Frontend
+
 - **Framework:** React 18
 - **Build Tool:** Vite
 - **Language:** TypeScript
@@ -354,11 +366,13 @@ CORS_ORIGIN="https://your-production-domain.com"
 ### Deploy to Popular Platforms
 
 **Backend:**
+
 - Railway: https://railway.app
 - Heroku: https://heroku.com
 - Render: https://render.com
 
 **Frontend:**
+
 - Vercel: https://vercel.com
 - Netlify: https://netlify.com
 
