@@ -92,7 +92,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md', s
                   {showCloseButton && (
                     <button
                       onClick={onClose}
-                      className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      className="rounded-lg p-1.5 text-app-muted hover:bg-app-bg-soft hover:text-app-text transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                       aria-label="Close modal"
                     >
                       <X className="h-5 w-5" />

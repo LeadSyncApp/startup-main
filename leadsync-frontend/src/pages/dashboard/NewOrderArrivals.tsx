@@ -236,7 +236,7 @@ export default function NewOrderArrivals() {
             <ShoppingCart className="text-indigo-600" />
             New Order Arrivals
           </h1>
-          <p className="text-slate-500 mt-2">
+          <p className="text-app-muted mt-2">
             All incoming orders requiring claim - universal intake queue
           </p>
         </div>
@@ -261,7 +261,7 @@ export default function NewOrderArrivals() {
         <div className="bg-app-surface p-6 rounded-2xl border border-app">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">In Queue</p>
+              <p className="text-sm font-medium text-app-muted">In Queue</p>
               <p className="text-2xl font-bold text-app-text">{orders.length}</p>
             </div>
             <Clock className="text-slate-400" size={20} />
@@ -271,7 +271,7 @@ export default function NewOrderArrivals() {
         <div className="bg-app-surface p-6 rounded-2xl border border-app">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">New Customers</p>
+              <p className="text-sm font-medium text-app-muted">New Customers</p>
               <p className="text-2xl font-bold text-app-text">
                 {orders.filter(o => !o.customerHistory.isExistingCustomer).length}
               </p>
@@ -283,7 +283,7 @@ export default function NewOrderArrivals() {
         <div className="bg-app-surface p-6 rounded-2xl border border-app">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">Returning</p>
+              <p className="text-sm font-medium text-app-muted">Returning</p>
               <p className="text-2xl font-bold text-app-text">
                 {orders.filter(o => o.customerHistory.isExistingCustomer).length}
               </p>
@@ -295,7 +295,7 @@ export default function NewOrderArrivals() {
         <div className="bg-app-surface p-6 rounded-2xl border border-app">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">High Priority</p>
+              <p className="text-sm font-medium text-app-muted">High Priority</p>
               <p className="text-2xl font-bold text-app-text">
                 {orders.filter(o => o.priorityScore >= 70).length}
               </p>
@@ -310,7 +310,7 @@ export default function NewOrderArrivals() {
         <div className="bg-app-surface rounded-2xl border border-app p-12 text-center">
           <ShoppingCart className="mx-auto text-slate-300 mb-4" size={48} />
           <h3 className="text-xl font-bold text-app-text mb-2">No new orders</h3>
-          <p className="text-slate-500">All orders have been claimed. Check back later for new arrivals.</p>
+          <p className="text-app-muted">All orders have been claimed. Check back later for new arrivals.</p>
         </div>
       ) : (
         <div className="bg-app-surface rounded-2xl border border-app overflow-hidden">
@@ -321,9 +321,9 @@ export default function NewOrderArrivals() {
                 type="checkbox"
                 checked={selectedOrders.size === orders.length}
                 onChange={handleSelectAll}
-                className="rounded border-slate-300"
+                className="rounded border-app-border-strong"
               />
-              <span className="text-sm font-medium text-slate-700">
+              <span className="text-sm font-medium text-app-text">
                 {selectedOrders.size > 0 ? `${selectedOrders.size} selected` : "Select all"}
               </span>
             </div>
@@ -349,7 +349,7 @@ export default function NewOrderArrivals() {
                         type="checkbox"
                         checked={selectedOrders.has(order.id)}
                         onChange={() => handleSelect(order.id)}
-                        className="mt-1 rounded border-slate-300"
+                        className="mt-1 rounded border-app-border-strong"
                       />
                       
                       <div className="flex-1 min-w-0">
@@ -391,33 +391,33 @@ export default function NewOrderArrivals() {
                         
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-slate-700">Order:</span>
+                            <span className="text-sm font-medium text-app-text">Order:</span>
                             <span className="font-bold text-app-text">{order.summary}</span>
                           </div>
                           
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-slate-700">Value:</span>
+                            <span className="text-sm font-medium text-app-text">Value:</span>
                             <span className="font-bold text-green-600">₹{order.amount.toLocaleString()}</span>
                           </div>
                           
                           {order.customerHistory.isExistingCustomer && (
                             <div className="bg-app-bg rounded-lg p-3 space-y-1">
                               <div className="flex items-center gap-2 text-sm">
-                                <History size={14} className="text-slate-500" />
-                                <span className="font-medium text-slate-700">Customer History:</span>
+                                <History size={14} className="text-app-muted" />
+                                <span className="font-medium text-app-text">Customer History:</span>
                               </div>
                               <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div>
-                                  <span className="text-slate-500">Previous Orders:</span>
+                                  <span className="text-app-muted">Previous Orders:</span>
                                   <span className="font-medium text-app-text">{order.customerHistory.previousOrderCount}</span>
                                 </div>
                                 <div>
-                                  <span className="text-slate-500">Previous Spend:</span>
+                                  <span className="text-app-muted">Previous Spend:</span>
                                   <span className="font-medium text-app-text">₹{order.customerHistory.previousSpend.toLocaleString()}</span>
                                 </div>
                                 {order.customerHistory.previousAgent && (
                                   <div className="col-span-2">
-                                    <span className="text-slate-500">Previous Agent:</span>
+                                    <span className="text-app-muted">Previous Agent:</span>
                                     <span className="font-medium text-app-text">{order.customerHistory.previousAgent.name}</span>
                                   </div>
                                 )}

@@ -1,4 +1,6 @@
 /** @type {import('tailwindcss').Config} */
+const withAlpha = (cssVar) => `rgb(var(${cssVar}) / <alpha-value>)`;
+
 export default {
   darkMode: 'class',
   content: [
@@ -25,16 +27,18 @@ export default {
           dark: '#0f172a',
         },
         app: {
-          bg: 'var(--app-bg)',
-          'bg-soft': 'var(--app-bg-soft)',
-          surface: 'var(--app-surface)',
-          'surface-alt': 'var(--app-surface-alt)',
-          text: 'var(--app-text)',
-          'text-muted': 'var(--app-text-muted)',
-          border: 'var(--app-border)',
-          'border-strong': 'var(--app-border-strong)',
-          primary: 'var(--app-primary)',
-          'primary-strong': 'var(--app-primary-strong)'
+          bg: withAlpha('--app-bg-rgb'),
+          'bg-soft': withAlpha('--app-bg-soft-rgb'),
+          surface: withAlpha('--app-surface-rgb'),
+          'surface-alt': withAlpha('--app-surface-alt-rgb'),
+          text: withAlpha('--app-text-rgb'),
+          'text-muted': withAlpha('--app-text-muted-rgb'),
+          border: withAlpha('--app-border-rgb'),
+          'border-strong': withAlpha('--app-border-strong-rgb'),
+          primary: withAlpha('--app-primary-rgb'),
+          'primary-strong': withAlpha('--app-primary-strong-rgb'),
+          input: withAlpha('--app-input-bg-rgb'),
+          placeholder: withAlpha('--app-input-placeholder-rgb'),
         }
       },
     },

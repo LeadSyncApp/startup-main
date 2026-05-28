@@ -494,14 +494,14 @@ export default function Settings() {
     return (
       <PageTransition className="space-y-8 max-w-4xl pb-12">
         <div className="space-y-2 animate-pulse">
-          <div className="h-8 bg-slate-200 rounded w-48" />
-          <div className="h-4 bg-slate-200 rounded w-80" />
+          <div className="h-8 bg-app-bg-soft rounded w-48" />
+          <div className="h-4 bg-app-bg-soft rounded w-80" />
         </div>
         {[1, 2, 3].map(i => (
           <div key={i} className="rounded-2xl border bg-app-surface p-6 space-y-4 animate-pulse">
-            <div className="h-5 bg-slate-200 rounded w-1/3" />
-            <div className="h-10 bg-slate-100 rounded-xl w-full" />
-            <div className="h-10 bg-slate-100 rounded-xl w-full" />
+            <div className="h-5 bg-app-bg-soft rounded w-1/3" />
+            <div className="h-10 bg-app-bg-soft rounded-xl w-full" />
+            <div className="h-10 bg-app-bg-soft rounded-xl w-full" />
           </div>
         ))}
       </PageTransition>
@@ -518,7 +518,7 @@ export default function Settings() {
           <div className="space-y-1 text-sm text-app-muted">
             <p><strong>Name:</strong> {user?.name}</p>
             <p><strong>Email:</strong> {user?.email}</p>
-            <p><strong>Role:</strong> <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-0.5 rounded-full font-bold uppercase">{user?.role}</span></p>
+            <p><strong>Role:</strong> <span className="bg-app-bg-soft text-app-text text-xs px-2.5 py-0.5 rounded-full font-bold uppercase">{user?.role}</span></p>
           </div>
         </div>
 
@@ -579,7 +579,7 @@ export default function Settings() {
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <span>🏢</span> Business Details (for Invoices)
         </h2>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-app-muted">
           These details will appear on the invoices generated for your customers.
         </p>
 
@@ -698,7 +698,7 @@ export default function Settings() {
           </div>
         )}
 
-        <p className="text-xs text-slate-500 mt-2">
+        <p className="text-xs text-app-muted mt-2">
           Paste your bot token from <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-blue-500 underline">BotFather</a> to connect.
         </p>
       </div>
@@ -711,7 +711,7 @@ export default function Settings() {
           </div>
           <div>
             <h2 className="text-lg font-semibold">Instagram Integration</h2>
-            <p className="text-xs text-slate-500">Receive and reply to Instagram DMs via your AI bot</p>
+            <p className="text-xs text-app-muted">Receive and reply to Instagram DMs via your AI bot</p>
           </div>
         </div>
 
@@ -719,15 +719,15 @@ export default function Settings() {
           <div className="space-y-3">
             {/* Webhook URL hint */}
             <div className="bg-app-bg rounded-xl px-4 py-3 border border-app space-y-1">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Step 1 — Register Webhook in Meta Developer Console</p>
-              <p className="text-xs text-slate-500">Callback URL (paste this in your Meta App → Webhooks):</p>
+              <p className="text-xs font-bold text-app-muted uppercase tracking-wide">Step 1 — Register Webhook in Meta Developer Console</p>
+              <p className="text-xs text-app-muted">Callback URL (paste this in your Meta App → Webhooks):</p>
               <code className="block text-xs bg-app-surface border border-app rounded-lg px-3 py-2 font-mono text-indigo-700 break-all select-all">
                 {DISPLAY_WEBHOOK_URL}
               </code>
-              <p className="text-xs text-slate-400 mt-1">Verify Token: use <span className="font-mono bg-slate-100 px-1 rounded">{igVerifyToken || "leadsync_ig_verify_2026"}</span> in Meta App verification.</p>
+              <p className="text-xs text-slate-400 mt-1">Verify Token: use <span className="font-mono bg-app-bg-soft px-1 rounded">{igVerifyToken || "leadsync_ig_verify_2026"}</span> in Meta App verification.</p>
             </div>
 
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Step 2 — Enter Page Credentials</p>
+            <p className="text-xs font-bold text-app-muted uppercase tracking-wide">Step 2 — Enter Page Credentials</p>
             <input
               type="text"
               placeholder="Instagram Page ID (numeric, e.g. 1234567890)"
@@ -773,7 +773,7 @@ export default function Settings() {
             </div>
             {/* Webhook URL reminder when connected */}
             <div className="bg-app-bg rounded-xl px-4 py-3 border border-app">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Webhook URL (for Meta App)</p>
+              <p className="text-xs font-bold text-app-muted uppercase tracking-wide mb-1">Webhook URL (for Meta App)</p>
               <code className="text-xs font-mono text-indigo-700 break-all select-all">
                 {DISPLAY_WEBHOOK_URL}
               </code>
@@ -788,29 +788,29 @@ export default function Settings() {
         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
 
         <div className="relative">
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+          <h2 className="text-2xl font-black text-app-text tracking-tight flex items-center gap-2">
             <span>📦</span> Commerce Onboarding
           </h2>
-          <p className="text-slate-500 text-sm mt-1">Populate your shop menu using AI paste or manual entry.</p>
+          <p className="text-app-muted text-sm mt-1">Populate your shop menu using AI paste or manual entry.</p>
         </div>
 
         {/* Tab Selector */}
-        <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
+        <div className="flex p-1 bg-app-bg-soft rounded-xl w-fit">
           <button
             onClick={() => setOnboardingMode('PASTE')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'PASTE' ? 'bg-app-surface text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'PASTE' ? 'bg-app-surface text-indigo-600 shadow-sm' : 'text-app-muted hover:text-app-text'}`}
           >
             ✨ AI Smart Paste
           </button>
           <button
             onClick={() => setOnboardingMode('MANUAL')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'MANUAL' ? 'bg-app-surface text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'MANUAL' ? 'bg-app-surface text-indigo-600 shadow-sm' : 'text-app-muted hover:text-app-text'}`}
           >
             🧱 Manual Entry
           </button>
           <button
             onClick={() => setOnboardingMode('FILE')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'FILE' ? 'bg-app-surface text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'FILE' ? 'bg-app-surface text-indigo-600 shadow-sm' : 'text-app-muted hover:text-app-text'}`}
           >
             🧾 Upload Document
           </button>
@@ -848,9 +848,9 @@ Cheese Croissant 180..."
                   id="mergeCheck"
                   checked={mergeWithExisting}
                   onChange={(e) => setMergeWithExisting(e.target.checked)}
-                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="rounded border-app-border-strong text-indigo-600 focus:ring-indigo-500"
                 />
-                <label htmlFor="mergeCheck" className="text-xs font-bold text-slate-500 cursor-pointer">Merge with existing items</label>
+                <label htmlFor="mergeCheck" className="text-xs font-bold text-app-muted cursor-pointer">Merge with existing items</label>
               </div>
             </div>
           </div>
@@ -906,7 +906,7 @@ Cheese Croissant 180..."
                 />
               </div>
             </div>
-            <p className="text-xs text-slate-500 italic">Use the "Edit Menu" section below to manage your catalog once items are added.</p>
+            <p className="text-xs text-app-muted italic">Use the "Edit Menu" section below to manage your catalog once items are added.</p>
             <button
               onClick={saveEditedMenu}
               className="bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-slate-900 transition-all text-sm"
@@ -942,7 +942,7 @@ Cheese Croissant 180..."
                 <div className="space-y-1.5">
                   {cat.items.map((item, ii) => (
                     <div key={ii} className="flex justify-between text-sm py-1 border-b border-slate-50 last:border-0">
-                      <span className="text-slate-700 font-medium">{item.name}</span>
+                      <span className="text-app-text font-medium">{item.name}</span>
                       <span className="text-indigo-600 font-bold">₹{item.price}</span>
                     </div>
                   ))}
@@ -960,7 +960,7 @@ Cheese Croissant 180..."
             </button>
             <button
               onClick={() => setPreviewMenu(null)}
-              className="bg-app-surface text-slate-500 px-6 py-4 rounded-2xl font-bold border border-app hover:bg-app-bg transition-all"
+              className="bg-app-surface text-app-muted px-6 py-4 rounded-2xl font-bold border border-app hover:bg-app-bg transition-all"
             >
               Cancel
             </button>
@@ -973,7 +973,7 @@ Cheese Croissant 180..."
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <span>🧠</span> AI Shop Knowledge (Advanced Tuning)
         </h2>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-app-muted">
           Enter detailed descriptions, suggestions, or "facts" about your products here. The AI will learn from this to answer customer questions better.
         </p>
 
@@ -1027,7 +1027,7 @@ Cheese Croissant 180..."
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <span>📜</span> Shop Policies (Grounded Rules)
         </h2>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-app-muted">
           Define your delivery times, return policies, or store rules. The AI will use these to answer customer queries.
         </p>
 

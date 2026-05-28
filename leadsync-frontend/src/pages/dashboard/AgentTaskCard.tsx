@@ -38,21 +38,21 @@ export function AgentTaskCard({ task, onAction }: AgentTaskCardProps) {
   const pStatus = getPriorityStatus();
 
   return (
-    <div className="group bg-app-surface border border-[#D9DADC] rounded-md p-4 transition hover:shadow-sm">
+    <div className="group bg-app-surface border border-app-border rounded-md p-4 transition hover:shadow-sm">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-app-bg text-slate-500 rounded border border-[#D9DADC]">
+          <div className="p-1.5 bg-app-bg text-app-muted rounded border border-app-border">
             {getIcon()}
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-[#1F2937] leading-tight">{task.title}</h4>
-            <p className="text-xs text-[#6B7280]">
+            <h4 className="text-sm font-semibold text-app-text leading-tight">{task.title}</h4>
+            <p className="text-xs text-app-muted">
               {task.contactName} {task.organization ? `• ${task.organization}` : ""}
             </p>
           </div>
         </div>
         <button 
-          className="text-slate-400 hover:text-[#1F2937] p-1 opacity-0 group-hover:opacity-100 transition"
+          className="text-slate-400 hover:text-app-text p-1 opacity-0 group-hover:opacity-100 transition"
           aria-label="More options"
         >
           <MoreHorizontal className="w-4 h-4" />
@@ -62,7 +62,7 @@ export function AgentTaskCard({ task, onAction }: AgentTaskCardProps) {
       <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
         <div className="flex items-center gap-3">
           <StatusBadge status={pStatus.status as any} label={pStatus.label} />
-          <div className="flex items-center gap-1 text-xs text-[#6B7280] font-medium">
+          <div className="flex items-center gap-1 text-xs text-app-muted font-medium">
             <Clock className="w-3.5 h-3.5" />
             <span>{task.dueAt}</span>
           </div>
@@ -74,7 +74,7 @@ export function AgentTaskCard({ task, onAction }: AgentTaskCardProps) {
               e.stopPropagation();
               onAction?.("mark_done", task);
             }}
-            className="px-3 py-1.5 text-xs font-semibold bg-app-surface border border-[#D9DADC] text-[#1F2937] rounded hover:bg-app-bg transition min-w-[44px]"
+            className="px-3 py-1.5 text-xs font-semibold bg-app-surface border border-app-border text-app-text rounded hover:bg-app-bg transition min-w-[44px]"
           >
             Done
           </button>

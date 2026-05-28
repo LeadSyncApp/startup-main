@@ -61,11 +61,11 @@ export function AssignmentStrategyManager({
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
+            <h2 className="text-xl font-bold text-app-text tracking-tight flex items-center gap-2">
               Automated Chat Assignment Strategies
               <span className="bg-indigo-100 text-indigo-800 text-xs px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">NEW</span>
             </h2>
-            <p className="text-slate-500 text-sm mt-1">
+            <p className="text-app-muted text-sm mt-1">
               Select how incoming customer conversations and generated hot leads are routed to your active staff members.
             </p>
           </div>
@@ -84,13 +84,13 @@ export function AssignmentStrategyManager({
           className={`relative border-2 p-5 rounded-2xl flex flex-col justify-between cursor-pointer transition-all ${
             selected === "MANUAL"
               ? "border-indigo-600 bg-indigo-50/20 shadow-indigo-50/50 shadow-md"
-              : "border-app bg-app-surface hover:border-slate-300 shadow-sm"
+              : "border-app bg-app-surface hover:border-app-border-strong shadow-sm"
           }`}
           id="strategy-manual-card"
         >
           <div className="space-y-4">
             <div className="flex justify-between items-start">
-              <div className={`p-3 rounded-2xl ${selected === "MANUAL" ? "bg-indigo-600 text-white" : "bg-slate-100 text-app-muted"}`}>
+              <div className={`p-3 rounded-2xl ${selected === "MANUAL" ? "bg-indigo-600 text-white" : "bg-app-bg-soft text-app-muted"}`}>
                 <UserCheck className="w-6 h-6" />
               </div>
               {selected === "MANUAL" && (
@@ -102,15 +102,15 @@ export function AssignmentStrategyManager({
             
             <div>
               <h3 className="font-bold text-app-text text-lg">Manual Claims</h3>
-              <p className="text-slate-500 text-sm mt-2 leading-relaxed">
+              <p className="text-app-muted text-sm mt-2 leading-relaxed">
                 Incoming conversations default to "unassigned". Agents manually browse the queue and click "Claim" to inherit threads.
               </p>
             </div>
           </div>
 
           <div className="mt-5 pt-4 border-t border-app flex flex-wrap gap-1.5">
-            <span className="bg-slate-100 text-app-muted text-xs px-2.5 py-1 rounded-lg font-semibold">Self-Selected</span>
-            <span className="bg-slate-100 text-app-muted text-xs px-2.5 py-1 rounded-lg font-semibold">Strict Boundaries</span>
+            <span className="bg-app-bg-soft text-app-muted text-xs px-2.5 py-1 rounded-lg font-semibold">Self-Selected</span>
+            <span className="bg-app-bg-soft text-app-muted text-xs px-2.5 py-1 rounded-lg font-semibold">Strict Boundaries</span>
           </div>
         </motion.div>
 
@@ -123,13 +123,13 @@ export function AssignmentStrategyManager({
           className={`relative border-2 p-5 rounded-2xl flex flex-col justify-between cursor-pointer transition-all ${
             selected === "ROUND_ROBIN"
               ? "border-indigo-600 bg-indigo-50/20 shadow-indigo-50/50 shadow-md"
-              : "border-app bg-app-surface hover:border-slate-300 shadow-sm"
+              : "border-app bg-app-surface hover:border-app-border-strong shadow-sm"
           }`}
           id="strategy-round-robin-card"
         >
           <div className="space-y-4">
             <div className="flex justify-between items-start">
-              <div className={`p-3 rounded-2xl ${selected === "ROUND_ROBIN" ? "bg-indigo-600 text-white" : "bg-slate-100 text-app-muted"}`}>
+              <div className={`p-3 rounded-2xl ${selected === "ROUND_ROBIN" ? "bg-indigo-600 text-white" : "bg-app-bg-soft text-app-muted"}`}>
                 <RotateCw className="w-6 h-6" />
               </div>
               {selected === "ROUND_ROBIN" && (
@@ -141,7 +141,7 @@ export function AssignmentStrategyManager({
             
             <div>
               <h3 className="font-bold text-app-text text-lg">Sequential Round-Robin</h3>
-              <p className="text-slate-500 text-sm mt-2 leading-relaxed">
+              <p className="text-app-muted text-sm mt-2 leading-relaxed">
                 Rotates newly initiated chats and order requests through each active agent sequentially in a continuous repeating sequence.
               </p>
             </div>
@@ -162,13 +162,13 @@ export function AssignmentStrategyManager({
           className={`relative border-2 p-5 rounded-2xl flex flex-col justify-between cursor-pointer transition-all ${
             selected === "LOAD_BALANCED"
               ? "border-indigo-600 bg-indigo-50/20 shadow-indigo-50/50 shadow-md"
-              : "border-app bg-app-surface hover:border-slate-300 shadow-sm"
+              : "border-app bg-app-surface hover:border-app-border-strong shadow-sm"
           }`}
           id="strategy-load-balanced-card"
         >
           <div className="space-y-4">
             <div className="flex justify-between items-start">
-              <div className={`p-3 rounded-2xl ${selected === "LOAD_BALANCED" ? "bg-indigo-600 text-white" : "bg-slate-100 text-app-muted"}`}>
+              <div className={`p-3 rounded-2xl ${selected === "LOAD_BALANCED" ? "bg-indigo-600 text-white" : "bg-app-bg-soft text-app-muted"}`}>
                 <Activity className="w-6 h-6" />
               </div>
               {selected === "LOAD_BALANCED" && (
@@ -180,7 +180,7 @@ export function AssignmentStrategyManager({
             
             <div>
               <h3 className="font-bold text-app-text text-lg">Load-Balanced Capacity</h3>
-              <p className="text-slate-500 text-sm mt-2 leading-relaxed">
+              <p className="text-app-muted text-sm mt-2 leading-relaxed">
                 Measures current workload and routes incoming threads to the agent with the fewest open chats. Prevents any bottlenecking.
               </p>
             </div>
@@ -197,10 +197,10 @@ export function AssignmentStrategyManager({
       {/* Real-time Load Analyzer for SME Manager */}
       <div className="bg-app-bg/50 rounded-2xl p-5 border border-app grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
         <div className="md:col-span-1 space-y-1">
-          <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+          <h4 className="font-bold text-app-text text-sm flex items-center gap-1.5">
             <Sparkles className="w-4 h-4 text-amber-500" /> Crew Workload Allocator
           </h4>
-          <p className="text-slate-500 text-xs leading-relaxed">
+          <p className="text-app-muted text-xs leading-relaxed">
             A real-time overview of your squad's active capacity. Load balancing ensures incoming tickets directly route to lowest handles.
           </p>
           <div className="pt-2 text-xs text-slate-400 font-medium">
@@ -221,14 +221,14 @@ export function AssignmentStrategyManager({
                 <div className="flex justify-between items-center gap-2">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className={`w-2 h-2 rounded-full shrink-0 ${agent.isAvailable !== false ? "bg-emerald-500 animate-pulse" : "bg-amber-400"}`} />
-                    <span className="font-bold text-slate-700 text-xs truncate max-w-[90px]" title={`${agent.name} (${agent.isAvailable !== false ? 'Accepting Chats' : 'On break'})`}>
+                    <span className="font-bold text-app-text text-xs truncate max-w-[90px]" title={`${agent.name} (${agent.isAvailable !== false ? 'Accepting Chats' : 'On break'})`}>
                       {agent.name}
                     </span>
                   </div>
                   <span className="text-[10px] uppercase font-black text-slate-400 shrink-0">{agent.role}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-app-bg-soft h-1.5 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
                         agent.openChats > 5
@@ -240,7 +240,7 @@ export function AssignmentStrategyManager({
                       style={{ width: `${Math.max(10, Math.min(100, workloadPct || 10))}%` }}
                     />
                   </div>
-                  <span className="text-xs font-bold text-slate-800 shrink-0">{agent.openChats} open</span>
+                  <span className="text-xs font-bold text-app-text shrink-0">{agent.openChats} open</span>
                 </div>
               </div>
             );
@@ -258,7 +258,7 @@ export function AssignmentStrategyManager({
             disabled={isSaving || selected === currentStrategy}
             className={`flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold transition-all shadow ${
               selected === currentStrategy
-                ? "bg-slate-100 text-slate-400 shadow-none cursor-not-allowed"
+                ? "bg-app-bg-soft text-slate-400 shadow-none cursor-not-allowed"
                 : "bg-indigo-600 hover:bg-indigo-700 text-white hover:shadow-indigo-100 cursor-pointer"
             }`}
             id="apply-assignment-strategy-button"

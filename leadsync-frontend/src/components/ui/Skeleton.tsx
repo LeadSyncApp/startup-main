@@ -8,7 +8,7 @@ interface SkeletonProps {
 export function Skeleton({ className = "" }: SkeletonProps) {
   return (
     <div
-      className={`animate-pulse rounded-lg bg-slate-200/60 ${className}`}
+      className={`animate-pulse rounded-lg bg-app-bg-soft/60 ${className}`}
     />
   );
 }
@@ -35,7 +35,7 @@ export function ChartSkeleton({ height = "h-[340px]" }: { height?: string }) {
         {Array.from({ length: 14 }).map((_, i) => (
           <div
             key={i}
-            className="flex-1 animate-pulse rounded-t-md bg-slate-200/60"
+            className="flex-1 animate-pulse rounded-t-md bg-app-bg-soft/60"
             style={{ height: `${20 + Math.random() * 60}%`, animationDelay: `${i * 80}ms` }}
           />
         ))}

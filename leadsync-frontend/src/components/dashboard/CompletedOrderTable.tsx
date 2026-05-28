@@ -10,7 +10,7 @@ export default function CompletedOrderTable({ orders }: Props) {
   return (
     <div className="w-full overflow-x-auto bg-app-surface rounded-2xl border border-app shadow-sm">
       <table className="w-full text-xs text-left">
-        <thead className="bg-app-bg text-slate-500 uppercase font-bold">
+        <thead className="bg-app-bg text-app-muted uppercase font-bold">
           <tr>
             <th className="p-4">Completed Date</th>
             <th className="p-4">Summary</th>
@@ -23,18 +23,18 @@ export default function CompletedOrderTable({ orders }: Props) {
         <tbody className="divide-y divide-slate-100">
           {orders.map(order => (
              <tr key={order.id} className="hover:bg-app-bg transition">
-               <td className="p-4 text-slate-500 whitespace-nowrap">
+               <td className="p-4 text-app-muted whitespace-nowrap">
                  {order.completedAt ? new Date(order.completedAt).toLocaleDateString() : 'N/A'}
                </td>
-               <td className="p-4 font-bold text-slate-800">{order.summary}</td>
-               <td className="p-4 text-slate-700">{order.lead?.name || '---'}</td>
+               <td className="p-4 font-bold text-app-text">{order.summary}</td>
+               <td className="p-4 text-app-text">{order.lead?.name || '---'}</td>
                <td className="p-4 font-black">₹{order.amount.toLocaleString()}</td>
                <td className="p-4">
                  <span className="px-2 py-1 bg-emerald-50 text-emerald-700 font-bold rounded-full text-[10px]">
                    {order.status}
                  </span>
                </td>
-               <td className="p-4 text-slate-700">{order.processedBy?.name || '---'}</td>
+               <td className="p-4 text-app-text">{order.processedBy?.name || '---'}</td>
              </tr>
           ))}
         </tbody>

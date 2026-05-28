@@ -44,7 +44,7 @@ const Tab = ({ label, isActive, onClick }: TabProps) => (
     className={`pb-4 px-2 text-sm font-medium transition-colors border-b-2 relative -mb-px whitespace-nowrap ${
       isActive 
         ? "border-blue-600 text-blue-600" 
-        : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+        : "border-transparent text-app-muted hover:text-app-text hover:border-app-border-strong"
     }`}
   >
     {label}
@@ -55,7 +55,7 @@ const IconButton = ({ icon: Icon, onClick, title }: { icon: React.ElementType, o
   <button
     onClick={onClick}
     title={title}
-    className="p-2 text-slate-500 hover:text-slate-700 bg-app-surface border border-app rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+    className="p-2 text-app-muted hover:text-app-text bg-app-surface border border-app rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
   >
     <Icon size={16} />
   </button>
@@ -572,7 +572,7 @@ export default function Leads() {
   useEffect(() => { setSelectedLeads(new Set()); }, [filter, search, channelFilter, priorityFilter, statusFilter, dateRangeFilter, showNewOrderArrivalsOnly]);
 
   return (
-    <PageTransition className="bg-[#F8FAFC] min-h-screen font-sans">
+    <PageTransition className="bg-app-bg min-h-screen font-sans">
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 md:space-y-8 w-full block">
         {/* 1. Header & Primary Action */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
@@ -659,7 +659,7 @@ export default function Leads() {
                 className="w-full pl-9 pr-8 py-2 text-sm border border-app bg-app-bg rounded-lg focus:outline-none focus:bg-app-surface focus:border-blue-300 focus:ring-2 focus:ring-blue-100 transition-colors"
               />
               {search && (
-                <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
+                <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-app-text">
                   <X size={13} />
                 </button>
               )}
@@ -708,7 +708,7 @@ export default function Leads() {
             </div>
           </div>
           <div className="flex items-center gap-2 px-2 pb-2 md:pb-0 w-full md:w-auto justify-end">
-            <div className="flex bg-slate-100 p-1 rounded-lg mr-2 shrink-0">
+            <div className="flex bg-app-bg-soft p-1 rounded-lg mr-2 shrink-0">
               <button
                 onClick={() => setViewMode("table")}
                 title="Table view"
@@ -747,8 +747,8 @@ export default function Leads() {
             <div className="p-4 bg-blue-50 text-blue-600 rounded-full mb-4">
               <Plus size={32} />
             </div>
-            <h3 className="text-lg font-bold text-slate-800 font-sans">No Manual Entries</h3>
-            <p className="text-slate-500 mt-2 max-w-sm text-sm font-sans">Create a new manual entry using the "Manual Entry / Take Order" button above to record your first offline lead.</p>
+            <h3 className="text-lg font-bold text-app-text font-sans">No Manual Entries</h3>
+            <p className="text-app-muted mt-2 max-w-sm text-sm font-sans">Create a new manual entry using the "Manual Entry / Take Order" button above to record your first offline lead.</p>
           </div>
         ) : (
           <ManualOrderTable 
@@ -826,13 +826,13 @@ export default function Leads() {
                 <h3 className="text-base font-bold text-app-text mb-1 font-sans text-left">
                   {filter === "manual" ? "Delete Orders?" : "Delete Leads?"}
                 </h3>
-                <p className="text-xs text-slate-500 leading-normal mb-5 font-sans text-left">
+                <p className="text-xs text-app-muted leading-normal mb-5 font-sans text-left">
                   Are you sure you want to delete {selectedLeads.size} {filter === "manual" ? "manual order" : "lead"}{selectedLeads.size !== 1 ? 's' : ''}? This action cannot be undone.
                 </p>
                 <div className="flex gap-2 justify-end font-sans">
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="px-3 py-2 text-slate-500 hover:bg-app-bg rounded-xl text-xs font-bold border border-app cursor-pointer"
+                    className="px-3 py-2 text-app-muted hover:bg-app-bg rounded-xl text-xs font-bold border border-app cursor-pointer"
                   >
                     Cancel
                   </button>

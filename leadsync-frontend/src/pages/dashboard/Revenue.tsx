@@ -84,8 +84,8 @@ export default function Revenue() {
       <PageTransition className="space-y-8">
         <div className="flex items-center justify-between">
           <div className="space-y-2 animate-pulse">
-            <div className="h-8 bg-slate-200 rounded w-48" />
-            <div className="h-4 bg-slate-200 rounded w-64" />
+            <div className="h-8 bg-app-bg-soft rounded w-48" />
+            <div className="h-4 bg-app-bg-soft rounded w-64" />
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -136,7 +136,7 @@ export default function Revenue() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-app-text">Revenue Insights</h1>
-          <p className="mt-1 text-sm text-slate-500">Last 30 days · delivered &amp; paid orders</p>
+          <p className="mt-1 text-sm text-app-muted">Last 30 days · delivered &amp; paid orders</p>
         </div>
         <button
           onClick={handleExport}
@@ -156,7 +156,7 @@ export default function Revenue() {
               <DollarSign className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Revenue</p>
+              <p className="text-xs font-semibold text-app-muted uppercase tracking-wider">Total Revenue</p>
               <p className="text-2xl font-bold text-app-text">{formatINR(totalRevenue)}</p>
               {trend !== null && (
                 <p className={`mt-0.5 text-xs font-medium flex items-center gap-0.5 ${trend >= 0 ? "text-emerald-600" : "text-red-500"}`}>
@@ -174,7 +174,7 @@ export default function Revenue() {
               <Receipt className="h-6 w-6 text-cyan-600" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Orders Delivered</p>
+              <p className="text-xs font-semibold text-app-muted uppercase tracking-wider">Orders Delivered</p>
               <p className="text-2xl font-bold text-app-text">{orderCount}</p>
             </div>
           </div>
@@ -186,7 +186,7 @@ export default function Revenue() {
               <TrendingUp className="h-6 w-6 text-amber-600" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg. Order Value</p>
+              <p className="text-xs font-semibold text-app-muted uppercase tracking-wider">Avg. Order Value</p>
               <p className="text-2xl font-bold text-app-text">{formatINR(avgOrderValue)}</p>
             </div>
           </div>
@@ -236,11 +236,11 @@ export default function Revenue() {
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
                     <ChevronRight size={12} className="text-slate-300" />
-                    <span className="text-sm font-semibold text-slate-700">{stage.label}</span>
+                    <span className="text-sm font-semibold text-app-text">{stage.label}</span>
                   </div>
                   <span className="text-sm font-bold text-app-text">{stage.value.toLocaleString()}</span>
                 </div>
-                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-3 bg-app-bg-soft rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-700"
                     style={{ width: `${(stage.value / funnelMax) * 100}%`, background: stage.color || "#6366f1" }}
@@ -266,11 +266,11 @@ export default function Revenue() {
               (agentStats.length > 0 ? agentStats : agentPerformance).map((a: any, i: number) => (
                 <div key={i} className="px-6 py-4 flex items-center justify-between hover:bg-app-bg transition">
                   <div className="flex items-center gap-3">
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white ${i === 0 ? "bg-amber-400" : i === 1 ? "bg-slate-400" : i === 2 ? "bg-orange-400" : "bg-slate-200 text-app-muted"}`}>
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white ${i === 0 ? "bg-amber-400" : i === 1 ? "bg-slate-400" : i === 2 ? "bg-orange-400" : "bg-app-bg-soft text-app-muted"}`}>
                       {i + 1}
                     </span>
                     <div>
-                      <p className="font-medium text-slate-800">{a.name}</p>
+                      <p className="font-medium text-app-text">{a.name}</p>
                       <p className="text-xs text-slate-400">
                         {a.orders ?? 0} order{(a.orders ?? 0) !== 1 ? "s" : ""}
                         {a.conversations ? ` · ${a.conversations} convos` : a.avgValue ? ` · avg ${formatINR(a.avgValue)}` : ""}
@@ -298,10 +298,10 @@ export default function Revenue() {
               channelAttribution.map((c: any, i: number) => (
                 <div key={i}>
                   <div className="flex justify-between text-sm mb-1.5">
-                    <span className="font-medium text-slate-700">{c.channel}</span>
-                    <span className="text-slate-500">{formatINR(c.revenue)} · {c.percentage}%</span>
+                    <span className="font-medium text-app-text">{c.channel}</span>
+                    <span className="text-app-muted">{formatINR(c.revenue)} · {c.percentage}%</span>
                   </div>
-                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-2 rounded-full bg-app-bg-soft overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${CHANNEL_COLORS[c.channel] || "bg-slate-400"}`}
                       style={{ width: `${c.percentage}%` }}

@@ -161,7 +161,7 @@ export function NotesPanel({ conversationId }: Props) {
                         {new Date(note.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                    <p className="text-xs text-app-text leading-relaxed whitespace-pre-wrap">
                       {note.content.split(/(@\w+)/g).map((part, i) =>
                         part.startsWith("@")
                           ? <span key={i} className="text-indigo-600 font-semibold">{part}</span>
@@ -203,7 +203,7 @@ export function NotesPanel({ conversationId }: Props) {
                   className="w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 flex items-center gap-2"
                 >
                   <AtSign size={11} className="text-indigo-400" />
-                  <span className="font-semibold text-slate-700">{m.name}</span>
+                  <span className="font-semibold text-app-text">{m.name}</span>
                 </button>
               ))}
             </motion.div>

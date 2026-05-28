@@ -25,7 +25,7 @@ const getTypeConfig = (type?: string) => {
   if (t === "FAQ") return TYPE_CONFIG.FAQ;
   if (t === "RULE") return TYPE_CONFIG.RULE;
   if (t === "PRODUCT") return TYPE_CONFIG.PRODUCT;
-  return { label: type || "FAQ", color: "bg-slate-100 text-slate-700 border-app" };
+  return { label: type || "FAQ", color: "bg-app-bg-soft text-app-text border-app" };
 };
 
 export function BotKnowledgeManager() {
@@ -117,7 +117,7 @@ export function BotKnowledgeManager() {
         )}
       </div>
 
-      <p className="text-xs text-slate-500 mb-4">
+      <p className="text-xs text-app-muted mb-4">
         Teach your AI bot specific FAQs, business rules, and product details. Active items are injected into every bot reply.
       </p>
 
@@ -136,7 +136,7 @@ export function BotKnowledgeManager() {
                   <button
                     key={t}
                     onClick={() => setNewType(t)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${newType === t ? TYPE_CONFIG[t].color + " shadow-sm" : "bg-app-surface border-app text-slate-500 hover:border-slate-300"}`}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${newType === t ? TYPE_CONFIG[t].color + " shadow-sm" : "bg-app-surface border-app text-app-muted hover:border-app-border-strong"}`}
                   >
                     {TYPE_CONFIG[t].label}
                   </button>
@@ -162,7 +162,7 @@ export function BotKnowledgeManager() {
                 <div className="text-right text-[10px] text-slate-400 -mt-1">{newContent.length}/600</div>
               </div>
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700 px-3 py-1.5">Cancel</button>
+                <button onClick={() => setShowForm(false)} className="text-sm text-app-muted hover:text-app-text px-3 py-1.5">Cancel</button>
                 <button
                   onClick={handleAdd}
                   disabled={saving || !newTitle.trim() || !newContent.trim()}
@@ -180,7 +180,7 @@ export function BotKnowledgeManager() {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse" />
+            <div key={i} className="h-16 bg-app-bg-soft rounded-xl animate-pulse" />
           ))}
         </div>
       ) : items.length === 0 ? (
@@ -208,9 +208,9 @@ export function BotKnowledgeManager() {
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${typeCfg.color}`}>
                           {typeCfg.label}
                         </span>
-                        <span className="text-sm font-semibold text-slate-800 truncate">{item.title}</span>
+                        <span className="text-sm font-semibold text-app-text truncate">{item.title}</span>
                       </div>
-                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{item.content}</p>
+                    <p className="text-xs text-app-muted line-clamp-2 leading-relaxed">{item.content}</p>
                   </div>
                   {!isAgent && (
                     <div className="flex items-center gap-1.5 shrink-0">

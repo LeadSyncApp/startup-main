@@ -107,7 +107,7 @@ const IconButton = ({ icon, onClick, title }: { icon: string; onClick?: () => vo
   <button 
     onClick={onClick}
     title={title}
-    className="p-2 text-slate-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
+    className="p-2 text-app-muted hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
   >
     <span className="material-symbols-outlined text-[20px]">{icon}</span>
   </button>
@@ -135,7 +135,7 @@ const Section = ({ title, children, action }: { title: string; children: React.R
 const InfoItem = ({ icon, text }: { icon: string; text: string }) => (
   <div className="flex items-center gap-3 group cursor-pointer">
     <span className="material-symbols-outlined text-slate-300 group-hover:text-blue-500 transition-colors text-[18px]">{icon}</span>
-    <span className="text-xs text-slate-700 font-medium truncate group-hover:text-app-text transition-colors">{text}</span>
+    <span className="text-xs text-app-text font-medium truncate group-hover:text-app-text transition-colors">{text}</span>
   </div>
 );
 
@@ -158,7 +158,7 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
         <button 
           type="button"
           onClick={onClose}
-          className="p-1 text-slate-400 hover:text-app-muted hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center border border-app bg-app-surface"
+          className="p-1 text-slate-400 hover:text-app-muted hover:bg-app-bg-soft rounded-lg transition-colors flex items-center justify-center border border-app bg-app-surface"
           title="Close profile"
         >
           <span className="material-symbols-outlined text-[18px]">close</span>
@@ -170,7 +170,7 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
           {leadInitials}
         </div>
         <h3 className="text-lg font-extrabold text-app-text leading-tight">{leadName}</h3>
-        <p className="text-xs text-slate-500 font-medium mt-1">
+        <p className="text-xs text-app-muted font-medium mt-1">
           {activeLead?.segment || 'Regular Lead'} • <span className="text-blue-600 font-semibold">{leadChannel}</span>
         </p>
         
@@ -188,7 +188,7 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
           className={`flex-1 py-3 text-center text-xs font-bold transition-all border-b-2 flex items-center justify-center gap-1.5 ${
             activeTab === 'details'
               ? 'border-blue-600 text-blue-600 font-black'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              : 'border-transparent text-app-muted hover:text-app-text'
           }`}
         >
           <span className="material-symbols-outlined text-[14px]">info</span>
@@ -200,7 +200,7 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
           className={`flex-1 py-3 text-center text-xs font-bold transition-all border-b-2 flex items-center justify-center gap-1.5 ${
             activeTab === 'notes'
               ? 'border-blue-600 text-blue-600 font-black'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              : 'border-transparent text-app-muted hover:text-app-text'
           }`}
         >
           <span className="material-symbols-outlined text-[14px]">sticky_note</span>
@@ -244,20 +244,20 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
           <Section title="Intelligence Metrics">
             <div className="space-y-1">
               <div className="flex justify-between py-2 border-b border-slate-50">
-                <span className="text-xs text-slate-500">AI Score</span>
+                <span className="text-xs text-app-muted">AI Score</span>
                 <span className="text-xs text-app-text font-bold">{activeLead?.aiScore ?? 75} / 100</span>
               </div>
               <div className="flex justify-between py-2 border-b border-slate-50">
-                <span className="text-xs text-slate-500">Transaction Count</span>
+                <span className="text-xs text-app-muted">Transaction Count</span>
                 <span className="text-xs text-app-text font-bold">{activeLead?.orderCount ?? 0} orders</span>
               </div>
               <div className="flex justify-between py-2 border-b border-slate-50">
-                <span className="text-xs text-slate-500">Value (CRM)</span>
+                <span className="text-xs text-app-muted">Value (CRM)</span>
                 <span className="text-xs text-app-text font-bold">₹{(activeLead?.totalSpend ?? 0).toLocaleString()}</span>
               </div>
               {activeLead?.suggestedAction && (
                 <div className="flex justify-between py-2">
-                  <span className="text-xs text-slate-500">Suggested Action</span>
+                  <span className="text-xs text-app-muted">Suggested Action</span>
                   <span className="text-xs text-blue-600 font-bold">{activeLead.suggestedAction}</span>
                 </div>
               )}
@@ -270,7 +270,7 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
               <div className="flex gap-3">
                 <div className="w-1 bg-blue-600 rounded-full shadow-[0_0_8px_rgba(37,99,235,0.4)]"></div>
                 <div>
-                  <p className="text-xs text-slate-800 font-semibold leading-relaxed truncate max-w-[180px]">
+                  <p className="text-xs text-app-text font-semibold leading-relaxed truncate max-w-[180px]">
                     {activeLead.lastMessage || "Logged interaction"}
                   </p>
                   <span className="text-[10px] text-slate-400 font-bold mt-1 block">
@@ -746,11 +746,11 @@ const ConversationHub = () => {
       >
         <div className="p-4 border-b border-app flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h1 className="text-sm font-extrabold text-slate-800 tracking-wider">INBOX</h1>
+            <h1 className="text-sm font-extrabold text-app-text tracking-wider">INBOX</h1>
             <button 
               type="button"
               onClick={() => setSidebarExpanded(false)}
-              className="hidden md:flex p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-600 rounded-lg transition-colors items-center justify-center shrink-0"
+              className="hidden md:flex p-1.5 text-app-muted hover:bg-app-bg-soft hover:text-blue-600 rounded-lg transition-colors items-center justify-center shrink-0"
               title="Collapse sidebar"
             >
               <span className="material-symbols-outlined text-[20px]">menu_open</span>
@@ -764,11 +764,11 @@ const ConversationHub = () => {
               placeholder="Search conversations..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-app-bg border border-app rounded-xl py-2 pl-10 pr-4 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/80 outline-none transition-all placeholder:text-slate-400 text-slate-800"
+              className="w-full bg-app-bg border border-app rounded-xl py-2 pl-10 pr-4 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/80 outline-none transition-all placeholder:text-slate-400 text-app-text"
             />
           </div>
 
-          <div className="flex bg-slate-100/80 p-0.5 rounded-lg border border-app/50">
+          <div className="flex bg-app-bg-soft/80 p-0.5 rounded-lg border border-app-border/50">
             {[
               { id: 'all', label: 'All' },
               { id: 'unread', label: 'Unread' },
@@ -781,8 +781,8 @@ const ConversationHub = () => {
                 onClick={() => setListFilter(tab.id as any)}
                 className={`flex-1 py-1 rounded-md text-[10px] font-bold uppercase tracking-tight transition-all duration-150 ${
                   listFilter === tab.id
-                    ? 'bg-app-surface shadow-sm text-blue-600 border border-app/20'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-app-surface shadow-sm text-blue-600 border border-app-border/20'
+                    : 'text-app-muted hover:text-app-text'
                 }`}
               >
                 {tab.label}
@@ -792,14 +792,14 @@ const ConversationHub = () => {
 
           {/* Sub-header for Channel vs Manual leads filter under All section */}
           {listFilter === 'all' && (
-            <div className="flex bg-slate-100/40 p-0.5 rounded-lg border border-app/40 gap-0.5 mt-0.5">
+            <div className="flex bg-app-bg-soft/40 p-0.5 rounded-lg border border-app-border/40 gap-0.5 mt-0.5">
               <button
                 type="button"
                 onClick={() => setAllSubFilter('channel')}
                 className={`flex-1 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-tight transition-all duration-150 flex items-center justify-center gap-1 cursor-pointer ${
                   allSubFilter === 'channel'
                     ? 'bg-blue-600 text-white shadow-sm font-black'
-                    : 'text-slate-500 hover:text-slate-800'
+                    : 'text-app-muted hover:text-app-text'
                 }`}
               >
                 <span className="material-symbols-outlined text-[12px]">language</span>
@@ -811,7 +811,7 @@ const ConversationHub = () => {
                 className={`flex-1 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-tight transition-all duration-150 flex items-center justify-center gap-1 cursor-pointer ${
                   allSubFilter === 'manual'
                     ? 'bg-indigo-600 text-white shadow-sm font-black'
-                    : 'text-slate-500 hover:text-slate-800'
+                    : 'text-app-muted hover:text-app-text'
                 }`}
               >
                 <span className="material-symbols-outlined text-[12px]">storefront</span>
@@ -841,7 +841,7 @@ const ConversationHub = () => {
                 <div 
                   key={conv.id}
                   onClick={() => setSelectedId(conv.id)}
-                  className={`px-4 py-3.5 border-b border-app/70 flex gap-3 items-start cursor-pointer transition-all ${
+                  className={`px-4 py-3.5 border-b border-app-border/70 flex gap-3 items-start cursor-pointer transition-all ${
                     isActive 
                       ? 'bg-blue-50/50 border-l-4 border-blue-600' 
                       : 'border-l-4 border-transparent hover:bg-app-bg/60'
@@ -858,7 +858,7 @@ const ConversationHub = () => {
                   
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center">
-                      <h4 className={`text-xs truncate ${isActive ? 'font-bold text-blue-900' : 'font-semibold text-slate-800'}`}>
+                      <h4 className={`text-xs truncate ${isActive ? 'font-bold text-blue-900' : 'font-semibold text-app-text'}`}>
                         {conv.lead?.name || 'Customer'}
                       </h4>
                       <span className="text-[10px] text-slate-400 font-medium">
@@ -868,7 +868,7 @@ const ConversationHub = () => {
                     <div className="mt-1">
                       <TagChips convId={conv.id} />
                     </div>
-                    <p className="text-[11px] text-slate-500 truncate mt-0.5">{conv.lastMessage || 'No messages received.'}</p>
+                    <p className="text-[11px] text-app-muted truncate mt-0.5">{conv.lastMessage || 'No messages received.'}</p>
                     
                     <div className="flex items-center justify-between gap-1 mt-1.5">
                       <div className="flex items-center gap-1">
@@ -899,7 +899,7 @@ const ConversationHub = () => {
                   <button 
                     type="button"
                     onClick={() => setSidebarExpanded(true)}
-                    className="hidden md:flex p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-600 rounded-lg items-center justify-center shrink-0 mr-1 transition-all"
+                    className="hidden md:flex p-1.5 text-app-muted hover:bg-app-bg-soft hover:text-blue-600 rounded-lg items-center justify-center shrink-0 mr-1 transition-all"
                     title="Expand sidebar"
                   >
                     <span className="material-symbols-outlined text-[20px]">menu</span>
@@ -908,7 +908,7 @@ const ConversationHub = () => {
 
                 <button 
                   onClick={() => setSelectedId(null)}
-                  className="md:hidden p-1 mr-1 text-slate-500 hover:bg-app-bg rounded-lg flex items-center justify-center shrink-0"
+                  className="md:hidden p-1 mr-1 text-app-muted hover:bg-app-bg rounded-lg flex items-center justify-center shrink-0"
                   title="Back to inbox list"
                 >
                   <span className="material-symbols-outlined text-[22px] sm:text-[24px]">arrow_back</span>
@@ -952,7 +952,7 @@ const ConversationHub = () => {
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 ${
                     showProfile 
                       ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-app'
+                      : 'bg-app-bg-soft hover:bg-app-bg-soft text-app-text border border-app'
                   }`}
                 >
                   {showProfile ? 'Hide Profile' : 'View Profile'}
@@ -1067,7 +1067,7 @@ const ConversationHub = () => {
 
 
             {/* MESSAGE ACTIVITY BAR with Sidebar Toggle */}
-            <div className="bg-app-bg px-4 sm:px-6 py-2.5 border-b border-app/60 flex items-center justify-between gap-2">
+            <div className="bg-app-bg px-4 sm:px-6 py-2.5 border-b border-app-border/60 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -1075,7 +1075,7 @@ const ConversationHub = () => {
                   className={`p-1.5 flex items-center gap-1.5 text-xs font-bold rounded-lg border transition-all duration-150 ${
                     trackSidebarExpanded 
                       ? 'bg-blue-50 text-blue-600 border-blue-200/50 hover:bg-blue-100/60' 
-                      : 'bg-app-surface text-app-muted border-app/80 hover:bg-slate-100 hover:text-slate-800'
+                      : 'bg-app-surface text-app-muted border-app-border/80 hover:bg-app-bg-soft hover:text-app-text'
                   }`}
                   title="Toggle Message Views Side Navigation"
                 >
@@ -1109,7 +1109,7 @@ const ConversationHub = () => {
                   minWidth: trackSidebarExpanded ? '200px' : '0px',
                   opacity: trackSidebarExpanded ? 1 : 0
                 }}
-                className="bg-app-bg border-r border-app/60 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden"
+                className="bg-app-bg border-r border-app-border/60 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden"
               >
                 <div className="p-3 flex flex-col gap-1.5 h-full">
                   <div className="px-1.5 py-1 text-[9px] font-black text-slate-400 tracking-wider uppercase">
@@ -1122,7 +1122,7 @@ const ConversationHub = () => {
                     className={`w-full text-left p-2.5 rounded-xl transition-all duration-150 flex items-center gap-2 ${
                       messageFilter === 'all'
                         ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-500/15'
-                        : 'text-app-muted hover:text-app-text hover:bg-slate-200/50'
+                        : 'text-app-muted hover:text-app-text hover:bg-app-bg-soft/50'
                     }`}
                   >
                     <span className="material-symbols-outlined text-[18px]">forum</span>
@@ -1140,7 +1140,7 @@ const ConversationHub = () => {
                     className={`w-full text-left p-2.5 rounded-xl transition-all duration-150 flex items-center gap-2 ${
                       messageFilter === 'bot'
                         ? 'bg-purple-600 text-white font-extrabold shadow-md shadow-purple-500/15'
-                        : 'text-app-muted hover:text-app-text hover:bg-slate-200/50'
+                        : 'text-app-muted hover:text-app-text hover:bg-app-bg-soft/50'
                     }`}
                   >
                     <span className="material-symbols-outlined text-[18px]">smart_toy</span>
@@ -1158,7 +1158,7 @@ const ConversationHub = () => {
                     className={`w-full text-left p-2.5 rounded-xl transition-all duration-150 flex items-center gap-2 ${
                       messageFilter === 'agent'
                         ? 'bg-emerald-600 text-white font-extrabold shadow-md shadow-emerald-500/15'
-                        : 'text-app-muted hover:text-app-text hover:bg-slate-200/50'
+                        : 'text-app-muted hover:text-app-text hover:bg-app-bg-soft/50'
                     }`}
                   >
                     <span className="material-symbols-outlined text-[18px]">support_agent</span>
@@ -1195,7 +1195,7 @@ const ConversationHub = () => {
                   if (msg.sender === 'SYSTEM' && isSystemLog(msg.content)) {
                     return (
                       <div key={msg.id} className="flex justify-center my-2">
-                        <span className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-app/50 flex items-center gap-1">
+                        <span className="bg-app-bg-soft text-app-muted px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-app-border/50 flex items-center gap-1">
                           <span className="material-symbols-outlined text-[12px]">info</span>
                           {msg.content}
                         </span>
@@ -1248,7 +1248,7 @@ const ConversationHub = () => {
                         {/* Speech Bubble Card */}
                         <div className={`p-4 rounded-xl shadow-sm ${
                           isIncoming 
-                            ? 'bg-app-surface border border-app text-slate-800' 
+                            ? 'bg-app-surface border border-app text-app-text' 
                             : isBotResponse
                               ? 'bg-purple-50 border border-purple-200/80 text-purple-950 font-medium'
                               : 'bg-blue-600 text-white'
@@ -1318,16 +1318,16 @@ const ConversationHub = () => {
                       </span>
                     </button>
 
-                    <div className="hidden sm:block h-4 w-px bg-slate-200 mx-1"></div>
+                    <div className="hidden sm:block h-4 w-px bg-app-bg-soft mx-1"></div>
                     
-                    <div className="flex bg-slate-100 p-0.5 rounded-lg border border-app/50">
+                    <div className="flex bg-app-bg-soft p-0.5 rounded-lg border border-app-border/50">
                       <button
                         type="button"
                         onClick={() => handleToggleMode('BOT')}
                         className={`px-2 sm:px-3 py-1 rounded text-[9px] font-black uppercase tracking-tight transition ${
                           currentConvMode === 'BOT' 
-                            ? 'bg-app-surface text-blue-600 shadow-sm border border-app/20' 
-                            : 'text-slate-500 hover:text-slate-800'
+                            ? 'bg-app-surface text-blue-600 shadow-sm border border-app-border/20' 
+                            : 'text-app-muted hover:text-app-text'
                         }`}
                         title="AI bot takes full automated control of communications flow"
                       >
@@ -1338,8 +1338,8 @@ const ConversationHub = () => {
                         onClick={() => handleToggleMode('HUMAN')}
                         className={`px-2 sm:px-3 py-1 rounded text-[9px] font-black uppercase tracking-tight transition ${
                           currentConvMode === 'HUMAN' 
-                            ? 'bg-app-surface text-blue-600 shadow-sm border border-app/20' 
-                            : 'text-slate-500 hover:text-slate-800'
+                            ? 'bg-app-surface text-blue-600 shadow-sm border border-app-border/20' 
+                            : 'text-app-muted hover:text-app-text'
                         }`}
                         title="Pause bot automated responses. Operator will reply manually."
                       >
@@ -1374,7 +1374,7 @@ const ConversationHub = () => {
                       handleSendMessage();
                     }
                   }}
-                  className="w-full p-4 text-xs md:text-sm border-none focus:ring-0 focus:outline-none min-h-[90px] resize-none text-slate-800 bg-transparent placeholder:text-slate-400"
+                  className="w-full p-4 text-xs md:text-sm border-none focus:ring-0 focus:outline-none min-h-[90px] resize-none text-app-text bg-transparent placeholder:text-slate-400"
                 />
                 
                 <div className="flex items-center justify-between p-2.5 sm:p-3 bg-app-bg/50 rounded-b-xl border-t border-app">
@@ -1402,20 +1402,20 @@ const ConversationHub = () => {
                 <button 
                   type="button"
                   onClick={() => setSidebarExpanded(true)}
-                  className="hidden md:flex p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-600 rounded-lg items-center justify-center shrink-0 mr-1 transition-all"
+                  className="hidden md:flex p-1.5 text-app-muted hover:bg-app-bg-soft hover:text-blue-600 rounded-lg items-center justify-center shrink-0 mr-1 transition-all"
                   title="Expand sidebar"
                 >
                   <span className="material-symbols-outlined text-[20px]">menu</span>
                 </button>
-                <span className="ml-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Inbox Directory</span>
+                <span className="ml-3 text-xs font-bold text-app-muted uppercase tracking-wider">Inbox Directory</span>
               </header>
             )}
             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-12 text-center bg-transparent">
              <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-3xl flex items-center justify-center mb-6">
                <span className="material-symbols-outlined text-[36px]">forum</span>
              </div>
-             <h2 className="text-sm font-bold text-slate-800 mb-2">Select a Conversation</h2>
-             <p className="text-xs max-w-xs leading-relaxed text-slate-500">Pick a customer session from the directory to review transaction notes or chat manual overrides.</p>
+             <h2 className="text-sm font-bold text-app-text mb-2">Select a Conversation</h2>
+             <p className="text-xs max-w-xs leading-relaxed text-app-muted">Pick a customer session from the directory to review transaction notes or chat manual overrides.</p>
             </div>
           </div>
         )}

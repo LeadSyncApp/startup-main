@@ -29,13 +29,13 @@ export default function ManualOrderTable({
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse select-none">
           <thead>
-            <tr className="border-b border-app bg-app-bg text-slate-500 font-sans text-xs uppercase font-extrabold tracking-wider">
+            <tr className="border-b border-app bg-app-bg text-app-muted font-sans text-xs uppercase font-extrabold tracking-wider">
               <th className="py-4 px-4 w-10">
                 <input
                   type="checkbox"
                   checked={isAllSelected}
                   onChange={onSelectAll}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 cursor-pointer accent-blue-600 focus:ring-blue-500"
+                  className="h-4 w-4 rounded border-app-border-strong text-blue-600 cursor-pointer accent-blue-600 focus:ring-blue-500"
                   title="Select all"
                 />
               </th>
@@ -63,26 +63,26 @@ export default function ManualOrderTable({
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => onSelect(order.id)}
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600 cursor-pointer accent-blue-600 focus:ring-blue-500"
+                      className="h-4 w-4 rounded border-app-border-strong text-blue-600 cursor-pointer accent-blue-600 focus:ring-blue-500"
                     />
                   </td>
                   <td className="py-4 px-6">
                     <div className="flex flex-col gap-0.5 text-left">
-                      <span className="font-bold text-slate-800 text-sm">
+                      <span className="font-bold text-app-text text-sm">
                         {order.lead?.name || "Customer"}
                       </span>
-                      <span className="text-xs text-slate-500 font-semibold font-mono">
+                      <span className="text-xs text-app-muted font-semibold font-mono">
                         {order.lead?.contact}
                       </span>
                     </div>
                   </td>
                   <td className="py-4 px-6 max-w-xs">
-                    <div className="text-slate-700 font-semibold line-clamp-2 text-left font-sans">
+                    <div className="text-app-text font-semibold line-clamp-2 text-left font-sans">
                       {baseSummary}
                     </div>
                   </td>
                   <td className="py-4 px-6 text-left">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-slate-700 bg-slate-100 border border-app rounded-lg font-bold font-sans">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-app-text bg-app-bg-soft border border-app rounded-lg font-bold font-sans">
                       👤 {agentName}
                     </span>
                   </td>
@@ -92,11 +92,11 @@ export default function ManualOrderTable({
                     </span>
                   </td>
                   <td className="py-4 px-6 text-left">
-                    <span className="font-semibold text-slate-500 font-sans">
+                    <span className="font-semibold text-app-muted font-sans">
                       {state}
                     </span>
                   </td>
-                  <td className="py-4 px-6 text-right font-black text-slate-800 text-sm font-sans">
+                  <td className="py-4 px-6 text-right font-black text-app-text text-sm font-sans">
                     <div className="flex flex-col items-end gap-1">
                       <span>
                         ₹{order.amount?.toLocaleString("en-IN") || "0"}
@@ -130,7 +130,7 @@ export default function ManualOrderTable({
                             setActiveDropdownOrderId(order.id);
                           }
                         }}
-                        className="p-2 text-slate-400 hover:text-app-muted hover:bg-slate-100 rounded-xl transition active:scale-90 cursor-pointer"
+                        className="p-2 text-slate-400 hover:text-app-muted hover:bg-app-bg-soft rounded-xl transition active:scale-90 cursor-pointer"
                       >
                         <MoreVertical size={18} />
                       </button>
@@ -162,7 +162,7 @@ export default function ManualOrderTable({
                               setActiveDropdownOrderId(null);
                               setDropdownPosition(null);
                             }}
-                            className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-app-bg flex items-center gap-2 transition cursor-pointer"
+                            className="w-full px-3.5 py-2 text-xs font-bold text-app-text hover:bg-app-bg flex items-center gap-2 transition cursor-pointer"
                           >
                             <Eye size={14} className="text-blue-500" />
                             Read Detailed Report
@@ -174,7 +174,7 @@ export default function ManualOrderTable({
                               setActiveDropdownOrderId(null);
                               setDropdownPosition(null);
                             }}
-                            className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-app-bg flex items-center gap-2 transition cursor-pointer"
+                            className="w-full px-3.5 py-2 text-xs font-bold text-app-text hover:bg-app-bg flex items-center gap-2 transition cursor-pointer"
                           >
                             <User size={14} className="text-indigo-500" />
                             Open CRM Lead Drawer
@@ -188,7 +188,7 @@ export default function ManualOrderTable({
                               setActiveDropdownOrderId(null);
                               setDropdownPosition(null);
                             }}
-                            className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-app-bg flex items-center gap-2 transition cursor-pointer"
+                            className="w-full px-3.5 py-2 text-xs font-bold text-app-text hover:bg-app-bg flex items-center gap-2 transition cursor-pointer"
                           >
                             <Clipboard size={14} className="text-emerald-500" />
                             Copy Order Info

@@ -51,7 +51,7 @@ export default function OrderTracking() {
                 <AlertCircle size={32} />
             </div>
             <h1 className="text-xl font-bold text-app-text">Tracking Unavailable</h1>
-            <p className="text-slate-500 mt-2">{error}</p>
+            <p className="text-app-muted mt-2">{error}</p>
         </div>
     );
 
@@ -110,7 +110,7 @@ export default function OrderTracking() {
                     {!isCancelled && (
                         <div className="space-y-8 relative">
                             {/* Vertical Line */}
-                            <div className="absolute left-6 top-2 bottom-6 w-0.5 bg-slate-100 -z-10" />
+                            <div className="absolute left-6 top-2 bottom-6 w-0.5 bg-app-bg-soft -z-10" />
 
                             {STATUS_STEPS.map((step, index) => {
                                 const isActive = index <= activeStep;
@@ -157,7 +157,7 @@ export default function OrderTracking() {
 
                     <div className="mt-10 pt-6 border-t border-app">
                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Order Summary</h4>
-                        <p className="text-slate-700 font-medium bg-app-bg p-4 rounded-2xl border border-app text-sm leading-relaxed">
+                        <p className="text-app-text font-medium bg-app-bg p-4 rounded-2xl border border-app text-sm leading-relaxed">
                             {order.summary}
                         </p>
                     </div>

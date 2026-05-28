@@ -117,10 +117,10 @@ export function SavedRepliesPopup({ query, onSelect, onClose }: SavedRepliesPopu
             }`}
           >
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-800">{reply.title}</span>
+              <span className="text-xs font-bold text-app-text">{reply.title}</span>
               {i === cursor && <Check size={10} className="text-indigo-500 ml-auto" />}
             </div>
-            <p className="text-xs text-slate-500 truncate">{reply.content}</p>
+            <p className="text-xs text-app-muted truncate">{reply.content}</p>
           </button>
         ))}
       </div>
@@ -150,7 +150,7 @@ export function SavedRepliesManager() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <BookOpen size={16} className="text-indigo-500" />
-          <h3 className="font-semibold text-slate-800 text-sm">Saved Replies</h3>
+          <h3 className="font-semibold text-app-text text-sm">Saved Replies</h3>
           <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{replies.length}</span>
         </div>
         <button
@@ -203,8 +203,8 @@ export function SavedRepliesManager() {
         {replies.map((reply) => (
           <div key={reply.id} className="flex items-start justify-between gap-3 bg-app-bg rounded-xl p-3 border border-app group">
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-800">{reply.title}</p>
-              <p className="text-xs text-slate-500 truncate mt-0.5">{reply.content}</p>
+              <p className="text-xs font-bold text-app-text">{reply.title}</p>
+              <p className="text-xs text-app-muted truncate mt-0.5">{reply.content}</p>
             </div>
             <button
               onClick={() => deleteReply(reply.id)}

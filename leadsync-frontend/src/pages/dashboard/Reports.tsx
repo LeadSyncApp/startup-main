@@ -36,7 +36,7 @@ export default function Reports() {
     <PageTransition className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold text-app-text">Reports & Analytics</h1>
-        <p className="mt-1 text-slate-500">
+        <p className="mt-1 text-app-muted">
           General business performance reports.
         </p>
       </div>
@@ -53,27 +53,27 @@ export default function Reports() {
             <div className="space-y-3 animate-pulse">
               {[1, 2, 3, 4].map(i => (
                 <div key={i} className="flex justify-between py-2 border-b border-slate-50">
-                  <div className="h-4 bg-slate-200 rounded w-1/3" />
-                  <div className="h-4 bg-slate-200 rounded w-1/5" />
+                  <div className="h-4 bg-app-bg-soft rounded w-1/3" />
+                  <div className="h-4 bg-app-bg-soft rounded w-1/5" />
                 </div>
               ))}
             </div>
           ) : (
           <div className="space-y-3">
             <div className="flex justify-between text-sm py-2 border-b border-slate-50">
-              <span className="text-slate-500">Total Generated Revenue</span>
+              <span className="text-app-muted">Total Generated Revenue</span>
               <span className="font-bold text-app-text">{formatINR(stats?.totalRevenue || 0)}</span>
             </div>
             <div className="flex justify-between text-sm py-2 border-b border-slate-50">
-              <span className="text-slate-500">Total Delivered Orders</span>
+              <span className="text-app-muted">Total Delivered Orders</span>
               <span className="font-bold text-app-text">{stats?.orderCount || 0}</span>
             </div>
             <div className="flex justify-between text-sm py-2 border-b border-slate-50">
-              <span className="text-slate-500">Avg. Order Value</span>
+              <span className="text-app-muted">Avg. Order Value</span>
               <span className="font-bold text-app-text">{formatINR(stats?.avgOrderValue || 0)}</span>
             </div>
             <div className="flex justify-between text-sm py-2">
-              <span className="text-slate-500">vs Previous Period</span>
+              <span className="text-app-muted">vs Previous Period</span>
               {trend !== null ? (
                 <span className={`font-medium flex items-center gap-1 ${trendPositive ? "text-emerald-600" : "text-red-500"}`}>
                   {trendPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}

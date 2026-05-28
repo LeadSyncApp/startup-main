@@ -33,8 +33,8 @@ const AIScoreBar = ({ score }: { score: number }) => {
   const color = safeScore >= 80 ? "bg-emerald-500" : safeScore >= 50 ? "bg-teal-400" : "bg-blue-400";
   return (
     <div className="flex items-center gap-2 w-full max-w-[100px]">
-      <span className="text-xs font-semibold text-slate-700 w-6">{safeScore}</span>
-      <div className="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
+      <span className="text-xs font-semibold text-app-text w-6">{safeScore}</span>
+      <div className="h-1.5 flex-1 bg-app-bg-soft rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${safeScore}%` }} />
       </div>
     </div>
@@ -86,7 +86,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
       {/* Desktop Table */}
       <div className="hidden md:block bg-app-surface rounded-xl shadow-sm border border-app overflow-hidden relative max-h-[70vh] overflow-y-auto">
         <table className="min-w-full text-sm text-left">
-          <thead className="bg-[#F8FAFC] text-xs uppercase text-slate-500 font-semibold tracking-wide border-b border-app sticky top-0 z-10">
+          <thead className="bg-app-bg text-xs uppercase text-app-muted font-semibold tracking-wide border-b border-app sticky top-0 z-10">
             <tr>
               {hasSelect && (
                 <th className="px-4 py-3 w-10">
@@ -94,7 +94,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                     type="checkbox"
                     checked={!!allSelected}
                     onChange={onSelectAll}
-                    className="h-4 w-4 rounded border-slate-300 text-blue-600 cursor-pointer accent-blue-600 focus:ring-blue-500"
+                    className="h-4 w-4 rounded border-app-border-strong text-blue-600 cursor-pointer accent-blue-600 focus:ring-blue-500"
                     title="Select all"
                   />
                 </th>
@@ -126,7 +126,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                         type="checkbox"
                         checked={!!isSelected}
                         onChange={() => onSelect?.(lead.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-blue-600 cursor-pointer accent-blue-600 focus:ring-blue-500"
+                        className="h-4 w-4 rounded border-app-border-strong text-blue-600 cursor-pointer accent-blue-600 focus:ring-blue-500"
                       />
                     </td>
                   )}
@@ -154,7 +154,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                           </div>
                         )}
                         {lead.isExistingCustomer && (
-                          <div className="mt-1 text-[10px] text-slate-500">
+                          <div className="mt-1 text-[10px] text-app-muted">
                             {lead.previousOrderCount} previous orders
                           </div>
                         )}
@@ -174,14 +174,14 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-slate-700">
+                  <td className="px-6 py-4 text-app-text">
                     <div className="font-mono text-sm font-semibold">
                       ₹{lead.totalSpend?.toLocaleString() || "0"}
                     </div>
                     {lead.orderCount > 0 && <div className="text-[10px] text-slate-400">{lead.orderCount} Orders</div>}
                   </td>
                   <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-app-muted capitalize">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-app-bg-soft text-app-muted capitalize">
                       {lead.channel?.toUpperCase() === "WEBSITE" ? "offline" : (lead.channel?.toLowerCase() || "unknown")}
                     </span>
                   </td>
@@ -194,7 +194,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                           className={`text-xs px-2.5 py-1.5 rounded shadow-sm font-medium transition whitespace-nowrap active:scale-95 flex items-center gap-1 ${
                             lead.canCurrentUserClaim || currentUser?.role === "ADMIN" || currentUser?.role === "OWNER"
                               ? "bg-blue-600 text-white hover:bg-blue-700"
-                              : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                              : "bg-app-bg-soft text-slate-400 cursor-not-allowed"
                           }`}
                         >
                           <Package size={12} />
@@ -211,7 +211,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                       )}
                       
                       {/* Vertical Ellipsis Actions Menu trigger */}
-                      <button className="p-1.5 text-slate-400 hover:text-slate-700 rounded transition-colors focus:ring-2 focus:ring-blue-100 outline-none hover:bg-slate-100 ml-1">
+                      <button className="p-1.5 text-slate-400 hover:text-app-text rounded transition-colors focus:ring-2 focus:ring-blue-100 outline-none hover:bg-app-bg-soft ml-1">
                         <MoreVertical size={16} />
                       </button>
                     </div>
@@ -245,7 +245,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                         type="checkbox"
                         checked={!!isSelected}
                         onChange={() => onSelect?.(lead.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-blue-600 cursor-pointer accent-blue-600"
+                        className="h-4 w-4 rounded border-app-border-strong text-blue-600 cursor-pointer accent-blue-600"
                         onClick={(e) => e.stopPropagation()}
                       />
                     </div>
@@ -285,7 +285,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                   <AIScoreBar score={lead.aiScore} />
                 </div>
                 <div className="flex flex-col items-end gap-0.5">
-                  <span className="font-mono text-sm font-semibold text-slate-800">
+                  <span className="font-mono text-sm font-semibold text-app-text">
                     ₹{lead.totalSpend?.toLocaleString() || "0"}
                   </span>
                   <span className="text-[10px] text-slate-400 capitalize">{lead.channel?.toUpperCase() === "WEBSITE" ? "offline" : lead.channel?.toLowerCase()}</span>
@@ -302,7 +302,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                       className={`text-xs px-4 py-2 rounded-lg shadow-sm font-medium flex items-center gap-2 ${
                         lead.canCurrentUserClaim || currentUser?.role === "ADMIN" || currentUser?.role === "OWNER"
                           ? "bg-blue-600 text-white"
-                          : "bg-slate-100 text-slate-400"
+                          : "bg-app-bg-soft text-slate-400"
                       }`}
                     >
                       <Package size={14} />

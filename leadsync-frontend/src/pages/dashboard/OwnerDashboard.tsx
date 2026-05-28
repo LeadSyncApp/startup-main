@@ -90,7 +90,7 @@ export default function OwnerDashboard() {
       <div className="flex-1 flex items-center justify-center py-12">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin" />
-          <span className="text-sm text-slate-500 font-medium">Analyzing assignment activity...</span>
+          <span className="text-sm text-app-muted font-medium">Analyzing assignment activity...</span>
         </div>
       </div>
     );
@@ -109,11 +109,11 @@ export default function OwnerDashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-app pb-5">
         <div>
           <h1 className="text-2xl font-bold text-app-text tracking-tight">Owner Assignment Control</h1>
-          <p className="text-sm text-slate-500">Monitor live updates, round-robin assignments, and agent capacity.</p>
+          <p className="text-sm text-app-muted">Monitor live updates, round-robin assignments, and agent capacity.</p>
         </div>
         <button
           onClick={() => fetchStats()}
-          className="inline-flex items-center gap-2 justify-center px-4 py-2 border border-app bg-app-surface hover:bg-app-bg text-slate-700 text-sm font-medium rounded-lg shadow-sm transition-colors"
+          className="inline-flex items-center gap-2 justify-center px-4 py-2 border border-app bg-app-surface hover:bg-app-bg text-app-text text-sm font-medium rounded-lg shadow-sm transition-colors"
           id="btn-refresh-stats"
         >
           <RefreshCw className="h-4 w-4" />
@@ -179,7 +179,7 @@ export default function OwnerDashboard() {
                 : 100;
 
               return (
-                <div key={agent.agentId} className="bg-app-surface border border-app rounded-xl shadow-sm hover:border-slate-300 transition-all overflow-hidden">
+                <div key={agent.agentId} className="bg-app-surface border border-app rounded-xl shadow-sm hover:border-app-border-strong transition-all overflow-hidden">
                   <div className="p-5 border-b border-app flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-app-bg/50">
                     <div>
                       <div className="flex items-center gap-2">
@@ -191,7 +191,7 @@ export default function OwnerDashboard() {
                             Active
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-app-muted">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-app-bg-soft text-app-muted">
                             Inactive
                           </span>
                         )}
@@ -206,19 +206,19 @@ export default function OwnerDashboard() {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-500 mt-0.5">{agent.email} • Staff ID: {agent.staffId || "N/A"}</p>
+                      <p className="text-xs text-app-muted mt-0.5">{agent.email} • Staff ID: {agent.staffId || "N/A"}</p>
                     </div>
 
                     <div className="text-left sm:text-right">
                       <div className="text-xs font-medium text-slate-400">Completion Tracker</div>
                       <div className="mt-1 flex items-center gap-2">
-                        <div className="w-24 bg-slate-200 rounded-full h-2 overflow-hidden">
+                        <div className="w-24 bg-app-bg-soft rounded-full h-2 overflow-hidden">
                           <div
                             className="bg-indigo-600 h-2 rounded-full transition-all"
                             style={{ width: `${completionRate}%` }}
                           />
                         </div>
-                        <span className="text-sm font-bold text-slate-700">{completionRate}%</span>
+                        <span className="text-sm font-bold text-app-text">{completionRate}%</span>
                       </div>
                     </div>
                   </div>
@@ -234,14 +234,14 @@ export default function OwnerDashboard() {
                       ) : (
                         <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                           {agent.currentConversations.map((c) => (
-                            <div key={c.id} className="p-2.5 bg-slate-100/50 rounded-lg text-xs space-y-1">
+                            <div key={c.id} className="p-2.5 bg-app-bg-soft/50 rounded-lg text-xs space-y-1">
                               <div className="flex justify-between font-semibold">
-                                <span className="text-slate-800">{c.lead?.name || c.lead?.contact || "Visitor"}</span>
+                                <span className="text-app-text">{c.lead?.name || c.lead?.contact || "Visitor"}</span>
                                 <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 uppercase font-mono text-[9px]">
                                   {c.status}
                                 </span>
                               </div>
-                              <div className="text-[11px] text-slate-500 flex justify-between">
+                              <div className="text-[11px] text-app-muted flex justify-between">
                                 <span>{c.lead?.contact} • {c.lead?.channel}</span>
                                 <span>Updated {new Date(c.updatedAt).toLocaleTimeString()}</span>
                               </div>
@@ -263,12 +263,12 @@ export default function OwnerDashboard() {
                           {agent.resolvedConversations.map((c) => (
                             <div key={c.id} className="p-2.5 bg-emerald-50/50 rounded-lg text-xs space-y-1">
                               <div className="flex justify-between font-semibold">
-                                <span className="text-slate-700">{c.lead?.name || c.lead?.contact || "Visitor"}</span>
+                                <span className="text-app-text">{c.lead?.name || c.lead?.contact || "Visitor"}</span>
                                 <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 uppercase font-mono text-[9px]">
                                   RESOLVED
                                 </span>
                               </div>
-                              <div className="text-[11px] text-slate-500 flex justify-between">
+                              <div className="text-[11px] text-app-muted flex justify-between">
                                 <span>{c.lead?.contact} • {c.lead?.channel}</span>
                                 <span>Updated {new Date(c.updatedAt).toLocaleDateString()}</span>
                               </div>
@@ -299,8 +299,8 @@ export default function OwnerDashboard() {
                 {activities.map((act) => (
                   <div key={act.conversationId} className="p-3 border-l-2 border-indigo-500 bg-app-bg rounded-r-lg space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800">{act.leadName}</span>
-                      <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded font-bold uppercase">
+                      <span className="text-xs font-bold text-app-text">{act.leadName}</span>
+                      <span className="text-[10px] bg-app-bg-soft px-1.5 py-0.5 rounded font-bold uppercase">
                         {act.channel}
                       </span>
                     </div>

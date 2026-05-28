@@ -19,7 +19,7 @@ interface User {
 const ROLE_BADGE: Record<string, string> = {
   OWNER: "bg-amber-100 text-amber-800 border border-amber-200",
   ADMIN: "bg-indigo-100 text-indigo-800 border border-indigo-200",
-  AGENT: "bg-slate-100 text-app-muted border border-app",
+  AGENT: "bg-app-bg-soft text-app-muted border border-app",
 };
 
 function Avatar({ name }: { name: string }) {
@@ -106,7 +106,7 @@ export default function UserManagement() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-app-text">Team Management</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Manage your team and their access levels</p>
+          <p className="text-sm text-app-muted mt-0.5">Manage your team and their access levels</p>
         </div>
         {canManage && (
           <button
@@ -132,7 +132,7 @@ export default function UserManagement() {
               <Icon className="w-4 h-4" />
             </div>
             <p className="text-2xl font-bold text-app-text">{value}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+            <p className="text-xs text-app-muted mt-0.5">{label}</p>
           </div>
         ))}
       </div>
@@ -145,7 +145,7 @@ export default function UserManagement() {
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="bg-app-bg text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                <tr className="bg-app-bg text-xs font-semibold text-app-muted uppercase tracking-wide">
                   <th className="px-5 py-3.5">Member</th>
                   <th className="px-5 py-3.5 hidden sm:table-cell">Staff ID</th>
                   <th className="px-5 py-3.5 hidden md:table-cell">Email</th>
@@ -163,12 +163,12 @@ export default function UserManagement() {
                         <Avatar name={u.name} />
                         <div>
                           <p className="font-semibold text-app-text text-sm">{u.name}</p>
-                          <p className="text-xs text-slate-500 md:hidden">{u.email}</p>
+                          <p className="text-xs text-app-muted md:hidden">{u.email}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-5 py-4 hidden sm:table-cell">
-                      <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+                      <span className="font-mono text-xs text-app-muted bg-app-bg-soft px-2 py-1 rounded-md">
                         {u.staffId || "—"}
                       </span>
                     </td>
@@ -312,7 +312,7 @@ export default function UserManagement() {
                 <UserX className="w-6 h-6 text-red-500" />
               </div>
               <h2 className="text-base font-bold text-app-text text-center">Disable Member?</h2>
-              <p className="text-sm text-slate-500 text-center mt-1 mb-5">
+              <p className="text-sm text-app-muted text-center mt-1 mb-5">
                 <strong>{confirmDisable.name}</strong> will lose access immediately.
               </p>
               <div className="flex gap-3">

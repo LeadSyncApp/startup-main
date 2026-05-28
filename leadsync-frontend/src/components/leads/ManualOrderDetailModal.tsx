@@ -85,7 +85,7 @@ export default function ManualOrderDetailModal({
 
               <div>
                 <span className="block text-[10px] uppercase font-bold text-slate-400">Order Summary & Items Description</span>
-                <p className="text-slate-800 text-xs font-semibold leading-relaxed whitespace-pre-line mt-1 bg-app-bg p-3 rounded-xl border border-app">
+                <p className="text-app-text text-xs font-semibold leading-relaxed whitespace-pre-line mt-1 bg-app-bg p-3 rounded-xl border border-app">
                   {baseSummary}
                 </p>
               </div>
@@ -94,14 +94,14 @@ export default function ManualOrderDetailModal({
                 <div>
                   <span className="block text-[10px] uppercase font-bold text-slate-400">Total Value / Amount</span>
                   <p className="text-app-text text-base font-black mt-1 flex items-center gap-1">
-                    <span className="text-slate-500 text-xs font-bold">₹</span>
+                    <span className="text-app-muted text-xs font-bold">₹</span>
                     {amount.toLocaleString("en-IN")}
                   </p>
                 </div>
 
                 <div>
                   <span className="block text-[10px] uppercase font-bold text-slate-400">Recorded Date & Time</span>
-                  <p className="text-slate-700 text-xs font-semibold mt-1">
+                  <p className="text-app-text text-xs font-semibold mt-1">
                     {createdAtDate}
                   </p>
                 </div>
@@ -121,20 +121,20 @@ export default function ManualOrderDetailModal({
                 <div className="flex-1 space-y-3">
                   <div>
                     <span className="block text-[10px] uppercase font-bold text-slate-400 font-sans">Street / Delivery Address</span>
-                    <p className="text-slate-800 text-xs font-semibold mt-0.5">
+                    <p className="text-app-text text-xs font-semibold mt-0.5">
                       {streetLocation}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-4 font-sans">
                     <div>
                       <span className="block text-[10px] uppercase font-bold text-slate-400">City / Local Area</span>
-                      <span className="inline-block mt-1 text-slate-800 text-xs font-bold bg-slate-100 px-2.5 py-1 rounded-lg border border-app">
+                      <span className="inline-block mt-1 text-app-text text-xs font-bold bg-app-bg-soft px-2.5 py-1 rounded-lg border border-app">
                         Read Only: 🏙️ {city}
                       </span>
                     </div>
                     <div>
                       <span className="block text-[10px] uppercase font-bold text-slate-400">State / Province</span>
-                      <span className="inline-block mt-1 text-slate-800 text-xs font-bold bg-slate-100 px-2.5 py-1 rounded-lg border border-app">
+                      <span className="inline-block mt-1 text-app-text text-xs font-bold bg-app-bg-soft px-2.5 py-1 rounded-lg border border-app">
                         Read Only: 🗺️ {state}
                       </span>
                     </div>
@@ -153,7 +153,7 @@ export default function ManualOrderDetailModal({
                   {agentName.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-800">{agentName}</p>
+                  <p className="text-xs font-bold text-app-text">{agentName}</p>
                   <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider font-sans">Agent on duty</p>
                 </div>
               </div>
@@ -170,7 +170,7 @@ export default function ManualOrderDetailModal({
                 navigator.clipboard.writeText(text);
                 toast.success("Complete order details copied!");
               }}
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-app active:scale-95 transition flex items-center gap-1.5 cursor-pointer font-sans"
+              className="px-4 py-2.5 bg-app-bg-soft hover:bg-app-bg-soft text-app-text rounded-xl text-xs font-bold border border-app active:scale-95 transition flex items-center gap-1.5 cursor-pointer font-sans"
             >
               <Clipboard size={14} />
               Copy Technical Summary

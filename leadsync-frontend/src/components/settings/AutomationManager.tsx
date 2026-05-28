@@ -170,14 +170,14 @@ export function AutomationManager() {
         )}
       </div>
 
-      <p className="text-xs text-slate-500 mb-4">
+      <p className="text-xs text-app-muted mb-4">
         Automation runs every 15 minutes. Rules trigger on conditions and send messages or update lead segments automatically.
       </p>
 
       {/* Templates */}
       {canEdit && rules.length === 0 && !showForm && (
         <div className="mb-5">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Quick Templates</p>
+          <p className="text-xs font-bold text-app-muted uppercase tracking-wider mb-2">Quick Templates</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {TEMPLATES.map(t => (
               <button
@@ -187,7 +187,7 @@ export function AutomationManager() {
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <Play size={11} className="text-indigo-400 group-hover:text-indigo-600" />
-                  <span className="text-xs font-bold text-slate-700 group-hover:text-indigo-700">{t.name}</span>
+                  <span className="text-xs font-bold text-app-text group-hover:text-indigo-700">{t.name}</span>
                 </div>
                 <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-2">
                   Trigger: <strong>{TRIGGER_LABELS[t.trigger]}</strong> after {Math.round(t.triggerDelayMinutes / 60)}h
@@ -217,7 +217,7 @@ export function AutomationManager() {
               />
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Trigger</label>
+                  <label className="text-[10px] font-bold text-app-muted uppercase tracking-wider block mb-1">Trigger</label>
                   <select
                     value={newTrigger}
                     onChange={e => setNewTrigger(e.target.value)}
@@ -229,7 +229,7 @@ export function AutomationManager() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] font-bold text-app-muted uppercase tracking-wider block mb-1">
                     Delay (hours)
                   </label>
                   <input
@@ -244,7 +244,7 @@ export function AutomationManager() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Action</label>
+                  <label className="text-[10px] font-bold text-app-muted uppercase tracking-wider block mb-1">Action</label>
                   <select
                     value={newAction}
                     onChange={e => setNewAction(e.target.value)}
@@ -257,7 +257,7 @@ export function AutomationManager() {
                 </div>
                 {newAction === "CHANGE_SEGMENT" && (
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Segment</label>
+                    <label className="text-[10px] font-bold text-app-muted uppercase tracking-wider block mb-1">Segment</label>
                     <select
                       value={newSegment}
                       onChange={e => setNewSegment(e.target.value)}
@@ -282,7 +282,7 @@ export function AutomationManager() {
                 </div>
               )}
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700 px-3 py-1.5">Cancel</button>
+                <button onClick={() => setShowForm(false)} className="text-sm text-app-muted hover:text-app-text px-3 py-1.5">Cancel</button>
                 <button
                   onClick={handleAdd}
                   disabled={saving}
@@ -299,7 +299,7 @@ export function AutomationManager() {
       {/* Rules list */}
       {loading ? (
         <div className="space-y-3">
-          {[1, 2].map(i => <div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse" />)}
+          {[1, 2].map(i => <div key={i} className="h-16 bg-app-bg-soft rounded-xl animate-pulse" />)}
         </div>
       ) : rules.length === 0 && !showForm ? (
         <div className="text-center py-8 text-slate-400">
@@ -320,16 +320,16 @@ export function AutomationManager() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 mb-1.5">{rule.name}</p>
+                    <p className="text-sm font-semibold text-app-text mb-1.5">{rule.name}</p>
                     <div className="flex flex-wrap gap-1.5">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${TRIGGER_COLOR[rule.trigger] ?? "bg-slate-100 text-app-muted border-app"}`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${TRIGGER_COLOR[rule.trigger] ?? "bg-app-bg-soft text-app-muted border-app"}`}>
                         {TRIGGER_LABELS[rule.trigger] ?? rule.trigger}
                       </span>
                       <span className="text-[10px] text-slate-400 flex items-center gap-0.5 bg-app-bg border border-app px-2 py-0.5 rounded">
                         <Clock size={9} />
                         {rule.triggerDelayMinutes >= 60 ? `${Math.round(rule.triggerDelayMinutes / 60)}h` : `${rule.triggerDelayMinutes}m`}
                       </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${ACTION_COLOR[rule.action] ?? "bg-slate-100 text-app-muted border-app"}`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${ACTION_COLOR[rule.action] ?? "bg-app-bg-soft text-app-muted border-app"}`}>
                         {ACTION_LABELS[rule.action] ?? rule.action}
                       </span>
                       {rule.runCount > 0 && (

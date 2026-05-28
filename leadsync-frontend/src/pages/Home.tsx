@@ -256,7 +256,7 @@ export default function Home() {
                 </Link>
                 <Link
                   to="/login"
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-500 bg-transparent px-8 py-3.5 font-semibold text-slate-200 hover:border-slate-300 hover:bg-slate-700/50 transition-all duration-200"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-500 bg-transparent px-8 py-3.5 font-semibold text-slate-200 hover:border-app-border-strong hover:bg-slate-700/50 transition-all duration-200"
                 >
                   Log In
                 </Link>

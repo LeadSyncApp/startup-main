@@ -68,7 +68,7 @@ const CHANNEL_EMOJI: Record<string, string> = {
 const PRIORITY_COLOR: Record<string, string> = {
   URGENT: "text-red-600 bg-red-50 border-red-200",
   HIGH: "text-orange-600 bg-orange-50 border-orange-200",
-  NORMAL: "text-slate-500 bg-app-bg border-app",
+  NORMAL: "text-app-muted bg-app-bg border-app",
 };
 
 function formatRelative(dateStr: string) {
@@ -144,7 +144,7 @@ export default function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
               </div>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-slate-100 rounded-xl transition text-slate-400 hover:text-slate-700"
+                className="p-2 hover:bg-app-bg-soft rounded-xl transition text-slate-400 hover:text-app-text"
               >
                 <X size={18} />
               </button>
@@ -152,13 +152,13 @@ export default function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
 
             {/* Badges Row */}
             <div className="px-6 py-3 flex items-center gap-2 flex-wrap border-b border-slate-50">
-              <span className={`text-[10px] font-black px-2 py-1 rounded-lg border ${SEGMENT_BADGE[lead.segment] || "bg-slate-100 text-app-muted border-app"}`}>
+              <span className={`text-[10px] font-black px-2 py-1 rounded-lg border ${SEGMENT_BADGE[lead.segment] || "bg-app-bg-soft text-app-muted border-app"}`}>
                 {lead.segment || "REGULAR"}
               </span>
               <span className={`text-[10px] font-black px-2 py-1 rounded-lg border ${PRIORITY_COLOR[lead.priority] || PRIORITY_COLOR.NORMAL}`}>
                 {lead.priority}
               </span>
-              <span className="text-[10px] font-bold bg-slate-100 text-app-muted px-2 py-1 rounded-lg">
+              <span className="text-[10px] font-bold bg-app-bg-soft text-app-muted px-2 py-1 rounded-lg">
                 {lead.channel?.toUpperCase() === "WEBSITE" ? (
                   <>🏢 OFFLINE</>
                 ) : (
@@ -188,33 +188,33 @@ export default function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
             {/* Info rows */}
             <div className="px-6 py-4 space-y-3 border-b border-slate-50">
               <div className="flex items-center gap-3 text-sm">
-                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                  <Clock size={14} className="text-slate-500" />
+                <div className="h-8 w-8 rounded-lg bg-app-bg-soft flex items-center justify-center shrink-0">
+                  <Clock size={14} className="text-app-muted" />
                 </div>
                 <div>
                   <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Last Active</p>
-                  <p className="text-sm font-semibold text-slate-800">{formatRelative(lead.lastActiveAt || lead.createdAt)}</p>
+                  <p className="text-sm font-semibold text-app-text">{formatRelative(lead.lastActiveAt || lead.createdAt)}</p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 text-sm">
-                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                  <Hash size={14} className="text-slate-500" />
+                <div className="h-8 w-8 rounded-lg bg-app-bg-soft flex items-center justify-center shrink-0">
+                  <Hash size={14} className="text-app-muted" />
                 </div>
                 <div>
                   <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Intent</p>
-                  <p className="text-sm font-semibold text-slate-800">{lead.intent || "Browsing"}</p>
+                  <p className="text-sm font-semibold text-app-text">{lead.intent || "Browsing"}</p>
                 </div>
               </div>
 
               {lead.agentAssigned && (
                 <div className="flex items-center gap-3 text-sm">
-                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                    <Phone size={14} className="text-slate-500" />
+                  <div className="h-8 w-8 rounded-lg bg-app-bg-soft flex items-center justify-center shrink-0">
+                    <Phone size={14} className="text-app-muted" />
                   </div>
                   <div>
                     <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Assigned To</p>
-                    <p className="text-sm font-semibold text-slate-800">{lead.agentAssigned}</p>
+                    <p className="text-sm font-semibold text-app-text">{lead.agentAssigned}</p>
                   </div>
                 </div>
               )}
@@ -225,7 +225,7 @@ export default function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
               <div className="px-6 py-4 border-b border-slate-50">
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider font-black mb-2">Last Message</p>
                 <div className="bg-app-bg rounded-xl p-3 border border-app">
-                  <p className="text-sm text-slate-700 leading-relaxed line-clamp-4">
+                  <p className="text-sm text-app-text leading-relaxed line-clamp-4">
                     "{lead.lastMessage}"
                   </p>
                 </div>
@@ -243,7 +243,7 @@ export default function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
                 onChange={e => noteState.save(e.target.value)}
                 placeholder="Add a private note about this lead…"
                 rows={3}
-                className="w-full text-sm text-slate-700 bg-amber-50 border border-amber-100 rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 placeholder:text-slate-400 leading-relaxed"
+                className="w-full text-sm text-app-text bg-amber-50 border border-amber-100 rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 placeholder:text-slate-400 leading-relaxed"
               />
               {noteState.note && (
                 <button

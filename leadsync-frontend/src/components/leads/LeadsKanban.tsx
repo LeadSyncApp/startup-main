@@ -14,14 +14,14 @@ const SEGMENTS = [
 const PRIORITY_COLOR: Record<string, string> = {
   URGENT: "bg-red-100 text-red-700 border-red-200",
   HIGH:   "bg-orange-100 text-orange-700 border-orange-200",
-  NORMAL: "bg-slate-100 text-slate-500 border-app",
+  NORMAL: "bg-app-bg-soft text-app-muted border-app",
 };
 
 const CHANNEL_COLOR: Record<string, string> = {
   TELEGRAM: "bg-blue-100 text-blue-700",
   INSTAGRAM: "bg-pink-100 text-pink-700",
   WHATSAPP:  "bg-green-100 text-green-700",
-  OFFLINE:   "bg-[#F1F5F9] text-[#475569] border border-[#CBD5E1]",
+  OFFLINE:   "bg-app-bg-soft text-app-muted border border-app-border-strong",
 };
 
 interface Lead {
@@ -61,7 +61,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ type: "spring", stiffness: 340, damping: 28 }}
-      className="bg-app-surface border border-app rounded-xl p-3.5 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group"
+      className="bg-app-surface border border-app rounded-xl p-3.5 shadow-sm hover:shadow-md hover:border-app-border-strong transition-all cursor-pointer group"
       onClick={() => onRowClick(lead)}
     >
       {/* Avatar + name row */}
@@ -70,7 +70,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
           {initials}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-slate-800 truncate leading-tight">
+          <p className="text-sm font-semibold text-app-text truncate leading-tight">
             {lead.name || lead.contact}
           </p>
           {lead.name && (
@@ -84,7 +84,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${PRIORITY_COLOR[priority]}`}>
           {priority}
         </span>
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${lead.channel?.toUpperCase() === "WEBSITE" ? CHANNEL_COLOR.OFFLINE : (CHANNEL_COLOR[lead.channel] ?? "bg-slate-100 text-app-muted")}`}>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${lead.channel?.toUpperCase() === "WEBSITE" ? CHANNEL_COLOR.OFFLINE : (CHANNEL_COLOR[lead.channel] ?? "bg-app-bg-soft text-app-muted")}`}>
           {lead.channel?.toUpperCase() === "WEBSITE" ? "OFFLINE" : lead.channel}
         </span>
         {(lead.totalSpend ?? 0) > 0 && (
@@ -112,7 +112,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
             (lead.aiScore ?? 0) >= 40 ? "text-amber-600" : "text-red-500"
           }`}>{lead.aiScore ?? 0}</span>
         </div>
-        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-app-bg-soft rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-700 ${
               (lead.aiScore ?? 0) >= 70 ? "bg-emerald-500" :

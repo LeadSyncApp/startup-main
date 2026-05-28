@@ -226,8 +226,8 @@ export default function Orders() {
         <div className="space-y-6 overflow-y-auto pr-1 flex-1 pb-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-app-bg p-5 rounded-2xl border border-app">
             <div>
-              <h2 className="text-xl font-bold text-slate-800">Business Control Center</h2>
-              <p className="text-xs text-slate-500">
+              <h2 className="text-xl font-bold text-app-text">Business Control Center</h2>
+              <p className="text-xs text-app-muted">
                 Performance dashboard for SME workflow, revenue monitoring, and staff assignment
               </p>
             </div>
@@ -246,7 +246,7 @@ export default function Orders() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             <div className="bg-app-surface p-5 rounded-2xl border border-app shadow-sm flex flex-col justify-between">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Revenue Today</span>
-              <div className="mt-2 text-2xl font-black text-slate-800">₹{metrics.revenueToday.toLocaleString()}</div>
+              <div className="mt-2 text-2xl font-black text-app-text">₹{metrics.revenueToday.toLocaleString()}</div>
               <span className="text-[10px] text-emerald-500 font-semibold mt-1 flex items-center gap-1">
                 <TrendingUp size={12} /> Today's Sales
               </span>
@@ -255,32 +255,32 @@ export default function Orders() {
             <div className="bg-app-surface p-5 rounded-2xl border border-app shadow-sm flex flex-col justify-between">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Pending Accept</span>
               <div className="mt-2 text-2xl font-black text-amber-500">{metrics.pendingCount}</div>
-              <span className="text-[10px] text-slate-500 font-semibold mt-1">Awaiting agents</span>
+              <span className="text-[10px] text-app-muted font-semibold mt-1">Awaiting agents</span>
             </div>
 
             <div className="bg-app-surface p-5 rounded-2xl border border-app shadow-sm flex flex-col justify-between">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Processing Count</span>
               <div className="mt-2 text-2xl font-black text-indigo-500">{metrics.processingCount}</div>
-              <span className="text-[10px] text-slate-500 font-semibold mt-1">Active handling</span>
+              <span className="text-[10px] text-app-muted font-semibold mt-1">Active handling</span>
             </div>
 
             <div className="bg-app-surface p-5 rounded-2xl border border-app shadow-sm flex flex-col justify-between">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Completed Count</span>
               <div className="mt-2 text-2xl font-black text-emerald-600">{metrics.completedCount}</div>
-              <span className="text-[10px] text-slate-500 font-semibold mt-1">History archived</span>
+              <span className="text-[10px] text-app-muted font-semibold mt-1">History archived</span>
             </div>
 
             <div className="bg-app-surface p-5 rounded-2xl border border-app shadow-sm flex flex-col justify-between">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Active Agents</span>
               <div className="mt-2 text-2xl font-black text-blue-600">{metrics.activeAgentsCount}</div>
-              <span className="text-[100%] text-slate-500 font-semibold mt-1 flex items-center gap-1">
+              <span className="text-[100%] text-app-muted font-semibold mt-1 flex items-center gap-1">
                 <Users size={12} /> Working now
               </span>
             </div>
 
             <div className="bg-app-surface p-5 rounded-2xl border border-app shadow-sm flex flex-col justify-between">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Top Performing Agent</span>
-              <div className="mt-2 text-base font-black text-slate-800 truncate" title={metrics.topAgent.name}>
+              <div className="mt-2 text-base font-black text-app-text truncate" title={metrics.topAgent.name}>
                 {metrics.topAgent.name}
               </div>
               <span className="text-[10px] text-indigo-600 font-semibold mt-1 flex items-center gap-1">
@@ -292,7 +292,7 @@ export default function Orders() {
           {/* Quick Info Grid panel for overview */}
           <div className="bg-app-surface rounded-2xl border border-app shadow-sm p-6">
             <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
-              <h3 className="font-bold text-slate-800 text-sm">Active Agent Pipelines</h3>
+              <h3 className="font-bold text-app-text text-sm">Active Agent Pipelines</h3>
               <button
                 onClick={() => setShowDetailedBoard(true)}
                 className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline"
@@ -322,7 +322,7 @@ export default function Orders() {
                 <div key={id} className="p-4 rounded-xl bg-app-bg border border-app flex flex-col justify-between gap-2">
                   <div className="flex justify-between items-center">
                     <div>
-                      <span className="font-bold text-sm text-slate-800">{stat.name}</span>
+                      <span className="font-bold text-sm text-app-text">{stat.name}</span>
                       <div className="text-[10px] text-slate-400">Total processed volume: ₹{stat.totalVolume.toLocaleString()}</div>
                     </div>
                     <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-bold">
@@ -358,7 +358,7 @@ export default function Orders() {
                 <button
                   id="back-to-metrics-btn"
                   onClick={() => setShowDetailedBoard(false)}
-                  className="mb-2 inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg border border-slate-300 transition"
+                  className="mb-2 inline-flex items-center gap-1.5 px-3 py-1 bg-app-bg-soft hover:bg-app-bg-soft text-app-text text-xs font-bold rounded-lg border border-app-border-strong transition"
                 >
                   ← Back to Metrics Dashboard
                 </button>
@@ -366,7 +366,7 @@ export default function Orders() {
               <h2 className="text-xl font-bold text-app-text">
                 {isManager ? "Global Orders Management" : "My Orders Workspace"}
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-app-muted">
                 {isManager
                   ? 'Detailed workspace overview of incoming, active, and completed orders'
                   : 'Receive, transition, and complete client orders within a simplified click flow'}
@@ -376,7 +376,7 @@ export default function Orders() {
             {/* Compact tab selectors */}
             <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
 
-              <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto self-stretch sm:self-auto">
+              <div className="flex bg-app-bg-soft p-1 rounded-xl w-full sm:w-auto self-stretch sm:self-auto">
               {(["pending", "processing", "completed"] as const).map(tabKey => {
                 const count = orders.filter(o => {
                   const s = (o.status || "").toUpperCase();
@@ -397,7 +397,7 @@ export default function Orders() {
                     className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                       activeTab === tabKey
                         ? "bg-app-surface text-app-text shadow-sm"
-                        : "text-slate-500 hover:text-slate-700"
+                        : "text-app-muted hover:text-app-text"
                     }`}
                   >
                     {tabKey === "pending" && "⏳ Pending"}
@@ -407,7 +407,7 @@ export default function Orders() {
                       className={`px-1.5 py-0.5 rounded-full text-[9px] ${
                         activeTab === tabKey
                           ? "bg-indigo-50 text-indigo-700 font-extrabold"
-                          : "bg-slate-200/65 text-app-muted"
+                          : "bg-app-bg-soft/65 text-app-muted"
                       }`}
                     >
                       {count}
@@ -427,7 +427,7 @@ export default function Orders() {
                   key={i}
                   className="rounded-2xl border border-app bg-app-bg/50 p-4 space-y-3 animate-pulse"
                 >
-                  <div className="h-4 bg-slate-200 rounded w-1/3 mb-4" />
+                  <div className="h-4 bg-app-bg-soft rounded w-1/3 mb-4" />
                   <div className="h-20 bg-app-surface rounded-xl border border-app" />
                   <div className="h-20 bg-app-surface rounded-xl border border-app" />
                 </div>
@@ -439,7 +439,7 @@ export default function Orders() {
                 <div className="mx-auto w-12 h-12 bg-app-surface rounded-2xl shadow-sm flex items-center justify-center text-xl mb-4 text-slate-400">
                   📦
                 </div>
-                <h3 className="font-bold text-slate-800 text-sm mb-1 uppercase tracking-tight">
+                <h3 className="font-bold text-app-text text-sm mb-1 uppercase tracking-tight">
                   No orders found
                 </h3>
                 <p className="text-xs text-slate-400">
@@ -470,7 +470,7 @@ export default function Orders() {
                         {/* Card Header information */}
                         <div className="flex justify-between items-start mb-3">
                           <span className="text-lg font-black text-indigo-600">₹{order.amount}</span>
-                          <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded font-mono font-medium">
+                          <span className="text-[10px] text-slate-400 bg-app-bg-soft px-2 py-0.5 rounded font-mono font-medium">
                             {new Date(order.createdAt).toLocaleTimeString([], {
                               hour: "2-digit",
                               minute: "2-digit"
@@ -479,12 +479,12 @@ export default function Orders() {
                         </div>
 
                         {/* Order Summary details */}
-                        <h4 className="font-bold text-slate-800 text-sm leading-snug mb-2">{order.summary}</h4>
+                        <h4 className="font-bold text-app-text text-sm leading-snug mb-2">{order.summary}</h4>
 
                         {/* Customer context info */}
-                        <div className="text-xs text-slate-500 flex items-center gap-1.5 py-2 border-b border-dashed border-app mb-3">
+                        <div className="text-xs text-app-muted flex items-center gap-1.5 py-2 border-b border-dashed border-app mb-3">
                           <span className="text-slate-400">👤 Contact:</span>
-                          <span className="font-medium text-slate-700">{order.lead?.name || "Anonymous Client"}</span>
+                          <span className="font-medium text-app-text">{order.lead?.name || "Anonymous Client"}</span>
                           {order.lead?.contact && (
                             <span className="text-[10px] text-slate-400">({order.lead.contact})</span>
                           )}
@@ -511,9 +511,9 @@ export default function Orders() {
 
                         {/* Managed agent metadata */}
                         {isManager && order.processedBy && (
-                          <div className="mb-4 text-[11px] text-slate-500 bg-app-bg px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+                          <div className="mb-4 text-[11px] text-app-muted bg-app-bg px-2.5 py-1.5 rounded-lg flex items-center justify-between">
                             <span className="text-slate-400 flex items-center gap-1">👨‍💻 Handler Agent:</span>
-                            <span className="font-bold text-slate-700">{order.processedBy.name}</span>
+                            <span className="font-bold text-app-text">{order.processedBy.name}</span>
                           </div>
                         )}
                       </div>
@@ -551,7 +551,7 @@ export default function Orders() {
                               <button
                                 id={`cancel-btn-${order.id}`}
                                 onClick={() => handleUpdateStatus(order.id, "CANCELLED", order.version)}
-                                className="px-3 py-1.5 border border-app text-slate-500 text-xs font-bold rounded-xl hover:bg-app-bg hover:text-red-500 hover:border-red-200 transition"
+                                className="px-3 py-1.5 border border-app text-app-muted text-xs font-bold rounded-xl hover:bg-app-bg hover:text-red-500 hover:border-red-200 transition"
                               >
                                 Cancel Order
                               </button>
@@ -595,13 +595,13 @@ export default function Orders() {
               <div className="h-2 w-full bg-red-500" />
               <div className="p-6">
                 <h3 className="text-base font-bold text-app-text mb-1">Archive Order?</h3>
-                <p className="text-xs text-slate-500 leading-normal mb-5">
+                <p className="text-xs text-app-muted leading-normal mb-5">
                   Are you sure you want to archive or remove this order record? This action removes it from the active views.
                 </p>
                 <div className="flex gap-2 justify-end">
                   <button
                     onClick={() => setDeleteConfirmId(null)}
-                    className="px-3 py-2 text-slate-500 hover:bg-app-bg rounded-xl text-xs font-bold border border-app"
+                    className="px-3 py-2 text-app-muted hover:bg-app-bg rounded-xl text-xs font-bold border border-app"
                   >
                     Cancel
                   </button>
@@ -645,7 +645,7 @@ export default function Orders() {
                 <h3 className="text-base font-bold text-app-text mb-1">
                   {actionType === "approve" ? "Accept Client Order Request?" : "Reject Order Request?"}
                 </h3>
-                <p className="text-xs text-slate-500 leading-normal mb-5">
+                <p className="text-xs text-app-muted leading-normal mb-5">
                   {actionType === "approve"
                     ? `You are claiming order for client amount ₹${actionOrder.amount}. It will transition immediately into your active processing list.`
                     : "Are you sure you want to reject and decline this inbound order request?"}
@@ -656,7 +656,7 @@ export default function Orders() {
                       setActionOrder(null);
                       setActionType(null);
                     }}
-                    className="px-3 py-2 text-slate-500 hover:bg-app-bg rounded-xl text-xs font-bold border border-app"
+                    className="px-3 py-2 text-app-muted hover:bg-app-bg rounded-xl text-xs font-bold border border-app"
                   >
                     Cancel
                   </button>
@@ -701,7 +701,7 @@ export default function Orders() {
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-app bg-app-bg shrink-0">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">📄</span>
-                  <span className="font-bold text-slate-800">{invoicePreview.invoiceNumber}</span>
+                  <span className="font-bold text-app-text">{invoicePreview.invoiceNumber}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <a
@@ -714,7 +714,7 @@ export default function Orders() {
                   </a>
                   <button
                     onClick={() => setInvoicePreview(null)}
-                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg transition"
+                    className="p-1.5 text-slate-400 hover:text-app-text hover:bg-app-bg-soft rounded-lg transition"
                   >
                     <X size={16} />
                   </button>

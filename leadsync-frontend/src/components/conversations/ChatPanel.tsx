@@ -79,9 +79,9 @@ export default function ChatPanel({
   });
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] flex-col rounded-xl border border-app/50 bg-app-surface shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+    <div className="flex h-[calc(100vh-12rem)] flex-col rounded-xl border border-app-border/50 bg-app-surface shadow-md overflow-hidden hover:shadow-lg transition-shadow">
       {/* Header with lead info - enhanced styling */}
-      <div className="flex flex-col justify-between border-b border-app/50 bg-gradient-to-r from-slate-50 via-white to-cyan-50/30 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 shadow-sm">
+      <div className="flex flex-col justify-between border-b border-app-border/50 bg-gradient-to-r from-slate-50 via-white to-cyan-50/30 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 shadow-sm">
         <div className="min-w-0 flex-1">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -92,7 +92,7 @@ export default function ChatPanel({
               <div>
                 <h3 className="font-bold text-app-text truncate">{leadName}</h3>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
-                  {leadEmail && <p className="text-xs text-slate-500 truncate">{leadEmail}</p>}
+                  {leadEmail && <p className="text-xs text-app-muted truncate">{leadEmail}</p>}
                   {leadPriority && (
                     <motion.span
                       initial={{ scale: 0 }}
@@ -105,7 +105,7 @@ export default function ChatPanel({
                           ? 'bg-amber-100 text-amber-700'
                           : leadPriority === 'medium'
                           ? 'bg-sky-100 text-sky-700'
-                          : 'bg-slate-100 text-slate-700'
+                          : 'bg-app-bg-soft text-app-text'
                       }`}
                     >
                       {leadPriority}
@@ -114,7 +114,7 @@ export default function ChatPanel({
                 </div>
               </div>
             </div>
-            <p className="text-xs text-slate-500 mt-1">🔒 Shared inbox — all agents see messages</p>
+            <p className="text-xs text-app-muted mt-1">🔒 Shared inbox — all agents see messages</p>
           </motion.div>
         </div>
 
@@ -129,7 +129,7 @@ export default function ChatPanel({
             type="checkbox"
             checked={useAuto}
             onChange={(e) => setUseAuto(e.target.checked)}
-            className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
+            className="w-4 h-4 rounded border-app-border-strong text-amber-500 focus:ring-amber-500 cursor-pointer"
           />
           <span className="font-medium">Auto response</span>
         </motion.label>
@@ -154,7 +154,7 @@ export default function ChatPanel({
             >
               💬
             </motion.div>
-            <p className="text-sm font-medium text-slate-500">No messages yet</p>
+            <p className="text-sm font-medium text-app-muted">No messages yet</p>
             <p className="text-xs text-slate-400 mt-1">Start the conversation by sending a message</p>
           </motion.div>
         ) : (
@@ -175,15 +175,15 @@ export default function ChatPanel({
                   transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                   className="flex items-center justify-center py-2 origin-center"
                 >
-                  <div className="border-t border-slate-300 flex-1"></div>
-                  <span className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <div className="border-t border-app-border-strong flex-1"></div>
+                  <span className="px-3 text-xs font-semibold text-app-muted uppercase tracking-wide">
                     {new Date(date).toLocaleDateString('en-IN', {
                       weekday: 'short',
                       month: 'short',
                       day: 'numeric',
                     })}
                   </span>
-                  <div className="border-t border-slate-300 flex-1"></div>
+                  <div className="border-t border-app-border-strong flex-1"></div>
                 </motion.div>
 
                 {/* Messages for this date with staggered animations */}
@@ -254,7 +254,7 @@ export default function ChatPanel({
                           whileHover={{ boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}
                           className={`rounded-2xl px-4 py-2.5 transition-all duration-200 shadow-sm ${
                             m.sender === 'lead'
-                              ? 'rounded-bl-none bg-slate-100 text-app-text'
+                              ? 'rounded-bl-none bg-app-bg-soft text-app-text'
                               : m.sender === 'auto'
                               ? 'rounded-br-none bg-amber-100 text-amber-900'
                               : 'rounded-br-none bg-gradient-to-r from-cyan-500 to-cyan-600 text-white shadow-md'
@@ -298,7 +298,7 @@ export default function ChatPanel({
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.3, duration: 0.4 }}
-        className="border-t border-app/50 bg-gradient-to-t from-white to-slate-50/30 p-4 space-y-3 shadow-lg"
+        className="border-t border-app-border/50 bg-gradient-to-t from-white to-slate-50/30 p-4 space-y-3 shadow-lg"
       >
         {/* Auto-response hint */}
         {useAuto && (
@@ -329,7 +329,7 @@ export default function ChatPanel({
               onKeyDown={handleKeyDown}
               placeholder="Type a message..."
               whileFocus={{ scale: 1.01 }}
-              className="w-full rounded-lg border border-slate-300/50 bg-app-surface px-4 py-2.5 text-sm text-app-text placeholder-slate-400 caret-cyan-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all duration-150"
+              className="w-full rounded-lg border border-app-border-strong/50 bg-app-surface px-4 py-2.5 text-sm text-app-text placeholder-slate-400 caret-cyan-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all duration-150"
             />
           </div>
 
@@ -340,7 +340,7 @@ export default function ChatPanel({
             onClick={() => {
               // TODO: Implement attachment upload
             }}
-            className="rounded-lg border border-slate-300/50 bg-app-surface px-3 py-2.5 text-app-muted hover:bg-app-bg hover:text-app-text hover:border-slate-400 transition-all duration-150 shrink-0 shadow-sm"
+            className="rounded-lg border border-app-border-strong/50 bg-app-surface px-3 py-2.5 text-app-muted hover:bg-app-bg hover:text-app-text hover:border-slate-400 transition-all duration-150 shrink-0 shadow-sm"
             title="Attach file (future implementation)"
             aria-label="Attach file"
           >

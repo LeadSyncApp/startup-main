@@ -126,7 +126,7 @@ export default function DashboardHome() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#F8F9FF] flex items-center justify-center pb-24">
+      <div className="min-h-screen bg-app-bg flex items-center justify-center pb-24">
         <div className="text-center">
           <p className="text-app-muted mb-4">{error}</p>
           <button
@@ -144,19 +144,19 @@ export default function DashboardHome() {
     <div className="space-y-8 font-['Manrope']">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Dashboard Overview</h1>
-          <p className="text-slate-500 font-medium text-sm mt-1">Real-time performance metrics and business monitoring</p>
+          <h1 className="text-3xl font-extrabold text-app-text tracking-tight">Dashboard Overview</h1>
+          <p className="text-app-muted font-medium text-sm mt-1">Real-time performance metrics and business monitoring</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">
-            <button className="p-2.5 bg-app-bg rounded-xl text-slate-500 hover:bg-slate-100 transition" aria-label="Notifications" title="Inbox notifications">
+            <button className="p-2.5 bg-app-bg rounded-xl text-app-muted hover:bg-app-bg-soft transition" aria-label="Notifications" title="Inbox notifications">
               <Inbox className="w-5 h-5" />
             </button>
             {(alertKpis?.pendingOrders ?? 0) > 0 && (
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
             )}
           </div>
-          <button className="p-2.5 bg-app-bg rounded-xl text-slate-500 hover:bg-slate-100 transition" aria-label="Layout options" title="View options">
+          <button className="p-2.5 bg-app-bg rounded-xl text-app-muted hover:bg-app-bg-soft transition" aria-label="Layout options" title="View options">
             <LayoutGrid className="w-5 h-5" />
           </button>
         </div>
@@ -219,7 +219,7 @@ export default function DashboardHome() {
             value={`₹${aov.toLocaleString()}`} 
             icon={TrendingUp}
             iconColor="text-app-muted"
-            iconBg="bg-slate-100"
+            iconBg="bg-app-bg-soft"
           />
           <StatCard 
             label="Leads" 
@@ -234,11 +234,11 @@ export default function DashboardHome() {
         <section className="bg-app-surface p-6 rounded-[24px] border border-app shadow-sm">
           <div className="flex justify-between items-start mb-6">
             <div>
-              <h3 className="text-lg font-bold text-[#1e293b]">Revenue Trend</h3>
+              <h3 className="text-lg font-bold text-app-text">Revenue Trend</h3>
               <p className="text-xs text-slate-400 font-medium mt-0.5">Last 14 days activity</p>
             </div>
             <button 
-              className="p-2.5 bg-app-bg rounded-xl text-slate-500 hover:bg-slate-100 transition"
+              className="p-2.5 bg-app-bg rounded-xl text-app-muted hover:bg-app-bg-soft transition"
               aria-label="Filter chart"
             >
               <Filter className="w-5 h-5" />
@@ -297,7 +297,7 @@ export default function DashboardHome() {
 
         {/* Top Products */}
         <section className="bg-[#f0f4ff] p-6 rounded-[24px]">
-          <h3 className="text-lg font-bold text-[#1e293b] mb-5 flex items-center gap-2">
+          <h3 className="text-lg font-bold text-app-text mb-5 flex items-center gap-2">
             <Package className="w-5 h-5 text-blue-600" /> Top Products
           </h3>
           <div className="space-y-3">
@@ -312,7 +312,7 @@ export default function DashboardHome() {
                 />
               ))
             ) : (
-              <p className="text-sm text-slate-500 font-medium text-center py-4">No product data available yet.</p>
+              <p className="text-sm text-app-muted font-medium text-center py-4">No product data available yet.</p>
             )}
           </div>
         </section>
@@ -331,7 +331,7 @@ export default function DashboardHome() {
                 />
               ))
             ) : (
-              <p className="text-sm text-slate-500 font-medium">No agent data available yet.</p>
+              <p className="text-sm text-app-muted font-medium">No agent data available yet.</p>
             )}
           </div>
         </section>
@@ -355,7 +355,7 @@ function StatCard({ label, value, trend, icon: Icon, iconColor, iconBg }: StatCa
       </div>
       <div>
         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">{label}</p>
-        <h4 className="text-xl font-extrabold text-[#1e293b]">{value}</h4>
+        <h4 className="text-xl font-extrabold text-app-text">{value}</h4>
       </div>
     </div>
   );
@@ -369,12 +369,12 @@ function ProductRow({ rank, name, sub, count }: ProductRowProps) {
           {rank}
         </span>
         <div>
-          <h5 className="text-sm font-bold text-[#1e293b]">{name}</h5>
+          <h5 className="text-sm font-bold text-app-text">{name}</h5>
           <p className="text-[10px] font-medium text-slate-400">{sub}</p>
         </div>
       </div>
       <div className="text-right">
-        <span className="text-sm font-extrabold text-[#1e293b]">{count}</span>
+        <span className="text-sm font-extrabold text-app-text">{count}</span>
         <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">sold</p>
       </div>
     </div>
@@ -387,7 +387,7 @@ function AgentCard({ name, orders, initial }: AgentCardProps) {
       <div className="w-12 h-12 rounded-full bg-blue-50 text-[#2563eb] flex items-center justify-center mx-auto mb-3 font-extrabold text-lg">
         {initial}
       </div>
-      <h5 className="text-sm font-bold text-[#1e293b]">{name}</h5>
+      <h5 className="text-sm font-bold text-app-text">{name}</h5>
       <p className="text-[11px] font-bold text-slate-400 mt-0.5">{orders} Orders</p>
       <div className="flex justify-center gap-0.5 mt-2">
         {[1, 2, 3].map((i) => (

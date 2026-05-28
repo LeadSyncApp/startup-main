@@ -174,7 +174,7 @@ export default function TakeOrderModal({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5" htmlFor="customer-name">
+                  <label className="block text-xs font-bold text-app-text mb-1.5" htmlFor="customer-name">
                     Customer Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -184,12 +184,12 @@ export default function TakeOrderModal({
                     placeholder="e.g. John Doe"
                     value={newCustomerName}
                     onChange={(e) => setNewCustomerName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
+                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-app-text text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5" htmlFor="phone-number">
+                  <label className="block text-xs font-bold text-app-text mb-1.5" htmlFor="phone-number">
                     Phone Number / Contact <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -199,14 +199,14 @@ export default function TakeOrderModal({
                     placeholder="e.g. +91 9876543210"
                     value={newPhoneNumber}
                     onChange={(e) => setNewPhoneNumber(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
+                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-app-text text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5" htmlFor="agent-name">
+                  <label className="block text-xs font-bold text-app-text mb-1.5" htmlFor="agent-name">
                     Recorded By (Agent Name) <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -216,12 +216,12 @@ export default function TakeOrderModal({
                     disabled
                     placeholder="Prefilled logged-in user"
                     value={agentName}
-                    className="w-full px-3.5 py-2.5 bg-slate-100 border border-app rounded-xl text-slate-500 text-xs font-semibold focus:outline-none cursor-not-allowed select-none font-sans"
+                    className="w-full px-3.5 py-2.5 bg-app-bg-soft border border-app rounded-xl text-app-muted text-xs font-semibold focus:outline-none cursor-not-allowed select-none font-sans"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5" htmlFor="delivery-location">
+                  <label className="block text-xs font-bold text-app-text mb-1.5" htmlFor="delivery-location">
                     Street / Delivery Address
                   </label>
                   <input
@@ -230,14 +230,14 @@ export default function TakeOrderModal({
                     placeholder="e.g. Flat 104, Block B"
                     value={newLocation}
                     onChange={(e) => setNewLocation(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
+                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-app-text text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5" htmlFor="location-city">
+                  <label className="block text-xs font-bold text-app-text mb-1.5" htmlFor="location-city">
                     City / Location Local Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -247,12 +247,12 @@ export default function TakeOrderModal({
                     placeholder="e.g. New Delhi"
                     value={newCity}
                     onChange={(e) => setNewCity(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
+                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-app-text text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5" htmlFor="location-state">
+                  <label className="block text-xs font-bold text-app-text mb-1.5" htmlFor="location-state">
                     State / Province <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -262,7 +262,7 @@ export default function TakeOrderModal({
                     placeholder="e.g. Delhi"
                     value={newState}
                     onChange={(e) => setNewState(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
+                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-app-text text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
                   />
                 </div>
               </div>
@@ -274,9 +274,9 @@ export default function TakeOrderModal({
 
               {/* Menu Item Selector if categories exist */}
               {menuCategories && menuCategories.length > 0 ? (
-                <div className="space-y-3 bg-app-bg border border-app/80 p-4 rounded-xl">
-                  <div className="flex items-center justify-between border-b border-app/80 pb-2 mb-1">
-                    <span className="text-xs font-bold text-slate-700">Add Items from Menu Catalog</span>
+                <div className="space-y-3 bg-app-bg border border-app-border/80 p-4 rounded-xl">
+                  <div className="flex items-center justify-between border-b border-app-border/80 pb-2 mb-1">
+                    <span className="text-xs font-bold text-app-text">Add Items from Menu Catalog</span>
                     <span className="text-[10px] font-semibold text-blue-600 bg-blue-50/50 px-2 py-0.5 rounded-full border border-blue-100 font-sans">
                       {menuCategories.reduce((sum, cat) => sum + (cat.items?.length || 0), 0)} items loaded
                     </span>
@@ -286,7 +286,7 @@ export default function TakeOrderModal({
                   <div className="flex gap-2 items-center">
                     <select
                       id="menu-item-dropdown"
-                      className="flex-1 px-3 py-2 bg-app-surface border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 cursor-pointer text-left font-sans"
+                      className="flex-1 px-3 py-2 bg-app-surface border border-app rounded-xl text-app-text text-xs font-semibold focus:outline-none focus:border-blue-500 cursor-pointer text-left font-sans"
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val) {
@@ -317,27 +317,27 @@ export default function TakeOrderModal({
                   {selectedMenuItems.length > 0 ? (
                     <div className="space-y-1.5 pt-2 max-h-[160px] overflow-y-auto">
                       {selectedMenuItems.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-app-surface border border-app px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 shadow-sm animate-in fade-in slide-in-from-top-1 duration-100">
+                        <div key={idx} className="flex items-center justify-between bg-app-surface border border-app px-3 py-1.5 rounded-lg text-xs font-semibold text-app-text shadow-sm animate-in fade-in slide-in-from-top-1 duration-100">
                           <span className="truncate flex-1 pr-2">{item.name} <span className="text-slate-400 font-normal">({item.price})</span></span>
                           <div className="flex items-center gap-2">
                             <div className="flex items-center border border-app rounded-lg overflow-hidden bg-app-bg">
                               <button
                                 type="button"
                                 onClick={() => handleUpdateItemQty(idx, -1)}
-                                className="px-2 py-0.5 hover:bg-slate-200/60 active:bg-slate-300/60 transition text-slate-500 font-bold text-xs"
+                                className="px-2 py-0.5 hover:bg-app-bg-soft/60 active:bg-slate-300/60 transition text-app-muted font-bold text-xs"
                               >
                                 -
                               </button>
-                              <span className="px-2 w-6 text-center text-xs text-slate-800 font-mono font-bold">{item.quantity}</span>
+                              <span className="px-2 w-6 text-center text-xs text-app-text font-mono font-bold">{item.quantity}</span>
                               <button
                                 type="button"
                                 onClick={() => handleUpdateItemQty(idx, 1)}
-                                className="px-2 py-0.5 hover:bg-slate-200/60 active:bg-slate-300/60 transition text-slate-500 font-bold text-xs"
+                                className="px-2 py-0.5 hover:bg-app-bg-soft/60 active:bg-slate-300/60 transition text-app-muted font-bold text-xs"
                               >
                                 +
                               </button>
                             </div>
-                            <span className="w-16 text-right font-black text-slate-800">₹{item.price * item.quantity}</span>
+                            <span className="w-16 text-right font-black text-app-text">₹{item.price * item.quantity}</span>
                             <button
                               type="button"
                               onClick={() => handleRemoveMenuItem(idx)}
@@ -362,7 +362,7 @@ export default function TakeOrderModal({
               )}
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 font-sans" htmlFor="order-summary">
+                <label className="block text-xs font-bold text-app-text mb-1.5 font-sans" htmlFor="order-summary">
                   Order Items & Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -375,15 +375,15 @@ export default function TakeOrderModal({
                   onChange={(e) => setNewOrderSummary(e.target.value)}
                   className={`w-full px-3.5 py-2.5 border rounded-xl text-xs font-semibold focus:outline-none transition resize-none ${
                     menuCategories && menuCategories.length > 0
-                      ? "bg-slate-100 border-app text-slate-500 cursor-not-allowed font-sans select-none"
-                      : "bg-app-bg border-app text-slate-800 focus:border-blue-500 focus:bg-app-surface"
+                      ? "bg-app-bg-soft border-app text-app-muted cursor-not-allowed font-sans select-none"
+                      : "bg-app-bg border-app text-app-text focus:border-blue-500 focus:bg-app-surface"
                   }`}
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 font-sans" htmlFor="order-amount">
+                  <label className="block text-xs font-bold text-app-text mb-1.5 font-sans" htmlFor="order-amount">
                     Order Value (Price in ₹)
                   </label>
                   <input
@@ -395,21 +395,21 @@ export default function TakeOrderModal({
                     onChange={(e) => setNewAmount(e.target.value)}
                     className={`w-full px-3.5 py-2.5 border rounded-xl text-xs font-semibold focus:outline-none transition ${
                       menuCategories && menuCategories.length > 0
-                        ? "bg-slate-100 border-app text-slate-500 cursor-not-allowed font-sans select-none"
-                        : "bg-app-bg border-app text-slate-800 focus:border-blue-500 focus:bg-app-surface"
+                        ? "bg-app-bg-soft border-app text-app-muted cursor-not-allowed font-sans select-none"
+                        : "bg-app-bg border-app text-app-text focus:border-blue-500 focus:bg-app-surface"
                     }`}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 font-sans" htmlFor="order-priority">
+                  <label className="block text-xs font-bold text-app-text mb-1.5 font-sans" htmlFor="order-priority">
                     Order Priority Level
                   </label>
                   <select
                     id="order-priority"
                     value={newPriority}
                     onChange={(e) => setNewPriority(e.target.value as "NORMAL" | "URGENT")}
-                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition cursor-pointer font-sans"
+                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-app-text text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition cursor-pointer font-sans"
                   >
                     <option value="NORMAL">🟢 Normal (Default)</option>
                     <option value="URGENT">🔴 Urgent Dispatch (50pt Score)</option>
@@ -422,7 +422,7 @@ export default function TakeOrderModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2.5 text-slate-500 hover:bg-app-bg rounded-xl text-xs font-bold border border-app active:scale-95 transition font-sans cursor-pointer"
+                  className="px-4 py-2.5 text-app-muted hover:bg-app-bg rounded-xl text-xs font-bold border border-app active:scale-95 transition font-sans cursor-pointer"
                 >
                   Cancel
                 </button>
