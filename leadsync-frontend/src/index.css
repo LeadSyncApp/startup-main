@@ -194,6 +194,15 @@
 
 /* Custom scrollbar for chat panels - WebKit browsers */
 @layer utilities {
+  /* Semantic utilities used by codemods */
+  .border-app {
+    border-color: var(--app-border);
+  }
+
+  .border-app-strong {
+    border-color: var(--app-border-strong);
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: var(--app-scroll-thumb) var(--app-scroll-track);
