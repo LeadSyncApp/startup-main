@@ -1,8 +1,8 @@
 import { Router, Response } from "express";
-import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
-import { prisma } from "../lib/prisma";
-import { newOrderArrivalService } from "../services/workflow/newOrderArrival.service";
-import { emitToCompany } from "../lib/socket";
+import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
+import { prisma } from "../../lib/prisma";
+import { newOrderArrivalService } from "../../services/workflow/newOrderArrival.service";
+import { emitToCompany } from "../../lib/socket";
 
 const router = Router();
 

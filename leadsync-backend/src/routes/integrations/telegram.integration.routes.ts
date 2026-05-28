@@ -1,8 +1,8 @@
 import { Router, Response } from "express";
 import axios from "axios";
 import crypto from "crypto";
-import { prisma } from "../lib/prisma"; // correct path for src/routes -> src/lib
-import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
+import { prisma } from "../../lib/prisma"; // correct path for src/routes -> src/lib
+import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
 
 const router = Router();
 

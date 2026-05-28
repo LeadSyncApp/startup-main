@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
-import { prisma } from "../lib/prisma";
-import { authMiddleware, authorizeRoles, AuthRequest } from "../middleware/auth.middleware";
+import { prisma } from "../../lib/prisma";
+import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
 import {
   OrderPriority,
   OrderStatus,
@@ -8,9 +8,9 @@ import {
   Role,
   MessageSender,
 } from "@prisma/client";
-import { sendTelegramMessage } from "../bot/telegram.sender";
-import { safeEmitConversationUpdate, emitToCompany, emitToAgent } from "../lib/socket";
-import { recalculateLeadCRM } from "../services/integrations/crm.service";
+import { sendTelegramMessage } from "../../bot/telegram.sender";
+import { safeEmitConversationUpdate, emitToCompany, emitToAgent } from "../../lib/socket";
+import { recalculateLeadCRM } from "../../services/integrations/crm.service";
 
 const router = Router();
 
@@ -249,7 +249,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
-import { orderWorkflowService } from "../services/workflow/orderWorkflow.service";
+import { orderWorkflowService } from "../../services/workflow/orderWorkflow.service";
 
 /* ===============================
    APPROVE ORDER (Activates Pending)

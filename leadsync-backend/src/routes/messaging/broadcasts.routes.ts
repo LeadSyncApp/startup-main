@@ -1,7 +1,7 @@
 import { Router, Response } from "express";
 import { z } from "zod";
-import { prisma } from "../lib/prisma";
-import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
+import { prisma } from "../../lib/prisma";
+import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
 import axios from "axios";
 
 const createBroadcastSchema = z.object({

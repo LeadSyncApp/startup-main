@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
-import { prisma } from "../lib/prisma";
-import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
+import { prisma } from "../../lib/prisma";
+import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
 import ExcelJS from "exceljs";
 
 const router = Router();

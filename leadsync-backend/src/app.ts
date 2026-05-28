@@ -5,28 +5,33 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
 // Routes
-import authRoutes from "./routes/auth.routes";
+import authRoutes from "./routes/auth/auth.routes";
+import publicRoutes from "./routes/auth/public.routes";
+import secureRoutes from "./routes/auth/secure.routes";
+
 import leadsRoutes from "./routes/leads/leads.routes";
 import telegramRoutes from "./routes/telegram/telegram.routes";
-import integrationsRoutes from "./routes/integrations.routes";
-import secureRoutes from "./routes/secure.routes";
-import conversationRoutes from "./routes/conversations.routes";
-import publicRoutes from "./routes/public.routes";
-import dashboardRoutes from "./routes/dashboard.routes";
-import telegramIntegrationRoutes from "./routes/telegram.integration.routes";
-import instagramIntegrationRoutes from "./routes/instagram.integration.routes";
-import instagramRoutes from "./routes/instagram.routes";
-import ordersRoutes from "./routes/orders.routes";
-import usersRoutes from "./routes/users.routes";
-import analyticsRoutes from "./routes/analytics.routes";
-import notificationRoutes from "./routes/notification.routes";
-import webhookRoutes from "./routes/webhook.routes";
-import broadcastsRoutes from "./routes/broadcasts.routes";
-import botKnowledgeRoutes from "./routes/bot-knowledge.routes";
-import automationRoutes from "./routes/automation.routes";
 
-// 🆕 Import New Order Arrivals routes
-import newOrderArrivalsRoutes from "./routes/newOrderArrivals.routes";
+import integrationsRoutes from "./routes/integrations/integrations.routes";
+import telegramIntegrationRoutes from "./routes/integrations/telegram.integration.routes";
+import instagramIntegrationRoutes from "./routes/integrations/instagram.integration.routes";
+
+import conversationRoutes from "./routes/messaging/conversations.routes";
+import instagramRoutes from "./routes/messaging/instagram.routes";
+import broadcastsRoutes from "./routes/messaging/broadcasts.routes";
+
+import dashboardRoutes from "./routes/core/dashboard.routes";
+import usersRoutes from "./routes/core/users.routes";
+import analyticsRoutes from "./routes/core/analytics.routes";
+import notificationRoutes from "./routes/core/notification.routes";
+
+import ordersRoutes from "./routes/orders/orders.routes";
+import newOrderArrivalsRoutes from "./routes/orders/newOrderArrivals.routes";
+
+import automationRoutes from "./routes/bot/automation.routes";
+import botKnowledgeRoutes from "./routes/bot/bot-knowledge.routes";
+
+import webhookRoutes from "./routes/webhooks/webhook.routes";
 
 console.log("🔥 app.ts loaded");
 

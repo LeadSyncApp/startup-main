@@ -1,9 +1,9 @@
 import { Router, Response } from "express";
-import { prisma } from "../lib/prisma";
-import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
-import { generateStructuredMenu, generateLearnedContext } from "../services/ai/ai.service";
-import { cacheService } from "../services/infrastructure/cache.service";
-import { upload, fileParserService } from "../services/fileParser.service";
+import { prisma } from "../../lib/prisma";
+import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
+import { generateStructuredMenu, generateLearnedContext } from "../../services/ai/ai.service";
+import { cacheService } from "../../services/infrastructure/cache.service";
+import { upload, fileParserService } from "../../services/integrations/fileParser.service";
 
 const router = Router();
 

@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { prisma } from "../lib/prisma";
-import { InstagramAdapter } from "../adapters/instagram.adapter";
+import { prisma } from "../../lib/prisma";
+import { InstagramAdapter } from "../../adapters/instagram.adapter";
 
 const router = Router();
 

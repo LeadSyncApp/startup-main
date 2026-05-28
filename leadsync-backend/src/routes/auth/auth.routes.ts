@@ -1,10 +1,10 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { prisma } from "../lib/prisma";
-import { signToken } from "../utils/jwt";
+import { prisma } from "../../lib/prisma";
+import { signToken } from "../../utils/jwt";
 import crypto from "crypto";
-import { sendEmail, generatePasswordResetHtml } from "../services/email.service";
+import { sendEmail, generatePasswordResetHtml } from "../../services/integrations/email.service";
 
 const router = Router();
 
