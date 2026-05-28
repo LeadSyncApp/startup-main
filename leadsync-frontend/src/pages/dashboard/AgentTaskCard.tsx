@@ -38,10 +38,10 @@ export function AgentTaskCard({ task, onAction }: AgentTaskCardProps) {
   const pStatus = getPriorityStatus();
 
   return (
-    <div className="group bg-white border border-[#D9DADC] rounded-md p-4 transition hover:shadow-sm">
+    <div className="group bg-app-surface border border-[#D9DADC] rounded-md p-4 transition hover:shadow-sm">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-slate-50 text-slate-500 rounded border border-[#D9DADC]">
+          <div className="p-1.5 bg-app-bg text-slate-500 rounded border border-[#D9DADC]">
             {getIcon()}
           </div>
           <div>
@@ -74,7 +74,7 @@ export function AgentTaskCard({ task, onAction }: AgentTaskCardProps) {
               e.stopPropagation();
               onAction?.("mark_done", task);
             }}
-            className="px-3 py-1.5 text-xs font-semibold bg-white border border-[#D9DADC] text-[#1F2937] rounded hover:bg-slate-50 transition min-w-[44px]"
+            className="px-3 py-1.5 text-xs font-semibold bg-app-surface border border-[#D9DADC] text-[#1F2937] rounded hover:bg-app-bg transition min-w-[44px]"
           >
             Done
           </button>

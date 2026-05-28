@@ -128,7 +128,7 @@ export default function DashboardHome() {
     return (
       <div className="min-h-screen bg-[#F8F9FF] flex items-center justify-center pb-24">
         <div className="text-center">
-          <p className="text-slate-600 mb-4">{error}</p>
+          <p className="text-app-muted mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
@@ -149,14 +149,14 @@ export default function DashboardHome() {
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">
-            <button className="p-2.5 bg-slate-50 rounded-xl text-slate-500 hover:bg-slate-100 transition" aria-label="Notifications" title="Inbox notifications">
+            <button className="p-2.5 bg-app-bg rounded-xl text-slate-500 hover:bg-slate-100 transition" aria-label="Notifications" title="Inbox notifications">
               <Inbox className="w-5 h-5" />
             </button>
             {(alertKpis?.pendingOrders ?? 0) > 0 && (
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
             )}
           </div>
-          <button className="p-2.5 bg-slate-50 rounded-xl text-slate-500 hover:bg-slate-100 transition" aria-label="Layout options" title="View options">
+          <button className="p-2.5 bg-app-bg rounded-xl text-slate-500 hover:bg-slate-100 transition" aria-label="Layout options" title="View options">
             <LayoutGrid className="w-5 h-5" />
           </button>
         </div>
@@ -168,11 +168,11 @@ export default function DashboardHome() {
           <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Live Alerts</h2>
           <div className="relative overflow-hidden rounded-[24px] bg-[#2563eb] p-6 text-white shadow-lg shadow-blue-100">
             {/* Background Accent */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-8 blur-2xl"></div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-app-surface/10 rounded-full -mr-16 -mt-8 blur-2xl"></div>
             
             <div className="relative z-10 space-y-4">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-white/20 rounded-lg">
+                <div className="p-1.5 bg-app-surface/20 rounded-lg">
                   <motion.div animate={{ opacity: [1, 0.5, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}>
                     <Bell className="w-3.5 h-3.5" />
                   </motion.div>
@@ -189,7 +189,7 @@ export default function DashboardHome() {
               </p>
               <button 
                 onClick={() => navigate("/dashboard/leads")}
-                className="flex items-center gap-2 bg-white text-[#2563eb] px-5 py-3 rounded-xl font-bold text-sm transition active:scale-95 hover:bg-blue-50"
+                className="flex items-center gap-2 bg-app-surface text-[#2563eb] px-5 py-3 rounded-xl font-bold text-sm transition active:scale-95 hover:bg-blue-50"
               >
                 Review Priority <ArrowRight className="w-4 h-4" />
               </button>
@@ -218,7 +218,7 @@ export default function DashboardHome() {
             label="AOV" 
             value={`₹${aov.toLocaleString()}`} 
             icon={TrendingUp}
-            iconColor="text-slate-600"
+            iconColor="text-app-muted"
             iconBg="bg-slate-100"
           />
           <StatCard 
@@ -231,14 +231,14 @@ export default function DashboardHome() {
         </section>
 
         {/* Revenue Trend Chart */}
-        <section className="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm">
+        <section className="bg-app-surface p-6 rounded-[24px] border border-app shadow-sm">
           <div className="flex justify-between items-start mb-6">
             <div>
               <h3 className="text-lg font-bold text-[#1e293b]">Revenue Trend</h3>
               <p className="text-xs text-slate-400 font-medium mt-0.5">Last 14 days activity</p>
             </div>
             <button 
-              className="p-2.5 bg-slate-50 rounded-xl text-slate-500 hover:bg-slate-100 transition"
+              className="p-2.5 bg-app-bg rounded-xl text-slate-500 hover:bg-slate-100 transition"
               aria-label="Filter chart"
             >
               <Filter className="w-5 h-5" />
@@ -342,7 +342,7 @@ export default function DashboardHome() {
 
 function StatCard({ label, value, trend, icon: Icon, iconColor, iconBg }: StatCardProps) {
   return (
-    <div className="bg-white p-5 rounded-[24px] border border-slate-100 shadow-sm relative overflow-hidden hover:shadow-md transition">
+    <div className="bg-app-surface p-5 rounded-[24px] border border-app shadow-sm relative overflow-hidden hover:shadow-md transition">
       <div className="flex justify-between items-start mb-4">
         <div className={`p-2.5 rounded-xl ${iconBg} ${iconColor}`}>
           <Icon className="w-5 h-5" />
@@ -363,7 +363,7 @@ function StatCard({ label, value, trend, icon: Icon, iconColor, iconBg }: StatCa
 
 function ProductRow({ rank, name, sub, count }: ProductRowProps) {
   return (
-    <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-50 hover:shadow-md transition">
+    <div className="flex items-center justify-between bg-app-surface p-4 rounded-2xl border border-slate-50 hover:shadow-md transition">
       <div className="flex items-center gap-4">
         <span className="text-xs font-extrabold text-blue-600 bg-blue-50 w-8 h-8 flex items-center justify-center rounded-lg">
           {rank}
@@ -383,7 +383,7 @@ function ProductRow({ rank, name, sub, count }: ProductRowProps) {
 
 function AgentCard({ name, orders, initial }: AgentCardProps) {
   return (
-    <div className="min-w-[140px] bg-white p-5 rounded-[24px] border border-slate-100 shadow-sm text-center hover:shadow-md transition">
+    <div className="min-w-[140px] bg-app-surface p-5 rounded-[24px] border border-app shadow-sm text-center hover:shadow-md transition">
       <div className="w-12 h-12 rounded-full bg-blue-50 text-[#2563eb] flex items-center justify-center mx-auto mb-3 font-extrabold text-lg">
         {initial}
       </div>

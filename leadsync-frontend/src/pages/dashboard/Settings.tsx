@@ -498,7 +498,7 @@ export default function Settings() {
           <div className="h-4 bg-slate-200 rounded w-80" />
         </div>
         {[1, 2, 3].map(i => (
-          <div key={i} className="rounded-2xl border bg-white p-6 space-y-4 animate-pulse">
+          <div key={i} className="rounded-2xl border bg-app-surface p-6 space-y-4 animate-pulse">
             <div className="h-5 bg-slate-200 rounded w-1/3" />
             <div className="h-10 bg-slate-100 rounded-xl w-full" />
             <div className="h-10 bg-slate-100 rounded-xl w-full" />
@@ -512,10 +512,10 @@ export default function Settings() {
     <PageTransition className="space-y-8 max-w-4xl pb-12">
 
       {/* PROFILE */}
-      <div className="bg-white p-6 rounded-2xl shadow border flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h2 className="text-lg font-semibold mb-3">Profile</h2>
-          <div className="space-y-1 text-sm text-slate-600">
+          <div className="space-y-1 text-sm text-app-muted">
             <p><strong>Name:</strong> {user?.name}</p>
             <p><strong>Email:</strong> {user?.email}</p>
             <p><strong>Role:</strong> <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-0.5 rounded-full font-bold uppercase">{user?.role}</span></p>
@@ -523,7 +523,7 @@ export default function Settings() {
         </div>
 
         {/* Individual Availability Toggle */}
-        <div className="border-t md:border-t-0 md:border-l border-slate-100 pt-4 md:pt-0 md:pl-6 flex flex-col justify-center min-w-[280px]">
+        <div className="border-t md:border-t-0 md:border-l border-app pt-4 md:pt-0 md:pl-6 flex flex-col justify-center min-w-[280px]">
           <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">
             Auto-Assignment Availability
           </label>
@@ -557,7 +557,7 @@ export default function Settings() {
               }`}
             >
               <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-app-surface shadow ring-0 transition duration-200 ease-in-out ${
                   user?.isAvailable !== false ? "translate-x-5" : "translate-x-0"
                 }`}
               />
@@ -575,7 +575,7 @@ export default function Settings() {
       </div>
 
       {/* BUSINESS DETAILS (FOR INVOICING) */}
-      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border space-y-4">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <span>🏢</span> Business Details (for Invoices)
         </h2>
@@ -626,22 +626,22 @@ export default function Settings() {
       </div>
 
       {/* SAVED REPLIES */}
-      <div className="bg-white p-6 rounded-2xl shadow border border-slate-100">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app">
         <SavedRepliesManager />
       </div>
 
       {/* BOT KNOWLEDGE */}
-      <div className="bg-white p-6 rounded-2xl shadow border border-slate-100">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app">
         <BotKnowledgeManager />
       </div>
 
       {/* AUTOMATION RULES */}
-      <div className="bg-white p-6 rounded-2xl shadow border border-slate-100">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app">
         <AutomationManager />
       </div>
 
       {/* AUTOMATED CHAT ASSIGNMENT STRATEGIES */}
-      <div className="bg-white p-6 rounded-2xl shadow border border-slate-100">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app">
         <AssignmentStrategyManager
           currentStrategy={assignmentStrategy}
           workloads={agentWorkloads}
@@ -651,7 +651,7 @@ export default function Settings() {
       </div>
 
       {/* TELEGRAM */}
-      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border space-y-4">
         <h2 className="text-lg font-semibold">
           Telegram Integration
         </h2>
@@ -691,7 +691,7 @@ export default function Settings() {
 
             <button
               onClick={handleDisconnectTelegram}
-              className="text-red-500 text-sm hover:underline hover:text-red-600 px-3 py-1 bg-white border border-red-100 rounded-lg shadow-sm"
+              className="text-red-500 text-sm hover:underline hover:text-red-600 px-3 py-1 bg-app-surface border border-red-100 rounded-lg shadow-sm"
             >
               Disconnect
             </button>
@@ -704,7 +704,7 @@ export default function Settings() {
       </div>
 
       {/* INSTAGRAM */}
-      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
@@ -718,10 +718,10 @@ export default function Settings() {
         {!instagramConnected ? (
           <div className="space-y-3">
             {/* Webhook URL hint */}
-            <div className="bg-slate-50 rounded-xl px-4 py-3 border border-slate-100 space-y-1">
+            <div className="bg-app-bg rounded-xl px-4 py-3 border border-app space-y-1">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Step 1 — Register Webhook in Meta Developer Console</p>
               <p className="text-xs text-slate-500">Callback URL (paste this in your Meta App → Webhooks):</p>
-              <code className="block text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 font-mono text-indigo-700 break-all select-all">
+              <code className="block text-xs bg-app-surface border border-app rounded-lg px-3 py-2 font-mono text-indigo-700 break-all select-all">
                 {DISPLAY_WEBHOOK_URL}
               </code>
               <p className="text-xs text-slate-400 mt-1">Verify Token: use <span className="font-mono bg-slate-100 px-1 rounded">{igVerifyToken || "leadsync_ig_verify_2026"}</span> in Meta App verification.</p>
@@ -766,13 +766,13 @@ export default function Settings() {
               </div>
               <button
                 onClick={handleDisconnectInstagram}
-                className="text-red-500 text-sm hover:text-red-600 px-3 py-1.5 bg-white border border-red-100 rounded-lg shadow-sm transition"
+                className="text-red-500 text-sm hover:text-red-600 px-3 py-1.5 bg-app-surface border border-red-100 rounded-lg shadow-sm transition"
               >
                 Disconnect
               </button>
             </div>
             {/* Webhook URL reminder when connected */}
-            <div className="bg-slate-50 rounded-xl px-4 py-3 border border-slate-100">
+            <div className="bg-app-bg rounded-xl px-4 py-3 border border-app">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Webhook URL (for Meta App)</p>
               <code className="text-xs font-mono text-indigo-700 break-all select-all">
                 {DISPLAY_WEBHOOK_URL}
@@ -783,7 +783,7 @@ export default function Settings() {
       </div>
 
       {/* COMMERCE AI ONBOARDING WIZARD */}
-      <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 space-y-6 relative overflow-hidden">
+      <div className="bg-app-surface p-8 rounded-3xl shadow-xl border border-app space-y-6 relative overflow-hidden">
         {/* Abstract Background Decoration */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
 
@@ -798,19 +798,19 @@ export default function Settings() {
         <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
           <button
             onClick={() => setOnboardingMode('PASTE')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'PASTE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'PASTE' ? 'bg-app-surface text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             ✨ AI Smart Paste
           </button>
           <button
             onClick={() => setOnboardingMode('MANUAL')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'MANUAL' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'MANUAL' ? 'bg-app-surface text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             🧱 Manual Entry
           </button>
           <button
             onClick={() => setOnboardingMode('FILE')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'FILE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'FILE' ? 'bg-app-surface text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             🧾 Upload Document
           </button>
@@ -830,7 +830,7 @@ Latte - 300
 Cheese Croissant 180..."
               value={shopDescription}
               onChange={(e) => setShopDescription(e.target.value)}
-              className="w-full border-2 border-slate-100 rounded-2xl px-4 py-4 h-48 focus:border-indigo-500 focus:ring-0 transition-all text-sm font-medium bg-slate-50/30"
+              className="w-full border-2 border-app rounded-2xl px-4 py-4 h-48 focus:border-indigo-500 focus:ring-0 transition-all text-sm font-medium bg-app-bg/30"
             />
 
             <div className="flex items-center gap-3">
@@ -871,12 +871,12 @@ Cheese Croissant 180..."
               </div>
             </div>
 
-            <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-200 rounded-3xl cursor-pointer hover:bg-slate-50 hover:border-indigo-400 transition-all group">
+            <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-app rounded-3xl cursor-pointer hover:bg-app-bg hover:border-indigo-400 transition-all group">
               <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
                 <div className="bg-indigo-50 p-4 rounded-full text-indigo-600 mb-3 group-hover:scale-110 transition-transform">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                 </div>
-                <p className="text-sm font-bold text-slate-600">Click to upload catalog</p>
+                <p className="text-sm font-bold text-app-muted">Click to upload catalog</p>
                 <p className="text-xs text-slate-400 mt-1">Supports PDF, DOCX, XLSX, CSV (Max 10MB)</p>
               </div>
               <input type="file" className="hidden" accept=".pdf,.docx,.xlsx,.csv,.txt" onChange={handleFileUpload} />
@@ -937,7 +937,7 @@ Cheese Croissant 180..."
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
             {previewMenu.categories.map((cat, ci) => (
-              <div key={ci} className="bg-white p-4 rounded-2xl border border-amber-100 shadow-sm">
+              <div key={ci} className="bg-app-surface p-4 rounded-2xl border border-amber-100 shadow-sm">
                 <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2 px-1">{cat.name}</p>
                 <div className="space-y-1.5">
                   {cat.items.map((item, ii) => (
@@ -960,7 +960,7 @@ Cheese Croissant 180..."
             </button>
             <button
               onClick={() => setPreviewMenu(null)}
-              className="bg-white text-slate-500 px-6 py-4 rounded-2xl font-bold border border-slate-200 hover:bg-slate-50 transition-all"
+              className="bg-app-surface text-slate-500 px-6 py-4 rounded-2xl font-bold border border-app hover:bg-app-bg transition-all"
             >
               Cancel
             </button>
@@ -969,7 +969,7 @@ Cheese Croissant 180..."
       )}
 
       {/* AI KNOWLEDGE BASE & LEARNING */}
-      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border space-y-4">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <span>🧠</span> AI Shop Knowledge (Advanced Tuning)
         </h2>
@@ -998,7 +998,7 @@ Cheese Croissant 180..."
               placeholder="AI summary will appear here..."
               value={botLearnedContext}
               onChange={(e) => setBotLearnedContext(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 h-48 text-sm bg-slate-50 italic"
+              className="w-full border rounded-lg px-3 py-2 h-48 text-sm bg-app-bg italic"
             />
           </div>
         </div>
@@ -1015,7 +1015,7 @@ Cheese Croissant 180..."
 
           <button
             onClick={handleSaveKnowledge}
-            className="border border-slate-200 text-slate-600 px-5 py-2 rounded-lg hover:bg-slate-50 transition"
+            className="border border-app text-app-muted px-5 py-2 rounded-lg hover:bg-app-bg transition"
           >
             Save Knowledge Manually
           </button>
@@ -1023,7 +1023,7 @@ Cheese Croissant 180..."
       </div>
 
       {/* SHOP POLICIES */}
-      <div className="bg-white p-6 rounded-2xl shadow border space-y-4">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border space-y-4">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <span>📜</span> Shop Policies (Grounded Rules)
         </h2>
@@ -1050,7 +1050,7 @@ Cheese Croissant 180..."
 
       {/* MENU EDITOR */}
       {generatedMenu && (
-        <div className="bg-white p-6 rounded-2xl shadow border space-y-6">
+        <div className="bg-app-surface p-6 rounded-2xl shadow border space-y-6">
           <h2 className="text-lg font-semibold">
             Edit Menu (with Pricing)
           </h2>

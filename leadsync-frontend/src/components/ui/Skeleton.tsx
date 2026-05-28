@@ -16,7 +16,7 @@ export function Skeleton({ className = "" }: SkeletonProps) {
 /** Skeleton card matching the KPI stat card layout */
 export function StatCardSkeleton() {
   return (
-    <div className="bg-white border rounded-2xl p-6 shadow-sm">
+    <div className="bg-app-surface border rounded-2xl p-6 shadow-sm">
       <div className="flex items-center justify-between mb-4">
         <Skeleton className="w-10 h-10 rounded-xl" />
       </div>
@@ -29,7 +29,7 @@ export function StatCardSkeleton() {
 /** Skeleton for a chart area */
 export function ChartSkeleton({ height = "h-[340px]" }: { height?: string }) {
   return (
-    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+    <div className="bg-app-surface p-6 rounded-2xl border border-app shadow-sm">
       <Skeleton className="h-5 w-48 mb-6" />
       <div className={`${height} flex items-end gap-2 px-4`}>
         {Array.from({ length: 14 }).map((_, i) => (
@@ -60,8 +60,8 @@ export function TableRowSkeleton({ cols = 5 }: { cols?: number }) {
 /** Full table skeleton with header + rows */
 export function TableSkeleton({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
   return (
-    <div className="bg-white rounded-xl shadow border overflow-hidden">
-      <div className="bg-slate-50 px-6 py-3 flex gap-6">
+    <div className="bg-app-surface rounded-xl shadow border overflow-hidden">
+      <div className="bg-app-bg px-6 py-3 flex gap-6">
         {Array.from({ length: cols }).map((_, i) => (
           <Skeleton key={i} className="h-3 w-20" />
         ))}
@@ -160,7 +160,7 @@ export function DashboardSkeleton() {
         <div className="lg:col-span-2">
           <ChartSkeleton height="h-[340px]" />
         </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="bg-app-surface p-6 rounded-2xl border border-app shadow-sm space-y-4">
           <Skeleton className="h-5 w-32 mb-2" />
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="flex items-center justify-between pb-3">
@@ -176,10 +176,10 @@ export function DashboardSkeleton() {
 
       {/* Bottom */}
       <div className="grid lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="bg-app-surface p-6 rounded-2xl border border-app shadow-sm space-y-4">
           <Skeleton className="h-5 w-48" />
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+            <div key={i} className="flex items-center justify-between p-3 bg-app-bg rounded-lg">
               <div className="flex items-center gap-3">
                 <Skeleton className="w-8 h-8 rounded-full" />
                 <Skeleton className="h-4 w-24" />
@@ -190,7 +190,7 @@ export function DashboardSkeleton() {
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <div key={i} className="bg-app-surface p-6 rounded-xl border border-app shadow-sm">
               <Skeleton className="w-8 h-8 rounded-lg mb-3" />
               <Skeleton className="h-5 w-24 mb-1" />
               <Skeleton className="h-3 w-36" />

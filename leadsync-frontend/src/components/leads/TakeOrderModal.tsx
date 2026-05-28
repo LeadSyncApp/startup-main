@@ -149,14 +149,14 @@ export default function TakeOrderModal({
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="bg-white rounded-[24px] shadow-2xl w-full max-w-lg overflow-hidden relative z-10 border border-slate-100 flex flex-col font-sans select-none"
+            className="bg-app-surface rounded-[24px] shadow-2xl w-full max-w-lg overflow-hidden relative z-10 border border-app flex flex-col font-sans select-none"
           >
             {/* Header block with gradient background */}
             <div className="bg-gradient-to-r from-[#0047cc] to-blue-600 p-6 text-white text-left relative">
               <button
                 type="button"
                 onClick={onClose}
-                className="absolute top-5 right-5 p-1 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition"
+                className="absolute top-5 right-5 p-1 text-white/80 hover:text-white hover:bg-app-surface/10 rounded-lg transition"
               >
                 <X size={18} />
               </button>
@@ -168,7 +168,7 @@ export default function TakeOrderModal({
             <form onSubmit={handleCreateOrderSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto text-left">
               
               {/* General Customer Details Subheader */}
-              <div className="border-b border-slate-100 pb-2 mb-2">
+              <div className="border-b border-app pb-2 mb-2">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-sans">Customer Details</h4>
               </div>
 
@@ -184,7 +184,7 @@ export default function TakeOrderModal({
                     placeholder="e.g. John Doe"
                     value={newCustomerName}
                     onChange={(e) => setNewCustomerName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
                   />
                 </div>
 
@@ -199,7 +199,7 @@ export default function TakeOrderModal({
                     placeholder="e.g. +91 9876543210"
                     value={newPhoneNumber}
                     onChange={(e) => setNewPhoneNumber(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
                   />
                 </div>
               </div>
@@ -216,7 +216,7 @@ export default function TakeOrderModal({
                     disabled
                     placeholder="Prefilled logged-in user"
                     value={agentName}
-                    className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 text-xs font-semibold focus:outline-none cursor-not-allowed select-none font-sans"
+                    className="w-full px-3.5 py-2.5 bg-slate-100 border border-app rounded-xl text-slate-500 text-xs font-semibold focus:outline-none cursor-not-allowed select-none font-sans"
                   />
                 </div>
 
@@ -230,7 +230,7 @@ export default function TakeOrderModal({
                     placeholder="e.g. Flat 104, Block B"
                     value={newLocation}
                     onChange={(e) => setNewLocation(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
                   />
                 </div>
               </div>
@@ -247,7 +247,7 @@ export default function TakeOrderModal({
                     placeholder="e.g. New Delhi"
                     value={newCity}
                     onChange={(e) => setNewCity(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
                   />
                 </div>
 
@@ -262,20 +262,20 @@ export default function TakeOrderModal({
                     placeholder="e.g. Delhi"
                     value={newState}
                     onChange={(e) => setNewState(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition"
                   />
                 </div>
               </div>
 
               {/* General Order Details Subheader */}
-              <div className="border-b border-slate-100 pb-2 pt-2 mb-2">
+              <div className="border-b border-app pb-2 pt-2 mb-2">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-sans">Order Items & Status</h4>
               </div>
 
               {/* Menu Item Selector if categories exist */}
               {menuCategories && menuCategories.length > 0 ? (
-                <div className="space-y-3 bg-slate-50 border border-slate-200/80 p-4 rounded-xl">
-                  <div className="flex items-center justify-between border-b border-slate-200/80 pb-2 mb-1">
+                <div className="space-y-3 bg-app-bg border border-app/80 p-4 rounded-xl">
+                  <div className="flex items-center justify-between border-b border-app/80 pb-2 mb-1">
                     <span className="text-xs font-bold text-slate-700">Add Items from Menu Catalog</span>
                     <span className="text-[10px] font-semibold text-blue-600 bg-blue-50/50 px-2 py-0.5 rounded-full border border-blue-100 font-sans">
                       {menuCategories.reduce((sum, cat) => sum + (cat.items?.length || 0), 0)} items loaded
@@ -286,7 +286,7 @@ export default function TakeOrderModal({
                   <div className="flex gap-2 items-center">
                     <select
                       id="menu-item-dropdown"
-                      className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 cursor-pointer text-left font-sans"
+                      className="flex-1 px-3 py-2 bg-app-surface border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 cursor-pointer text-left font-sans"
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val) {
@@ -317,10 +317,10 @@ export default function TakeOrderModal({
                   {selectedMenuItems.length > 0 ? (
                     <div className="space-y-1.5 pt-2 max-h-[160px] overflow-y-auto">
                       {selectedMenuItems.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-white border border-slate-100 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 shadow-sm animate-in fade-in slide-in-from-top-1 duration-100">
+                        <div key={idx} className="flex items-center justify-between bg-app-surface border border-app px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 shadow-sm animate-in fade-in slide-in-from-top-1 duration-100">
                           <span className="truncate flex-1 pr-2">{item.name} <span className="text-slate-400 font-normal">({item.price})</span></span>
                           <div className="flex items-center gap-2">
-                            <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                            <div className="flex items-center border border-app rounded-lg overflow-hidden bg-app-bg">
                               <button
                                 type="button"
                                 onClick={() => handleUpdateItemQty(idx, -1)}
@@ -375,8 +375,8 @@ export default function TakeOrderModal({
                   onChange={(e) => setNewOrderSummary(e.target.value)}
                   className={`w-full px-3.5 py-2.5 border rounded-xl text-xs font-semibold focus:outline-none transition resize-none ${
                     menuCategories && menuCategories.length > 0
-                      ? "bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed font-sans select-none"
-                      : "bg-slate-50 border-slate-200 text-slate-800 focus:border-blue-500 focus:bg-white"
+                      ? "bg-slate-100 border-app text-slate-500 cursor-not-allowed font-sans select-none"
+                      : "bg-app-bg border-app text-slate-800 focus:border-blue-500 focus:bg-app-surface"
                   }`}
                 />
               </div>
@@ -395,8 +395,8 @@ export default function TakeOrderModal({
                     onChange={(e) => setNewAmount(e.target.value)}
                     className={`w-full px-3.5 py-2.5 border rounded-xl text-xs font-semibold focus:outline-none transition ${
                       menuCategories && menuCategories.length > 0
-                        ? "bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed font-sans select-none"
-                        : "bg-slate-50 border-slate-200 text-slate-800 focus:border-blue-500 focus:bg-white"
+                        ? "bg-slate-100 border-app text-slate-500 cursor-not-allowed font-sans select-none"
+                        : "bg-app-bg border-app text-slate-800 focus:border-blue-500 focus:bg-app-surface"
                     }`}
                   />
                 </div>
@@ -409,7 +409,7 @@ export default function TakeOrderModal({
                     id="order-priority"
                     value={newPriority}
                     onChange={(e) => setNewPriority(e.target.value as "NORMAL" | "URGENT")}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-white transition cursor-pointer font-sans"
+                    className="w-full px-3.5 py-2.5 bg-app-bg border border-app rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500 focus:bg-app-surface transition cursor-pointer font-sans"
                   >
                     <option value="NORMAL">🟢 Normal (Default)</option>
                     <option value="URGENT">🔴 Urgent Dispatch (50pt Score)</option>
@@ -418,11 +418,11 @@ export default function TakeOrderModal({
               </div>
 
               {/* Footer Buttons */}
-              <div className="flex gap-3 justify-end pt-5 border-t border-slate-100">
+              <div className="flex gap-3 justify-end pt-5 border-t border-app">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2.5 text-slate-500 hover:bg-slate-50 rounded-xl text-xs font-bold border border-slate-200 active:scale-95 transition font-sans cursor-pointer"
+                  className="px-4 py-2.5 text-slate-500 hover:bg-app-bg rounded-xl text-xs font-bold border border-app active:scale-95 transition font-sans cursor-pointer"
                 >
                   Cancel
                 </button>

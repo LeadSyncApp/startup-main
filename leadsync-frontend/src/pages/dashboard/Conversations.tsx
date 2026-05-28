@@ -116,7 +116,7 @@ const IconButton = ({ icon, onClick, title }: { icon: string; onClick?: () => vo
 const ActionCircle = ({ icon, onClick }: { icon: string; onClick?: () => void }) => (
   <button 
     onClick={onClick}
-    className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-full text-slate-600 shadow-sm hover:border-blue-500 hover:text-blue-600 hover:shadow-md transition-all active:scale-90"
+    className="w-10 h-10 flex items-center justify-center bg-app-surface border border-app rounded-full text-app-muted shadow-sm hover:border-blue-500 hover:text-blue-600 hover:shadow-md transition-all active:scale-90"
   >
     <span className="material-symbols-outlined text-[20px]">{icon}</span>
   </button>
@@ -135,7 +135,7 @@ const Section = ({ title, children, action }: { title: string; children: React.R
 const InfoItem = ({ icon, text }: { icon: string; text: string }) => (
   <div className="flex items-center gap-3 group cursor-pointer">
     <span className="material-symbols-outlined text-slate-300 group-hover:text-blue-500 transition-colors text-[18px]">{icon}</span>
-    <span className="text-xs text-slate-700 font-medium truncate group-hover:text-slate-900 transition-colors">{text}</span>
+    <span className="text-xs text-slate-700 font-medium truncate group-hover:text-app-text transition-colors">{text}</span>
   </div>
 );
 
@@ -153,23 +153,23 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
   const initialsColor = getInitialsColor(leadName);
 
   return (
-    <aside className="w-[300px] bg-white border-l border-slate-200 shadow-xl md:shadow-none flex flex-col shrink-0 absolute md:relative right-0 top-0 bottom-0 h-full z-20">
+    <aside className="w-[300px] bg-app-surface border-l border-app shadow-xl md:shadow-none flex flex-col shrink-0 absolute md:relative right-0 top-0 bottom-0 h-full z-20">
       <div className="absolute top-4 right-4 z-10">
         <button 
           type="button"
           onClick={onClose}
-          className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center border border-slate-200 bg-white"
+          className="p-1 text-slate-400 hover:text-app-muted hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center border border-app bg-app-surface"
           title="Close profile"
         >
           <span className="material-symbols-outlined text-[18px]">close</span>
         </button>
       </div>
 
-      <div className="p-8 flex flex-col items-center text-center border-b border-slate-100 bg-slate-50/30 shrink-0">
+      <div className="p-8 flex flex-col items-center text-center border-b border-app bg-app-bg/30 shrink-0">
         <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-black shadow-lg mb-4 bg-gradient-to-br ${initialsColor}`}>
           {leadInitials}
         </div>
-        <h3 className="text-lg font-extrabold text-slate-900 leading-tight">{leadName}</h3>
+        <h3 className="text-lg font-extrabold text-app-text leading-tight">{leadName}</h3>
         <p className="text-xs text-slate-500 font-medium mt-1">
           {activeLead?.segment || 'Regular Lead'} • <span className="text-blue-600 font-semibold">{leadChannel}</span>
         </p>
@@ -181,7 +181,7 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
       </div>
 
       {/* Tab bar switch */}
-      <div className="flex border-b border-slate-100 bg-slate-50/50 shrink-0">
+      <div className="flex border-b border-app bg-app-bg/50 shrink-0">
         <button
           type="button"
           onClick={() => setActiveTab('details')}
@@ -232,7 +232,7 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
                   <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
                     activeLead.priority === "URGENT" ? "bg-rose-50 text-rose-700 border-rose-100" :
                     activeLead.priority === "HIGH" ? "bg-orange-50 text-orange-700 border-orange-100" :
-                    "bg-slate-50 text-slate-600 border-slate-100"
+                    "bg-app-bg text-app-muted border-app"
                   }`}>
                     Priority: {activeLead.priority}
                   </span>
@@ -245,15 +245,15 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
             <div className="space-y-1">
               <div className="flex justify-between py-2 border-b border-slate-50">
                 <span className="text-xs text-slate-500">AI Score</span>
-                <span className="text-xs text-slate-900 font-bold">{activeLead?.aiScore ?? 75} / 100</span>
+                <span className="text-xs text-app-text font-bold">{activeLead?.aiScore ?? 75} / 100</span>
               </div>
               <div className="flex justify-between py-2 border-b border-slate-50">
                 <span className="text-xs text-slate-500">Transaction Count</span>
-                <span className="text-xs text-slate-900 font-bold">{activeLead?.orderCount ?? 0} orders</span>
+                <span className="text-xs text-app-text font-bold">{activeLead?.orderCount ?? 0} orders</span>
               </div>
               <div className="flex justify-between py-2 border-b border-slate-50">
                 <span className="text-xs text-slate-500">Value (CRM)</span>
-                <span className="text-xs text-slate-900 font-bold">₹{(activeLead?.totalSpend ?? 0).toLocaleString()}</span>
+                <span className="text-xs text-app-text font-bold">₹{(activeLead?.totalSpend ?? 0).toLocaleString()}</span>
               </div>
               {activeLead?.suggestedAction && (
                 <div className="flex justify-between py-2">
@@ -732,7 +732,7 @@ const ConversationHub = () => {
   const selectedConvInitialsColor = getInitialsColor(selectedConv?.lead?.name || selectedConv?.lead?.contact || '?');
 
   return (
-    <div className="flex relative h-[calc(100vh-140px)] md:h-[calc(100vh-160px)] w-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden text-slate-900 antialiased font-sans">
+    <div className="flex relative h-[calc(100vh-140px)] md:h-[calc(100vh-160px)] w-full bg-app-surface rounded-2xl border border-app shadow-sm overflow-hidden text-app-text antialiased font-sans">
       
       {/* 1. LEFT COLUMN: DIRECTORY OF CUSTOMERS */}
       <section 
@@ -740,11 +740,11 @@ const ConversationHub = () => {
           width: sidebarExpanded ? undefined : '0px', 
           minWidth: sidebarExpanded ? undefined : '0px' 
         }}
-        className={`w-full md:w-[320px] bg-white border-r border-slate-200 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
+        className={`w-full md:w-[320px] bg-app-surface border-r border-app flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
           selectedId ? (sidebarExpanded ? 'hidden md:flex' : 'hidden') : 'flex'
         } ${!sidebarExpanded ? 'md:border-r-0' : ''}`}
       >
-        <div className="p-4 border-b border-slate-100 flex flex-col gap-3">
+        <div className="p-4 border-b border-app flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h1 className="text-sm font-extrabold text-slate-800 tracking-wider">INBOX</h1>
             <button 
@@ -764,11 +764,11 @@ const ConversationHub = () => {
               placeholder="Search conversations..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/80 outline-none transition-all placeholder:text-slate-400 text-slate-800"
+              className="w-full bg-app-bg border border-app rounded-xl py-2 pl-10 pr-4 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/80 outline-none transition-all placeholder:text-slate-400 text-slate-800"
             />
           </div>
 
-          <div className="flex bg-slate-100/80 p-0.5 rounded-lg border border-slate-200/50">
+          <div className="flex bg-slate-100/80 p-0.5 rounded-lg border border-app/50">
             {[
               { id: 'all', label: 'All' },
               { id: 'unread', label: 'Unread' },
@@ -781,7 +781,7 @@ const ConversationHub = () => {
                 onClick={() => setListFilter(tab.id as any)}
                 className={`flex-1 py-1 rounded-md text-[10px] font-bold uppercase tracking-tight transition-all duration-150 ${
                   listFilter === tab.id
-                    ? 'bg-white shadow-sm text-blue-600 border border-slate-200/20'
+                    ? 'bg-app-surface shadow-sm text-blue-600 border border-app/20'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -792,7 +792,7 @@ const ConversationHub = () => {
 
           {/* Sub-header for Channel vs Manual leads filter under All section */}
           {listFilter === 'all' && (
-            <div className="flex bg-slate-100/40 p-0.5 rounded-lg border border-slate-200/40 gap-0.5 mt-0.5">
+            <div className="flex bg-slate-100/40 p-0.5 rounded-lg border border-app/40 gap-0.5 mt-0.5">
               <button
                 type="button"
                 onClick={() => setAllSubFilter('channel')}
@@ -841,10 +841,10 @@ const ConversationHub = () => {
                 <div 
                   key={conv.id}
                   onClick={() => setSelectedId(conv.id)}
-                  className={`px-4 py-3.5 border-b border-slate-100/70 flex gap-3 items-start cursor-pointer transition-all ${
+                  className={`px-4 py-3.5 border-b border-app/70 flex gap-3 items-start cursor-pointer transition-all ${
                     isActive 
                       ? 'bg-blue-50/50 border-l-4 border-blue-600' 
-                      : 'border-l-4 border-transparent hover:bg-slate-50/60'
+                      : 'border-l-4 border-transparent hover:bg-app-bg/60'
                   }`}
                 >
                   <div className="relative flex-shrink-0">
@@ -888,12 +888,12 @@ const ConversationHub = () => {
       </section>
 
       {/* 2. MIDDLE COLUMN: MESSAGES DISCUSSION STREAM */}
-      <section className={`flex-1 flex flex-col bg-white overflow-hidden min-w-0 ${
+      <section className={`flex-1 flex flex-col bg-app-surface overflow-hidden min-w-0 ${
         !selectedId ? 'hidden md:flex' : 'flex'
       }`}>
         {selectedConv ? (
           <>
-            <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-4 sm:px-6 shrink-0 z-10">
+            <header className="h-16 border-b border-app bg-app-surface flex items-center justify-between px-4 sm:px-6 shrink-0 z-10">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 {!sidebarExpanded && (
                   <button 
@@ -908,7 +908,7 @@ const ConversationHub = () => {
 
                 <button 
                   onClick={() => setSelectedId(null)}
-                  className="md:hidden p-1 mr-1 text-slate-500 hover:bg-slate-50 rounded-lg flex items-center justify-center shrink-0"
+                  className="md:hidden p-1 mr-1 text-slate-500 hover:bg-app-bg rounded-lg flex items-center justify-center shrink-0"
                   title="Back to inbox list"
                 >
                   <span className="material-symbols-outlined text-[22px] sm:text-[24px]">arrow_back</span>
@@ -919,7 +919,7 @@ const ConversationHub = () => {
                 </div>
                 
                 <div className="min-w-0">
-                  <h2 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-1.5 truncate">
+                  <h2 className="text-xs sm:text-sm font-bold text-app-text flex items-center gap-1.5 truncate">
                     {selectedConv?.lead?.name || 'Customer'}
                     <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                   </h2>
@@ -952,7 +952,7 @@ const ConversationHub = () => {
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 ${
                     showProfile 
                       ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-app'
                   }`}
                 >
                   {showProfile ? 'Hide Profile' : 'View Profile'}
@@ -970,7 +970,7 @@ const ConversationHub = () => {
                   <div>
                     <h4 className="text-xs font-black uppercase text-amber-800 tracking-tight">Customer Order Request</h4>
                     <p className="text-[11px] text-amber-700 font-semibold mt-0.5">
-                      Items: <strong className="text-slate-900 font-bold">{activeOrder.summary}</strong> ({activeOrder.amount ? `₹${activeOrder.amount}` : "Pending Amount"})
+                      Items: <strong className="text-app-text font-bold">{activeOrder.summary}</strong> ({activeOrder.amount ? `₹${activeOrder.amount}` : "Pending Amount"})
                     </p>
                     <span className="inline-flex items-center gap-1 text-[9px] bg-amber-200 text-amber-800 font-black uppercase px-2 py-0.5 rounded-full mt-1.5 shadow-sm border border-amber-300">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
@@ -1008,7 +1008,7 @@ const ConversationHub = () => {
                   <div>
                     <h4 className="text-xs font-black uppercase text-blue-800 tracking-tight">Active Customer Order</h4>
                     <p className="text-[11px] text-blue-700 font-semibold mt-0.5">
-                      Items: <strong className="text-slate-900 font-bold">{activeOrder.summary}</strong> ({activeOrder.amount ? `₹${activeOrder.amount}` : "Pending Amount"})
+                      Items: <strong className="text-app-text font-bold">{activeOrder.summary}</strong> ({activeOrder.amount ? `₹${activeOrder.amount}` : "Pending Amount"})
                     </p>
                     <div className="flex flex-wrap items-center gap-2 mt-1.5">
                       <span className="inline-flex items-center gap-1 text-[9px] bg-blue-100/80 text-blue-800 font-black uppercase px-2.5 py-1 rounded-full shadow-sm border border-blue-200">
@@ -1067,7 +1067,7 @@ const ConversationHub = () => {
 
 
             {/* MESSAGE ACTIVITY BAR with Sidebar Toggle */}
-            <div className="bg-slate-50 px-4 sm:px-6 py-2.5 border-b border-slate-200/60 flex items-center justify-between gap-2">
+            <div className="bg-app-bg px-4 sm:px-6 py-2.5 border-b border-app/60 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -1075,7 +1075,7 @@ const ConversationHub = () => {
                   className={`p-1.5 flex items-center gap-1.5 text-xs font-bold rounded-lg border transition-all duration-150 ${
                     trackSidebarExpanded 
                       ? 'bg-blue-50 text-blue-600 border-blue-200/50 hover:bg-blue-100/60' 
-                      : 'bg-white text-slate-600 border-slate-200/80 hover:bg-slate-100 hover:text-slate-800'
+                      : 'bg-app-surface text-app-muted border-app/80 hover:bg-slate-100 hover:text-slate-800'
                   }`}
                   title="Toggle Message Views Side Navigation"
                 >
@@ -1109,7 +1109,7 @@ const ConversationHub = () => {
                   minWidth: trackSidebarExpanded ? '200px' : '0px',
                   opacity: trackSidebarExpanded ? 1 : 0
                 }}
-                className="bg-slate-50 border-r border-slate-200/60 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden"
+                className="bg-app-bg border-r border-app/60 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden"
               >
                 <div className="p-3 flex flex-col gap-1.5 h-full">
                   <div className="px-1.5 py-1 text-[9px] font-black text-slate-400 tracking-wider uppercase">
@@ -1122,7 +1122,7 @@ const ConversationHub = () => {
                     className={`w-full text-left p-2.5 rounded-xl transition-all duration-150 flex items-center gap-2 ${
                       messageFilter === 'all'
                         ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-500/15'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                        : 'text-app-muted hover:text-app-text hover:bg-slate-200/50'
                     }`}
                   >
                     <span className="material-symbols-outlined text-[18px]">forum</span>
@@ -1140,7 +1140,7 @@ const ConversationHub = () => {
                     className={`w-full text-left p-2.5 rounded-xl transition-all duration-150 flex items-center gap-2 ${
                       messageFilter === 'bot'
                         ? 'bg-purple-600 text-white font-extrabold shadow-md shadow-purple-500/15'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                        : 'text-app-muted hover:text-app-text hover:bg-slate-200/50'
                     }`}
                   >
                     <span className="material-symbols-outlined text-[18px]">smart_toy</span>
@@ -1158,7 +1158,7 @@ const ConversationHub = () => {
                     className={`w-full text-left p-2.5 rounded-xl transition-all duration-150 flex items-center gap-2 ${
                       messageFilter === 'agent'
                         ? 'bg-emerald-600 text-white font-extrabold shadow-md shadow-emerald-500/15'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                        : 'text-app-muted hover:text-app-text hover:bg-slate-200/50'
                     }`}
                   >
                     <span className="material-symbols-outlined text-[18px]">support_agent</span>
@@ -1173,11 +1173,11 @@ const ConversationHub = () => {
               </div>
 
               {/* MESSAGES FLOW & INPUT BOX COMPOSER WRAPPER */}
-              <div className="flex-1 flex flex-col min-w-0 bg-white relative">
+              <div className="flex-1 flex flex-col min-w-0 bg-app-surface relative">
                 {/* Conversation Window */}
                 <div 
                   ref={scrollRef} 
-                  className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar bg-slate-50/10"
+                  className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar bg-app-bg/10"
                 >
               {loadingChat ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-2">
@@ -1195,7 +1195,7 @@ const ConversationHub = () => {
                   if (msg.sender === 'SYSTEM' && isSystemLog(msg.content)) {
                     return (
                       <div key={msg.id} className="flex justify-center my-2">
-                        <span className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-slate-200/50 flex items-center gap-1">
+                        <span className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-app/50 flex items-center gap-1">
                           <span className="material-symbols-outlined text-[12px]">info</span>
                           {msg.content}
                         </span>
@@ -1248,7 +1248,7 @@ const ConversationHub = () => {
                         {/* Speech Bubble Card */}
                         <div className={`p-4 rounded-xl shadow-sm ${
                           isIncoming 
-                            ? 'bg-white border border-slate-200 text-slate-800' 
+                            ? 'bg-app-surface border border-app text-slate-800' 
                             : isBotResponse
                               ? 'bg-purple-50 border border-purple-200/80 text-purple-950 font-medium'
                               : 'bg-blue-600 text-white'
@@ -1274,8 +1274,8 @@ const ConversationHub = () => {
             </div>
 
             {/* Input Form Composer */}
-            <div className="p-4 bg-white border-t border-slate-200">
-              <div className="border border-slate-200 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/15 focus-within:border-blue-500/50 transition-all shadow-sm">
+            <div className="p-4 bg-app-surface border-t border-app">
+              <div className="border border-app rounded-xl focus-within:ring-2 focus-within:ring-blue-500/15 focus-within:border-blue-500/50 transition-all shadow-sm">
                 
                 {showRepliesPopup && (
                   <div className="relative">
@@ -1290,7 +1290,7 @@ const ConversationHub = () => {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between p-2.5 border-b border-slate-100 flex-wrap gap-2 bg-slate-50/50">
+                <div className="flex items-center justify-between p-2.5 border-b border-app flex-wrap gap-2 bg-app-bg/50">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button 
                       onClick={() => { setShowRepliesPopup(p => !p); setReplyQuery(""); }}
@@ -1320,13 +1320,13 @@ const ConversationHub = () => {
 
                     <div className="hidden sm:block h-4 w-px bg-slate-200 mx-1"></div>
                     
-                    <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200/50">
+                    <div className="flex bg-slate-100 p-0.5 rounded-lg border border-app/50">
                       <button
                         type="button"
                         onClick={() => handleToggleMode('BOT')}
                         className={`px-2 sm:px-3 py-1 rounded text-[9px] font-black uppercase tracking-tight transition ${
                           currentConvMode === 'BOT' 
-                            ? 'bg-white text-blue-600 shadow-sm border border-slate-200/20' 
+                            ? 'bg-app-surface text-blue-600 shadow-sm border border-app/20' 
                             : 'text-slate-500 hover:text-slate-800'
                         }`}
                         title="AI bot takes full automated control of communications flow"
@@ -1338,7 +1338,7 @@ const ConversationHub = () => {
                         onClick={() => handleToggleMode('HUMAN')}
                         className={`px-2 sm:px-3 py-1 rounded text-[9px] font-black uppercase tracking-tight transition ${
                           currentConvMode === 'HUMAN' 
-                            ? 'bg-white text-blue-600 shadow-sm border border-slate-200/20' 
+                            ? 'bg-app-surface text-blue-600 shadow-sm border border-app/20' 
                             : 'text-slate-500 hover:text-slate-800'
                         }`}
                         title="Pause bot automated responses. Operator will reply manually."
@@ -1377,7 +1377,7 @@ const ConversationHub = () => {
                   className="w-full p-4 text-xs md:text-sm border-none focus:ring-0 focus:outline-none min-h-[90px] resize-none text-slate-800 bg-transparent placeholder:text-slate-400"
                 />
                 
-                <div className="flex items-center justify-between p-2.5 sm:p-3 bg-slate-50/50 rounded-b-xl border-t border-slate-100">
+                <div className="flex items-center justify-between p-2.5 sm:p-3 bg-app-bg/50 rounded-b-xl border-t border-app">
                   <span className="hidden sm:inline text-[10px] text-slate-400 font-semibold select-none">
                     {currentConvMode === 'BOT' ? '🤖 AI Autopilot actively responding' : '👤 Manual operator overrides active'}
                   </span>
@@ -1396,9 +1396,9 @@ const ConversationHub = () => {
         </div>
       </>
         ) : (
-          <div className="flex-1 flex flex-col bg-slate-50/10">
+          <div className="flex-1 flex flex-col bg-app-bg/10">
             {!sidebarExpanded && (
-              <header className="h-16 border-b border-slate-200 bg-white flex items-center px-4 sm:px-6 shrink-0">
+              <header className="h-16 border-b border-app bg-app-surface flex items-center px-4 sm:px-6 shrink-0">
                 <button 
                   type="button"
                   onClick={() => setSidebarExpanded(true)}

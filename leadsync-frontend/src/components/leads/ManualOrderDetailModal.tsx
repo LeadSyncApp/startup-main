@@ -45,19 +45,19 @@ export default function ManualOrderDetailModal({
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          className="bg-white rounded-[24px] shadow-2xl w-full max-w-xl overflow-hidden relative z-10 border border-slate-100 flex flex-col font-sans select-none"
+          className="bg-app-surface rounded-[24px] shadow-2xl w-full max-w-xl overflow-hidden relative z-10 border border-app flex flex-col font-sans select-none"
         >
           {/* Modal Header */}
           <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-[#0047cc] p-6 text-white text-left relative">
             <button
               type="button"
               onClick={onClose}
-              className="absolute top-5 right-5 p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
+              className="absolute top-5 right-5 p-1.5 text-white/80 hover:text-white hover:bg-app-surface/10 rounded-lg transition cursor-pointer"
             >
               <X size={18} />
             </button>
             <div className="flex items-center gap-2 mb-1.5 font-sans">
-              <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-white/20 text-white">
+              <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-app-surface/20 text-white">
                 📝 Manual Entry Details
               </span>
               <span className={`inline-block text-center text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-md ${
@@ -75,17 +75,17 @@ export default function ManualOrderDetailModal({
           </div>
 
           {/* Content body */}
-          <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto text-left bg-slate-50/50 font-sans">
+          <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto text-left bg-app-bg/50 font-sans">
             
             {/* Section 1: Core Order Overview */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3.5">
-              <div className="border-b border-slate-100 pb-2 mb-1">
+            <div className="bg-app-surface rounded-2xl p-4 border border-app shadow-sm space-y-3.5">
+              <div className="border-b border-app pb-2 mb-1">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">📦 Product & Order Information</h4>
               </div>
 
               <div>
                 <span className="block text-[10px] uppercase font-bold text-slate-400">Order Summary & Items Description</span>
-                <p className="text-slate-800 text-xs font-semibold leading-relaxed whitespace-pre-line mt-1 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <p className="text-slate-800 text-xs font-semibold leading-relaxed whitespace-pre-line mt-1 bg-app-bg p-3 rounded-xl border border-app">
                   {baseSummary}
                 </p>
               </div>
@@ -93,7 +93,7 @@ export default function ManualOrderDetailModal({
               <div className="grid grid-cols-2 gap-4 pt-1">
                 <div>
                   <span className="block text-[10px] uppercase font-bold text-slate-400">Total Value / Amount</span>
-                  <p className="text-slate-900 text-base font-black mt-1 flex items-center gap-1">
+                  <p className="text-app-text text-base font-black mt-1 flex items-center gap-1">
                     <span className="text-slate-500 text-xs font-bold">₹</span>
                     {amount.toLocaleString("en-IN")}
                   </p>
@@ -109,8 +109,8 @@ export default function ManualOrderDetailModal({
             </div>
 
             {/* Section 2: Address & Geography */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3.5">
-              <div className="border-b border-slate-100 pb-2 mb-1">
+            <div className="bg-app-surface rounded-2xl p-4 border border-app shadow-sm space-y-3.5">
+              <div className="border-b border-app pb-2 mb-1">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">📍 Delivery Address</h4>
               </div>
 
@@ -128,13 +128,13 @@ export default function ManualOrderDetailModal({
                   <div className="grid grid-cols-2 gap-4 font-sans">
                     <div>
                       <span className="block text-[10px] uppercase font-bold text-slate-400">City / Local Area</span>
-                      <span className="inline-block mt-1 text-slate-800 text-xs font-bold bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                      <span className="inline-block mt-1 text-slate-800 text-xs font-bold bg-slate-100 px-2.5 py-1 rounded-lg border border-app">
                         Read Only: 🏙️ {city}
                       </span>
                     </div>
                     <div>
                       <span className="block text-[10px] uppercase font-bold text-slate-400">State / Province</span>
-                      <span className="inline-block mt-1 text-slate-800 text-xs font-bold bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                      <span className="inline-block mt-1 text-slate-800 text-xs font-bold bg-slate-100 px-2.5 py-1 rounded-lg border border-app">
                         Read Only: 🗺️ {state}
                       </span>
                     </div>
@@ -144,8 +144,8 @@ export default function ManualOrderDetailModal({
             </div>
 
             {/* Section 3: Responsible Agent */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
-              <div className="border-b border-slate-100 pb-2">
+            <div className="bg-app-surface rounded-2xl p-4 border border-app shadow-sm space-y-3">
+              <div className="border-b border-app pb-2">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-sans">👤 Responsible Agent</h4>
               </div>
               <div className="flex items-center gap-3">
@@ -162,7 +162,7 @@ export default function ManualOrderDetailModal({
           </div>
 
           {/* Modal Footer */}
-          <div className="border-t border-slate-100 p-5 bg-white flex justify-end gap-2.5">
+          <div className="border-t border-app p-5 bg-app-surface flex justify-end gap-2.5">
             <button
               type="button"
               onClick={() => {
@@ -170,7 +170,7 @@ export default function ManualOrderDetailModal({
                 navigator.clipboard.writeText(text);
                 toast.success("Complete order details copied!");
               }}
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 active:scale-95 transition flex items-center gap-1.5 cursor-pointer font-sans"
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-app active:scale-95 transition flex items-center gap-1.5 cursor-pointer font-sans"
             >
               <Clipboard size={14} />
               Copy Technical Summary

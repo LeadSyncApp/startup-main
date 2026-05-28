@@ -88,7 +88,7 @@ export function SavedRepliesPopup({ query, onSelect, onClose }: SavedRepliesPopu
         initial={{ opacity: 0, y: 8, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.97 }}
-        className="absolute bottom-full left-0 mb-2 w-full bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 text-sm text-slate-400 text-center z-50"
+        className="absolute bottom-full left-0 mb-2 w-full bg-app-surface rounded-2xl shadow-2xl border border-app p-4 text-sm text-slate-400 text-center z-50"
       >
         No saved replies found for "{query}"
       </motion.div>
@@ -100,7 +100,7 @@ export function SavedRepliesPopup({ query, onSelect, onClose }: SavedRepliesPopu
       initial={{ opacity: 0, y: 8, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 8, scale: 0.97 }}
-      className="absolute bottom-full left-0 mb-2 w-full max-h-72 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50"
+      className="absolute bottom-full left-0 mb-2 w-full max-h-72 bg-app-surface rounded-2xl shadow-2xl border border-app overflow-hidden z-50"
     >
       <div className="px-4 py-2.5 bg-indigo-50 border-b border-indigo-100 flex items-center gap-2">
         <Zap size={12} className="text-indigo-500" />
@@ -113,7 +113,7 @@ export function SavedRepliesPopup({ query, onSelect, onClose }: SavedRepliesPopu
             key={reply.id}
             onClick={() => onSelect(reply.content)}
             className={`w-full text-left px-4 py-3 transition-colors flex flex-col gap-0.5 ${
-              i === cursor ? "bg-indigo-50" : "hover:bg-slate-50"
+              i === cursor ? "bg-indigo-50" : "hover:bg-app-bg"
             }`}
           >
             <div className="flex items-center gap-2">
@@ -175,14 +175,14 @@ export function SavedRepliesManager() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Reply name (e.g. Welcome)"
-                className="w-full text-sm px-3 py-2 rounded-lg border border-indigo-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                className="w-full text-sm px-3 py-2 rounded-lg border border-indigo-200 bg-app-surface focus:outline-none focus:ring-2 focus:ring-indigo-300"
               />
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Reply content..."
                 rows={3}
-                className="w-full text-sm px-3 py-2 rounded-lg border border-indigo-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                className="w-full text-sm px-3 py-2 rounded-lg border border-indigo-200 bg-app-surface focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
               />
               <button
                 onClick={handleAdd}
@@ -201,7 +201,7 @@ export function SavedRepliesManager() {
           <p className="text-xs text-slate-400 italic text-center py-4">No saved replies yet. Add one above.</p>
         )}
         {replies.map((reply) => (
-          <div key={reply.id} className="flex items-start justify-between gap-3 bg-slate-50 rounded-xl p-3 border border-slate-100 group">
+          <div key={reply.id} className="flex items-start justify-between gap-3 bg-app-bg rounded-xl p-3 border border-app group">
             <div className="flex-1 min-w-0">
               <p className="text-xs font-bold text-slate-800">{reply.title}</p>
               <p className="text-xs text-slate-500 truncate mt-0.5">{reply.content}</p>
