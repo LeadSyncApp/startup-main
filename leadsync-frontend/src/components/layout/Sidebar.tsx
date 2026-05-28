@@ -15,6 +15,7 @@ import {
   Activity,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import ThemeToggle from "../ui/ThemeToggle";
 
 interface SidebarProps {
   closeSidebar?: () => void;
@@ -99,19 +100,19 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
   ];
 
   return (
-    <aside className="h-full w-64 bg-white border-r border-slate-100 shadow-sm flex flex-col">
+    <aside className="h-full w-64 bg-[var(--app-surface)] border-r border-[var(--app-border)] shadow-sm flex flex-col text-[var(--app-text)]">
 
       {/* Logo Section */}
-      <div className="px-6 py-6 border-b border-slate-100 flex items-center justify-between">
+      <div className="px-6 py-6 border-b border-[var(--app-border)] flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center">
             <Zap className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-800 leading-tight">
+            <h1 className="text-lg font-bold text-[var(--app-text)] leading-tight">
               LeadSync
             </h1>
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-medium">
+            <p className="text-[10px] text-[var(--app-text-muted)] uppercase tracking-widest font-medium">
               CRM Platform
             </p>
           </div>
@@ -120,7 +121,7 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
         {closeSidebar && (
           <button
             onClick={closeSidebar}
-            className="lg:hidden p-1 rounded-lg hover:bg-slate-100 text-slate-500"
+            className="lg:hidden p-1 rounded-lg hover:bg-[var(--app-bg-soft)] text-[var(--app-text-muted)]"
           >
             <X className="w-5 h-5" />
           </button>
@@ -139,8 +140,8 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
               onClick={closeSidebar}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${isActive
-                  ? "bg-indigo-50/80 text-indigo-600 border border-indigo-100/60"
-                  : "text-slate-500 hover:text-slate-900 hover:bg-slate-50/80"
+                  ? "bg-cyan-50/70 text-cyan-700 border border-cyan-100/70"
+                  : "text-[var(--app-text-muted)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-soft)]"
                 }`
               }
             >
@@ -153,17 +154,20 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
       {/* User Section */}
       <div className="px-3 py-4 border-t border-slate-100">
         <div className="flex items-center gap-3 px-3 py-2 mb-2">
-          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs shrink-0">
+          <div className="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center text-cyan-700 font-bold text-xs shrink-0">
             {user?.name?.charAt(0)?.toUpperCase() || "?"}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-slate-800 truncate">{user?.name}</p>
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">{user?.role}</p>
+            <p className="text-sm font-semibold text-[var(--app-text)] truncate">{user?.name}</p>
+            <p className="text-[10px] text-[var(--app-text-muted)] uppercase tracking-wider font-medium">{user?.role}</p>
           </div>
+        </div>
+        <div className="mb-2 px-3">
+          <ThemeToggle className="w-full justify-center" />
         </div>
         <button
           onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100 transition-all"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-[var(--app-text-muted)] hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100 transition-all"
         >
           <LogOut className="h-4 w-4" />
           Logout

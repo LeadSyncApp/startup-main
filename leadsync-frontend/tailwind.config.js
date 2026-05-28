@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -23,6 +24,18 @@ export default {
           accent: '#0ea5e9',
           dark: '#0f172a',
         },
+        app: {
+          bg: 'var(--app-bg)',
+          'bg-soft': 'var(--app-bg-soft)',
+          surface: 'var(--app-surface)',
+          'surface-alt': 'var(--app-surface-alt)',
+          text: 'var(--app-text)',
+          'text-muted': 'var(--app-text-muted)',
+          border: 'var(--app-border)',
+          'border-strong': 'var(--app-border-strong)',
+          primary: 'var(--app-primary)',
+          'primary-strong': 'var(--app-primary-strong)'
+        }
       },
     },
   },

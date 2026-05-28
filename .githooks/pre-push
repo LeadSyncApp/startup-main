@@ -1,0 +1,20 @@
+#!/bin/sh
+# Prevent accidental pushes to main branch.
+# This hook reads ref lines from stdin: <local_ref> <local_sha> <remote_ref> <remote_sha>
+
+while read local_ref local_sha remote_ref remote_sha
+do
+  branch=$(echo "$local_ref" | sed 's|refs/heads/||')
+  if [ "$branch" = "main" ]; then
+    echo "\nERROR: Pushing to 'main' is blocked by repository policy."
+    echo "Create a feature branch and open a PR targeting 'dev'. Only merge to 'main' after tests and approval."
+    echo "If you really must override, set ALLOW_PUSH_TO_MAIN=1 in your environment (NOT recommended).\n"
+    if [ "$ALLOW_PUSH_TO_MAIN" = "1" ]; then
+      echo "ALLOW_PUSH_TO_MAIN is set; allowing push to 'main' (override)."
+    else
+      exit 1
+    fi
+  fi
+done
+
+exit 0

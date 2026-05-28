@@ -1,14 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Search,
-  X,
-  Users,
-  MessageSquare,
-  ShoppingCart,
-  Command,
-} from "lucide-react";
+import { Search, X, Users, MessageSquare, ShoppingCart, Command } from "lucide-react";
 import { api } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 
@@ -31,7 +24,6 @@ export default function GlobalSearch() {
   const { token } = useAuth();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Keyboard shortcut: Ctrl+K / Cmd+K to open
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
@@ -40,27 +32,29 @@ export default function GlobalSearch() {
       }
       if (e.key === "Escape") setOpen(false);
     };
+
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Focus input when opened
   useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-      setQuery("");
-      setResults([]);
-      setSelectedIndex(0);
-    }
+    if (!open) return;
+
+    const timer = setTimeout(() => inputRef.current?.focus(), 100);
+    setQuery("");
+    setResults([]);
+    setSelectedIndex(0);
+
+    return () => clearTimeout(timer);
   }, [open]);
 
-  // Debounced search
   const doSearch = useCallback(
     async (q: string) => {
       if (!q.trim() || !token) {
         setResults([]);
         return;
       }
+
       setLoading(true);
       try {
         const [leads, conversations, orders] = await Promise.all([
@@ -71,46 +65,43 @@ export default function GlobalSearch() {
 
         const mapped: SearchResult[] = [];
 
-        // Leads
-        (Array.isArray(leads) ? leads : []).slice(0, 5).forEach((l: any) => {
+        (Array.isArray(leads) ? leads : []).slice(0, 5).forEach((lead: any) => {
           mapped.push({
             type: "lead",
-            id: l.id,
-            title: l.name || l.contact || "Unknown",
-            subtitle: `${l.channel || "—"} · ${l.segment || "NEW"}`,
-            link: l.conversationId
-              ? `/dashboard/conversations?conversationId=${l.conversationId}`
-              : `/dashboard/leads`,
+            id: lead.id,
+            title: lead.name || lead.contact || "Unknown",
+            subtitle: `${lead.channel || "—"} · ${lead.segment || "NEW"}`,
+            link: lead.conversationId
+              ? `/dashboard/conversations?conversationId=${lead.conversationId}`
+              : "/dashboard/leads",
           });
         });
 
-        // Conversations
         const convItems = conversations?.items || conversations || [];
-        (Array.isArray(convItems) ? convItems : []).slice(0, 5).forEach((c: any) => {
+        (Array.isArray(convItems) ? convItems : []).slice(0, 5).forEach((conversation: any) => {
           mapped.push({
             type: "conversation",
-            id: c.id,
-            title: c.lead?.name || c.lead?.contact || "Conversation",
-            subtitle: c.lastMessage?.substring(0, 60) || "No messages",
-            link: `/dashboard/conversations?conversationId=${c.id}`,
+            id: conversation.id,
+            title: conversation.lead?.name || conversation.lead?.contact || "Conversation",
+            subtitle: conversation.lastMessage?.substring(0, 60) || "No messages",
+            link: `/dashboard/conversations?conversationId=${conversation.id}`,
           });
         });
 
-        // Orders
-        (Array.isArray(orders) ? orders : []).slice(0, 5).forEach((o: any) => {
+        (Array.isArray(orders) ? orders : []).slice(0, 5).forEach((order: any) => {
           mapped.push({
             type: "order",
-            id: o.id,
-            title: o.summary?.substring(0, 50) || `Order ${o.id.substring(0, 8)}`,
-            subtitle: `${o.status} · ₹${o.amount || 0}`,
-            link: `/dashboard/orders`,
+            id: order.id,
+            title: order.summary?.substring(0, 50) || `Order ${order.id.substring(0, 8)}`,
+            subtitle: `${order.status} · ₹${order.amount || 0}`,
+            link: "/dashboard/orders",
           });
         });
 
         setResults(mapped);
         setSelectedIndex(0);
-      } catch (err) {
-        console.error("Search failed", err);
+      } catch (error) {
+        console.error("Search failed", error);
       } finally {
         setLoading(false);
       }
@@ -129,10 +120,10 @@ export default function GlobalSearch() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelectedIndex((i) => Math.min(i + 1, results.length - 1));
+      setSelectedIndex((current) => Math.min(current + 1, results.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSelectedIndex((i) => Math.max(i - 1, 0));
+      setSelectedIndex((current) => Math.max(current - 1, 0));
     } else if (e.key === "Enter" && results[selectedIndex]) {
       navigate(results[selectedIndex].link);
       setOpen(false);
@@ -142,31 +133,29 @@ export default function GlobalSearch() {
   const typeIcon = (type: string) => {
     switch (type) {
       case "lead":
-        return <Users className="w-4 h-4 text-blue-500" />;
+        return <Users className="w-4 h-4 text-cyan-500" />;
       case "conversation":
-        return <MessageSquare className="w-4 h-4 text-green-500" />;
+        return <MessageSquare className="w-4 h-4 text-emerald-500" />;
       case "order":
-        return <ShoppingCart className="w-4 h-4 text-purple-500" />;
+        return <ShoppingCart className="w-4 h-4 text-violet-500" />;
       default:
-        return <Search className="w-4 h-4 text-slate-400" />;
+        return <Search className="w-4 h-4 text-[var(--app-text-muted)]" />;
     }
   };
 
   return (
     <>
-      {/* Trigger button */}
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-lg text-slate-500 hover:text-slate-700 text-sm transition-all group"
+        className="flex items-center gap-2 px-3 py-2 bg-[var(--app-bg-soft)] hover:bg-[var(--app-bg-soft)]/80 border border-[var(--app-border)] rounded-lg text-[var(--app-text-muted)] hover:text-[var(--app-text)] text-sm transition-all group"
       >
-        <Search className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
+        <Search className="w-4 h-4 text-[var(--app-text-muted)] group-hover:text-[var(--app-text)]" />
         <span className="hidden sm:inline font-medium">Search...</span>
-        <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-slate-200/50 rounded text-[10px] font-mono text-slate-500">
+        <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[var(--app-border)]/50 rounded text-[10px] font-mono text-[var(--app-text-muted)]">
           <Command className="w-3 h-3" />K
         </kbd>
       </button>
 
-      {/* Modal overlay */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -177,73 +166,69 @@ export default function GlobalSearch() {
             className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4"
             onClick={() => setOpen(false)}
           >
-            {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <div className="absolute inset-0 bg-[var(--app-backdrop)] backdrop-blur-sm" />
 
-            {/* Dialog */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="relative w-full max-w-lg bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden"
+              className="relative w-full max-w-lg bg-[var(--app-surface)] border border-[var(--app-border)] rounded-xl shadow-2xl overflow-hidden text-[var(--app-text)]"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Input */}
-              <div className="flex items-center gap-3 px-4 border-b border-slate-100">
-                <Search className="w-5 h-5 text-slate-400" />
+              <div className="flex items-center gap-3 px-4 border-b border-[var(--app-border)]">
+                <Search className="w-5 h-5 text-[var(--app-text-muted)]" />
                 <input
                   ref={inputRef}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Search leads, conversations, orders..."
-                  className="flex-1 py-4 bg-transparent text-slate-800 placeholder-slate-400 text-sm outline-none"
+                  className="flex-1 py-4 bg-transparent text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] text-sm outline-none"
                 />
                 {query && (
-                  <button onClick={() => setQuery("")} className="text-slate-400 hover:text-slate-600">
+                  <button onClick={() => setQuery("")} className="text-[var(--app-text-muted)] hover:text-[var(--app-text)]">
                     <X className="w-4 h-4" />
                   </button>
                 )}
               </div>
 
-              {/* Results */}
               <div className="max-h-80 overflow-y-auto scrollbar-thin">
                 {loading && (
-                  <div className="px-4 py-8 text-center text-slate-400 text-sm">
-                    <div className="inline-block w-5 h-5 border-2 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
+                  <div className="px-4 py-8 text-center text-[var(--app-text-muted)] text-sm">
+                    <div className="inline-block w-5 h-5 border-2 border-[var(--app-border)] border-t-cyan-600 rounded-full animate-spin" />
                   </div>
                 )}
 
                 {!loading && query && results.length === 0 && (
-                  <div className="px-4 py-8 text-center text-slate-400 text-sm">
+                  <div className="px-4 py-8 text-center text-[var(--app-text-muted)] text-sm">
                     No results for "{query}"
                   </div>
                 )}
 
                 {!loading && results.length > 0 && (
                   <ul className="py-2">
-                    {results.map((r, i) => (
+                    {results.map((result, index) => (
                       <li
-                        key={`${r.type}-${r.id}`}
+                        key={`${result.type}-${result.id}`}
                         className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
-                          i === selectedIndex
-                            ? "bg-indigo-50 text-indigo-900 font-medium"
-                            : "text-slate-600 hover:bg-slate-50"
+                          index === selectedIndex
+                            ? "bg-cyan-50 text-[var(--app-text)] font-medium dark:bg-cyan-500/10"
+                            : "text-[var(--app-text-muted)] hover:bg-[var(--app-bg-soft)]"
                         }`}
                         onClick={() => {
-                          navigate(r.link);
+                          navigate(result.link);
                           setOpen(false);
                         }}
-                        onMouseEnter={() => setSelectedIndex(i)}
+                        onMouseEnter={() => setSelectedIndex(index)}
                       >
-                        {typeIcon(r.type)}
+                        {typeIcon(result.type)}
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate">{r.title}</p>
-                          <p className="text-xs text-slate-400 truncate mt-0.5">{r.subtitle}</p>
+                          <p className="text-sm font-semibold truncate">{result.title}</p>
+                          <p className="text-xs text-[var(--app-text-muted)] truncate mt-0.5">{result.subtitle}</p>
                         </div>
-                        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium bg-slate-100 px-1.5 py-0.5 rounded">
-                          {r.type}
+                        <span className="text-[10px] uppercase tracking-wider text-[var(--app-text-muted)] font-medium bg-[var(--app-bg-soft)] px-1.5 py-0.5 rounded">
+                          {result.type}
                         </span>
                       </li>
                     ))}
@@ -251,18 +236,23 @@ export default function GlobalSearch() {
                 )}
 
                 {!loading && !query && (
-                  <div className="px-4 py-8 text-center text-slate-400 text-sm">
+                  <div className="px-4 py-8 text-center text-[var(--app-text-muted)] text-sm">
                     Type to search across leads, conversations, and orders
                   </div>
                 )}
               </div>
 
-              {/* Footer */}
-              <div className="flex items-center justify-between px-4 py-2 border-t border-slate-100 text-[10px] text-slate-400 bg-slate-50/50">
-                <div className="flex items-center gap-3">
-                  <span><kbd className="px-1 py-0.5 bg-white border border-slate-200 shadow-xs rounded text-slate-500 font-medium">↑↓</kbd> navigate</span>
-                  <span><kbd className="px-1 py-0.5 bg-white border border-slate-200 shadow-xs rounded text-slate-500 font-medium">↵</kbd> select</span>
-                  <span><kbd className="px-1 py-0.5 bg-white border border-slate-200 shadow-xs rounded text-slate-500 font-medium">esc</kbd> close</span>
+              <div className="flex items-center justify-between px-4 py-2 border-t border-[var(--app-border)] text-[10px] text-[var(--app-text-muted)] bg-[var(--app-bg-soft)]/50">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span>
+                    <kbd className="px-1 py-0.5 bg-[var(--app-surface)] border border-[var(--app-border)] rounded text-[var(--app-text-muted)] font-medium">↑↓</kbd> navigate
+                  </span>
+                  <span>
+                    <kbd className="px-1 py-0.5 bg-[var(--app-surface)] border border-[var(--app-border)] rounded text-[var(--app-text-muted)] font-medium">↵</kbd> select
+                  </span>
+                  <span>
+                    <kbd className="px-1 py-0.5 bg-[var(--app-surface)] border border-[var(--app-border)] rounded text-[var(--app-text-muted)] font-medium">esc</kbd> close
+                  </span>
                 </div>
               </div>
             </motion.div>

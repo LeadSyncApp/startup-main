@@ -7,10 +7,11 @@ export default function ToastContainer() {
       toastOptions={{
         duration: 4000,
         style: {
-          background: "#fff",
-          color: "#363636",
+          background: "var(--app-surface)",
+          color: "var(--app-text)",
+          border: "1px solid var(--app-border)",
           borderRadius: "12px",
-          boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+          boxShadow: "var(--app-shadow-lg)",
         },
       }}
     />
