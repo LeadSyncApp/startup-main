@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
-import { notificationService } from "../services/notification.service";
+import { notificationService } from "../services/infrastructure/notification.service";
 import { emitToAgent } from "../lib/socket";
 
 const createUserSchema = z.object({

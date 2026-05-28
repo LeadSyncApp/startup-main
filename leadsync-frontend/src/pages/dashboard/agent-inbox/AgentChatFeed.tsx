@@ -1,5 +1,5 @@
 import { MessageSquare, ExternalLink, ThumbsUp } from "lucide-react";
-import { NoteData } from "../../../components/dashboard/InternalNote";
+import { NoteData } from "../internal-note/InternalNote";
 
 interface Props {
   notesLoading: boolean;

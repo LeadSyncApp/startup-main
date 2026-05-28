@@ -4,10 +4,10 @@ import { prisma } from "../lib/prisma";
 import { sendTelegramMessage } from "../bot/telegram.sender";
 import { ConversationMode, MessageSender, Role } from "@prisma/client";
 import { emitToCompany, emitToConversation, safeEmitConversationUpdate, emitToAgent, emitToCompanyAdmin } from "../lib/socket";
-import { sarvamService } from "../services/sarvam.service";
+import { sarvamService } from "../services/ai/sarvam.service";
 import { TelegramAdapter } from "../adapters/telegram.adapter";
-import { generateAgentSuggestion, generateConversationSummary } from "../services/ai.service";
-import { notificationService } from "../services/notification.service";
+import { generateAgentSuggestion, generateConversationSummary } from "../services/ai/ai.service";
+import { notificationService } from "../services/infrastructure/notification.service";
 
 const router = Router();
 

@@ -2,7 +2,7 @@ import { Server as HttpServer } from "http";
 import { Server } from "socket.io";
 import { prisma } from "./prisma";
 import axios from "axios";
-import { IS_LOCAL } from "../services/telegramSelector.service";
+import { IS_LOCAL } from "../services/messaging/telegramSelector.service";
 
 let io: Server | null = null;
 

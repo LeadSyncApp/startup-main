@@ -103,8 +103,8 @@ router.get('/orders/:id', async (req, res) => {
 router.get('/mock-payment/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { orderWorkflowService } = await import("../services/orderWorkflow.service.js");
-    const { invoiceService } = await import("../services/invoice.service.js");
+    const { orderWorkflowService } = await import("../services/workflow/orderWorkflow.service.js");
+    const { invoiceService } = await import("../services/integrations/invoice.service.js");
     const { MessageSender } = await import("@prisma/client");
     const { emitToConversation } = await import("../lib/socket.js");
 
@@ -128,7 +128,7 @@ router.get('/mock-payment/:id', async (req, res) => {
     const invoice = await invoiceService.ensureInvoiceForPaidOrder(id, "MOCK_PAY_" + Date.now());
 
     // 3. Update Lead Stats
-    const { recalculateLeadCRM } = await import("../services/crm.service.js");
+    const { recalculateLeadCRM } = await import("../services/integrations/crm.service.js");
     await recalculateLeadCRM(order.leadId, order.companyId);
 
     // 4. Confirmation Message

@@ -3,7 +3,7 @@ import { MoreHorizontal, Trash, Volume2, ArrowLeft } from "lucide-react";
 import { AgentChatFeed } from "./AgentChatFeed";
 import { AgentChatFooter } from "./AgentChatFooter";
 import { UserData } from "./types";
-import { NoteData } from "../../../components/dashboard/InternalNote";
+import { NoteData } from "../internal-note/InternalNote";
 
 interface Props {
   mobileView: "list" | "detail" | "context";

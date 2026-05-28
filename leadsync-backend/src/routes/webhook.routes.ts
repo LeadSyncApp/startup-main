@@ -3,8 +3,8 @@ import { prisma } from "../lib/prisma";
 import crypto from "crypto";
 import { OrderStatus, MessageSender } from "@prisma/client";
 import { emitToConversation, safeEmitConversationUpdate } from "../lib/socket";
-import { invoiceService } from "../services/invoice.service";
-import { orderWorkflowService } from "../services/orderWorkflow.service";
+import { invoiceService } from "../services/integrations/invoice.service";
+import { orderWorkflowService } from "../services/workflow/orderWorkflow.service";
 
 
 const router = Router();

@@ -10,16 +10,16 @@ import {
 } from "@prisma/client";
 import axios from "axios";
 import { emitToCompany, emitToConversation, safeEmitConversationUpdate } from "../lib/socket";
-import { generateBotReply } from "../services/ai.service";
-import { aiQueue } from "../services/queue.service";
-import { cacheService } from "../services/cache.service";
-import { intelligenceService } from "../services/intelligence.service";
-import { orderParserService } from "../services/orderParser.service";
-import { notificationService } from "../services/notification.service";
-import { sarvamService } from "../services/sarvam.service";
-import { assignmentService } from "../services/assignment.service";
+import { generateBotReply } from "../services/ai/ai.service";
+import { aiQueue } from "../services/infrastructure/queue.service";
+import { cacheService } from "../services/infrastructure/cache.service";
+import { intelligenceService } from "../services/ai/intelligence.service";
+import { orderParserService } from "../services/ai/orderParser.service";
+import { notificationService } from "../services/infrastructure/notification.service";
+import { sarvamService } from "../services/ai/sarvam.service";
+import { assignmentService } from "../services/workflow/assignment.service";
 import { handleBotMessage } from "../bot/bot.logic";
-import { recalculateLeadCRM } from "../services/crm.service";
+import { recalculateLeadCRM } from "../services/integrations/crm.service";
 
 /* ===============================
    TYPES

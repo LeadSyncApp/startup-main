@@ -1,5 +1,5 @@
 import { Sparkles } from "lucide-react";
-import { MessageComposer } from "../../../components/dashboard/MessageComposer";
+import { MessageComposer } from "@/pages/dashboard/message-composer/MessageComposer";
 import { UserData } from "./types";
 
 interface Props {

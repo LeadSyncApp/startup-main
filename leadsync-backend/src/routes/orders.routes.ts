@@ -10,7 +10,7 @@ import {
 } from "@prisma/client";
 import { sendTelegramMessage } from "../bot/telegram.sender";
 import { safeEmitConversationUpdate, emitToCompany, emitToAgent } from "../lib/socket";
-import { recalculateLeadCRM } from "../services/crm.service";
+import { recalculateLeadCRM } from "../services/integrations/crm.service";
 
 const router = Router();
 
@@ -249,7 +249,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
-import { orderWorkflowService } from "../services/orderWorkflow.service";
+import { orderWorkflowService } from "../services/workflow/orderWorkflow.service";
 
 /* ===============================
    APPROVE ORDER (Activates Pending)
