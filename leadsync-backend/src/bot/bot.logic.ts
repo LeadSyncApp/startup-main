@@ -1,8 +1,8 @@
 import { prisma } from "../lib/prisma";
 import { OrderStatus } from "@prisma/client";
-import { newOrderArrivalService } from "../services/newOrderArrival.service";
+import { newOrderArrivalService } from "../services/workflow/newOrderArrival.service";
 import { getSession, updateSession, getMenuSnapshot, calculateRetrieval, createFreshSessionState } from "../utils/shop-ai.utils";
-import { generateShopReply } from "../services/ai.service";
+import { generateShopReply } from "../services/ai/ai.service";
 
 /* =====================================================
    SWITCH TO BOT MODE

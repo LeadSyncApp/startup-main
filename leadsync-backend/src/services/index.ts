@@ -1,0 +1,28 @@
+// Re-export all services for convenient imports from ../services
+
+// AI Services
+export { IntelligenceService, intelligenceService } from "./ai/intelligence.service";
+export { orderParserService } from "./ai/orderParser.service";
+export { SarvamService, sarvamService } from "./ai/sarvam.service";
+
+// Infrastructure Services
+export { NotificationService, notificationService } from "./infrastructure/notification.service";
+export { aiQueue } from "./infrastructure/queue.service";
+
+// Integration Services
+export { recalculateLeadCRM } from "./integrations/crm.service";
+export { invoiceService } from "./integrations/invoice.service";
+export { paymentService } from "./integrations/payment.service";
+export { sendEmail, generatePasswordResetHtml } from "./integrations/email.service";
+export { FileParserService, fileParserService, upload } from "./integrations/fileParser.service";
+
+// Messaging Services
+export { CustomerMessagingService, customerMessagingService } from "./messaging/customerMessaging.service";
+export { createOrder } from "./messaging/telegram.service";
+export { TelegramLeaseService, INSTANCE_ID, IS_LOCAL, MY_ROLE } from "./messaging/telegramSelector.service";
+
+// Workflow Services
+export { NewOrderArrivalService, newOrderArrivalService } from "./workflow/newOrderArrival.service";
+export { OrderWorkflowService, orderWorkflowService } from "./workflow/orderWorkflow.service";
+export { startAutomationRunner, stopAutomationRunner } from "./workflow/automation.service";
+export { AssignmentService, assignmentService } from "./workflow/assignment.service";

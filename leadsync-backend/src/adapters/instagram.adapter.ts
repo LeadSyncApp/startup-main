@@ -8,13 +8,13 @@ import {
 } from "@prisma/client";
 import axios from "axios";
 import { emitToCompany, emitToConversation, safeEmitConversationUpdate } from "../lib/socket";
-import { generateBotReply } from "../services/ai.service";
-import { aiQueue } from "../services/queue.service";
-import { cacheService } from "../services/cache.service";
-import { intelligenceService } from "../services/intelligence.service";
-import { orderParserService } from "../services/orderParser.service";
-import { notificationService } from "../services/notification.service";
-import { assignmentService } from "../services/assignment.service";
+import { generateBotReply } from "../services/ai/ai.service";
+import { aiQueue } from "../services/infrastructure/queue.service";
+import { cacheService } from "../services/infrastructure/cache.service";
+import { intelligenceService } from "../services/ai/intelligence.service";
+import { orderParserService } from "../services/ai/orderParser.service";
+import { notificationService } from "../services/infrastructure/notification.service";
+import { assignmentService } from "../services/workflow/assignment.service";
 
 /* ===============================
    TYPES

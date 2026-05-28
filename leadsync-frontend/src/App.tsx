@@ -13,17 +13,17 @@ const Signup        = lazy(() => import("./pages/Signup"));
 const OrderTracking = lazy(() => import("./pages/OrderTracking"));
 
 // ─── Lazy dashboard pages ────────────────────────────────────────
-const DashboardHome  = lazy(() => import("./pages/dashboard/DashboardHome"));
-const AgentInbox     = lazy(() => import("./pages/dashboard/AgentInbox"));
-const Conversations  = lazy(() => import("./pages/dashboard/Conversations"));
-const Leads          = lazy(() => import("./pages/dashboard/Leads"));
-const Orders         = lazy(() => import("./pages/dashboard/Orders"));
-const Revenue        = lazy(() => import("./pages/dashboard/Revenue"));
-const Reports        = lazy(() => import("./pages/dashboard/Reports"));
-const Settings       = lazy(() => import("./pages/dashboard/Settings"));
-const UserManagement = lazy(() => import("./pages/dashboard/UserManagement"));
-const Broadcasts     = lazy(() => import("./pages/dashboard/Broadcasts"));
-const OwnerDashboard = lazy(() => import("./pages/dashboard/OwnerDashboard"));
+const DashboardHome  = lazy(() => import("./pages/dashboard/dashboard-home/DashboardHome"));
+const AgentInbox     = lazy(() => import("./pages/dashboard/agent-inbox/AgentInbox"));
+const Conversations  = lazy(() => import("./pages/dashboard/conversations/Conversations"));
+const Leads          = lazy(() => import("./pages/dashboard/leads/Leads"));
+const Orders         = lazy(() => import("./pages/dashboard/orders/Orders"));
+const Revenue        = lazy(() => import("./pages/dashboard/revenue/Revenue"));
+const Reports        = lazy(() => import("./pages/dashboard/reports/Reports"));
+const Settings       = lazy(() => import("./pages/dashboard/settings/Settings"));
+const UserManagement = lazy(() => import("./pages/dashboard/user-management/UserManagement"));
+const Broadcasts     = lazy(() => import("./pages/dashboard/broadcasts/Broadcasts"));
+const OwnerDashboard = lazy(() => import("./pages/dashboard/owner-dashboard/OwnerDashboard"));
 
 // ─── Route-level loading fallback ───────────────────────────────
 function PageFallback() {

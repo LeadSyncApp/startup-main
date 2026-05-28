@@ -8,8 +8,8 @@ process.on("unhandledRejection", (reason, promise) => {
 import http from "http";
 import app from "./app";
 import { initSocket } from "./lib/socket";
-import { startAutomationRunner } from "./services/automation.service";
-import { startTelegramPolling } from "./services/telegram.polling";
+import { startAutomationRunner } from "./services/workflow/automation.service";
+import { startTelegramPolling } from "./services/messaging/telegram.polling";
 import { prisma } from "./lib/prisma";
 
 // If the infrastructure sets PORT=3000, we must run the backend on 4000 to prevent conflict with Vite
