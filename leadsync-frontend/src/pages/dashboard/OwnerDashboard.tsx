@@ -106,14 +106,14 @@ export default function OwnerDashboard() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-4 lg:p-6" id="owner-dashboard-root">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-app pb-5">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Owner Assignment Control</h1>
+          <h1 className="text-2xl font-bold text-app-text tracking-tight">Owner Assignment Control</h1>
           <p className="text-sm text-slate-500">Monitor live updates, round-robin assignments, and agent capacity.</p>
         </div>
         <button
           onClick={() => fetchStats()}
-          className="inline-flex items-center gap-2 justify-center px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg shadow-sm transition-colors"
+          className="inline-flex items-center gap-2 justify-center px-4 py-2 border border-app bg-app-surface hover:bg-app-bg text-slate-700 text-sm font-medium rounded-lg shadow-sm transition-colors"
           id="btn-refresh-stats"
         >
           <RefreshCw className="h-4 w-4" />
@@ -123,43 +123,43 @@ export default function OwnerDashboard() {
 
       {/* Numerical Highlights */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4" id="owner-dashboard-grid-headers">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div className="bg-app-surface p-5 rounded-xl border border-app shadow-sm flex items-center gap-4">
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
             <Users className="h-6 w-6" />
           </div>
           <div>
             <div className="text-xs font-medium text-slate-400">Total Staff</div>
-            <div className="text-2xl font-bold text-slate-900">{stats.length}</div>
+            <div className="text-2xl font-bold text-app-text">{stats.length}</div>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div className="bg-app-surface p-5 rounded-xl border border-app shadow-sm flex items-center gap-4">
           <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
             <MessageSquare className="h-6 w-6" />
           </div>
           <div>
             <div className="text-xs font-medium text-slate-400">Current Sessions</div>
-            <div className="text-2xl font-bold text-slate-900">{totalOpen}</div>
+            <div className="text-2xl font-bold text-app-text">{totalOpen}</div>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div className="bg-app-surface p-5 rounded-xl border border-app shadow-sm flex items-center gap-4">
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
             <CheckCircle className="h-6 w-6" />
           </div>
           <div>
             <div className="text-xs font-medium text-slate-400">Resolved Conversations</div>
-            <div className="text-2xl font-bold text-slate-900">{totalClosed}</div>
+            <div className="text-2xl font-bold text-app-text">{totalClosed}</div>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-slate-50 text-slate-600 rounded-lg">
+        <div className="bg-app-surface p-5 rounded-xl border border-app shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-app-bg text-app-muted rounded-lg">
             <Activity className="h-6 w-6" />
           </div>
           <div>
             <div className="text-xs font-medium text-slate-400">Total Assignments</div>
-            <div className="text-2xl font-bold text-slate-900">{totalAssignments}</div>
+            <div className="text-2xl font-bold text-app-text">{totalAssignments}</div>
           </div>
         </div>
       </div>
@@ -167,7 +167,7 @@ export default function OwnerDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Agents Listing & Status Monitor */}
         <div className="lg:col-span-2 space-y-6">
-          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-app-text flex items-center gap-2">
             <UserCheck className="h-5 w-5 text-indigo-500" />
             Agent Performance Profiles
           </h2>
@@ -179,11 +179,11 @@ export default function OwnerDashboard() {
                 : 100;
 
               return (
-                <div key={agent.agentId} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:border-slate-300 transition-all overflow-hidden">
-                  <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
+                <div key={agent.agentId} className="bg-app-surface border border-app rounded-xl shadow-sm hover:border-slate-300 transition-all overflow-hidden">
+                  <div className="p-5 border-b border-app flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-app-bg/50">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900">{agent.name}</span>
+                        <span className="font-bold text-app-text">{agent.name}</span>
                         <span className="text-xs font-medium text-slate-400">({agent.role})</span>
                         {agent.isActive ? (
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">
@@ -191,7 +191,7 @@ export default function OwnerDashboard() {
                             Active
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-app-muted">
                             Inactive
                           </span>
                         )}
@@ -286,25 +286,25 @@ export default function OwnerDashboard() {
 
         {/* Live Assignment Activity and Channels */}
         <div className="space-y-6">
-          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-app-text flex items-center gap-2">
             <Activity className="h-5 w-5 text-indigo-500" />
             Live Activity Stream
           </h2>
 
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 space-y-4">
+          <div className="bg-app-surface border border-app rounded-xl shadow-sm p-4 space-y-4">
             {activities.length === 0 ? (
               <p className="text-sm text-slate-400 italic py-8 text-center">No recent assignment updates.</p>
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
                 {activities.map((act) => (
-                  <div key={act.conversationId} className="p-3 border-l-2 border-indigo-500 bg-slate-50 rounded-r-lg space-y-2">
+                  <div key={act.conversationId} className="p-3 border-l-2 border-indigo-500 bg-app-bg rounded-r-lg space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-800">{act.leadName}</span>
                       <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded font-bold uppercase">
                         {act.channel}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-600">
+                    <div className="text-xs text-app-muted">
                       {act.assignedTo ? (
                         <span>Assigned to <strong className="text-indigo-600">{act.assignedTo.name}</strong></span>
                       ) : (

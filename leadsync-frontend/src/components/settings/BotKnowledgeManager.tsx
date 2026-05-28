@@ -25,7 +25,7 @@ const getTypeConfig = (type?: string) => {
   if (t === "FAQ") return TYPE_CONFIG.FAQ;
   if (t === "RULE") return TYPE_CONFIG.RULE;
   if (t === "PRODUCT") return TYPE_CONFIG.PRODUCT;
-  return { label: type || "FAQ", color: "bg-slate-100 text-slate-700 border-slate-200" };
+  return { label: type || "FAQ", color: "bg-slate-100 text-slate-700 border-app" };
 };
 
 export function BotKnowledgeManager() {
@@ -101,7 +101,7 @@ export function BotKnowledgeManager() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Brain size={18} className="text-indigo-600" />
-          <h2 className="text-lg font-bold text-slate-900">Bot Knowledge Base</h2>
+          <h2 className="text-lg font-bold text-app-text">Bot Knowledge Base</h2>
           <span className="text-xs bg-indigo-50 text-indigo-600 font-bold px-2 py-0.5 rounded-full border border-indigo-100">
             {items.filter(i => i.isActive).length} active
           </span>
@@ -136,7 +136,7 @@ export function BotKnowledgeManager() {
                   <button
                     key={t}
                     onClick={() => setNewType(t)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${newType === t ? TYPE_CONFIG[t].color + " shadow-sm" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${newType === t ? TYPE_CONFIG[t].color + " shadow-sm" : "bg-app-surface border-app text-slate-500 hover:border-slate-300"}`}
                   >
                     {TYPE_CONFIG[t].label}
                   </button>
@@ -148,7 +148,7 @@ export function BotKnowledgeManager() {
                 value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
                 maxLength={120}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                className="w-full border border-app rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
               />
               <div>
                 <textarea
@@ -157,7 +157,7 @@ export function BotKnowledgeManager() {
                   onChange={e => setNewContent(e.target.value)}
                   rows={3}
                   maxLength={600}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                  className="w-full border border-app rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
                 />
                 <div className="text-right text-[10px] text-slate-400 -mt-1">{newContent.length}/600</div>
               </div>
@@ -200,7 +200,7 @@ export function BotKnowledgeManager() {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className={`border rounded-xl p-3.5 transition-all ${item.isActive ? "bg-white border-slate-200" : "bg-slate-50 border-slate-100 opacity-60"}`}
+                  className={`border rounded-xl p-3.5 transition-all ${item.isActive ? "bg-app-surface border-app" : "bg-app-bg border-app opacity-60"}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">

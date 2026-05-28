@@ -27,7 +27,7 @@ const STATUS_ICON: Record<string, JSX.Element> = {
 };
 
 const STATUS_BADGE: Record<string, string> = {
-  PENDING: "bg-slate-100 text-slate-600",
+  PENDING: "bg-slate-100 text-app-muted",
   SENDING: "bg-blue-100 text-blue-700",
   DONE: "bg-emerald-100 text-emerald-700",
   FAILED: "bg-red-100 text-red-600",
@@ -92,17 +92,17 @@ export default function Broadcasts() {
     <PageTransition className="space-y-8 max-w-4xl">
       {/* HEADER */}
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">Broadcasts</h1>
+        <h1 className="text-3xl font-bold text-app-text">Broadcasts</h1>
         <p className="mt-1 text-sm text-slate-500">
           Send a message to a group of leads on a specific channel.
         </p>
       </div>
 
       {/* COMPOSE */}
-      <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+      <div className="rounded-2xl border bg-app-surface shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-app flex items-center gap-2">
           <Megaphone className="h-5 w-5 text-cyan-600" />
-          <h2 className="text-lg font-semibold text-slate-900">New Broadcast</h2>
+          <h2 className="text-lg font-semibold text-app-text">New Broadcast</h2>
         </div>
 
         <div className="px-6 py-6 space-y-6">
@@ -117,7 +117,7 @@ export default function Broadcasts() {
                   className={`px-4 py-2 rounded-xl border text-sm font-medium transition ${
                     channel === ch.value
                       ? ch.color + " ring-2 ring-offset-1 ring-current"
-                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                      : "bg-app-bg text-app-muted border-app hover:bg-slate-100"
                   }`}
                 >
                   {ch.label}
@@ -137,7 +137,7 @@ export default function Broadcasts() {
                   className={`p-3 rounded-xl border text-left transition ${
                     segment === seg.value
                       ? "bg-slate-900 text-white border-slate-900"
-                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      : "bg-app-bg text-slate-700 border-app hover:bg-slate-100"
                   }`}
                 >
                   <p className="font-semibold text-sm">{seg.label}</p>
@@ -157,7 +157,7 @@ export default function Broadcasts() {
               onChange={(e) => setMessage(e.target.value.slice(0, charLimit))}
               rows={5}
               placeholder="Hi! 👋 We have a special offer just for you…"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
+              className="w-full rounded-xl border border-app bg-app-bg px-4 py-3 text-sm text-app-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
             />
             <p className="mt-1 text-xs text-slate-400 text-right">
               {message.length}/{charLimit}
@@ -184,27 +184,27 @@ export default function Broadcasts() {
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4"
+            className="bg-app-surface rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4"
           >
             <div className="flex items-center gap-3">
               <div className="bg-amber-100 p-2 rounded-xl">
                 <Megaphone className="h-5 w-5 text-amber-600" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900">Confirm Broadcast</h3>
+              <h3 className="text-lg font-bold text-app-text">Confirm Broadcast</h3>
             </div>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-app-muted">
               You are about to send a message to all{" "}
-              <span className="font-semibold text-slate-900">{selectedSegmentLabel}</span> leads on{" "}
-              <span className="font-semibold text-slate-900">{selectedChannelLabel}</span>. This cannot
+              <span className="font-semibold text-app-text">{selectedSegmentLabel}</span> leads on{" "}
+              <span className="font-semibold text-app-text">{selectedChannelLabel}</span>. This cannot
               be undone.
             </p>
-            <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-700 italic border border-slate-200">
+            <div className="bg-app-bg rounded-xl p-4 text-sm text-slate-700 italic border border-app">
               "{message.slice(0, 120)}{message.length > 120 ? "…" : ""}"
             </div>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setShowConfirm(false)}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                className="px-4 py-2 text-sm text-app-muted hover:bg-slate-100 rounded-xl transition"
               >
                 Cancel
               </button>
@@ -220,9 +220,9 @@ export default function Broadcasts() {
       )}
 
       {/* HISTORY */}
-      <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100">
-          <h2 className="text-lg font-semibold text-slate-900">Broadcast History</h2>
+      <div className="rounded-2xl border bg-app-surface shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-app">
+          <h2 className="text-lg font-semibold text-app-text">Broadcast History</h2>
         </div>
 
         {loadingHistory ? (
@@ -248,7 +248,7 @@ export default function Broadcasts() {
               const isExpanded = expandedRows.has(b.id);
 
               return (
-              <div key={b.id} className="px-6 py-4 hover:bg-slate-50 transition">
+              <div key={b.id} className="px-6 py-4 hover:bg-app-bg transition">
                 <div className="flex items-start justify-between gap-4">
                   <div
                     className="flex-1 min-w-0 cursor-pointer"

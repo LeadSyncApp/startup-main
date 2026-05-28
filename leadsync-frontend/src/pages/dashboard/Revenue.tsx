@@ -135,7 +135,7 @@ export default function Revenue() {
       {/* HEADER */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Revenue Insights</h1>
+          <h1 className="text-3xl font-bold text-app-text">Revenue Insights</h1>
           <p className="mt-1 text-sm text-slate-500">Last 30 days · delivered &amp; paid orders</p>
         </div>
         <button
@@ -150,14 +150,14 @@ export default function Revenue() {
 
       {/* KPI CARDS */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border bg-app-surface p-6 shadow-sm">
           <div className="flex items-center gap-4">
             <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
               <DollarSign className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Revenue</p>
-              <p className="text-2xl font-bold text-slate-900">{formatINR(totalRevenue)}</p>
+              <p className="text-2xl font-bold text-app-text">{formatINR(totalRevenue)}</p>
               {trend !== null && (
                 <p className={`mt-0.5 text-xs font-medium flex items-center gap-0.5 ${trend >= 0 ? "text-emerald-600" : "text-red-500"}`}>
                   {trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -168,34 +168,34 @@ export default function Revenue() {
           </div>
         </div>
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border bg-app-surface p-6 shadow-sm">
           <div className="flex items-center gap-4">
             <div className="bg-cyan-50 p-3 rounded-xl border border-cyan-100">
               <Receipt className="h-6 w-6 text-cyan-600" />
             </div>
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Orders Delivered</p>
-              <p className="text-2xl font-bold text-slate-900">{orderCount}</p>
+              <p className="text-2xl font-bold text-app-text">{orderCount}</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border bg-app-surface p-6 shadow-sm">
           <div className="flex items-center gap-4">
             <div className="bg-amber-50 p-3 rounded-xl border border-amber-100">
               <TrendingUp className="h-6 w-6 text-amber-600" />
             </div>
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg. Order Value</p>
-              <p className="text-2xl font-bold text-slate-900">{formatINR(avgOrderValue)}</p>
+              <p className="text-2xl font-bold text-app-text">{formatINR(avgOrderValue)}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* REVENUE + FORECAST CHART */}
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900 mb-1">Revenue &amp; 14-Day Forecast</h2>
+      <div className="rounded-2xl border bg-app-surface p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-app-text mb-1">Revenue &amp; 14-Day Forecast</h2>
         <p className="text-xs text-slate-400 mb-6">Solid = actual · dashed amber = AI linear regression forecast</p>
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -222,10 +222,10 @@ export default function Revenue() {
 
       {/* SALES FUNNEL */}
       {funnelStages.length > 0 && (
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border bg-app-surface p-6 shadow-sm">
           <div className="flex items-center gap-2 mb-1">
             <BarChart2 className="h-4 w-4 text-slate-400" />
-            <h2 className="text-lg font-semibold text-slate-900">Sales Funnel</h2>
+            <h2 className="text-lg font-semibold text-app-text">Sales Funnel</h2>
           </div>
           <p className="text-xs text-slate-400 mb-5">
             Conversion rate: <span className="font-bold text-emerald-600">{funnelData?.conversionRate ?? 0}%</span> of {funnelData?.totalLeads ?? 0} total leads
@@ -238,7 +238,7 @@ export default function Revenue() {
                     <ChevronRight size={12} className="text-slate-300" />
                     <span className="text-sm font-semibold text-slate-700">{stage.label}</span>
                   </div>
-                  <span className="text-sm font-bold text-slate-900">{stage.value.toLocaleString()}</span>
+                  <span className="text-sm font-bold text-app-text">{stage.value.toLocaleString()}</span>
                 </div>
                 <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
                   <div
@@ -254,19 +254,19 @@ export default function Revenue() {
 
       {/* AGENT PERFORMANCE + CHANNEL ATTRIBUTION */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border bg-white overflow-hidden shadow-sm">
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+        <div className="rounded-2xl border bg-app-surface overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b border-app flex items-center gap-2">
             <Trophy className="h-4 w-4 text-amber-400" />
-            <h2 className="text-lg font-semibold text-slate-900">Agent Leaderboard</h2>
+            <h2 className="text-lg font-semibold text-app-text">Agent Leaderboard</h2>
           </div>
           <div className="divide-y divide-slate-100">
             {(agentStats.length > 0 ? agentStats : agentPerformance).length === 0 ? (
               <p className="p-10 text-center text-slate-400 text-sm">No agent-processed orders yet.</p>
             ) : (
               (agentStats.length > 0 ? agentStats : agentPerformance).map((a: any, i: number) => (
-                <div key={i} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition">
+                <div key={i} className="px-6 py-4 flex items-center justify-between hover:bg-app-bg transition">
                   <div className="flex items-center gap-3">
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white ${i === 0 ? "bg-amber-400" : i === 1 ? "bg-slate-400" : i === 2 ? "bg-orange-400" : "bg-slate-200 text-slate-600"}`}>
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white ${i === 0 ? "bg-amber-400" : i === 1 ? "bg-slate-400" : i === 2 ? "bg-orange-400" : "bg-slate-200 text-app-muted"}`}>
                       {i + 1}
                     </span>
                     <div>
@@ -286,10 +286,10 @@ export default function Revenue() {
           </div>
         </div>
 
-        <div className="rounded-2xl border bg-white overflow-hidden shadow-sm">
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+        <div className="rounded-2xl border bg-app-surface overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b border-app flex items-center gap-2">
             <Radio className="h-4 w-4 text-slate-400" />
-            <h2 className="text-lg font-semibold text-slate-900">Channel Attribution</h2>
+            <h2 className="text-lg font-semibold text-app-text">Channel Attribution</h2>
           </div>
           <div className="px-6 py-6 space-y-5">
             {channelAttribution.length === 0 ? (
@@ -315,9 +315,9 @@ export default function Revenue() {
       </div>
 
       {/* RECENT DELIVERIES */}
-      <div className="rounded-2xl border bg-white overflow-hidden shadow-sm">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Recent Deliveries</h2>
+      <div className="rounded-2xl border bg-app-surface overflow-hidden shadow-sm">
+        <div className="px-6 py-4 border-b border-app flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-app-text">Recent Deliveries</h2>
           <Clock className="h-4 w-4 text-slate-400" />
         </div>
         <div className="divide-y divide-slate-100">
@@ -325,9 +325,9 @@ export default function Revenue() {
             <p className="p-10 text-center text-slate-400">No delivered orders found.</p>
           ) : (
             recentOrders.map((o: any, idx: number) => (
-              <div key={idx} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition">
+              <div key={idx} className="px-6 py-4 flex items-center justify-between hover:bg-app-bg transition">
                 <div>
-                  <p className="font-medium text-slate-900">{o.customer}</p>
+                  <p className="font-medium text-app-text">{o.customer}</p>
                   <p className="text-xs text-slate-400">{new Date(o.date).toLocaleDateString("en-IN")}</p>
                 </div>
                 <p className="font-bold text-emerald-600">{formatINR(o.amount)}</p>

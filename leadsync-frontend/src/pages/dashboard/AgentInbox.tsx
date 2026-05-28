@@ -518,9 +518,9 @@ export default function AgentInbox() {
     <div className="flex flex-col lg:flex-row h-full lg:h-[calc(100vh-80px)] bg-[#F8F9FB] -mx-6 lg:-mx-10 -my-8 lg:-my-10 font-['Inter',sans-serif] overflow-hidden">
       {/* LEFT PANEL - List View */}
       <div
-        className={`w-full lg:w-[380px] bg-white border-r border-[#D9DADC] flex-col z-10 shrink-0 h-full overflow-hidden ${mobileView === "list" ? "flex" : "hidden lg:flex"}`}
+        className={`w-full lg:w-[380px] bg-app-surface border-r border-[#D9DADC] flex-col z-10 shrink-0 h-full overflow-hidden ${mobileView === "list" ? "flex" : "hidden lg:flex"}`}
       >
-        <div className="p-4 border-b border-[#D9DADC] bg-white flex flex-col gap-3 sticky top-0 z-20">
+        <div className="p-4 border-b border-[#D9DADC] bg-app-surface flex flex-col gap-3 sticky top-0 z-20">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-[#1F2937]">Team Inbox</h2>
           </div>
@@ -529,7 +529,7 @@ export default function AgentInbox() {
           <div className="relative">
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="w-full flex items-center justify-between px-3 py-2 bg-white border border-[#D9DADC] hover:border-[#0052CC] rounded-lg shadow-sm text-sm transition-all"
+              className="w-full flex items-center justify-between px-3 py-2 bg-app-surface border border-[#D9DADC] hover:border-[#0052CC] rounded-lg shadow-sm text-sm transition-all"
             >
               <span className="text-[#6B7280] flex items-center gap-2">
                 <Users className="w-4 h-4" /> Start a new chat...
@@ -545,8 +545,8 @@ export default function AgentInbox() {
                   className="fixed inset-0 z-30"
                   onClick={() => setIsDropdownOpen(false)}
                 />
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#E2E8F0] shadow-lg rounded-lg max-h-[300px] overflow-y-auto z-40">
-                  <div className="p-2 border-b border-[#E2E8F0] sticky top-0 bg-white">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-app-surface border border-[#E2E8F0] shadow-lg rounded-lg max-h-[300px] overflow-y-auto z-40">
+                  <div className="p-2 border-b border-[#E2E8F0] sticky top-0 bg-app-surface">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       Available Agents
                     </p>
@@ -563,11 +563,11 @@ export default function AgentInbox() {
                           handleSelectAgent(agent);
                           setIsDropdownOpen(false);
                         }}
-                        className="w-full flex items-center justify-between p-3 hover:bg-slate-50 border-b border-[#F1F5F9] last:border-0 transition-colors text-left"
+                        className="w-full flex items-center justify-between p-3 hover:bg-app-bg border-b border-[#F1F5F9] last:border-0 transition-colors text-left"
                       >
                         <div className="flex items-center gap-3">
                           <div className="relative">
-                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold uppercase text-xs">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-app-muted font-bold uppercase text-xs">
                               {agent.name.charAt(0)}
                             </div>
                             <span
@@ -584,7 +584,7 @@ export default function AgentInbox() {
                           </div>
                         </div>
                         <span
-                          className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${agent.isActive ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-600"}`}
+                          className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${agent.isActive ? "bg-green-50 text-green-700" : "bg-slate-100 text-app-muted"}`}
                         >
                           {agent.isActive ? "Active" : "Away"}
                         </span>
@@ -607,13 +607,13 @@ export default function AgentInbox() {
                 placeholder="Filter recent chats..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-[#D9DADC] rounded-md text-sm outline-none focus:border-[#0052CC] focus:ring-1 focus:ring-[#0052CC] transition-shadow placeholder-[#6B7280]"
+                className="w-full pl-9 pr-3 py-2 bg-app-bg border border-[#D9DADC] rounded-md text-sm outline-none focus:border-[#0052CC] focus:ring-1 focus:ring-[#0052CC] transition-shadow placeholder-[#6B7280]"
               />
             </div>
           </div>
         </div>
 
-        <div className="flex bg-slate-50 border-b border-[#E2E8F0] px-4 py-2 items-center justify-between z-10">
+        <div className="flex bg-app-bg border-b border-[#E2E8F0] px-4 py-2 items-center justify-between z-10">
           <button
             onClick={() => {
               if (isSelectionMode) clearSelection();
@@ -671,7 +671,7 @@ export default function AgentInbox() {
                       handleSelectAgent(agent);
                     }
                   }}
-                  className={`relative overflow-visible cursor-pointer bg-white border rounded-lg p-4 transition-all duration-200 hover:shadow-xs group ${
+                  className={`relative overflow-visible cursor-pointer bg-app-surface border rounded-lg p-4 transition-all duration-200 hover:shadow-xs group ${
                     isSelected && !isSelectionMode
                       ? "border-[#0052CC] ring-1 ring-[#0052CC]/50 shadow-xs"
                       : isChecked
@@ -756,7 +756,7 @@ export default function AgentInbox() {
                               }}
                             ></div>
                             <div
-                              className="absolute top-8 right-0 w-44 bg-white border border-[#E2E8F0] shadow-lg rounded-md overflow-hidden z-30"
+                              className="absolute top-8 right-0 w-44 bg-app-surface border border-[#E2E8F0] shadow-lg rounded-md overflow-hidden z-30"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <button
@@ -790,11 +790,11 @@ export default function AgentInbox() {
 
       {/* CENTER PANEL - Detailed View */}
       <div
-        className={`flex-1 flex-col bg-white border-r border-[#D9DADC] h-full overflow-hidden ${mobileView === "detail" ? "flex" : "hidden lg:flex"}`}
+        className={`flex-1 flex-col bg-app-surface border-r border-[#D9DADC] h-full overflow-hidden ${mobileView === "detail" ? "flex" : "hidden lg:flex"}`}
       >
         {selectedAgent ? (
           <>
-            <div className="p-4 lg:p-6 border-b border-[#D9DADC] bg-white flex items-start justify-between sticky top-0 z-10 shadow-xs">
+            <div className="p-4 lg:p-6 border-b border-[#D9DADC] bg-app-surface flex items-start justify-between sticky top-0 z-10 shadow-xs">
               <div className="flex items-start gap-3">
                 <button
                   onClick={() => setMobileView("list")}
@@ -862,7 +862,7 @@ export default function AgentInbox() {
                   className={`p-2 border rounded-md transition-colors duration-200 flex items-center justify-center min-w-[44px] min-h-[44px] cursor-pointer ${
                     soundEnabled
                       ? "bg-blue-50 text-[#0052CC] border-blue-200 hover:bg-blue-100"
-                      : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
+                      : "bg-app-bg text-slate-400 border-app hover:bg-slate-100"
                   }`}
                 >
                   {soundEnabled ? (
@@ -880,7 +880,7 @@ export default function AgentInbox() {
                 <div className="flex items-center gap-2 relative">
                   <button
                     onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-                    className="p-2 border border-[#D9DADC] rounded-md text-[#6B7280] hover:bg-slate-50 transition min-w-[44px] min-h-[44px] flex justify-center items-center"
+                    className="p-2 border border-[#D9DADC] rounded-md text-[#6B7280] hover:bg-app-bg transition min-w-[44px] min-h-[44px] flex justify-center items-center"
                   >
                     <MoreVertical className="w-4 h-4" />
                   </button>
@@ -891,7 +891,7 @@ export default function AgentInbox() {
                         className="fixed inset-0 z-20"
                         onClick={() => setIsMoreMenuOpen(false)}
                       ></div>
-                      <div className="absolute top-full right-0 mt-1 w-48 bg-white border border-[#E2E8F0] shadow-lg rounded-md overflow-hidden z-30">
+                      <div className="absolute top-full right-0 mt-1 w-48 bg-app-surface border border-[#E2E8F0] shadow-lg rounded-md overflow-hidden z-30">
                         <button
                           onClick={() => handleDeleteChat(false)}
                           className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
@@ -921,7 +921,7 @@ export default function AgentInbox() {
 
                 <div className="space-y-4">
                   {notesLoading ? (
-                    <div className="text-center py-10 text-sm text-slate-500 bg-white border border-slate-100 rounded-xl shadow-xs">
+                    <div className="text-center py-10 text-sm text-slate-500 bg-app-surface border border-app rounded-xl shadow-xs">
                       <div className="animate-pulse flex flex-col items-center justify-center gap-2">
                         <div className="h-4 w-24 bg-slate-200 rounded"></div>
                         <div className="text-xs text-slate-400">
@@ -930,7 +930,7 @@ export default function AgentInbox() {
                       </div>
                     </div>
                   ) : notes.length === 0 ? (
-                    <div className="text-center py-12 px-6 text-sm text-slate-500 bg-white border border-[#E2E8F0] rounded-xl shadow-sm">
+                    <div className="text-center py-12 px-6 text-sm text-slate-500 bg-app-surface border border-[#E2E8F0] rounded-xl shadow-sm">
                       <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-[#0052CC] mx-auto mb-3">
                         <MessageSquare className="w-6 h-6" />
                       </div>
@@ -942,7 +942,7 @@ export default function AgentInbox() {
                         below.
                       </p>
 
-                      <div className="border-t border-slate-100 pt-4 max-w-md mx-auto">
+                      <div className="border-t border-app pt-4 max-w-md mx-auto">
                         <p className="text-xs font-semibold text-slate-500 mb-2">
                           💡 Try one of these quick topics:
                         </p>
@@ -957,7 +957,7 @@ export default function AgentInbox() {
                               onClick={() => {
                                 handleSendNote(suggestion);
                               }}
-                              className="text-xs p-2 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-[#0052CC] border border-slate-200 hover:border-blue-200 rounded-lg text-left transition"
+                              className="text-xs p-2 bg-app-bg hover:bg-blue-50 text-slate-700 hover:text-[#0052CC] border border-app hover:border-blue-200 rounded-lg text-left transition"
                             >
                               ⚡ {suggestion}
                             </button>
@@ -998,7 +998,7 @@ export default function AgentInbox() {
                               className={`relative p-3.5 rounded-2xl ${
                                 isMe
                                   ? "bg-[#0052CC] text-white rounded-tr-none shadow-sm"
-                                  : "bg-white text-slate-800 border border-[#E2E8F0] rounded-tl-none shadow-xs"
+                                  : "bg-app-surface text-slate-800 border border-[#E2E8F0] rounded-tl-none shadow-xs"
                               }`}
                             >
                               <p className="text-sm leading-relaxed whitespace-pre-wrap">
@@ -1010,7 +1010,7 @@ export default function AgentInbox() {
                                   className={`flex items-center gap-1.5 pt-2 border-t mt-2 ${
                                     isMe
                                       ? "border-blue-500/50"
-                                      : "border-slate-100"
+                                      : "border-app"
                                   }`}
                                 >
                                   <span
@@ -1045,7 +1045,7 @@ export default function AgentInbox() {
                                         : "bg-blue-50 border-blue-200 text-blue-700"
                                       : isMe
                                         ? "bg-blue-600/30 border-blue-500/20 text-blue-100 hover:bg-blue-600/50"
-                                        : "bg-slate-50 border-slate-100 text-slate-400 hover:bg-slate-100"
+                                        : "bg-app-bg border-app text-slate-400 hover:bg-slate-100"
                                   }`}
                                   title="Thumbs Up"
                                 >
@@ -1076,7 +1076,7 @@ export default function AgentInbox() {
             </div>
 
             {/* Quick SUGGESTIONS */}
-            <div className="px-4 py-2.5 bg-slate-50 border-t border-[#D9DADC] flex flex-wrap items-center gap-2">
+            <div className="px-4 py-2.5 bg-app-bg border-t border-[#D9DADC] flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1 select-none">
                 <Sparkles className="w-3 h-3 text-amber-500 animate-pulse" />{" "}
                 Collaboration Chips:
@@ -1102,7 +1102,7 @@ export default function AgentInbox() {
                 <button
                   key={idx}
                   onClick={() => handleSendNote(chip.text)}
-                  className="text-[11px] font-medium px-2.5 py-1 bg-white hover:bg-blue-50 text-slate-600 hover:text-[#0052CC] border border-slate-200 hover:border-blue-200 rounded-full transition-all shadow-xs cursor-pointer select-none active:scale-95"
+                  className="text-[11px] font-medium px-2.5 py-1 bg-app-surface hover:bg-blue-50 text-app-muted hover:text-[#0052CC] border border-app hover:border-blue-200 rounded-full transition-all shadow-xs cursor-pointer select-none active:scale-95"
                 >
                   {chip.label}
                 </button>
@@ -1116,7 +1116,7 @@ export default function AgentInbox() {
             />
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-slate-50 text-[#6B7280]">
+          <div className="flex-1 flex items-center justify-center bg-app-bg text-[#6B7280]">
             <div className="text-center">
               <Users className="w-12 h-12 mx-auto mb-4 text-[#D9DADC]" />
               <p className="font-medium text-[#1F2937]">Select a team member</p>
@@ -1130,7 +1130,7 @@ export default function AgentInbox() {
 
       {/* RIGHT PANEL - Context / CRM Data */}
       <div
-        className={`w-full lg:w-[320px] bg-white flex-col shrink-0 h-full overflow-y-auto lg:overflow-visible border-l border-[#D9DADC] ${mobileView === "context" ? "flex z-20 absolute inset-0 lg:relative lg:flex" : "hidden lg:flex"}`}
+        className={`w-full lg:w-[320px] bg-app-surface flex-col shrink-0 h-full overflow-y-auto lg:overflow-visible border-l border-[#D9DADC] ${mobileView === "context" ? "flex z-20 absolute inset-0 lg:relative lg:flex" : "hidden lg:flex"}`}
       >
         {selectedAgent ? (
           <div className="p-6">
@@ -1149,7 +1149,7 @@ export default function AgentInbox() {
               Member Profile
             </h3>
 
-            <div className="flex flex-col items-center text-center gap-3 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <div className="flex flex-col items-center text-center gap-3 mb-6 bg-app-bg p-4 rounded-xl border border-app">
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold uppercase shadow-sm">
                 {selectedAgent.name.charAt(0)}
               </div>
@@ -1187,7 +1187,7 @@ export default function AgentInbox() {
                         Active Account
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                      <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-app">
                         Disabled
                       </span>
                     )}
@@ -1202,12 +1202,12 @@ export default function AgentInbox() {
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setMobileView("detail")}
-                className="flex flex-col items-center justify-center gap-2 p-3 border border-[#D9DADC] rounded-md hover:bg-slate-50 transition text-[#1F2937] min-h-[80px]"
+                className="flex flex-col items-center justify-center gap-2 p-3 border border-[#D9DADC] rounded-md hover:bg-app-bg transition text-[#1F2937] min-h-[80px]"
               >
                 <MessageSquare className="w-5 h-5 text-[#0052CC]" />
                 <span className="text-xs font-semibold">Message</span>
               </button>
-              <button className="flex flex-col items-center justify-center gap-2 p-3 border border-[#D9DADC] rounded-md hover:bg-slate-50 transition text-[#1F2937] min-h-[80px]">
+              <button className="flex flex-col items-center justify-center gap-2 p-3 border border-[#D9DADC] rounded-md hover:bg-app-bg transition text-[#1F2937] min-h-[80px]">
                 <Clock className="w-5 h-5 text-[#0052CC]" />
                 <span className="text-xs font-semibold">Schedule Sync</span>
               </button>
@@ -1224,19 +1224,19 @@ export default function AgentInbox() {
 
       {confirmModal.isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform scale-100 transition-all border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-app-surface rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform scale-100 transition-all border border-app animate-in fade-in zoom-in-95 duration-200">
             <div className="p-6">
-              <h3 className="text-lg font-bold text-slate-900 mb-2">
+              <h3 className="text-lg font-bold text-app-text mb-2">
                 {confirmModal.title}
               </h3>
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-app-muted">
                 {confirmModal.message}
               </p>
             </div>
-            <div className="bg-slate-50 px-6 py-4 flex items-center justify-end gap-3 border-t border-slate-100">
+            <div className="bg-app-bg px-6 py-4 flex items-center justify-end gap-3 border-t border-app">
               <button
                 onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
-                className="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition"
+                className="px-4 py-2 text-sm font-semibold text-slate-700 bg-app-surface border border-slate-300 rounded-lg hover:bg-app-bg transition"
               >
                 Cancel
               </button>

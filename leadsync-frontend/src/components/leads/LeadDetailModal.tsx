@@ -82,7 +82,7 @@ export default function LeadDetailModal({
               exit={{ opacity: 0, scale: 0.8, y: 20 }}
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               onClick={(e) => e.stopPropagation()}
-              className="rounded-xl bg-white p-6 shadow-2xl max-w-sm border border-slate-200/50"
+              className="rounded-xl bg-app-surface p-6 shadow-2xl max-w-sm border border-app/50"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0 }}
@@ -93,13 +93,13 @@ export default function LeadDetailModal({
                 <div className="rounded-full bg-red-100 p-3">
                   <AlertCircle className="h-6 w-6 text-red-600" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900">Delete Lead?</h3>
+                <h3 className="text-lg font-bold text-app-text">Delete Lead?</h3>
               </motion.div>
               <motion.p
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.15 }}
-                className="mb-6 text-sm text-slate-600 font-medium"
+                className="mb-6 text-sm text-app-muted font-medium"
               >
                 This action cannot be undone. All associated conversations and deals will remain for audit purposes.
               </motion.p>
@@ -136,7 +136,7 @@ export default function LeadDetailModal({
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.1 }}
-        className="border-b border-slate-200/50 mb-6"
+        className="border-b border-app/50 mb-6"
       >
         <div className="flex gap-8">
           {['details', 'notes', 'conversations'].map((tab, idx) => (
@@ -151,7 +151,7 @@ export default function LeadDetailModal({
               className={`border-b-2 px-1 py-3 text-sm font-bold tracking-wide transition-all ${
                 activeTab === tab
                   ? 'border-cyan-600 text-cyan-600'
-                  : 'border-transparent text-slate-600 hover:text-slate-900'
+                  : 'border-transparent text-app-muted hover:text-app-text'
               }`}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -190,12 +190,12 @@ export default function LeadDetailModal({
                   visible: { opacity: 1, x: 0 }
                 }}
               >
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">Name</label>
+                <label className="block text-xs font-semibold text-app-muted uppercase tracking-wide">Name</label>
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.1 }}
-                  className="mt-2 text-slate-900 font-semibold text-base"
+                  className="mt-2 text-app-text font-semibold text-base"
                 >
                   {lead.name}
                 </motion.p>
@@ -208,7 +208,7 @@ export default function LeadDetailModal({
                   visible: { opacity: 1, x: 0 }
                 }}
               >
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">Email</label>
+                <label className="block text-xs font-semibold text-app-muted uppercase tracking-wide">Email</label>
                 <motion.a
                   href={`mailto:${lead.email}`}
                   initial={{ opacity: 0 }}
@@ -229,7 +229,7 @@ export default function LeadDetailModal({
                     visible: { opacity: 1, x: 0 }
                   }}
                 >
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">Phone</label>
+                  <label className="block text-xs font-semibold text-app-muted uppercase tracking-wide">Phone</label>
                   <motion.a
                     href={`tel:${lead.phone}`}
                     initial={{ opacity: 0 }}
@@ -251,12 +251,12 @@ export default function LeadDetailModal({
                     visible: { opacity: 1, x: 0 }
                   }}
                 >
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">Business</label>
+                  <label className="block text-xs font-semibold text-app-muted uppercase tracking-wide">Business</label>
                   <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.15 }}
-                    className="mt-2 text-slate-900 font-semibold text-base"
+                    className="mt-2 text-app-text font-semibold text-base"
                   >
                     {lead.company}
                   </motion.p>
@@ -270,12 +270,12 @@ export default function LeadDetailModal({
                   visible: { opacity: 1, x: 0 }
                 }}
               >
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">Source</label>
+                <label className="block text-xs font-semibold text-app-muted uppercase tracking-wide">Source</label>
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.2 }}
-                  className="mt-2 capitalize text-slate-900 font-semibold text-base"
+                  className="mt-2 capitalize text-app-text font-semibold text-base"
                 >
                   {lead.source}
                 </motion.p>
@@ -288,7 +288,7 @@ export default function LeadDetailModal({
                   visible: { opacity: 1, x: 0 }
                 }}
               >
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">Priority</label>
+                <label className="block text-xs font-semibold text-app-muted uppercase tracking-wide">Priority</label>
                 <motion.span
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -301,7 +301,7 @@ export default function LeadDetailModal({
                       ? 'bg-amber-100/80 text-amber-700 border border-amber-200/50'
                       : lead.priority === 'medium'
                       ? 'bg-sky-100/80 text-sky-700 border border-sky-200/50'
-                      : 'bg-slate-100/80 text-slate-700 border border-slate-200/50'
+                      : 'bg-slate-100/80 text-slate-700 border border-app/50'
                   }`}
                 >
                   {lead.priority}
@@ -315,12 +315,12 @@ export default function LeadDetailModal({
                   visible: { opacity: 1, x: 0 }
                 }}
               >
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">Created</label>
+                <label className="block text-xs font-semibold text-app-muted uppercase tracking-wide">Created</label>
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.25 }}
-                  className="mt-2 text-slate-900 font-semibold text-base"
+                  className="mt-2 text-app-text font-semibold text-base"
                 >
                   {formatDateIN(lead.createdAt)}
                 </motion.p>
@@ -332,14 +332,14 @@ export default function LeadDetailModal({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.3 }}
-              className="border-t border-slate-200/50 pt-5"
+              className="border-t border-app/50 pt-5"
             >
-              <label className="block text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">Assign Agent</label>
+              <label className="block text-sm font-bold text-app-text mb-3 uppercase tracking-wide">Assign Agent</label>
               <motion.select
                 whileFocus={{ boxShadow: '0 0 0 3px rgba(6, 182, 212, 0.1)' }}
                 value={lead.agentId ?? ''}
                 onChange={(e) => onAssignAgent(lead.id, e.target.value)}
-                className="w-full rounded-lg border border-slate-300/50 bg-white px-4 py-2.5 text-slate-900 font-medium focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all cursor-pointer"
+                className="w-full rounded-lg border border-slate-300/50 bg-app-surface px-4 py-2.5 text-app-text font-medium focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all cursor-pointer"
               >
                 <option value="">Unassigned</option>
                 {agents.map((a) => (
@@ -355,7 +355,7 @@ export default function LeadDetailModal({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.4 }}
-              className="border-t border-slate-200/50 pt-5"
+              className="border-t border-app/50 pt-5"
             >
               <motion.button
                 whileHover={{ scale: 1.05, backgroundColor: 'rgb(127, 29, 29)' }}
@@ -395,7 +395,7 @@ export default function LeadDetailModal({
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="rounded-lg bg-gradient-to-br from-slate-50 to-slate-100/50 p-5 text-slate-900 border border-slate-200/50 font-medium leading-relaxed"
+                      className="rounded-lg bg-gradient-to-br from-slate-50 to-slate-100/50 p-5 text-app-text border border-app/50 font-medium leading-relaxed"
                     >
                       {lead.notes}
                     </motion.div>
@@ -434,7 +434,7 @@ export default function LeadDetailModal({
                     onChange={(e) => setNewNote(e.target.value)}
                     placeholder="Enter your note here..."
                     rows={5}
-                    className="w-full rounded-lg border border-slate-300/50 bg-white px-4 py-3 text-slate-900 placeholder-slate-400 caret-cyan-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all font-medium resize-none"
+                    className="w-full rounded-lg border border-slate-300/50 bg-app-surface px-4 py-3 text-app-text placeholder-slate-400 caret-cyan-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all font-medium resize-none"
                   />
                   <motion.div
                     initial={{ opacity: 0, y: 5 }}
@@ -483,7 +483,7 @@ export default function LeadDetailModal({
             <motion.label
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="block text-sm font-bold text-slate-900 uppercase tracking-wide"
+              className="block text-sm font-bold text-app-text uppercase tracking-wide"
             >
               Chat History
             </motion.label>
@@ -491,7 +491,7 @@ export default function LeadDetailModal({
               initial={{ opacity: 0, borderColor: 'rgba(148, 163, 184, 0)' }}
               animate={{ opacity: 1, borderColor: 'rgba(226, 232, 240, 0.5)' }}
               transition={{ duration: 0.3 }}
-              className="max-h-96 overflow-y-auto rounded-lg border border-slate-200/50 bg-gradient-to-b from-white via-slate-50/30 to-slate-50 p-4 space-y-3"
+              className="max-h-96 overflow-y-auto rounded-lg border border-app/50 bg-gradient-to-b from-white via-slate-50/30 to-slate-50 p-4 space-y-3"
             >
               {messages.length === 0 ? (
                 <motion.div
@@ -533,7 +533,7 @@ export default function LeadDetailModal({
                       whileHover={{ x: m.sender === 'lead' ? -2 : 2 }}
                       className={`rounded-lg px-4 py-3 text-sm transition-all ${
                         m.sender === 'lead'
-                          ? 'ml-0 mr-8 bg-slate-200/80 border border-slate-300/50 text-slate-900'
+                          ? 'ml-0 mr-8 bg-slate-200/80 border border-slate-300/50 text-app-text'
                           : m.sender === 'auto'
                           ? 'ml-8 mr-0 bg-amber-100/80 border border-amber-200/50 text-amber-900'
                           : 'ml-8 mr-0 bg-cyan-100/80 border border-cyan-200/50 text-cyan-900'
@@ -543,7 +543,7 @@ export default function LeadDetailModal({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.05 }}
-                        className="text-xs font-bold text-slate-600 uppercase tracking-wider"
+                        className="text-xs font-bold text-app-muted uppercase tracking-wider"
                       >
                         {m.sender === 'lead'
                           ? '📌 Potential Customer'
@@ -563,7 +563,7 @@ export default function LeadDetailModal({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.15 }}
-                        className="mt-2 text-xs text-slate-600/70 font-medium"
+                        className="mt-2 text-xs text-app-muted/70 font-medium"
                       >
                         {formatDateIN(m.timestamp)}{' '}
                         {new Date(m.timestamp).toLocaleTimeString('en-IN', {

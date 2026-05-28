@@ -35,7 +35,7 @@ export default function Reports() {
   return (
     <PageTransition className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">Reports & Analytics</h1>
+        <h1 className="text-3xl font-bold text-app-text">Reports & Analytics</h1>
         <p className="mt-1 text-slate-500">
           General business performance reports.
         </p>
@@ -43,9 +43,9 @@ export default function Reports() {
 
       <div className="grid gap-4 lg:gap-6 md:grid-cols-2">
         {/* Performance Summary */}
-        <div className="rounded-2xl border bg-white p-6 shadow-sm space-y-4">
+        <div className="rounded-2xl border bg-app-surface p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-slate-900">Performance Overview</h2>
+            <h2 className="font-semibold text-app-text">Performance Overview</h2>
             <BarChart3 className="h-5 w-5 text-slate-400" />
           </div>
 
@@ -62,15 +62,15 @@ export default function Reports() {
           <div className="space-y-3">
             <div className="flex justify-between text-sm py-2 border-b border-slate-50">
               <span className="text-slate-500">Total Generated Revenue</span>
-              <span className="font-bold text-slate-900">{formatINR(stats?.totalRevenue || 0)}</span>
+              <span className="font-bold text-app-text">{formatINR(stats?.totalRevenue || 0)}</span>
             </div>
             <div className="flex justify-between text-sm py-2 border-b border-slate-50">
               <span className="text-slate-500">Total Delivered Orders</span>
-              <span className="font-bold text-slate-900">{stats?.orderCount || 0}</span>
+              <span className="font-bold text-app-text">{stats?.orderCount || 0}</span>
             </div>
             <div className="flex justify-between text-sm py-2 border-b border-slate-50">
               <span className="text-slate-500">Avg. Order Value</span>
-              <span className="font-bold text-slate-900">{formatINR(stats?.avgOrderValue || 0)}</span>
+              <span className="font-bold text-app-text">{formatINR(stats?.avgOrderValue || 0)}</span>
             </div>
             <div className="flex justify-between text-sm py-2">
               <span className="text-slate-500">vs Previous Period</span>
@@ -104,7 +104,7 @@ export default function Reports() {
                 catch { /* toast handled by caller */ }
                 finally { setExportingOrders(false); }
               }}
-              className="bg-white/10 hover:bg-white/20 disabled:opacity-50 py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5"
+              className="bg-app-surface/10 hover:bg-app-surface/20 disabled:opacity-50 py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5"
             >
               <Download className="h-3.5 w-3.5" />
               {exportingOrders ? "Exporting…" : "Orders.xlsx"}
@@ -117,7 +117,7 @@ export default function Reports() {
                 catch { /* silent */ }
                 finally { setExportingLeads(false); }
               }}
-              className="bg-white/10 hover:bg-white/20 disabled:opacity-50 py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5"
+              className="bg-app-surface/10 hover:bg-app-surface/20 disabled:opacity-50 py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5"
             >
               <Download className="h-3.5 w-3.5" />
               {exportingLeads ? "Exporting…" : "Leads.xlsx"}

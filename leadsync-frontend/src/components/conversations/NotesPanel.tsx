@@ -148,7 +148,7 @@ export function NotesPanel({ conversationId }: Props) {
                 key={note.id}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white border border-amber-200 rounded-xl p-3 shadow-sm group"
+                className="bg-app-surface border border-amber-200 rounded-xl p-3 shadow-sm group"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -156,7 +156,7 @@ export function NotesPanel({ conversationId }: Props) {
                       <div className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center text-white text-[9px] font-black">
                         {(note.authorName || "?").charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-[10px] font-bold text-slate-600">{note.authorName}</span>
+                      <span className="text-[10px] font-bold text-app-muted">{note.authorName}</span>
                       <span className="text-[9px] text-slate-400 ml-auto">
                         {new Date(note.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </span>
@@ -186,7 +186,7 @@ export function NotesPanel({ conversationId }: Props) {
       </div>
 
       {/* Compose area */}
-      <div className="p-3 bg-white border-t border-amber-200 relative">
+      <div className="p-3 bg-app-surface border-t border-amber-200 relative">
         {/* Mention suggestions */}
         <AnimatePresence>
           {mentionQuery !== null && filteredMembers.length > 0 && (
@@ -194,7 +194,7 @@ export function NotesPanel({ conversationId }: Props) {
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 4 }}
-              className="absolute bottom-full left-3 right-3 mb-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50"
+              className="absolute bottom-full left-3 right-3 mb-1 bg-app-surface border border-app rounded-xl shadow-xl overflow-hidden z-50"
             >
               {filteredMembers.slice(0, 5).map(m => (
                 <button

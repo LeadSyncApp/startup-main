@@ -152,7 +152,7 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
       </nav>
 
       {/* User Section */}
-      <div className="px-3 py-4 border-t border-slate-100">
+      <div className="px-3 py-4 border-t border-app">
         <div className="flex items-center gap-3 px-3 py-2 mb-2">
           <div className="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center text-cyan-700 font-bold text-xs shrink-0">
             {user?.name?.charAt(0)?.toUpperCase() || "?"}

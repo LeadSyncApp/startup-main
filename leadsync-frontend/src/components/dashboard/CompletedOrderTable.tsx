@@ -8,9 +8,9 @@ export default function CompletedOrderTable({ orders }: Props) {
   if (orders.length === 0) return null;
 
   return (
-    <div className="w-full overflow-x-auto bg-white rounded-2xl border border-slate-100 shadow-sm">
+    <div className="w-full overflow-x-auto bg-app-surface rounded-2xl border border-app shadow-sm">
       <table className="w-full text-xs text-left">
-        <thead className="bg-slate-50 text-slate-500 uppercase font-bold">
+        <thead className="bg-app-bg text-slate-500 uppercase font-bold">
           <tr>
             <th className="p-4">Completed Date</th>
             <th className="p-4">Summary</th>
@@ -22,7 +22,7 @@ export default function CompletedOrderTable({ orders }: Props) {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {orders.map(order => (
-             <tr key={order.id} className="hover:bg-slate-50 transition">
+             <tr key={order.id} className="hover:bg-app-bg transition">
                <td className="p-4 text-slate-500 whitespace-nowrap">
                  {order.completedAt ? new Date(order.completedAt).toLocaleDateString() : 'N/A'}
                </td>

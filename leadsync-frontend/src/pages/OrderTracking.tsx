@@ -40,17 +40,17 @@ export default function OrderTracking() {
     }, [id]);
 
     if (loading) return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="min-h-screen bg-app-bg flex items-center justify-center">
             <div className="h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
         </div>
     );
 
     if (error || !order) return (
-        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="min-h-screen bg-app-bg flex flex-col items-center justify-center p-6 text-center">
             <div className="h-16 w-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4">
                 <AlertCircle size={32} />
             </div>
-            <h1 className="text-xl font-bold text-slate-900">Tracking Unavailable</h1>
+            <h1 className="text-xl font-bold text-app-text">Tracking Unavailable</h1>
             <p className="text-slate-500 mt-2">{error}</p>
         </div>
     );
@@ -74,14 +74,14 @@ export default function OrderTracking() {
     const isCancelled = order.status === "CANCELLED" || order.status === "REJECTED";
 
     return (
-        <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-app-bg py-12 px-4 sm:px-6 lg:px-8">
             {/* {order.status === "DELIVERED" && <Confetti numberOfPieces={200} recycle={false} />} */}
 
-            <div className="max-w-md mx-auto bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+            <div className="max-w-md mx-auto bg-app-surface rounded-3xl shadow-xl overflow-hidden border border-app">
 
                 {/* Header */}
                 <div className="bg-indigo-600 p-8 text-center relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-full bg-white/10 opacity-20"
+                    <div className="absolute top-0 left-0 w-full h-full bg-app-surface/10 opacity-20"
                         style={{ backgroundImage: 'radial-gradient(circle, #fff 10%, transparent 10%)', backgroundSize: '20px 20px' }} />
 
                     <h1 className="text-white text-lg font-medium opacity-90 relative z-10">Order Tracking</h1>
@@ -95,14 +95,14 @@ export default function OrderTracking() {
 
                 {/* Content */}
                 <div className="p-8">
-                    <div className="flex justify-between items-center mb-8 pb-8 border-b border-slate-100">
+                    <div className="flex justify-between items-center mb-8 pb-8 border-b border-app">
                         <div>
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Customer</p>
-                            <p className="font-bold text-slate-900 text-lg">{order.lead?.name || "Guest"}</p>
+                            <p className="font-bold text-app-text text-lg">{order.lead?.name || "Guest"}</p>
                         </div>
                         <div className="text-right">
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Amount</p>
-                            <p className="font-bold text-slate-900 text-lg">₹{order.amount}</p>
+                            <p className="font-bold text-app-text text-lg">₹{order.amount}</p>
                         </div>
                     </div>
 
@@ -129,12 +129,12 @@ export default function OrderTracking() {
                         h-12 w-12 rounded-full flex items-center justify-center border-4 transition-all z-10
                         ${isActive
                                                 ? `bg-indigo-600 border-indigo-100 text-white shadow-lg shadow-indigo-500/30 ${isCurrent ? 'scale-110 ring-4 ring-indigo-50' : ''}`
-                                                : 'bg-white border-slate-100 text-slate-300'}
+                                                : 'bg-app-surface border-app text-slate-300'}
                       `}>
                                             <Icon size={isCurrent ? 24 : 18} />
                                         </div>
                                         <div>
-                                            <h3 className={`font-bold text-sm ${isActive ? 'text-slate-900' : 'text-slate-400'}`}>
+                                            <h3 className={`font-bold text-sm ${isActive ? 'text-app-text' : 'text-slate-400'}`}>
                                                 {step.label}
                                             </h3>
                                             {isCurrent && (
@@ -155,9 +155,9 @@ export default function OrderTracking() {
                         </div>
                     )}
 
-                    <div className="mt-10 pt-6 border-t border-slate-100">
+                    <div className="mt-10 pt-6 border-t border-app">
                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Order Summary</h4>
-                        <p className="text-slate-700 font-medium bg-slate-50 p-4 rounded-2xl border border-slate-100 text-sm leading-relaxed">
+                        <p className="text-slate-700 font-medium bg-app-bg p-4 rounded-2xl border border-app text-sm leading-relaxed">
                             {order.summary}
                         </p>
                     </div>
