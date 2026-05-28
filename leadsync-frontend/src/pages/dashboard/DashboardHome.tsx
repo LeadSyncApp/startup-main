@@ -264,7 +264,7 @@ export default function DashboardHome() {
                   dataKey="date" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: "#94a3b8", fontSize: 10, fontWeight: 600 }} 
+                  tick={{ fill: "var(--app-text-muted)", fontSize: 10, fontWeight: 600 }} 
                   dy={10}
                 />
               </AreaChart>

@@ -206,9 +206,9 @@ export default function Revenue() {
                   <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} interval={4} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--app-border)" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "var(--app-text-muted)", fontSize: 11 }} interval={4} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: "var(--app-text-muted)", fontSize: 11 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
               <Tooltip
                 contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
                 formatter={(v: number, name: string) => [formatINR(v), name === "revenue" ? "Revenue" : "Forecast"]}

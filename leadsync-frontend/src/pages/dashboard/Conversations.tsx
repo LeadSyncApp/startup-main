@@ -1445,11 +1445,11 @@ const ConversationHub = () => {
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #e2e8f0;
+          background: var(--app-scroll-thumb);
           border-radius: 10px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #cbd5e1;
+          background: var(--app-scroll-thumb-hover);
         }
       `}</style>
     </div>
