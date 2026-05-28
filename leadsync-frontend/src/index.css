@@ -2,23 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Base styles for LeadSync CRM - Color system and typography */
+/* Base styles for LeadSync CRM - semantic color system and typography */
 @layer base {
+  :root {
+    color-scheme: light;
+    --app-bg: #f8fafc;
+    --app-bg-soft: #f1f5f9;
+    --app-surface: #ffffff;
+    --app-surface-alt: #f8fafc;
+    --app-text: #0f172a;
+    --app-text-muted: #64748b;
+    --app-border: #e2e8f0;
+    --app-border-strong: #cbd5e1;
+    --app-primary: #0891b2;
+    --app-primary-strong: #0e7490;
+    --app-primary-soft: #ecfeff;
+    --app-input-bg: #ffffff;
+    --app-input-placeholder: #94a3b8;
+    --app-scroll-track: #f1f5f9;
+    --app-scroll-thumb: #cbd5e1;
+    --app-scroll-thumb-hover: #94a3b8;
+    --app-backdrop: rgba(15, 23, 42, 0.55);
+    --app-shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.05);
+    --app-shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.12);
+  }
+
+  html.dark {
+    color-scheme: dark;
+    --app-bg: #020617;
+    --app-bg-soft: #0f172a;
+    --app-surface: #111827;
+    --app-surface-alt: #0f172a;
+    --app-text: #e2e8f0;
+    --app-text-muted: #94a3b8;
+    --app-border: #334155;
+    --app-border-strong: #475569;
+    --app-primary: #22d3ee;
+    --app-primary-strong: #06b6d4;
+    --app-primary-soft: rgba(34, 211, 238, 0.12);
+    --app-input-bg: #0f172a;
+    --app-input-placeholder: #64748b;
+    --app-scroll-track: #0f172a;
+    --app-scroll-thumb: #475569;
+    --app-scroll-thumb-hover: #64748b;
+    --app-backdrop: rgba(2, 6, 23, 0.72);
+    --app-shadow-soft: 0 1px 2px rgba(2, 6, 23, 0.3);
+    --app-shadow-lg: 0 24px 60px rgba(2, 6, 23, 0.5);
+  }
+
   body {
-    @apply antialiased text-slate-900 bg-slate-50;
+    @apply antialiased;
+    background-color: var(--app-bg);
+    color: var(--app-text);
     font-feature-settings: "rlig" 1 "calt" 1;
+    transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
   }
 
   h1 {
-    @apply font-bold tracking-tight text-slate-900;
+    @apply font-bold tracking-tight;
+    color: var(--app-text);
   }
 
   h2 {
-    @apply font-bold text-slate-900;
+    @apply font-bold;
+    color: var(--app-text);
   }
 
   h3 {
-    @apply font-semibold text-slate-900;
+    @apply font-semibold;
+    color: var(--app-text);
   }
 
   button {
@@ -34,50 +86,78 @@
 @layer components {
   /* Primary CTA Buttons */
   .btn-primary {
-    @apply rounded-lg bg-cyan-600 px-4 py-2.5 font-semibold text-white shadow-sm hover:bg-cyan-700 hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply rounded-lg px-4 py-2.5 font-semibold text-white shadow-sm active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    background-color: var(--app-primary);
+    box-shadow: var(--app-shadow-soft);
   }
 
   .btn-secondary {
-    @apply rounded-lg border-2 border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-900 hover:border-slate-400 hover:bg-slate-50 transition-all duration-200 disabled:opacity-50;
+    @apply rounded-lg border-2 px-4 py-2.5 font-semibold transition-all duration-200 disabled:opacity-50;
+    border-color: var(--app-border);
+    background-color: var(--app-surface);
+    color: var(--app-text);
   }
 
   .btn-ghost {
-    @apply px-3 py-2 font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors duration-200;
+    @apply px-3 py-2 font-medium rounded-lg transition-colors duration-200;
+    color: var(--app-text-muted);
   }
 
   .btn-icon {
-    @apply inline-flex items-center justify-center h-10 w-10 rounded-lg hover:bg-slate-100 transition-colors duration-200;
+    @apply inline-flex items-center justify-center h-10 w-10 rounded-lg transition-colors duration-200;
+    color: var(--app-text-muted);
   }
 
   /* Card components with consistent shadows */
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow duration-200;
+    @apply rounded-xl border shadow-sm hover:shadow-md transition-shadow duration-200;
+    border-color: var(--app-border);
+    background-color: var(--app-surface);
+    box-shadow: var(--app-shadow-soft);
   }
 
   .card-compact {
-    @apply rounded-lg border border-slate-200 bg-white shadow-sm;
+    @apply rounded-lg border shadow-sm;
+    border-color: var(--app-border);
+    background-color: var(--app-surface);
   }
 
   /* Badge/Status components */
   .badge-success {
-    @apply inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
+    background-color: rgba(16, 185, 129, 0.14);
+    color: rgb(5, 150, 105);
   }
 
   .badge-error {
-    @apply inline-flex items-center px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
+    background-color: rgba(239, 68, 68, 0.14);
+    color: rgb(220, 38, 38);
   }
 
   .badge-warning {
-    @apply inline-flex items-center px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
+    background-color: rgba(245, 158, 11, 0.14);
+    color: rgb(217, 119, 6);
   }
 
   .badge-info {
-    @apply inline-flex items-center px-2.5 py-1 rounded-full bg-sky-100 text-sky-700 text-xs font-semibold;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
+    background-color: rgba(14, 165, 233, 0.14);
+    color: rgb(2, 132, 199);
   }
 
   /* Input styling with focus states */
   .input-base {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-slate-900 placeholder-slate-400 placeholder-opacity-100 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200;
+    @apply w-full rounded-lg border px-4 py-2.5 placeholder-opacity-100 focus:outline-none focus:ring-2 transition-all duration-200;
+    border-color: var(--app-border);
+    background-color: var(--app-input-bg);
+    color: var(--app-text);
+    caret-color: var(--app-primary);
+  }
+
+  .input-base::placeholder {
+    color: var(--app-input-placeholder);
   }
 
   .input-error {
@@ -86,16 +166,19 @@
 
   /* Typography utilities */
   .text-xs-light {
-    @apply text-xs font-medium text-slate-500;
+    @apply text-xs font-medium;
+    color: var(--app-text-muted);
   }
 
   .text-sm-muted {
-    @apply text-sm text-slate-600;
+    @apply text-sm;
+    color: var(--app-text-muted);
   }
 
   /* Backdrop blur for modals */
   .backdrop-blur-modal {
-    @apply backdrop-blur-sm bg-black/50;
+    @apply backdrop-blur-sm;
+    background-color: var(--app-backdrop);
   }
 
   /* Responsive container */
@@ -111,9 +194,18 @@
 
 /* Custom scrollbar for chat panels - WebKit browsers */
 @layer utilities {
+  /* Semantic utilities used by codemods */
+  .border-app {
+    border-color: var(--app-border);
+  }
+
+  .border-app-strong {
+    border-color: var(--app-border-strong);
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: #cbd5e1 #f1f5f9;
+    scrollbar-color: var(--app-scroll-thumb) var(--app-scroll-track);
   }
 
   .scrollbar-thin::-webkit-scrollbar {
@@ -122,16 +214,16 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: var(--app-scroll-track);
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: var(--app-scroll-thumb);
     border-radius: 3px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: var(--app-scroll-thumb-hover);
   }
 
   /* Animation utilities for smooth transitions */
@@ -159,7 +251,11 @@
 
   /* Group hover states */
   .group-item-hover {
-    @apply group-hover:bg-slate-50 transition-colors duration-200;
+    @apply transition-colors duration-200;
+  }
+
+  .group-item-hover:hover {
+    background-color: var(--app-bg-soft);
   }
 }
 

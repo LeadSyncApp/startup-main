@@ -220,7 +220,7 @@ export default function NewOrderArrivals() {
     return (
       <PageTransition className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-black text-slate-900">New Order Arrivals</h1>
+          <h1 className="text-3xl font-black text-app-text">New Order Arrivals</h1>
         </div>
         <TableSkeleton rows={8} cols={6} />
       </PageTransition>
@@ -232,7 +232,7 @@ export default function NewOrderArrivals() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3">
+          <h1 className="text-3xl font-black text-app-text flex items-center gap-3">
             <ShoppingCart className="text-indigo-600" />
             New Order Arrivals
           </h1>
@@ -243,7 +243,7 @@ export default function NewOrderArrivals() {
         
         {selectedOrders.size > 0 && (
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-slate-600">
+            <span className="text-sm font-medium text-app-muted">
               {selectedOrders.size} selected
             </span>
             <button
@@ -258,21 +258,21 @@ export default function NewOrderArrivals() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200">
+        <div className="bg-app-surface p-6 rounded-2xl border border-app">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500">In Queue</p>
-              <p className="text-2xl font-bold text-slate-900">{orders.length}</p>
+              <p className="text-2xl font-bold text-app-text">{orders.length}</p>
             </div>
             <Clock className="text-slate-400" size={20} />
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-2xl border border-slate-200">
+        <div className="bg-app-surface p-6 rounded-2xl border border-app">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500">New Customers</p>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-2xl font-bold text-app-text">
                 {orders.filter(o => !o.customerHistory.isExistingCustomer).length}
               </p>
             </div>
@@ -280,11 +280,11 @@ export default function NewOrderArrivals() {
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-2xl border border-slate-200">
+        <div className="bg-app-surface p-6 rounded-2xl border border-app">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500">Returning</p>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-2xl font-bold text-app-text">
                 {orders.filter(o => o.customerHistory.isExistingCustomer).length}
               </p>
             </div>
@@ -292,11 +292,11 @@ export default function NewOrderArrivals() {
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-2xl border border-slate-200">
+        <div className="bg-app-surface p-6 rounded-2xl border border-app">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500">High Priority</p>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-2xl font-bold text-app-text">
                 {orders.filter(o => o.priorityScore >= 70).length}
               </p>
             </div>
@@ -307,15 +307,15 @@ export default function NewOrderArrivals() {
 
       {/* Orders Table */}
       {orders.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+        <div className="bg-app-surface rounded-2xl border border-app p-12 text-center">
           <ShoppingCart className="mx-auto text-slate-300 mb-4" size={48} />
-          <h3 className="text-xl font-bold text-slate-900 mb-2">No new orders</h3>
+          <h3 className="text-xl font-bold text-app-text mb-2">No new orders</h3>
           <p className="text-slate-500">All orders have been claimed. Check back later for new arrivals.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="bg-app-surface rounded-2xl border border-app overflow-hidden">
           {/* Table Header */}
-          <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
+          <div className="bg-app-bg px-6 py-4 border-b border-app">
             <div className="flex items-center gap-4">
               <input
                 type="checkbox"
@@ -342,7 +342,7 @@ export default function NewOrderArrivals() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    className="p-6 hover:bg-slate-50 transition-colors"
+                    className="p-6 hover:bg-app-bg transition-colors"
                   >
                     <div className="flex items-start gap-4">
                       <input
@@ -356,7 +356,7 @@ export default function NewOrderArrivals() {
                         <div className="flex items-start justify-between gap-4 mb-3">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
-                              <h3 className="font-bold text-slate-900">
+                              <h3 className="font-bold text-app-text">
                                 {order.lead.name || "Customer"}
                               </h3>
                               <span className={`text-xs font-bold px-2 py-1 rounded-full border ${customerBadge.color}`}>
@@ -367,7 +367,7 @@ export default function NewOrderArrivals() {
                               </span>
                             </div>
                             
-                            <div className="flex items-center gap-4 text-sm text-slate-600">
+                            <div className="flex items-center gap-4 text-sm text-app-muted">
                               <span className="flex items-center gap-1">
                                 <span>{order.lead.contact}</span>
                                 <span className="text-slate-400">•</span>
@@ -392,7 +392,7 @@ export default function NewOrderArrivals() {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-slate-700">Order:</span>
-                            <span className="font-bold text-slate-900">{order.summary}</span>
+                            <span className="font-bold text-app-text">{order.summary}</span>
                           </div>
                           
                           <div className="flex items-center justify-between">
@@ -401,7 +401,7 @@ export default function NewOrderArrivals() {
                           </div>
                           
                           {order.customerHistory.isExistingCustomer && (
-                            <div className="bg-slate-50 rounded-lg p-3 space-y-1">
+                            <div className="bg-app-bg rounded-lg p-3 space-y-1">
                               <div className="flex items-center gap-2 text-sm">
                                 <History size={14} className="text-slate-500" />
                                 <span className="font-medium text-slate-700">Customer History:</span>
@@ -409,16 +409,16 @@ export default function NewOrderArrivals() {
                               <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div>
                                   <span className="text-slate-500">Previous Orders:</span>
-                                  <span className="font-medium text-slate-900">{order.customerHistory.previousOrderCount}</span>
+                                  <span className="font-medium text-app-text">{order.customerHistory.previousOrderCount}</span>
                                 </div>
                                 <div>
                                   <span className="text-slate-500">Previous Spend:</span>
-                                  <span className="font-medium text-slate-900">₹{order.customerHistory.previousSpend.toLocaleString()}</span>
+                                  <span className="font-medium text-app-text">₹{order.customerHistory.previousSpend.toLocaleString()}</span>
                                 </div>
                                 {order.customerHistory.previousAgent && (
                                   <div className="col-span-2">
                                     <span className="text-slate-500">Previous Agent:</span>
-                                    <span className="font-medium text-slate-900">{order.customerHistory.previousAgent.name}</span>
+                                    <span className="font-medium text-app-text">{order.customerHistory.previousAgent.name}</span>
                                   </div>
                                 )}
                               </div>

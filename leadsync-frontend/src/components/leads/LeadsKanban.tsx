@@ -14,7 +14,7 @@ const SEGMENTS = [
 const PRIORITY_COLOR: Record<string, string> = {
   URGENT: "bg-red-100 text-red-700 border-red-200",
   HIGH:   "bg-orange-100 text-orange-700 border-orange-200",
-  NORMAL: "bg-slate-100 text-slate-500 border-slate-200",
+  NORMAL: "bg-slate-100 text-slate-500 border-app",
 };
 
 const CHANNEL_COLOR: Record<string, string> = {
@@ -61,7 +61,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ type: "spring", stiffness: 340, damping: 28 }}
-      className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group"
+      className="bg-app-surface border border-app rounded-xl p-3.5 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group"
       onClick={() => onRowClick(lead)}
     >
       {/* Avatar + name row */}
@@ -84,7 +84,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${PRIORITY_COLOR[priority]}`}>
           {priority}
         </span>
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${lead.channel?.toUpperCase() === "WEBSITE" ? CHANNEL_COLOR.OFFLINE : (CHANNEL_COLOR[lead.channel] ?? "bg-slate-100 text-slate-600")}`}>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${lead.channel?.toUpperCase() === "WEBSITE" ? CHANNEL_COLOR.OFFLINE : (CHANNEL_COLOR[lead.channel] ?? "bg-slate-100 text-app-muted")}`}>
           {lead.channel?.toUpperCase() === "WEBSITE" ? "OFFLINE" : lead.channel}
         </span>
         {(lead.totalSpend ?? 0) > 0 && (
@@ -141,13 +141,13 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -4, scale: 0.96 }}
               transition={{ duration: 0.12 }}
-              className="absolute bottom-full mb-1 left-0 bg-white border border-slate-200 rounded-xl shadow-xl z-30 overflow-hidden min-w-[140px]"
+              className="absolute bottom-full mb-1 left-0 bg-app-surface border border-app rounded-xl shadow-xl z-30 overflow-hidden min-w-[140px]"
             >
               {SEGMENTS.filter(s => s.key !== lead.segment).map(seg => (
                 <button
                   key={seg.key}
                   onClick={() => { onSegmentChange(lead.id, seg.key); setMenuOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-app-bg transition flex items-center gap-2"
                 >
                   <span className={`w-2 h-2 rounded-full ${seg.color}`} />
                   {seg.label}
@@ -208,7 +208,7 @@ export default function LeadsKanban({ leads, onRowClick, onSegmentChange }: Prop
                     key="empty"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center"
+                    className="border-2 border-dashed border-app rounded-xl p-4 text-center"
                   >
                     <p className="text-xs text-slate-300 font-medium">No leads</p>
                   </motion.div>

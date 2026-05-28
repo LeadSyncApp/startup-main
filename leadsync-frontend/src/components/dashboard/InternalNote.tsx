@@ -19,7 +19,7 @@ interface InternalNoteProps {
 export function InternalNote({ note }: InternalNoteProps) {
   if (note.isSystem) {
     return (
-      <div className="flex gap-3 py-3 px-4 bg-slate-50 border border-slate-100 rounded-md text-sm text-[#6B7280] font-['Inter',sans-serif]">
+      <div className="flex gap-3 py-3 px-4 bg-app-bg border border-app rounded-md text-sm text-[#6B7280] font-['Inter',sans-serif]">
         <div className="mt-0.5">
           <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center">
             <Clock className="w-3 h-3 text-slate-500" />
@@ -45,10 +45,10 @@ export function InternalNote({ note }: InternalNoteProps) {
           <span className="text-sm font-bold text-[#1F2937] truncate">{note.authorName}</span>
           <span className="text-xs text-[#6B7280] whitespace-nowrap">{note.createdAt}</span>
         </div>
-        <div className="text-sm text-[#1F2937] bg-white border border-[#D9DADC] p-3 rounded-md rounded-tl-none leading-relaxed shadow-sm">
+        <div className="text-sm text-[#1F2937] bg-app-surface border border-[#D9DADC] p-3 rounded-md rounded-tl-none leading-relaxed shadow-sm">
           <div>{note.content}</div>
           {note.conversationId && (
-            <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-100 mt-1.5">
+            <div className="flex items-center gap-1.5 pt-1.5 border-t border-app mt-1.5">
               <span className="text-[10px] text-slate-400">Context:</span>
               <a 
                 href={`/dashboard/conversations?id=${note.conversationId}`}

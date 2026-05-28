@@ -96,28 +96,28 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--app-bg)] px-4 transition-colors duration-200">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
       >
         <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="bg-cyan-600 rounded-xl p-2.5">
+          <div className="bg-cyan-600 rounded-xl p-2.5 shadow-sm">
             <Zap className="h-8 w-8 text-white" />
           </div>
           <div>
-            <span className="text-3xl font-bold text-cyan-400">
+            <span className="text-3xl font-bold text-cyan-500 dark:text-cyan-400">
               LeadSync
             </span>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[var(--app-text-muted)]">
               CRM Platform
             </p>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-700 bg-slate-800 p-8 shadow-xl">
-          <h1 className="text-3xl font-bold text-white mb-2">
+        <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-8 shadow-xl shadow-slate-900/10">
+          <h1 className="text-3xl font-bold text-[var(--app-text)] mb-2">
             {mode === "login"
               ? "Welcome back"
               : mode === "forgot"
@@ -125,14 +125,14 @@ export default function Login() {
                 : "Reset Password"}
           </h1>
 
-          <p className="text-slate-400 mb-6">
+          <p className="text-[var(--app-text-muted)] mb-6">
             {mode === "login"
               ? "Sign in to your account"
               : "Follow the steps below"}
           </p>
 
           {error && (
-            <p className="mb-4 text-sm text-red-400">{error}</p>
+            <p className="mb-4 text-sm text-red-500">{error}</p>
           )}
 
           {/* ================= LOGIN FORM ================= */}
@@ -143,16 +143,16 @@ export default function Login() {
               className="space-y-5"
             >
               <div>
-                <label className="block text-sm text-slate-200 mb-2">
+                <label className="block text-sm text-[var(--app-text)] mb-2">
                   Email / Staff ID
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--app-text-muted)]" />
                   <input
                     type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full rounded-lg bg-slate-700 border border-slate-600 py-3 pl-11 pr-4 text-white"
+                    className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 pl-11 pr-4 text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
                     placeholder="Enter email or staff ID"
                     required
                   />
@@ -160,18 +160,18 @@ export default function Login() {
               </div>
 
               <div>
-                <label className="block text-sm text-slate-200 mb-2">
+                <label className="block text-sm text-[var(--app-text)] mb-2">
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--app-text-muted)]" />
                   <input
                     type="password"
                     value={password}
                     onChange={(e) =>
                       setPassword(e.target.value)
                     }
-                    className="w-full rounded-lg bg-slate-700 border border-slate-600 py-3 pl-11 pr-4 text-white"
+                    className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 pl-11 pr-4 text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
                     required
                   />
                 </div>
@@ -181,7 +181,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setMode("forgot")}
-                  className="text-cyan-400 hover:underline"
+                  className="text-cyan-600 hover:underline"
                 >
                   Forgot Password?
                 </button>
@@ -190,7 +190,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-cyan-600 hover:bg-cyan-700 rounded-lg py-3 font-semibold text-white flex items-center justify-center gap-2"
+                className="w-full bg-cyan-600 hover:bg-cyan-700 rounded-lg py-3 font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {loading ? "Signing in…" : "Sign in"}
                 <ArrowRight className="h-4 w-4" />
@@ -206,7 +206,7 @@ export default function Login() {
                 placeholder="Enter your registered email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg bg-slate-700 border border-slate-600 py-3 px-4 text-white"
+                className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 px-4 text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
                 required
               />
 
@@ -221,7 +221,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => setMode("login")}
-                className="w-full text-sm text-slate-400"
+                className="w-full text-sm text-[var(--app-text-muted)]"
               >
                 Back to Login
               </button>
@@ -241,7 +241,7 @@ export default function Login() {
                     placeholder="Enter reset token from email"
                     value={token}
                     onChange={(e) => setToken(e.target.value)}
-                    className="w-full rounded-lg bg-slate-700 border border-slate-600 py-3 px-4 text-white"
+                    className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 px-4 text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
                     required
                   />
                 </div>
@@ -254,14 +254,14 @@ export default function Login() {
                 onChange={(e) =>
                   setNewPassword(e.target.value)
                 }
-                className="w-full rounded-lg bg-slate-700 border border-slate-600 py-3 px-4 text-white"
+                className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 px-4 text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
                 required
               />
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-cyan-600 hover:bg-cyan-700 rounded-lg py-3 font-semibold text-white"
+                className="w-full text-sm text-[var(--app-text-muted)]"
               >
                 {loading ? "Updating…" : "Reset Password"}
               </button>
@@ -269,7 +269,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => setMode("login")}
-                className="w-full text-sm text-slate-400"
+                className="w-full text-sm text-[var(--app-text-muted)]"
               >
                 Back to Login
               </button>
@@ -277,12 +277,9 @@ export default function Login() {
           )}
 
           {mode === "login" && (
-            <p className="mt-6 text-center text-sm text-slate-400">
+            <p className="mt-6 text-center text-sm text-[var(--app-text-muted)]">
               Don’t have an account?{" "}
-              <Link
-                to="/signup"
-                className="text-cyan-400 font-semibold"
-              >
+              <Link to="/signup" className="text-cyan-600 dark:text-cyan-400 font-semibold">
                 Sign up
               </Link>
             </p>

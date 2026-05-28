@@ -224,7 +224,7 @@ export default function Orders() {
       {isManager && !showDetailedBoard ? (
         // --- 1. ADMIN/OWNER METRICS OVERVIEW DASHBOARD ---
         <div className="space-y-6 overflow-y-auto pr-1 flex-1 pb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-app-bg p-5 rounded-2xl border border-app">
             <div>
               <h2 className="text-xl font-bold text-slate-800">Business Control Center</h2>
               <p className="text-xs text-slate-500">
@@ -244,7 +244,7 @@ export default function Orders() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+            <div className="bg-app-surface p-5 rounded-2xl border border-app shadow-sm flex flex-col justify-between">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Revenue Today</span>
               <div className="mt-2 text-2xl font-black text-slate-800">₹{metrics.revenueToday.toLocaleString()}</div>
               <span className="text-[10px] text-emerald-500 font-semibold mt-1 flex items-center gap-1">
@@ -252,25 +252,25 @@ export default function Orders() {
               </span>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+            <div className="bg-app-surface p-5 rounded-2xl border border-app shadow-sm flex flex-col justify-between">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Pending Accept</span>
               <div className="mt-2 text-2xl font-black text-amber-500">{metrics.pendingCount}</div>
               <span className="text-[10px] text-slate-500 font-semibold mt-1">Awaiting agents</span>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+            <div className="bg-app-surface p-5 rounded-2xl border border-app shadow-sm flex flex-col justify-between">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Processing Count</span>
               <div className="mt-2 text-2xl font-black text-indigo-500">{metrics.processingCount}</div>
               <span className="text-[10px] text-slate-500 font-semibold mt-1">Active handling</span>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+            <div className="bg-app-surface p-5 rounded-2xl border border-app shadow-sm flex flex-col justify-between">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Completed Count</span>
               <div className="mt-2 text-2xl font-black text-emerald-600">{metrics.completedCount}</div>
               <span className="text-[10px] text-slate-500 font-semibold mt-1">History archived</span>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+            <div className="bg-app-surface p-5 rounded-2xl border border-app shadow-sm flex flex-col justify-between">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Active Agents</span>
               <div className="mt-2 text-2xl font-black text-blue-600">{metrics.activeAgentsCount}</div>
               <span className="text-[100%] text-slate-500 font-semibold mt-1 flex items-center gap-1">
@@ -278,7 +278,7 @@ export default function Orders() {
               </span>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+            <div className="bg-app-surface p-5 rounded-2xl border border-app shadow-sm flex flex-col justify-between">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Top Performing Agent</span>
               <div className="mt-2 text-base font-black text-slate-800 truncate" title={metrics.topAgent.name}>
                 {metrics.topAgent.name}
@@ -290,8 +290,8 @@ export default function Orders() {
           </div>
 
           {/* Quick Info Grid panel for overview */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+          <div className="bg-app-surface rounded-2xl border border-app shadow-sm p-6">
+            <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
               <h3 className="font-bold text-slate-800 text-sm">Active Agent Pipelines</h3>
               <button
                 onClick={() => setShowDetailedBoard(true)}
@@ -319,7 +319,7 @@ export default function Orders() {
                   return acc;
                 }, {})
               ).map(([id, stat]) => (
-                <div key={id} className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-2">
+                <div key={id} className="p-4 rounded-xl bg-app-bg border border-app flex flex-col justify-between gap-2">
                   <div className="flex justify-between items-center">
                     <div>
                       <span className="font-bold text-sm text-slate-800">{stat.name}</span>
@@ -330,11 +330,11 @@ export default function Orders() {
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                    <div className="bg-white p-2 rounded-lg border border-slate-100">
+                    <div className="bg-app-surface p-2 rounded-lg border border-app">
                       <div className="text-[10px] text-slate-400">Completed</div>
                       <div className="font-bold text-emerald-600">{stat.completed} orders</div>
                     </div>
-                    <div className="bg-white p-2 rounded-lg border border-slate-100">
+                    <div className="bg-app-surface p-2 rounded-lg border border-app">
                       <div className="text-[10px] text-slate-400">Active Handling</div>
                       <div className="font-bold text-amber-500">{stat.pending} in pipeline</div>
                     </div>
@@ -363,7 +363,7 @@ export default function Orders() {
                   ← Back to Metrics Dashboard
                 </button>
               )}
-              <h2 className="text-xl font-bold text-slate-900">
+              <h2 className="text-xl font-bold text-app-text">
                 {isManager ? "Global Orders Management" : "My Orders Workspace"}
               </h2>
               <p className="text-xs text-slate-500">
@@ -396,7 +396,7 @@ export default function Orders() {
                     onClick={() => setActiveTab(tabKey)}
                     className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                       activeTab === tabKey
-                        ? "bg-white text-slate-900 shadow-sm"
+                        ? "bg-app-surface text-app-text shadow-sm"
                         : "text-slate-500 hover:text-slate-700"
                     }`}
                   >
@@ -407,7 +407,7 @@ export default function Orders() {
                       className={`px-1.5 py-0.5 rounded-full text-[9px] ${
                         activeTab === tabKey
                           ? "bg-indigo-50 text-indigo-700 font-extrabold"
-                          : "bg-slate-200/65 text-slate-600"
+                          : "bg-slate-200/65 text-app-muted"
                       }`}
                     >
                       {count}
@@ -425,18 +425,18 @@ export default function Orders() {
               {[1, 2, 3].map(i => (
                 <div
                   key={i}
-                  className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 space-y-3 animate-pulse"
+                  className="rounded-2xl border border-app bg-app-bg/50 p-4 space-y-3 animate-pulse"
                 >
                   <div className="h-4 bg-slate-200 rounded w-1/3 mb-4" />
-                  <div className="h-20 bg-white rounded-xl border border-slate-100" />
-                  <div className="h-20 bg-white rounded-xl border border-slate-100" />
+                  <div className="h-20 bg-app-surface rounded-xl border border-app" />
+                  <div className="h-20 bg-app-surface rounded-xl border border-app" />
                 </div>
               ))}
             </div>
           ) : tabFilteredOrders.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 p-8">
+            <div className="flex-1 flex items-center justify-center bg-app-bg rounded-2xl border-2 border-dashed border-app p-8">
               <div className="text-center max-w-sm">
-                <div className="mx-auto w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-xl mb-4 text-slate-400">
+                <div className="mx-auto w-12 h-12 bg-app-surface rounded-2xl shadow-sm flex items-center justify-center text-xl mb-4 text-slate-400">
                   📦
                 </div>
                 <h3 className="font-bold text-slate-800 text-sm mb-1 uppercase tracking-tight">
@@ -460,10 +460,10 @@ export default function Orders() {
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: -10 }}
                       key={order.id}
-                      className={`bg-white p-5 rounded-2xl shadow-sm border relative flex flex-col justify-between ${
+                      className={`bg-app-surface p-5 rounded-2xl shadow-sm border relative flex flex-col justify-between ${
                         order.isUrgent || (order.priorityScore && order.priorityScore > 50)
                           ? "border-red-200 ring-2 ring-red-50"
-                          : "border-slate-100"
+                          : "border-app"
                       }`}
                     >
                       <div>
@@ -482,7 +482,7 @@ export default function Orders() {
                         <h4 className="font-bold text-slate-800 text-sm leading-snug mb-2">{order.summary}</h4>
 
                         {/* Customer context info */}
-                        <div className="text-xs text-slate-500 flex items-center gap-1.5 py-2 border-b border-dashed border-slate-100 mb-3">
+                        <div className="text-xs text-slate-500 flex items-center gap-1.5 py-2 border-b border-dashed border-app mb-3">
                           <span className="text-slate-400">👤 Contact:</span>
                           <span className="font-medium text-slate-700">{order.lead?.name || "Anonymous Client"}</span>
                           {order.lead?.contact && (
@@ -511,7 +511,7 @@ export default function Orders() {
 
                         {/* Managed agent metadata */}
                         {isManager && order.processedBy && (
-                          <div className="mb-4 text-[11px] text-slate-500 bg-slate-50 px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+                          <div className="mb-4 text-[11px] text-slate-500 bg-app-bg px-2.5 py-1.5 rounded-lg flex items-center justify-between">
                             <span className="text-slate-400 flex items-center gap-1">👨‍💻 Handler Agent:</span>
                             <span className="font-bold text-slate-700">{order.processedBy.name}</span>
                           </div>
@@ -551,7 +551,7 @@ export default function Orders() {
                               <button
                                 id={`cancel-btn-${order.id}`}
                                 onClick={() => handleUpdateStatus(order.id, "CANCELLED", order.version)}
-                                className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-bold rounded-xl hover:bg-slate-50 hover:text-red-500 hover:border-red-200 transition"
+                                className="px-3 py-1.5 border border-app text-slate-500 text-xs font-bold rounded-xl hover:bg-app-bg hover:text-red-500 hover:border-red-200 transition"
                               >
                                 Cancel Order
                               </button>
@@ -590,18 +590,18 @@ export default function Orders() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 border border-slate-100"
+              className="bg-app-surface rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 border border-app"
             >
               <div className="h-2 w-full bg-red-500" />
               <div className="p-6">
-                <h3 className="text-base font-bold text-slate-900 mb-1">Archive Order?</h3>
+                <h3 className="text-base font-bold text-app-text mb-1">Archive Order?</h3>
                 <p className="text-xs text-slate-500 leading-normal mb-5">
                   Are you sure you want to archive or remove this order record? This action removes it from the active views.
                 </p>
                 <div className="flex gap-2 justify-end">
                   <button
                     onClick={() => setDeleteConfirmId(null)}
-                    className="px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-xl text-xs font-bold border border-slate-200"
+                    className="px-3 py-2 text-slate-500 hover:bg-app-bg rounded-xl text-xs font-bold border border-app"
                   >
                     Cancel
                   </button>
@@ -636,13 +636,13 @@ export default function Orders() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 border border-slate-100"
+              className="bg-app-surface rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 border border-app"
             >
               <div
                 className={`h-2 w-full ${actionType === "approve" ? "bg-indigo-600" : "bg-red-500"}`}
               />
               <div className="p-6">
-                <h3 className="text-base font-bold text-slate-900 mb-1">
+                <h3 className="text-base font-bold text-app-text mb-1">
                   {actionType === "approve" ? "Accept Client Order Request?" : "Reject Order Request?"}
                 </h3>
                 <p className="text-xs text-slate-500 leading-normal mb-5">
@@ -656,7 +656,7 @@ export default function Orders() {
                       setActionOrder(null);
                       setActionType(null);
                     }}
-                    className="px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-xl text-xs font-bold border border-slate-200"
+                    className="px-3 py-2 text-slate-500 hover:bg-app-bg rounded-xl text-xs font-bold border border-app"
                   >
                     Cancel
                   </button>
@@ -696,9 +696,9 @@ export default function Orders() {
               initial={{ opacity: 0, scale: 0.97, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.97, y: 16 }}
-              className="relative z-10 flex flex-col m-4 md:m-8 bg-white rounded-2xl shadow-2xl overflow-hidden flex-1"
+              className="relative z-10 flex flex-col m-4 md:m-8 bg-app-surface rounded-2xl shadow-2xl overflow-hidden flex-1"
             >
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50 shrink-0">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-app bg-app-bg shrink-0">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">📄</span>
                   <span className="font-bold text-slate-800">{invoicePreview.invoiceNumber}</span>

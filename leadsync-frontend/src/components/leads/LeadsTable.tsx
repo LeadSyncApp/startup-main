@@ -45,7 +45,7 @@ const StatusBadge = ({ status }: { status: string }) => {
   const styles: Record<string, string> = {
     URGENT: "bg-red-50 text-red-700 border-red-200",
     HIGH: "bg-blue-50 text-blue-700 border-blue-200",
-    NORMAL: "bg-slate-50 text-slate-600 border-slate-200",
+    NORMAL: "bg-app-bg text-app-muted border-app",
   };
   const style = styles[status?.toUpperCase()] || styles.NORMAL;
   return (
@@ -84,9 +84,9 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
   return (
     <>
       {/* Desktop Table */}
-      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative max-h-[70vh] overflow-y-auto">
+      <div className="hidden md:block bg-app-surface rounded-xl shadow-sm border border-app overflow-hidden relative max-h-[70vh] overflow-y-auto">
         <table className="min-w-full text-sm text-left">
-          <thead className="bg-[#F8FAFC] text-xs uppercase text-slate-500 font-semibold tracking-wide border-b border-slate-200 sticky top-0 z-10">
+          <thead className="bg-[#F8FAFC] text-xs uppercase text-slate-500 font-semibold tracking-wide border-b border-app sticky top-0 z-10">
             <tr>
               {hasSelect && (
                 <th className="px-4 py-3 w-10">
@@ -117,7 +117,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                   animate={{ opacity: 1 }}
                   onClick={() => onRowClick?.(lead)}
                   className={`cursor-pointer transition-colors group ${
-                    isSelected ? "bg-blue-50/50" : "hover:bg-slate-50"
+                    isSelected ? "bg-blue-50/50" : "hover:bg-app-bg"
                   }`}
                 >
                   {hasSelect && (
@@ -134,7 +134,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                     <div className="flex items-start gap-3">
                       <Avatar name={lead.name} />
                       <div className="flex flex-col min-w-0">
-                        <div className="font-semibold text-slate-900 truncate flex items-center gap-2">
+                        <div className="font-semibold text-app-text truncate flex items-center gap-2">
                           {lead.name || "Unknown"}
                           {lead.segment === "VIP" && <span className="text-yellow-500 text-[10px]">VIP</span>}
                         </div>
@@ -181,7 +181,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                     {lead.orderCount > 0 && <div className="text-[10px] text-slate-400">{lead.orderCount} Orders</div>}
                   </td>
                   <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 capitalize">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-app-muted capitalize">
                       {lead.channel?.toUpperCase() === "WEBSITE" ? "offline" : (lead.channel?.toLowerCase() || "unknown")}
                     </span>
                   </td>
@@ -233,8 +233,8 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               onClick={() => onRowClick?.(lead)}
-              className={`bg-white rounded-xl border p-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all ${
-                isSelected ? "border-blue-300 bg-blue-50/40 ring-1 ring-blue-200" : "border-slate-200"
+              className={`bg-app-surface rounded-xl border p-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all ${
+                isSelected ? "border-blue-300 bg-blue-50/40 ring-1 ring-blue-200" : "border-app"
               }`}
             >
               <div className="flex items-start justify-between mb-3">
@@ -252,7 +252,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                   )}
                   <Avatar name={lead.name} />
                   <div>
-                    <p className="font-semibold text-slate-900 flex items-center gap-1.5">
+                    <p className="font-semibold text-app-text flex items-center gap-1.5">
                       {lead.name || "Unknown"}
                       {lead.segment === "VIP" && <span className="text-yellow-500 text-[10px] font-bold">VIP</span>}
                     </p>
@@ -273,13 +273,13 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
                 </div>
                 <div className="flex flex-col items-end gap-2">
                    <StatusBadge status={lead.priority} />
-                   <button className="p-1 text-slate-300 hover:text-slate-600 -mr-1" onClick={(e) => e.stopPropagation()}>
+                   <button className="p-1 text-slate-300 hover:text-app-muted -mr-1" onClick={(e) => e.stopPropagation()}>
                      <MoreVertical size={16} />
                    </button>
                 </div>
               </div>
               
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-between pt-3 border-t border-app">
                 <div className="flex flex-col gap-1 w-24">
                   <span className="text-[10px] uppercase font-bold text-slate-400">AI Score</span>
                   <AIScoreBar score={lead.aiScore} />
@@ -294,7 +294,7 @@ export default function LeadsTable({ leads, onRowClick, onClaim, onClaimPendingO
 
               {/* Mobile Actions */}
               {(lead.hasPendingOrderApproval || !lead.agentAssigned) && (
-                <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+                <div className="mt-4 pt-3 border-t border-app flex justify-end">
                   {lead.hasPendingOrderApproval && lead.pendingOrderState === "PENDING_APPROVAL" && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onClaimPendingOrder?.(lead.id, e); }}

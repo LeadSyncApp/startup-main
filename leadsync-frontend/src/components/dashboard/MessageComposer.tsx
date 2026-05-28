@@ -25,7 +25,7 @@ export function MessageComposer({ onSend, isLoading = false, placeholder = "Writ
   };
 
   return (
-    <div className="flex gap-2 items-end p-4 bg-white border-t border-[#D9DADC]">
+    <div className="flex gap-2 items-end p-4 bg-app-surface border-t border-[#D9DADC]">
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}

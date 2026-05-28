@@ -69,7 +69,7 @@ const testimonials = [
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[var(--app-bg)] text-[var(--app-text)] transition-colors duration-200">
       <MarketingNav />
 
       {/* Hero Section */}
@@ -88,7 +88,7 @@ export default function Home() {
           </div>
 
           {/* Main heading */}
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6">
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-[var(--app-text)] mb-6">
             Sync Every Lead.
             <br />
             <span className="bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">Close More Deals.</span>
@@ -96,13 +96,13 @@ export default function Home() {
 
           {/* Value Proposition - 3 lines */}
           <div className="max-w-2xl mx-auto mb-8 space-y-3">
-            <p className="text-lg text-slate-600 font-medium">
+            <p className="text-lg text-[var(--app-text-muted)] font-medium">
               Aggregate leads from chat, forms, websites, and social media into one unified inbox.
             </p>
-            <p className="text-lg text-slate-600 font-medium">
+            <p className="text-lg text-[var(--app-text-muted)] font-medium">
               Manage conversations, assign tasks, and track progress—all in real-time with your team.
             </p>
-            <p className="text-lg text-slate-600 font-medium">
+            <p className="text-lg text-[var(--app-text-muted)] font-medium">
               Scale your sales operations with automated workflows and revenue dashboards built for SMEs.
             </p>
           </div>
@@ -118,28 +118,28 @@ export default function Home() {
             </Link>
             <Link
               to="/login"
-              className="inline-flex items-center justify-center rounded-lg border-2 border-slate-800 bg-white px-8 py-3.5 text-base font-semibold text-slate-900 hover:bg-slate-50 hover:border-cyan-600 transition-colors duration-200"
+              className="inline-flex items-center justify-center rounded-lg border-2 border-[var(--app-border-strong)] bg-[var(--app-surface)] px-8 py-3.5 text-base font-semibold text-[var(--app-text)] hover:bg-[var(--app-bg-soft)] hover:border-cyan-600 transition-colors duration-200"
             >
               Log In
             </Link>
           </div>
 
           {/* Trust indicators */}
-          <p className="mt-8 text-sm text-slate-500 font-medium">
+          <p className="mt-8 text-sm text-[var(--app-text-muted)] font-medium">
             ✓ No credit card required &nbsp;&nbsp;&nbsp;✓ 14-day free trial &nbsp;&nbsp;&nbsp;✓ Cancel anytime
           </p>
         </div>
       </section>
 
       {/* Features Grid Section */}
-      <section className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-slate-50">
+      <section className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[var(--app-bg)] to-[var(--app-bg-soft)]">
         <div className="mx-auto max-w-7xl">
           {/* Section header */}
           <div className="text-center mb-16 sm:mb-20">
-            <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-4">
+            <h2 className="text-4xl sm:text-5xl font-bold text-[var(--app-text)] mb-4">
               Everything You Need to Convert
             </h2>
-            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+            <p className="text-lg text-[var(--app-text-muted)] max-w-2xl mx-auto">
               From first touch to closed deal—LeadSync brings your lead management into one intelligent platform.
             </p>
           </div>
@@ -149,7 +149,7 @@ export default function Home() {
             {features.map(({ icon: Icon, title, description }) => (
               <div
                 key={title}
-                className="group rounded-2xl border border-slate-200 bg-white p-8 hover:border-cyan-300 hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 cursor-default"
+                className="group rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-8 hover:border-cyan-300 hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 cursor-default"
               >
                 {/* Icon container */}
                 <div className="rounded-xl bg-gradient-to-br from-cyan-100 to-blue-100 p-3 w-fit mb-4 group-hover:scale-110 transition-transform duration-300">
@@ -157,8 +157,8 @@ export default function Home() {
                 </div>
 
                 {/* Content */}
-                <h3 className="text-xl font-bold text-slate-900 mb-3">{title}</h3>
-                <p className="text-slate-600 leading-relaxed">{description}</p>
+                <h3 className="text-xl font-bold text-[var(--app-text)] mb-3">{title}</h3>
+                <p className="text-[var(--app-text-muted)] leading-relaxed">{description}</p>
               </div>
             ))}
           </div>
@@ -191,12 +191,12 @@ export default function Home() {
       </section>
 
       {/* Testimonials Section */}
-      <section className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 bg-white">
+      <section className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 bg-[var(--app-bg)]">
         <div className="mx-auto max-w-6xl">
           {/* Section header */}
           <div className="text-center mb-16">
-            <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-4">What Our Users Say</h2>
-            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+            <h2 className="text-4xl sm:text-5xl font-bold text-[var(--app-text)] mb-4">What Our Users Say</h2>
+            <p className="text-lg text-[var(--app-text-muted)] max-w-2xl mx-auto">
               Join hundreds of SMEs who trust LeadSync to manage their leads and close more deals.
             </p>
           </div>
@@ -206,7 +206,7 @@ export default function Home() {
             {testimonials.map(({ name, company, quote, rating }) => (
               <div
                 key={name}
-                className="group rounded-2xl border border-slate-200 bg-white p-8 hover:border-cyan-300 hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300"
+                className="group rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-8 hover:border-cyan-300 hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300"
               >
                 {/* Star rating */}
                 <div className="flex items-center gap-1 mb-4">
@@ -216,12 +216,12 @@ export default function Home() {
                 </div>
 
                 {/* Quote */}
-                <p className="text-lg text-slate-700 mb-6 leading-relaxed">"{quote}"</p>
+                <p className="text-lg text-[var(--app-text)] mb-6 leading-relaxed">"{quote}"</p>
 
                 {/* Author */}
-                <div className="border-t border-slate-200 pt-4">
-                  <p className="font-bold text-slate-900">{name}</p>
-                  <p className="text-sm text-slate-500">{company}</p>
+                <div className="border-t border-[var(--app-border)] pt-4">
+                  <p className="font-bold text-[var(--app-text)]">{name}</p>
+                  <p className="text-sm text-[var(--app-text-muted)]">{company}</p>
                 </div>
               </div>
             ))}
@@ -230,7 +230,7 @@ export default function Home() {
       </section>
 
       {/* CTA Section with dark gradient */}
-      <section className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-slate-50">
+      <section className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[var(--app-bg)] to-[var(--app-bg-soft)]">
         <div className="mx-auto max-w-3xl">
           <div className="relative rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-8 sm:px-12 py-16 sm:py-20 text-center border border-slate-700 shadow-2xl overflow-hidden">
             {/* Background accent */}
@@ -277,38 +277,38 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-12 px-4 sm:px-6 lg:px-8">
+      <footer className="border-t border-[var(--app-border)] bg-[var(--app-surface)] py-12 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="grid gap-8 sm:grid-cols-3 mb-8">
             {/* Brand */}
             <div>
-              <p className="font-bold text-slate-900 mb-2">LeadSync CRM</p>
-              <p className="text-sm text-slate-600">Lead management platform for SMEs across all industries.</p>
+              <p className="font-bold text-[var(--app-text)] mb-2">LeadSync CRM</p>
+              <p className="text-sm text-[var(--app-text-muted)]">Lead management platform for SMEs across all industries.</p>
             </div>
 
             {/* Quick links */}
             <div>
-              <p className="font-semibold text-slate-900 mb-4">Quick Links</p>
+              <p className="font-semibold text-[var(--app-text)] mb-4">Quick Links</p>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="text-slate-600 hover:text-slate-900 transition-colors">Features</a></li>
-                <li><a href="#" className="text-slate-600 hover:text-slate-900 transition-colors">Pricing</a></li>
-                <li><a href="#" className="text-slate-600 hover:text-slate-900 transition-colors">Blog</a></li>
+                <li><a href="#" className="text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition-colors">Features</a></li>
+                <li><a href="#" className="text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition-colors">Pricing</a></li>
+                <li><a href="#" className="text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition-colors">Blog</a></li>
               </ul>
             </div>
 
             {/* Legal */}
             <div>
-              <p className="font-semibold text-slate-900 mb-4">Legal</p>
+              <p className="font-semibold text-[var(--app-text)] mb-4">Legal</p>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="text-slate-600 hover:text-slate-900 transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="text-slate-600 hover:text-slate-900 transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="text-slate-600 hover:text-slate-900 transition-colors">Contact</a></li>
+                <li><a href="#" className="text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition-colors">Privacy Policy</a></li>
+                <li><a href="#" className="text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition-colors">Terms of Service</a></li>
+                <li><a href="#" className="text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition-colors">Contact</a></li>
               </ul>
             </div>
           </div>
 
           {/* Copyright */}
-          <div className="border-t border-slate-200 pt-8 text-center text-sm text-slate-600">
+          <div className="border-t border-[var(--app-border)] pt-8 text-center text-sm text-[var(--app-text-muted)]">
             <p>© {new Date().getFullYear()} LeadSync CRM. All rights reserved.</p>
           </div>
         </div>

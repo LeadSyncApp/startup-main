@@ -79,9 +79,9 @@ export default function ChatPanel({
   });
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] flex-col rounded-xl border border-slate-200/50 bg-white shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+    <div className="flex h-[calc(100vh-12rem)] flex-col rounded-xl border border-app/50 bg-app-surface shadow-md overflow-hidden hover:shadow-lg transition-shadow">
       {/* Header with lead info - enhanced styling */}
-      <div className="flex flex-col justify-between border-b border-slate-200/50 bg-gradient-to-r from-slate-50 via-white to-cyan-50/30 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 shadow-sm">
+      <div className="flex flex-col justify-between border-b border-app/50 bg-gradient-to-r from-slate-50 via-white to-cyan-50/30 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 shadow-sm">
         <div className="min-w-0 flex-1">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -90,7 +90,7 @@ export default function ChatPanel({
           >
             <div className="flex items-center gap-3">
               <div>
-                <h3 className="font-bold text-slate-900 truncate">{leadName}</h3>
+                <h3 className="font-bold text-app-text truncate">{leadName}</h3>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                   {leadEmail && <p className="text-xs text-slate-500 truncate">{leadEmail}</p>}
                   {leadPriority && (
@@ -123,7 +123,7 @@ export default function ChatPanel({
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
-          className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer hover:text-slate-900 transition-colors py-2 sm:py-0 sm:whitespace-nowrap"
+          className="flex items-center gap-2 text-sm text-app-muted cursor-pointer hover:text-app-text transition-colors py-2 sm:py-0 sm:whitespace-nowrap"
         >
           <input
             type="checkbox"
@@ -254,7 +254,7 @@ export default function ChatPanel({
                           whileHover={{ boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}
                           className={`rounded-2xl px-4 py-2.5 transition-all duration-200 shadow-sm ${
                             m.sender === 'lead'
-                              ? 'rounded-bl-none bg-slate-100 text-slate-900'
+                              ? 'rounded-bl-none bg-slate-100 text-app-text'
                               : m.sender === 'auto'
                               ? 'rounded-br-none bg-amber-100 text-amber-900'
                               : 'rounded-br-none bg-gradient-to-r from-cyan-500 to-cyan-600 text-white shadow-md'
@@ -298,7 +298,7 @@ export default function ChatPanel({
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.3, duration: 0.4 }}
-        className="border-t border-slate-200/50 bg-gradient-to-t from-white to-slate-50/30 p-4 space-y-3 shadow-lg"
+        className="border-t border-app/50 bg-gradient-to-t from-white to-slate-50/30 p-4 space-y-3 shadow-lg"
       >
         {/* Auto-response hint */}
         {useAuto && (
@@ -329,7 +329,7 @@ export default function ChatPanel({
               onKeyDown={handleKeyDown}
               placeholder="Type a message..."
               whileFocus={{ scale: 1.01 }}
-              className="w-full rounded-lg border border-slate-300/50 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 caret-cyan-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all duration-150"
+              className="w-full rounded-lg border border-slate-300/50 bg-app-surface px-4 py-2.5 text-sm text-app-text placeholder-slate-400 caret-cyan-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all duration-150"
             />
           </div>
 
@@ -340,7 +340,7 @@ export default function ChatPanel({
             onClick={() => {
               // TODO: Implement attachment upload
             }}
-            className="rounded-lg border border-slate-300/50 bg-white px-3 py-2.5 text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 transition-all duration-150 shrink-0 shadow-sm"
+            className="rounded-lg border border-slate-300/50 bg-app-surface px-3 py-2.5 text-app-muted hover:bg-app-bg hover:text-app-text hover:border-slate-400 transition-all duration-150 shrink-0 shadow-sm"
             title="Attach file (future implementation)"
             aria-label="Attach file"
           >

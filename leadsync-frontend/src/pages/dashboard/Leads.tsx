@@ -22,10 +22,10 @@ import BulkActionsPanel from "../../components/leads/BulkActionsPanel.tsx";
 
 const LeadsHeader = ({ totalLeads }: { totalLeads: number }) => (
   <div className="flex flex-col font-sans">
-    <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-3">Leads CRM</h1>
+    <h1 className="text-3xl font-bold text-app-text tracking-tight mb-3">Leads CRM</h1>
     <div className="flex items-center gap-3">
-      <div className="inline-flex items-center bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
-        <span className="text-sm font-medium text-slate-600">Total Leads</span>
+      <div className="inline-flex items-center bg-app-surface px-3 py-1.5 rounded-full border border-app shadow-sm">
+        <span className="text-sm font-medium text-app-muted">Total Leads</span>
         <span className="ml-2 text-sm font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full">{totalLeads}</span>
       </div>
     </div>
@@ -55,7 +55,7 @@ const IconButton = ({ icon: Icon, onClick, title }: { icon: React.ElementType, o
   <button
     onClick={onClick}
     title={title}
-    className="p-2 text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+    className="p-2 text-slate-500 hover:text-slate-700 bg-app-surface border border-app rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
   >
     <Icon size={16} />
   </button>
@@ -603,7 +603,7 @@ export default function Leads() {
 
         {/* 2. Tabs */}
         {!showNewOrderArrivalsOnly && (
-          <div className="flex space-x-6 border-b border-slate-200 overflow-x-auto font-sans">
+          <div className="flex space-x-6 border-b border-app overflow-x-auto font-sans">
             <Tab label="All" isActive={filter === "all"} onClick={() => setFilter("all")} />
             <Tab label="Mine" isActive={filter === "me"} onClick={() => setFilter("me")} />
             <Tab label="Unassigned" isActive={filter === "unassigned"} onClick={() => setFilter("unassigned")} />
@@ -648,7 +648,7 @@ export default function Leads() {
         </div>
 
         {/* 4. CRM Action Toolbar */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-app-surface p-2 rounded-xl border border-app shadow-sm">
           <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto px-2">
             <div className="relative w-full sm:w-64 shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
@@ -656,7 +656,7 @@ export default function Leads() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search leads..."
-                className="w-full pl-9 pr-8 py-2 text-sm border border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-100 transition-colors"
+                className="w-full pl-9 pr-8 py-2 text-sm border border-app bg-app-bg rounded-lg focus:outline-none focus:bg-app-surface focus:border-blue-300 focus:ring-2 focus:ring-blue-100 transition-colors"
               />
               {search && (
                 <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
@@ -670,7 +670,7 @@ export default function Leads() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none flex items-center gap-2 pl-3 pr-8 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors cursor-pointer"
+                className="appearance-none flex items-center gap-2 pl-3 pr-8 py-2 text-sm font-medium text-app-muted bg-app-surface border border-app rounded-lg hover:bg-app-bg focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors cursor-pointer"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="OPEN">Open Status</option>
@@ -691,7 +691,7 @@ export default function Leads() {
               <select
                 value={dateRangeFilter}
                 onChange={(e) => setDateRangeFilter(e.target.value)}
-                className="appearance-none flex items-center gap-2 pl-8 pr-8 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors cursor-pointer"
+                className="appearance-none flex items-center gap-2 pl-8 pr-8 py-2 text-sm font-medium text-app-muted bg-app-surface border border-app rounded-lg hover:bg-app-bg focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors cursor-pointer"
               >
                 <option value="ALL">All Dates</option>
                 <option value="TODAY">Today</option>
@@ -712,14 +712,14 @@ export default function Leads() {
               <button
                 onClick={() => setViewMode("table")}
                 title="Table view"
-                className={`p-1.5 rounded transition ${viewMode === "table" ? "bg-white shadow text-blue-600" : "text-slate-400 hover:text-slate-600"}`}
+                className={`p-1.5 rounded transition ${viewMode === "table" ? "bg-app-surface shadow text-blue-600" : "text-slate-400 hover:text-app-muted"}`}
               >
                 <List size={16} />
               </button>
               <button
                 onClick={() => setViewMode("kanban")}
                 title="Kanban view"
-                className={`p-1.5 rounded transition ${viewMode === "kanban" ? "bg-white shadow text-blue-600" : "text-slate-400 hover:text-slate-600"}`}
+                className={`p-1.5 rounded transition ${viewMode === "kanban" ? "bg-app-surface shadow text-blue-600" : "text-slate-400 hover:text-app-muted"}`}
               >
                 <LayoutGrid size={16} />
               </button>
@@ -743,7 +743,7 @@ export default function Leads() {
         loadingManualLeads ? (
           <TableSkeleton rows={8} cols={8} />
         ) : filteredManualLeads.length === 0 ? (
-          <div className="bg-white rounded-[20px] p-12 text-center border border-slate-200 shadow-sm font-sans flex flex-col items-center justify-center">
+          <div className="bg-app-surface rounded-[20px] p-12 text-center border border-app shadow-sm font-sans flex flex-col items-center justify-center">
             <div className="p-4 bg-blue-50 text-blue-600 rounded-full mb-4">
               <Plus size={32} />
             </div>
@@ -765,7 +765,7 @@ export default function Leads() {
       ) : leads.length === 0 ? (
         <EmptyLeads onAction={() => navigate("/dashboard/settings")} />
       ) : filteredLeads.length === 0 ? (
-        <div className="bg-white rounded-xl border p-10 text-center font-sans">
+        <div className="bg-app-surface rounded-xl border p-10 text-center font-sans">
           <p className="text-slate-400 text-sm">No leads match your filters.</p>
           <button onClick={() => { setSearch(""); setChannelFilter("ALL"); setPriorityFilter("ALL"); }} className="mt-3 text-indigo-500 text-xs font-bold hover:underline cursor-pointer">
             Clear filters
@@ -819,11 +819,11 @@ export default function Leads() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 border border-slate-100"
+              className="bg-app-surface rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 border border-app"
             >
               <div className="h-2 w-full bg-red-500" />
               <div className="p-6">
-                <h3 className="text-base font-bold text-slate-900 mb-1 font-sans text-left">
+                <h3 className="text-base font-bold text-app-text mb-1 font-sans text-left">
                   {filter === "manual" ? "Delete Orders?" : "Delete Leads?"}
                 </h3>
                 <p className="text-xs text-slate-500 leading-normal mb-5 font-sans text-left">
@@ -832,7 +832,7 @@ export default function Leads() {
                 <div className="flex gap-2 justify-end font-sans">
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-xl text-xs font-bold border border-slate-200 cursor-pointer"
+                    className="px-3 py-2 text-slate-500 hover:bg-app-bg rounded-xl text-xs font-bold border border-app cursor-pointer"
                   >
                     Cancel
                   </button>
