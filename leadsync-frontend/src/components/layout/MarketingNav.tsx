@@ -25,7 +25,7 @@ export default function MarketingNav() {
           to="/"
           className="flex items-center gap-2 font-bold text-[var(--app-text)]"
         >
-          <Zap className="h-8 w-8 text-cyan-500" />
+          <Zap className="h-8 w-8 text-app-primary" />
           <span className="text-xl">LeadSync</span>
         </Link>
 

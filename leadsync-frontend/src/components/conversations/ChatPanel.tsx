@@ -81,7 +81,7 @@ export default function ChatPanel({
   return (
     <div className="flex h-[calc(100vh-12rem)] flex-col rounded-xl border border-app-border/50 bg-app-surface shadow-md overflow-hidden hover:shadow-lg transition-shadow">
       {/* Header with lead info - enhanced styling */}
-      <div className="flex flex-col justify-between border-b border-app-border/50 bg-gradient-to-r from-slate-50 via-white to-cyan-50/30 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 shadow-sm">
+      <div className="flex flex-col justify-between border-b border-app-border/50 bg-gradient-to-r from-slate-50 via-white to-app-primary/10 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 shadow-sm">
         <div className="min-w-0 flex-1">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -104,7 +104,7 @@ export default function ChatPanel({
                           : leadPriority === 'high'
                           ? 'bg-amber-100 text-amber-700'
                           : leadPriority === 'medium'
-                          ? 'bg-sky-100 text-sky-700'
+                          ? 'bg-app-primary/10 text-app-primary'
                           : 'bg-app-bg-soft text-app-text'
                       }`}
                     >
@@ -238,7 +238,7 @@ export default function ChatPanel({
                           {m.sender === 'agent' && (
                             <>
                               <span className="inline-flex h-2 w-2 rounded-full bg-cyan-500 animate-pulse"></span>
-                              <span className="text-xs font-semibold text-cyan-600">Agent</span>
+                              <span className="text-xs font-semibold text-app-primary">Agent</span>
                             </>
                           )}
                           {m.sender === 'auto' && (
@@ -273,7 +273,7 @@ export default function ChatPanel({
                               ? 'text-gray-500'
                               : m.sender === 'auto'
                               ? 'text-amber-600'
-                              : 'text-cyan-600'
+                              : 'text-app-primary'
                           }`}
                         >
                           {new Date(m.timestamp).toLocaleTimeString('en-IN', {

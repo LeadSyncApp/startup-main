@@ -107,7 +107,7 @@ const IconButton = ({ icon, onClick, title }: { icon: string; onClick?: () => vo
   <button 
     onClick={onClick}
     title={title}
-    className="p-2 text-app-muted hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
+    className="p-2 text-app-muted hover:bg-app-primary/15 hover:text-app-primary-strong rounded-lg transition-colors"
   >
     <span className="material-symbols-outlined text-[20px]">{icon}</span>
   </button>
@@ -116,7 +116,7 @@ const IconButton = ({ icon, onClick, title }: { icon: string; onClick?: () => vo
 const ActionCircle = ({ icon, onClick }: { icon: string; onClick?: () => void }) => (
   <button 
     onClick={onClick}
-    className="w-10 h-10 flex items-center justify-center bg-app-surface border border-app rounded-full text-app-muted shadow-sm hover:border-blue-500 hover:text-blue-600 hover:shadow-md transition-all active:scale-90"
+    className="w-10 h-10 flex items-center justify-center bg-app-surface border border-app-border rounded-full text-app-muted shadow-sm hover:border-blue-500 hover:text-app-primary-strong hover:shadow-md transition-all active:scale-90"
   >
     <span className="material-symbols-outlined text-[20px]">{icon}</span>
   </button>
@@ -126,7 +126,7 @@ const Section = ({ title, children, action }: { title: string; children: React.R
   <div className="space-y-3">
     <div className="flex justify-between items-center">
       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">{title}</h4>
-      {action && <button className="text-blue-600 font-bold text-xs hover:underline transition-all">{action}</button>}
+      {action && <button className="text-app-primary font-bold text-xs hover:underline transition-all">{action}</button>}
     </div>
     {children}
   </div>
@@ -134,7 +134,7 @@ const Section = ({ title, children, action }: { title: string; children: React.R
 
 const InfoItem = ({ icon, text }: { icon: string; text: string }) => (
   <div className="flex items-center gap-3 group cursor-pointer">
-    <span className="material-symbols-outlined text-slate-300 group-hover:text-blue-500 transition-colors text-[18px]">{icon}</span>
+    <span className="material-symbols-outlined text-slate-300 group-hover:text-app-primary-strong transition-colors text-[18px]">{icon}</span>
     <span className="text-xs text-app-text font-medium truncate group-hover:text-app-text transition-colors">{text}</span>
   </div>
 );
@@ -153,25 +153,25 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
   const initialsColor = getInitialsColor(leadName);
 
   return (
-    <aside className="w-[300px] bg-app-surface border-l border-app shadow-xl md:shadow-none flex flex-col shrink-0 absolute md:relative right-0 top-0 bottom-0 h-full z-20">
+    <aside className="w-[300px] bg-app-surface border-l border-app-border shadow-xl md:shadow-none flex flex-col shrink-0 absolute md:relative right-0 top-0 bottom-0 h-full z-20">
       <div className="absolute top-4 right-4 z-10">
         <button 
           type="button"
           onClick={onClose}
-          className="p-1 text-slate-400 hover:text-app-muted hover:bg-app-bg-soft rounded-lg transition-colors flex items-center justify-center border border-app bg-app-surface"
+          className="p-1 text-slate-400 hover:text-app-muted hover:bg-app-bg-soft rounded-lg transition-colors flex items-center justify-center border border-app-border bg-app-surface"
           title="Close profile"
         >
           <span className="material-symbols-outlined text-[18px]">close</span>
         </button>
       </div>
 
-      <div className="p-8 flex flex-col items-center text-center border-b border-app bg-app-bg/30 shrink-0">
+      <div className="p-8 flex flex-col items-center text-center border-b border-app-border bg-app-bg/30 shrink-0">
         <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-black shadow-lg mb-4 bg-gradient-to-br ${initialsColor}`}>
           {leadInitials}
         </div>
         <h3 className="text-lg font-extrabold text-app-text leading-tight">{leadName}</h3>
         <p className="text-xs text-app-muted font-medium mt-1">
-          {activeLead?.segment || 'Regular Lead'} • <span className="text-blue-600 font-semibold">{leadChannel}</span>
+          {activeLead?.segment || 'Regular Lead'} • <span className="text-app-primary font-semibold">{leadChannel}</span>
         </p>
         
         <div className="flex gap-2.5 mt-5">
@@ -181,13 +181,13 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
       </div>
 
       {/* Tab bar switch */}
-      <div className="flex border-b border-app bg-app-bg/50 shrink-0">
+      <div className="flex border-b border-app-border bg-app-bg/50 shrink-0">
         <button
           type="button"
           onClick={() => setActiveTab('details')}
           className={`flex-1 py-3 text-center text-xs font-bold transition-all border-b-2 flex items-center justify-center gap-1.5 ${
             activeTab === 'details'
-              ? 'border-blue-600 text-blue-600 font-black'
+              ? 'border-blue-600 text-app-primary font-black'
               : 'border-transparent text-app-muted hover:text-app-text'
           }`}
         >
@@ -199,7 +199,7 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
           onClick={() => setActiveTab('notes')}
           className={`flex-1 py-3 text-center text-xs font-bold transition-all border-b-2 flex items-center justify-center gap-1.5 ${
             activeTab === 'notes'
-              ? 'border-blue-600 text-blue-600 font-black'
+              ? 'border-blue-600 text-app-primary font-black'
               : 'border-transparent text-app-muted hover:text-app-text'
           }`}
         >
@@ -224,7 +224,7 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
                 <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
                   activeLead.segment === "VIP" ? "bg-amber-50 text-amber-700 border-amber-100" :
                   activeLead.segment === "CHURN_RISK" ? "bg-red-50 text-red-700 border-red-100" :
-                  "bg-blue-50 text-blue-700 border-blue-100"
+                  "bg-app-primary/10 text-app-primary border-app-primary/20"
                 }`}>
                   {activeLead.segment} SEGMENT
                 </span>
@@ -232,7 +232,7 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
                   <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
                     activeLead.priority === "URGENT" ? "bg-rose-50 text-rose-700 border-rose-100" :
                     activeLead.priority === "HIGH" ? "bg-orange-50 text-orange-700 border-orange-100" :
-                    "bg-app-bg text-app-muted border-app"
+                    "bg-app-bg text-app-muted border-app-border"
                   }`}>
                     Priority: {activeLead.priority}
                   </span>
@@ -258,15 +258,15 @@ const ContactIntelligence = ({ activeLead, selectedConv, onClose }: { activeLead
               {activeLead?.suggestedAction && (
                 <div className="flex justify-between py-2">
                   <span className="text-xs text-app-muted">Suggested Action</span>
-                  <span className="text-xs text-blue-600 font-bold">{activeLead.suggestedAction}</span>
+                  <span className="text-xs text-app-primary font-bold">{activeLead.suggestedAction}</span>
                 </div>
               )}
             </div>
           </Section>
 
           {activeLead?.lastActiveAt && (
-            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50">
-              <h4 className="text-[10px] font-black text-blue-900 uppercase tracking-widest mb-2">Last Customer Activity</h4>
+            <div className="bg-app-primary/10 p-4 rounded-xl border border-app-primary/20">
+              <h4 className="text-[10px] font-black text-app-primary uppercase tracking-widest mb-2">Last Customer Activity</h4>
               <div className="flex gap-3">
                 <div className="w-1 bg-blue-600 rounded-full shadow-[0_0_8px_rgba(37,99,235,0.4)]"></div>
                 <div>
@@ -732,7 +732,7 @@ const ConversationHub = () => {
   const selectedConvInitialsColor = getInitialsColor(selectedConv?.lead?.name || selectedConv?.lead?.contact || '?');
 
   return (
-    <div className="flex relative h-[calc(100vh-140px)] md:h-[calc(100vh-160px)] w-full bg-app-surface rounded-2xl border border-app shadow-sm overflow-hidden text-app-text antialiased font-sans">
+    <div className="flex relative h-[calc(100vh-140px)] md:h-[calc(100vh-160px)] w-full bg-app-surface rounded-2xl border border-app-border shadow-sm overflow-hidden text-app-text antialiased font-sans">
       
       {/* 1. LEFT COLUMN: DIRECTORY OF CUSTOMERS */}
       <section 
@@ -740,17 +740,17 @@ const ConversationHub = () => {
           width: sidebarExpanded ? undefined : '0px', 
           minWidth: sidebarExpanded ? undefined : '0px' 
         }}
-        className={`w-full md:w-[320px] bg-app-surface border-r border-app flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
+        className={`w-full md:w-[320px] bg-app-surface border-r border-app-border flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
           selectedId ? (sidebarExpanded ? 'hidden md:flex' : 'hidden') : 'flex'
         } ${!sidebarExpanded ? 'md:border-r-0' : ''}`}
       >
-        <div className="p-4 border-b border-app flex flex-col gap-3">
+        <div className="p-4 border-b border-app-border flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h1 className="text-sm font-extrabold text-app-text tracking-wider">INBOX</h1>
             <button 
               type="button"
               onClick={() => setSidebarExpanded(false)}
-              className="hidden md:flex p-1.5 text-app-muted hover:bg-app-bg-soft hover:text-blue-600 rounded-lg transition-colors items-center justify-center shrink-0"
+              className="hidden md:flex p-1.5 text-app-muted hover:bg-app-bg-soft hover:text-app-primary-strong rounded-lg transition-colors items-center justify-center shrink-0"
               title="Collapse sidebar"
             >
               <span className="material-symbols-outlined text-[20px]">menu_open</span>
@@ -764,7 +764,7 @@ const ConversationHub = () => {
               placeholder="Search conversations..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-app-bg border border-app rounded-xl py-2 pl-10 pr-4 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/80 outline-none transition-all placeholder:text-slate-400 text-app-text"
+              className="w-full bg-app-bg border border-app-border rounded-xl py-2 pl-10 pr-4 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/80 outline-none transition-all placeholder:text-slate-400 text-app-text"
             />
           </div>
 
@@ -781,7 +781,7 @@ const ConversationHub = () => {
                 onClick={() => setListFilter(tab.id as any)}
                 className={`flex-1 py-1 rounded-md text-[10px] font-bold uppercase tracking-tight transition-all duration-150 ${
                   listFilter === tab.id
-                    ? 'bg-app-surface shadow-sm text-blue-600 border border-app-border/20'
+                    ? 'bg-app-surface shadow-sm text-app-primary border border-app-border/20'
                     : 'text-app-muted hover:text-app-text'
                 }`}
               >
@@ -843,7 +843,7 @@ const ConversationHub = () => {
                   onClick={() => setSelectedId(conv.id)}
                   className={`px-4 py-3.5 border-b border-app-border/70 flex gap-3 items-start cursor-pointer transition-all ${
                     isActive 
-                      ? 'bg-blue-50/50 border-l-4 border-blue-600' 
+                      ? 'bg-app-primary/10 border-l-4 border-blue-600' 
                       : 'border-l-4 border-transparent hover:bg-app-bg/60'
                   }`}
                 >
@@ -858,7 +858,7 @@ const ConversationHub = () => {
                   
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center">
-                      <h4 className={`text-xs truncate ${isActive ? 'font-bold text-blue-900' : 'font-semibold text-app-text'}`}>
+                      <h4 className={`text-xs truncate ${isActive ? 'font-bold text-app-primary' : 'font-semibold text-app-text'}`}>
                         {conv.lead?.name || 'Customer'}
                       </h4>
                       <span className="text-[10px] text-slate-400 font-medium">
@@ -872,7 +872,7 @@ const ConversationHub = () => {
                     
                     <div className="flex items-center justify-between gap-1 mt-1.5">
                       <div className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[13px] text-blue-400">chat_bubble</span>
+                        <span className="material-symbols-outlined text-[13px] text-app-primary">chat_bubble</span>
                         <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{conv.lead?.channel || 'Telegram'}</span>
                       </div>
                       {conv.mode === 'BOT' && (
@@ -893,13 +893,13 @@ const ConversationHub = () => {
       }`}>
         {selectedConv ? (
           <>
-            <header className="h-16 border-b border-app bg-app-surface flex items-center justify-between px-4 sm:px-6 shrink-0 z-10">
+            <header className="h-16 border-b border-app-border bg-app-surface flex items-center justify-between px-4 sm:px-6 shrink-0 z-10">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 {!sidebarExpanded && (
                   <button 
                     type="button"
                     onClick={() => setSidebarExpanded(true)}
-                    className="hidden md:flex p-1.5 text-app-muted hover:bg-app-bg-soft hover:text-blue-600 rounded-lg items-center justify-center shrink-0 mr-1 transition-all"
+                    className="hidden md:flex p-1.5 text-app-muted hover:bg-app-bg-soft hover:text-app-primary-strong rounded-lg items-center justify-center shrink-0 mr-1 transition-all"
                     title="Expand sidebar"
                   >
                     <span className="material-symbols-outlined text-[20px]">menu</span>
@@ -952,7 +952,7 @@ const ConversationHub = () => {
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 ${
                     showProfile 
                       ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                      : 'bg-app-bg-soft hover:bg-app-bg-soft text-app-text border border-app'
+                      : 'bg-app-bg-soft hover:bg-app-bg-soft text-app-text border border-app-border'
                   }`}
                 >
                   {showProfile ? 'Hide Profile' : 'View Profile'}
@@ -1000,18 +1000,18 @@ const ConversationHub = () => {
 
             {/* HIGH FIDELITY DIRECT ORDER WORKFLOW CONTROLLER FOR ACTIVE ORDERS */}
             {activeOrder && ['PROCESSING', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'NEW', 'CONFIRMED'].includes(activeOrder.status) && (
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200/50 p-4 shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+              <div className="bg-gradient-to-r from-app-primary/15 to-app-primary/10 border-b border-app-primary/20 p-4 shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
                 <div className="flex gap-2.5 items-start">
                   <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
                     <span className="material-symbols-outlined text-[18px]">engineering</span>
                   </div>
                   <div>
-                    <h4 className="text-xs font-black uppercase text-blue-800 tracking-tight">Active Customer Order</h4>
-                    <p className="text-[11px] text-blue-700 font-semibold mt-0.5">
+                    <h4 className="text-xs font-black uppercase text-app-primary tracking-tight">Active Customer Order</h4>
+                    <p className="text-[11px] text-app-primary font-semibold mt-0.5">
                       Items: <strong className="text-app-text font-bold">{activeOrder.summary}</strong> ({activeOrder.amount ? `₹${activeOrder.amount}` : "Pending Amount"})
                     </p>
                     <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                      <span className="inline-flex items-center gap-1 text-[9px] bg-blue-100/80 text-blue-800 font-black uppercase px-2.5 py-1 rounded-full shadow-sm border border-blue-200">
+                      <span className="inline-flex items-center gap-1 text-[9px] bg-app-primary/10 text-app-primary font-black uppercase px-2.5 py-1 rounded-full shadow-sm border border-app-primary/20">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
                         Stage: {activeOrder.status}
                       </span>
@@ -1074,7 +1074,7 @@ const ConversationHub = () => {
                   onClick={() => setTrackSidebarExpanded(!trackSidebarExpanded)}
                   className={`p-1.5 flex items-center gap-1.5 text-xs font-bold rounded-lg border transition-all duration-150 ${
                     trackSidebarExpanded 
-                      ? 'bg-blue-50 text-blue-600 border-blue-200/50 hover:bg-blue-100/60' 
+                      ? 'bg-app-primary/10 text-app-primary border-app-primary/20 hover:bg-app-primary/15' 
                       : 'bg-app-surface text-app-muted border-app-border/80 hover:bg-app-bg-soft hover:text-app-text'
                   }`}
                   title="Toggle Message Views Side Navigation"
@@ -1090,7 +1090,7 @@ const ConversationHub = () => {
                 <span className="text-slate-400">Viewing:</span>
                 <span className={`px-2 py-0.5 rounded font-black tracking-tight ${
                   messageFilter === 'all' 
-                    ? 'bg-blue-100 text-blue-700' 
+                    ? 'bg-app-primary/10 text-app-primary' 
                     : messageFilter === 'bot' 
                     ? 'bg-purple-100 text-purple-700' 
                     : 'bg-emerald-100 text-emerald-700'
@@ -1181,7 +1181,7 @@ const ConversationHub = () => {
                 >
               {loadingChat ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-2">
-                  <span className="material-symbols-outlined animate-spin text-blue-500 text-[32px]">progress_activity</span>
+                  <span className="material-symbols-outlined animate-spin text-app-primary text-[32px]">progress_activity</span>
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Loading conversation history...</span>
                 </div>
               ) : filteredMessages.length === 0 ? (
@@ -1241,14 +1241,14 @@ const ConversationHub = () => {
                             <span className="text-[8px] bg-purple-100 text-purple-700 px-1 rounded font-black uppercase">Auto</span>
                           )}
                           {!isIncoming && !isBotResponse && (
-                            <span className="text-[8px] bg-blue-100 text-blue-700 px-1 rounded font-black uppercase font-sans">Live</span>
+                            <span className="text-[8px] bg-app-primary/10 text-app-primary px-1 rounded font-black uppercase font-sans">Live</span>
                           )}
                         </div>
 
                         {/* Speech Bubble Card */}
                         <div className={`p-4 rounded-xl shadow-sm ${
                           isIncoming 
-                            ? 'bg-app-surface border border-app text-app-text' 
+                            ? 'bg-app-surface border border-app-border text-app-text' 
                             : isBotResponse
                               ? 'bg-purple-50 border border-purple-200/80 text-purple-950 font-medium'
                               : 'bg-blue-600 text-white'
@@ -1262,7 +1262,7 @@ const ConversationHub = () => {
                           {!isIncoming && (
                             <>
                               <span>•</span>
-                              <span className={isBotResponse ? 'text-purple-600' : 'text-blue-500'}>Delivered</span>
+                              <span className={isBotResponse ? 'text-purple-600' : 'text-app-primary'}>Delivered</span>
                             </>
                           )}
                         </div>
@@ -1274,8 +1274,8 @@ const ConversationHub = () => {
             </div>
 
             {/* Input Form Composer */}
-            <div className="p-4 bg-app-surface border-t border-app">
-              <div className="border border-app rounded-xl focus-within:ring-2 focus-within:ring-blue-500/15 focus-within:border-blue-500/50 transition-all shadow-sm">
+            <div className="p-4 bg-app-surface border-t border-app-border">
+              <div className="border border-app-border rounded-xl focus-within:ring-2 focus-within:ring-blue-500/15 focus-within:border-blue-500/50 transition-all shadow-sm">
                 
                 {showRepliesPopup && (
                   <div className="relative">
@@ -1290,12 +1290,12 @@ const ConversationHub = () => {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between p-2.5 border-b border-app flex-wrap gap-2 bg-app-bg/50">
+                <div className="flex items-center justify-between p-2.5 border-b border-app-border flex-wrap gap-2 bg-app-bg/50">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button 
                       onClick={() => { setShowRepliesPopup(p => !p); setReplyQuery(""); }}
                       disabled={isLocked}
-                      className="px-2 sm:px-3 py-1.5 text-blue-600 font-extrabold text-[10px] uppercase bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1"
+                      className="px-2 sm:px-3 py-1.5 text-app-primary font-extrabold text-[10px] uppercase bg-app-primary/10 hover:bg-app-primary/15 rounded-lg transition-colors flex items-center gap-1"
                     >
                       <span className="material-symbols-outlined text-[15px]">menu_book</span>
                       <span className="hidden sm:inline">Replies</span>
@@ -1326,7 +1326,7 @@ const ConversationHub = () => {
                         onClick={() => handleToggleMode('BOT')}
                         className={`px-2 sm:px-3 py-1 rounded text-[9px] font-black uppercase tracking-tight transition ${
                           currentConvMode === 'BOT' 
-                            ? 'bg-app-surface text-blue-600 shadow-sm border border-app-border/20' 
+                            ? 'bg-app-surface text-app-primary shadow-sm border border-app-border/20' 
                             : 'text-app-muted hover:text-app-text'
                         }`}
                         title="AI bot takes full automated control of communications flow"
@@ -1338,7 +1338,7 @@ const ConversationHub = () => {
                         onClick={() => handleToggleMode('HUMAN')}
                         className={`px-2 sm:px-3 py-1 rounded text-[9px] font-black uppercase tracking-tight transition ${
                           currentConvMode === 'HUMAN' 
-                            ? 'bg-app-surface text-blue-600 shadow-sm border border-app-border/20' 
+                            ? 'bg-app-surface text-app-primary shadow-sm border border-app-border/20' 
                             : 'text-app-muted hover:text-app-text'
                         }`}
                         title="Pause bot automated responses. Operator will reply manually."
@@ -1377,7 +1377,7 @@ const ConversationHub = () => {
                   className="w-full p-4 text-xs md:text-sm border-none focus:ring-0 focus:outline-none min-h-[90px] resize-none text-app-text bg-transparent placeholder:text-slate-400"
                 />
                 
-                <div className="flex items-center justify-between p-2.5 sm:p-3 bg-app-bg/50 rounded-b-xl border-t border-app">
+                <div className="flex items-center justify-between p-2.5 sm:p-3 bg-app-bg/50 rounded-b-xl border-t border-app-border">
                   <span className="hidden sm:inline text-[10px] text-slate-400 font-semibold select-none">
                     {currentConvMode === 'BOT' ? '🤖 AI Autopilot actively responding' : '👤 Manual operator overrides active'}
                   </span>
@@ -1398,11 +1398,11 @@ const ConversationHub = () => {
         ) : (
           <div className="flex-1 flex flex-col bg-app-bg/10">
             {!sidebarExpanded && (
-              <header className="h-16 border-b border-app bg-app-surface flex items-center px-4 sm:px-6 shrink-0">
+              <header className="h-16 border-b border-app-border bg-app-surface flex items-center px-4 sm:px-6 shrink-0">
                 <button 
                   type="button"
                   onClick={() => setSidebarExpanded(true)}
-                  className="hidden md:flex p-1.5 text-app-muted hover:bg-app-bg-soft hover:text-blue-600 rounded-lg items-center justify-center shrink-0 mr-1 transition-all"
+                  className="hidden md:flex p-1.5 text-app-muted hover:bg-app-bg-soft hover:text-app-primary-strong rounded-lg items-center justify-center shrink-0 mr-1 transition-all"
                   title="Expand sidebar"
                 >
                   <span className="material-symbols-outlined text-[20px]">menu</span>
@@ -1411,7 +1411,7 @@ const ConversationHub = () => {
               </header>
             )}
             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-12 text-center bg-transparent">
-             <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-3xl flex items-center justify-center mb-6">
+             <div className="w-20 h-20 bg-app-primary/10 text-app-primary rounded-3xl flex items-center justify-center mb-6">
                <span className="material-symbols-outlined text-[36px]">forum</span>
              </div>
              <h2 className="text-sm font-bold text-app-text mb-2">Select a Conversation</h2>

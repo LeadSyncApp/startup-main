@@ -127,13 +127,13 @@ export default function Reports() {
       </div>
 
       {/* Info Card */}
-      <div className="bg-cyan-50 border border-cyan-100 rounded-2xl p-6 flex gap-4">
-        <div className="bg-cyan-100 p-2 rounded-lg h-fit">
-          <Info className="text-cyan-600" size={20} />
+      <div className="bg-app-primary/10 border border-app-primary/20 rounded-2xl p-6 flex gap-4">
+        <div className="bg-app-primary/10 p-2 rounded-lg h-fit">
+          <Info className="text-app-primary" size={20} />
         </div>
         <div>
-          <h3 className="text-cyan-900 font-semibold text-sm">Automated Reporting</h3>
-          <p className="text-cyan-700 text-xs mt-1 leading-relaxed">
+          <h3 className="text-app-primary font-semibold text-sm">Automated Reporting</h3>
+          <p className="text-app-primary text-xs mt-1 leading-relaxed">
             LeadSync tracks all deliveries and revenue automatically using the Telegram integration.
             Detailed per-agent performance reports are available on the Revenue page.
           </p>

@@ -16,7 +16,7 @@ interface InternalNoteProps {
 export function InternalNote({ note }: InternalNoteProps) {
   if (note.isSystem) {
     return (
-      <div className="flex gap-3 py-3 px-4 bg-app-bg border border-app rounded-md text-sm text-app-muted">
+      <div className="flex gap-3 py-3 px-4 bg-app-bg border border-app-border rounded-md text-sm text-app-muted">
         <div className="mt-0.5">
           <div className="w-6 h-6 rounded-full bg-app-bg-soft flex items-center justify-center">
             <Clock className="w-3 h-3 text-app-muted" />
@@ -33,7 +33,7 @@ export function InternalNote({ note }: InternalNoteProps) {
   return (
     <div className="flex gap-3 py-3">
       <div className="flex-shrink-0">
-        <div className="w-8 h-8 rounded-full bg-blue-100 text-[#0052CC] font-bold text-xs flex items-center justify-center border border-blue-200">
+        <div className="w-8 h-8 rounded-full bg-app-primary/10 text-app-primary font-bold text-xs flex items-center justify-center border border-app-primary/20">
           {note.authorInitials}
         </div>
       </div>

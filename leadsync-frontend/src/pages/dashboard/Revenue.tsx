@@ -170,8 +170,8 @@ export default function Revenue() {
 
         <div className="rounded-2xl border bg-app-surface p-6 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="bg-cyan-50 p-3 rounded-xl border border-cyan-100">
-              <Receipt className="h-6 w-6 text-cyan-600" />
+            <div className="bg-app-primary/10 p-3 rounded-xl border border-app-primary/20">
+              <Receipt className="h-6 w-6 text-app-primary" />
             </div>
             <div>
               <p className="text-xs font-semibold text-app-muted uppercase tracking-wider">Orders Delivered</p>
@@ -202,8 +202,8 @@ export default function Revenue() {
             <ComposedChart data={chartData}>
               <defs>
                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                  <stop offset="5%" stopColor="var(--app-primary-strong)" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="var(--app-primary-strong)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--app-border)" />
@@ -213,7 +213,7 @@ export default function Revenue() {
                 contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
                 formatter={(v: number, name: string) => [formatINR(v), name === "revenue" ? "Revenue" : "Forecast"]}
               />
-              <Area type="monotone" dataKey="revenue" stroke="#06b6d4" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" connectNulls={false} />
+              <Area type="monotone" dataKey="revenue" stroke="var(--app-primary-strong)" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" connectNulls={false} />
               <Line type="monotone" dataKey="forecast" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls />
             </ComposedChart>
           </ResponsiveContainer>
@@ -243,7 +243,7 @@ export default function Revenue() {
                 <div className="h-3 bg-app-bg-soft rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-700"
-                    style={{ width: `${(stage.value / funnelMax) * 100}%`, background: stage.color || "#6366f1" }}
+                    style={{ width: `${(stage.value / funnelMax) * 100}%`, background: stage.color || "var(--app-primary)" }}
                   />
                 </div>
               </div>
@@ -255,7 +255,7 @@ export default function Revenue() {
       {/* AGENT PERFORMANCE + CHANNEL ATTRIBUTION */}
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border bg-app-surface overflow-hidden shadow-sm">
-          <div className="px-6 py-4 border-b border-app flex items-center gap-2">
+          <div className="px-6 py-4 border-b border-app-border flex items-center gap-2">
             <Trophy className="h-4 w-4 text-amber-400" />
             <h2 className="text-lg font-semibold text-app-text">Agent Leaderboard</h2>
           </div>
@@ -287,7 +287,7 @@ export default function Revenue() {
         </div>
 
         <div className="rounded-2xl border bg-app-surface overflow-hidden shadow-sm">
-          <div className="px-6 py-4 border-b border-app flex items-center gap-2">
+          <div className="px-6 py-4 border-b border-app-border flex items-center gap-2">
             <Radio className="h-4 w-4 text-slate-400" />
             <h2 className="text-lg font-semibold text-app-text">Channel Attribution</h2>
           </div>
@@ -316,7 +316,7 @@ export default function Revenue() {
 
       {/* RECENT DELIVERIES */}
       <div className="rounded-2xl border bg-app-surface overflow-hidden shadow-sm">
-        <div className="px-6 py-4 border-b border-app flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-app-border flex items-center justify-between">
           <h2 className="text-lg font-semibold text-app-text">Recent Deliveries</h2>
           <Clock className="h-4 w-4 text-slate-400" />
         </div>

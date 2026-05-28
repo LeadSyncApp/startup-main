@@ -32,13 +32,13 @@ export function MessageComposer({ onSend, isLoading = false, placeholder = "Writ
         onKeyPress={handleKeyPress}
         placeholder={placeholder}
         rows={3}
-        className="flex-1 px-3 py-2 border border-app-border rounded-md text-sm resize-none outline-none focus:border-[#0052CC] focus:ring-1 focus:ring-[#0052CC] transition-shadow placeholder-app-placeholder"
+        className="flex-1 px-3 py-2 border border-app-border rounded-md text-sm resize-none outline-none focus:border-app-primary focus:ring-1 focus:ring-app-primary transition-shadow placeholder-app-placeholder"
         disabled={isLoading}
       />
       <button
         onClick={handleSend}
         disabled={isLoading || !message.trim()}
-        className="p-2 bg-[#0052CC] text-white rounded-md hover:bg-[#0844A3] disabled:bg-app-border transition min-w-[36px] min-h-[36px] flex items-center justify-center"
+        className="p-2 bg-app-primary text-white rounded-md hover:bg-app-primary-strong disabled:bg-app-border transition min-w-[36px] min-h-[36px] flex items-center justify-center"
       >
         <Send className="w-4 h-4" />
       </button>

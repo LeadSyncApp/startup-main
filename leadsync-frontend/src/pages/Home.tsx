@@ -76,15 +76,15 @@ export default function Home() {
       <section className="relative py-20 sm:py-32 lg:py-40 px-4 sm:px-6 lg:px-8 overflow-hidden">
         {/* Background gradient elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-100 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
+          <div className="absolute top-0 right-0 w-96 h-96 bg-app-primary/10 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-96 h-96 bg-app-primary/10 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
         </div>
 
         <div className="relative mx-auto max-w-4xl text-center">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-cyan-50 border border-cyan-200">
-            <Sparkles className="h-4 w-4 text-cyan-600" />
-            <span className="text-sm font-semibold text-cyan-700">Lead Management for SMEs</span>
+          <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-app-primary/10 border border-app-primary/20">
+            <Sparkles className="h-4 w-4 text-app-primary" />
+            <span className="text-sm font-semibold text-app-primary">Lead Management for SMEs</span>
           </div>
 
           {/* Main heading */}
@@ -149,11 +149,11 @@ export default function Home() {
             {features.map(({ icon: Icon, title, description }) => (
               <div
                 key={title}
-                className="group rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-8 hover:border-cyan-300 hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 cursor-default"
+                className="group rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-8 hover:border-app-primary/30 hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 cursor-default"
               >
                 {/* Icon container */}
-                <div className="rounded-xl bg-gradient-to-br from-cyan-100 to-blue-100 p-3 w-fit mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <Icon className="h-6 w-6 text-cyan-600" />
+                <div className="rounded-xl bg-gradient-to-br from-app-primary/15 to-app-primary/10 p-3 w-fit mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <Icon className="h-6 w-6 text-app-primary" />
                 </div>
 
                 {/* Content */}
@@ -183,7 +183,7 @@ export default function Home() {
                 key={industry}
                 className="group rounded-xl border border-slate-700 bg-gradient-to-br from-slate-800 to-slate-900 px-6 py-4 text-center hover:border-cyan-500 hover:shadow-lg hover:shadow-cyan-500/20 transition-all duration-300 cursor-default"
               >
-                <p className="font-semibold text-white group-hover:text-cyan-400 transition-colors">{industry}</p>
+                <p className="font-semibold text-white group-hover:text-app-primary-strong transition-colors">{industry}</p>
               </div>
             ))}
           </div>
@@ -206,7 +206,7 @@ export default function Home() {
             {testimonials.map(({ name, company, quote, rating }) => (
               <div
                 key={name}
-                className="group rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-8 hover:border-cyan-300 hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300"
+                className="group rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-8 hover:border-app-primary/30 hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300"
               >
                 {/* Star rating */}
                 <div className="flex items-center gap-1 mb-4">
@@ -266,7 +266,7 @@ export default function Home() {
               <ul className="mt-8 flex flex-wrap justify-center gap-4 sm:gap-6 text-sm text-slate-300">
                 {['No credit card required', '14-day free trial', 'Cancel anytime'].map((item) => (
                   <li key={item} className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-cyan-400" />
+                    <CheckCircle2 className="h-5 w-5 text-app-primary" />
                     <span>{item}</span>
                   </li>
                 ))}

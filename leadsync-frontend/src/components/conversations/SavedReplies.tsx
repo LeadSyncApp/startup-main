@@ -88,7 +88,7 @@ export function SavedRepliesPopup({ query, onSelect, onClose }: SavedRepliesPopu
         initial={{ opacity: 0, y: 8, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.97 }}
-        className="absolute bottom-full left-0 mb-2 w-full bg-app-surface rounded-2xl shadow-2xl border border-app p-4 text-sm text-slate-400 text-center z-50"
+        className="absolute bottom-full left-0 mb-2 w-full bg-app-surface rounded-2xl shadow-2xl border border-app-border p-4 text-sm text-slate-400 text-center z-50"
       >
         No saved replies found for "{query}"
       </motion.div>
@@ -100,12 +100,12 @@ export function SavedRepliesPopup({ query, onSelect, onClose }: SavedRepliesPopu
       initial={{ opacity: 0, y: 8, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 8, scale: 0.97 }}
-      className="absolute bottom-full left-0 mb-2 w-full max-h-72 bg-app-surface rounded-2xl shadow-2xl border border-app overflow-hidden z-50"
+      className="absolute bottom-full left-0 mb-2 w-full max-h-72 bg-app-surface rounded-2xl shadow-2xl border border-app-border overflow-hidden z-50"
     >
-      <div className="px-4 py-2.5 bg-indigo-50 border-b border-indigo-100 flex items-center gap-2">
-        <Zap size={12} className="text-indigo-500" />
-        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Saved Replies</span>
-        <span className="ml-auto text-[9px] text-indigo-400">↑↓ navigate · Enter insert · Esc close</span>
+      <div className="px-4 py-2.5 bg-app-primary/10 border-b border-app-primary/20 flex items-center gap-2">
+        <Zap size={12} className="text-app-primary" />
+        <span className="text-[10px] font-black text-app-primary uppercase tracking-widest">Saved Replies</span>
+        <span className="ml-auto text-[9px] text-app-primary">↑↓ navigate · Enter insert · Esc close</span>
       </div>
       <div ref={listRef} className="overflow-y-auto max-h-56 divide-y divide-slate-50">
         {filtered.map((reply, i) => (
@@ -113,12 +113,12 @@ export function SavedRepliesPopup({ query, onSelect, onClose }: SavedRepliesPopu
             key={reply.id}
             onClick={() => onSelect(reply.content)}
             className={`w-full text-left px-4 py-3 transition-colors flex flex-col gap-0.5 ${
-              i === cursor ? "bg-indigo-50" : "hover:bg-app-bg"
+              i === cursor ? "bg-app-primary/10" : "hover:bg-app-bg"
             }`}
           >
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-app-text">{reply.title}</span>
-              {i === cursor && <Check size={10} className="text-indigo-500 ml-auto" />}
+              {i === cursor && <Check size={10} className="text-app-primary ml-auto" />}
             </div>
             <p className="text-xs text-app-muted truncate">{reply.content}</p>
           </button>
@@ -149,13 +149,13 @@ export function SavedRepliesManager() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <BookOpen size={16} className="text-indigo-500" />
+          <BookOpen size={16} className="text-app-primary" />
           <h3 className="font-semibold text-app-text text-sm">Saved Replies</h3>
-          <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{replies.length}</span>
+          <span className="text-[10px] bg-app-primary/10 text-app-primary px-2 py-0.5 rounded-full font-bold">{replies.length}</span>
         </div>
         <button
           onClick={() => setShowForm(s => !s)}
-          className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition"
+          className="flex items-center gap-1.5 text-xs font-bold text-app-primary hover:text-app-primary-strong transition"
         >
           {showForm ? <X size={13} /> : <Plus size={13} />}
           {showForm ? "Cancel" : "Add Reply"}
@@ -170,19 +170,19 @@ export function SavedRepliesManager() {
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="bg-indigo-50 rounded-xl p-4 space-y-3 border border-indigo-100">
+            <div className="bg-app-primary/10 rounded-xl p-4 space-y-3 border border-app-primary/20">
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Reply name (e.g. Welcome)"
-                className="w-full text-sm px-3 py-2 rounded-lg border border-indigo-200 bg-app-surface focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                className="w-full text-sm px-3 py-2 rounded-lg border border-app-primary/20 bg-app-surface focus:outline-none focus:ring-2 focus:ring-app-primary/25"
               />
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Reply content..."
                 rows={3}
-                className="w-full text-sm px-3 py-2 rounded-lg border border-indigo-200 bg-app-surface focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                className="w-full text-sm px-3 py-2 rounded-lg border border-app-primary/20 bg-app-surface focus:outline-none focus:ring-2 focus:ring-app-primary/25 resize-none"
               />
               <button
                 onClick={handleAdd}
@@ -201,7 +201,7 @@ export function SavedRepliesManager() {
           <p className="text-xs text-slate-400 italic text-center py-4">No saved replies yet. Add one above.</p>
         )}
         {replies.map((reply) => (
-          <div key={reply.id} className="flex items-start justify-between gap-3 bg-app-bg rounded-xl p-3 border border-app group">
+          <div key={reply.id} className="flex items-start justify-between gap-3 bg-app-bg rounded-xl p-3 border border-app-border group">
             <div className="flex-1 min-w-0">
               <p className="text-xs font-bold text-app-text">{reply.title}</p>
               <p className="text-xs text-app-muted truncate mt-0.5">{reply.content}</p>

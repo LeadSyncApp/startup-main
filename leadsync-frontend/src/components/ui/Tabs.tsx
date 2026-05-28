@@ -22,7 +22,7 @@ export function Tabs({ tabs, activeTabId, onChange, className = "" }: TabsProps)
             onClick={() => onChange(tab.id)}
             className={`
               relative px-4 py-2.5 text-sm font-medium transition-colors
-              ${isActive ? "text-[#0052CC]" : "text-app-muted hover:text-app-text hover:bg-app-bg"}
+              ${isActive ? "text-app-primary" : "text-app-muted hover:text-app-text hover:bg-app-bg"}
             `}
           >
             <div className="flex items-center gap-2">
@@ -31,7 +31,7 @@ export function Tabs({ tabs, activeTabId, onChange, className = "" }: TabsProps)
                 <span
                   className={`
                     px-1.5 py-0.5 rounded-full text-xs
-                    ${isActive ? "bg-blue-100 text-blue-700" : "bg-app-bg-soft text-app-muted"}
+                    ${isActive ? "bg-app-primary/10 text-app-primary" : "bg-app-bg-soft text-app-muted"}
                   `}
                 >
                   {tab.count}
@@ -39,7 +39,7 @@ export function Tabs({ tabs, activeTabId, onChange, className = "" }: TabsProps)
               )}
             </div>
             {isActive && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0052CC] rounded-t-sm" />
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-app-primary rounded-t-sm" />
             )}
           </button>
         );

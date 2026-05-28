@@ -7,7 +7,7 @@
  * - Customizable class names
  *
  * Usage:
- * <Spinner /> or <Spinner size="lg" className="text-cyan-600" />
+ * <Spinner /> or <Spinner size="lg" className="text-app-primary" />
  *
  * TODO: Track loading states and analytics
  */

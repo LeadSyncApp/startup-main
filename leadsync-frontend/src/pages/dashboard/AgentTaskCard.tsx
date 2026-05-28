@@ -83,7 +83,7 @@ export function AgentTaskCard({ task, onAction }: AgentTaskCardProps) {
               e.stopPropagation();
               onAction?.("start", task);
             }}
-            className="px-3 py-1.5 text-xs font-semibold bg-[#0052CC] text-white rounded hover:bg-blue-700 transition min-w-[44px]"
+            className="px-3 py-1.5 text-xs font-semibold bg-app-primary text-white rounded hover:bg-blue-700 transition min-w-[44px]"
           >
             Start
           </button>

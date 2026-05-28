@@ -45,10 +45,10 @@ export default function ManualOrderDetailModal({
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          className="bg-app-surface rounded-[24px] shadow-2xl w-full max-w-xl overflow-hidden relative z-10 border border-app flex flex-col font-sans select-none"
+          className="bg-app-surface rounded-[24px] shadow-2xl w-full max-w-xl overflow-hidden relative z-10 border border-app-border flex flex-col font-sans select-none"
         >
           {/* Modal Header */}
-          <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-[#0047cc] p-6 text-white text-left relative">
+          <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-app-primary p-6 text-white text-left relative">
             <button
               type="button"
               onClick={onClose}
@@ -78,14 +78,14 @@ export default function ManualOrderDetailModal({
           <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto text-left bg-app-bg/50 font-sans">
             
             {/* Section 1: Core Order Overview */}
-            <div className="bg-app-surface rounded-2xl p-4 border border-app shadow-sm space-y-3.5">
-              <div className="border-b border-app pb-2 mb-1">
+            <div className="bg-app-surface rounded-2xl p-4 border border-app-border shadow-sm space-y-3.5">
+              <div className="border-b border-app-border pb-2 mb-1">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">📦 Product & Order Information</h4>
               </div>
 
               <div>
                 <span className="block text-[10px] uppercase font-bold text-slate-400">Order Summary & Items Description</span>
-                <p className="text-app-text text-xs font-semibold leading-relaxed whitespace-pre-line mt-1 bg-app-bg p-3 rounded-xl border border-app">
+                <p className="text-app-text text-xs font-semibold leading-relaxed whitespace-pre-line mt-1 bg-app-bg p-3 rounded-xl border border-app-border">
                   {baseSummary}
                 </p>
               </div>
@@ -109,13 +109,13 @@ export default function ManualOrderDetailModal({
             </div>
 
             {/* Section 2: Address & Geography */}
-            <div className="bg-app-surface rounded-2xl p-4 border border-app shadow-sm space-y-3.5">
-              <div className="border-b border-app pb-2 mb-1">
+            <div className="bg-app-surface rounded-2xl p-4 border border-app-border shadow-sm space-y-3.5">
+              <div className="border-b border-app-border pb-2 mb-1">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">📍 Delivery Address</h4>
               </div>
 
               <div className="flex items-start gap-2.5">
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl mt-0.5">
+                <div className="p-2 bg-app-primary/10 text-app-primary rounded-xl mt-0.5">
                   <MapPin size={16} />
                 </div>
                 <div className="flex-1 space-y-3">
@@ -128,13 +128,13 @@ export default function ManualOrderDetailModal({
                   <div className="grid grid-cols-2 gap-4 font-sans">
                     <div>
                       <span className="block text-[10px] uppercase font-bold text-slate-400">City / Local Area</span>
-                      <span className="inline-block mt-1 text-app-text text-xs font-bold bg-app-bg-soft px-2.5 py-1 rounded-lg border border-app">
+                      <span className="inline-block mt-1 text-app-text text-xs font-bold bg-app-bg-soft px-2.5 py-1 rounded-lg border border-app-border">
                         Read Only: 🏙️ {city}
                       </span>
                     </div>
                     <div>
                       <span className="block text-[10px] uppercase font-bold text-slate-400">State / Province</span>
-                      <span className="inline-block mt-1 text-app-text text-xs font-bold bg-app-bg-soft px-2.5 py-1 rounded-lg border border-app">
+                      <span className="inline-block mt-1 text-app-text text-xs font-bold bg-app-bg-soft px-2.5 py-1 rounded-lg border border-app-border">
                         Read Only: 🗺️ {state}
                       </span>
                     </div>
@@ -144,12 +144,12 @@ export default function ManualOrderDetailModal({
             </div>
 
             {/* Section 3: Responsible Agent */}
-            <div className="bg-app-surface rounded-2xl p-4 border border-app shadow-sm space-y-3">
-              <div className="border-b border-app pb-2">
+            <div className="bg-app-surface rounded-2xl p-4 border border-app-border shadow-sm space-y-3">
+              <div className="border-b border-app-border pb-2">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-sans">👤 Responsible Agent</h4>
               </div>
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-indigo-100 text-indigo-700 font-bold rounded-full flex items-center justify-center text-sm">
+                <div className="w-9 h-9 bg-app-primary/10 text-app-primary font-bold rounded-full flex items-center justify-center text-sm">
                   {agentName.charAt(0).toUpperCase()}
                 </div>
                 <div>
@@ -162,7 +162,7 @@ export default function ManualOrderDetailModal({
           </div>
 
           {/* Modal Footer */}
-          <div className="border-t border-app p-5 bg-app-surface flex justify-end gap-2.5">
+          <div className="border-t border-app-border p-5 bg-app-surface flex justify-end gap-2.5">
             <button
               type="button"
               onClick={() => {
@@ -170,7 +170,7 @@ export default function ManualOrderDetailModal({
                 navigator.clipboard.writeText(text);
                 toast.success("Complete order details copied!");
               }}
-              className="px-4 py-2.5 bg-app-bg-soft hover:bg-app-bg-soft text-app-text rounded-xl text-xs font-bold border border-app active:scale-95 transition flex items-center gap-1.5 cursor-pointer font-sans"
+              className="px-4 py-2.5 bg-app-bg-soft hover:bg-app-bg-soft text-app-text rounded-xl text-xs font-bold border border-app-border active:scale-95 transition flex items-center gap-1.5 cursor-pointer font-sans"
             >
               <Clipboard size={14} />
               Copy Technical Summary

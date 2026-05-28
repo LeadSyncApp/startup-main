@@ -79,7 +79,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md', s
             transition={{ duration: 0.2, type: 'spring', stiffness: 300, damping: 30 }}
           >
             <div
-              className={`relative w-full ${sizeClasses[size]} rounded-xl bg-app-surface shadow-2xl border border-app overflow-hidden pointer-events-auto`}
+              className={`relative w-full ${sizeClasses[size]} rounded-xl bg-app-surface shadow-2xl border border-app-border overflow-hidden pointer-events-auto`}
               role="dialog"
               aria-modal="true"
               aria-labelledby={title ? 'modal-title' : undefined}
@@ -87,7 +87,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md', s
             >
               {/* Header */}
               {title && (
-                <div className="flex items-center justify-between border-b border-app bg-gradient-to-r from-slate-50 to-white px-6 py-4">
+                <div className="flex items-center justify-between border-b border-app-border bg-gradient-to-r from-slate-50 to-white px-6 py-4">
                   <h2 id="modal-title" className="text-xl font-semibold text-app-text">{title}</h2>
                   {showCloseButton && (
                     <button

@@ -55,7 +55,7 @@ export const INDUSTRY_CONFIGS: Record<BusinessType, IndustryConfig> = {
         },
         colors: {
             primary: 'blue-500',
-            badge: 'bg-blue-100 text-blue-800'
+            badge: 'bg-app-primary/10 text-app-primary'
         }
     },
     electronics: {

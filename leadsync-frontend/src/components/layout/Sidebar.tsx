@@ -140,7 +140,7 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
               onClick={closeSidebar}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${isActive
-                  ? "bg-cyan-50/70 text-cyan-700 border border-cyan-100/70"
+                  ? "bg-app-primary/10 text-app-primary border border-app-primary/20"
                   : "text-[var(--app-text-muted)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-soft)]"
                 }`
               }
@@ -152,9 +152,9 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
       </nav>
 
       {/* User Section */}
-      <div className="px-3 py-4 border-t border-app">
+      <div className="px-3 py-4 border-t border-app-border">
         <div className="flex items-center gap-3 px-3 py-2 mb-2">
-          <div className="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center text-cyan-700 font-bold text-xs shrink-0">
+          <div className="w-8 h-8 rounded-full bg-app-primary/10 flex items-center justify-center text-app-primary font-bold text-xs shrink-0">
             {user?.name?.charAt(0)?.toUpperCase() || "?"}
           </div>
           <div className="min-w-0 flex-1">

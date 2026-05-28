@@ -55,15 +55,15 @@ export function AssignmentStrategyManager({
 
   return (
     <div className="space-y-6" id="assignment-strategy-section">
-      <div className="border-b border-app pb-5">
+      <div className="border-b border-app-border pb-5">
         <div className="flex items-center gap-3">
-          <div className="bg-indigo-50 text-indigo-600 p-2.5 rounded-2xl">
+          <div className="bg-app-primary/10 text-app-primary p-2.5 rounded-2xl">
             <Users className="w-5 h-5" />
           </div>
           <div>
             <h2 className="text-xl font-bold text-app-text tracking-tight flex items-center gap-2">
               Automated Chat Assignment Strategies
-              <span className="bg-indigo-100 text-indigo-800 text-xs px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">NEW</span>
+              <span className="bg-app-primary/10 text-app-primary text-xs px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">NEW</span>
             </h2>
             <p className="text-app-muted text-sm mt-1">
               Select how incoming customer conversations and generated hot leads are routed to your active staff members.
@@ -83,8 +83,8 @@ export function AssignmentStrategyManager({
           onClick={() => canEdit && setSelected("MANUAL")}
           className={`relative border-2 p-5 rounded-2xl flex flex-col justify-between cursor-pointer transition-all ${
             selected === "MANUAL"
-              ? "border-indigo-600 bg-indigo-50/20 shadow-indigo-50/50 shadow-md"
-              : "border-app bg-app-surface hover:border-app-border-strong shadow-sm"
+              ? "border-indigo-600 bg-app-primary/10 shadow-indigo-50/50 shadow-md"
+              : "border-app-border bg-app-surface hover:border-app-border-strong shadow-sm"
           }`}
           id="strategy-manual-card"
         >
@@ -108,7 +108,7 @@ export function AssignmentStrategyManager({
             </div>
           </div>
 
-          <div className="mt-5 pt-4 border-t border-app flex flex-wrap gap-1.5">
+          <div className="mt-5 pt-4 border-t border-app-border flex flex-wrap gap-1.5">
             <span className="bg-app-bg-soft text-app-muted text-xs px-2.5 py-1 rounded-lg font-semibold">Self-Selected</span>
             <span className="bg-app-bg-soft text-app-muted text-xs px-2.5 py-1 rounded-lg font-semibold">Strict Boundaries</span>
           </div>
@@ -122,8 +122,8 @@ export function AssignmentStrategyManager({
           onClick={() => canEdit && setSelected("ROUND_ROBIN")}
           className={`relative border-2 p-5 rounded-2xl flex flex-col justify-between cursor-pointer transition-all ${
             selected === "ROUND_ROBIN"
-              ? "border-indigo-600 bg-indigo-50/20 shadow-indigo-50/50 shadow-md"
-              : "border-app bg-app-surface hover:border-app-border-strong shadow-sm"
+              ? "border-indigo-600 bg-app-primary/10 shadow-indigo-50/50 shadow-md"
+              : "border-app-border bg-app-surface hover:border-app-border-strong shadow-sm"
           }`}
           id="strategy-round-robin-card"
         >
@@ -147,9 +147,9 @@ export function AssignmentStrategyManager({
             </div>
           </div>
 
-          <div className="mt-5 pt-4 border-t border-app flex flex-wrap gap-1.5">
-            <span className="bg-indigo-50 text-indigo-700 text-xs px-2.5 py-1 rounded-lg font-semibold">100% Equal load</span>
-            <span className="bg-indigo-50 text-indigo-700 text-xs px-2.5 py-1 rounded-lg font-semibold">Automatic assigning</span>
+          <div className="mt-5 pt-4 border-t border-app-border flex flex-wrap gap-1.5">
+            <span className="bg-app-primary/10 text-app-primary text-xs px-2.5 py-1 rounded-lg font-semibold">100% Equal load</span>
+            <span className="bg-app-primary/10 text-app-primary text-xs px-2.5 py-1 rounded-lg font-semibold">Automatic assigning</span>
           </div>
         </motion.div>
 
@@ -161,8 +161,8 @@ export function AssignmentStrategyManager({
           onClick={() => canEdit && setSelected("LOAD_BALANCED")}
           className={`relative border-2 p-5 rounded-2xl flex flex-col justify-between cursor-pointer transition-all ${
             selected === "LOAD_BALANCED"
-              ? "border-indigo-600 bg-indigo-50/20 shadow-indigo-50/50 shadow-md"
-              : "border-app bg-app-surface hover:border-app-border-strong shadow-sm"
+              ? "border-indigo-600 bg-app-primary/10 shadow-indigo-50/50 shadow-md"
+              : "border-app-border bg-app-surface hover:border-app-border-strong shadow-sm"
           }`}
           id="strategy-load-balanced-card"
         >
@@ -186,16 +186,16 @@ export function AssignmentStrategyManager({
             </div>
           </div>
 
-          <div className="mt-5 pt-4 border-t border-app flex flex-wrap gap-1.5">
-            <span className="bg-indigo-50 text-indigo-700 text-xs px-2.5 py-1 rounded-lg font-semibold">Burnout Protection</span>
-            <span className="bg-indigo-50 text-indigo-700 text-xs px-2.5 py-1 rounded-lg font-semibold">Capacity Optimised</span>
+          <div className="mt-5 pt-4 border-t border-app-border flex flex-wrap gap-1.5">
+            <span className="bg-app-primary/10 text-app-primary text-xs px-2.5 py-1 rounded-lg font-semibold">Burnout Protection</span>
+            <span className="bg-app-primary/10 text-app-primary text-xs px-2.5 py-1 rounded-lg font-semibold">Capacity Optimised</span>
           </div>
         </motion.div>
 
       </div>
 
       {/* Real-time Load Analyzer for SME Manager */}
-      <div className="bg-app-bg/50 rounded-2xl p-5 border border-app grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+      <div className="bg-app-bg/50 rounded-2xl p-5 border border-app-border grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
         <div className="md:col-span-1 space-y-1">
           <h4 className="font-bold text-app-text text-sm flex items-center gap-1.5">
             <Sparkles className="w-4 h-4 text-amber-500" /> Crew Workload Allocator
@@ -204,7 +204,7 @@ export function AssignmentStrategyManager({
             A real-time overview of your squad's active capacity. Load balancing ensures incoming tickets directly route to lowest handles.
           </p>
           <div className="pt-2 text-xs text-slate-400 font-medium">
-            Active Squad Backlog: <span className="text-indigo-600 font-bold">{totalOpenLoads} open chats</span>
+            Active Squad Backlog: <span className="text-app-primary font-bold">{totalOpenLoads} open chats</span>
           </div>
         </div>
 
@@ -215,7 +215,7 @@ export function AssignmentStrategyManager({
               <div
                 key={agent.id}
                 className={`bg-app-surface px-4 py-3 rounded-xl border flex-1 min-w-[140px] shadow-sm flex flex-col justify-between space-y-1.5 transition-all ${
-                  agent.isAvailable !== false ? "border-app" : "border-app bg-app-bg opacity-75"
+                  agent.isAvailable !== false ? "border-app-border" : "border-app-border bg-app-bg opacity-75"
                 }`}
               >
                 <div className="flex justify-between items-center gap-2">

@@ -24,9 +24,9 @@ const LeadsHeader = ({ totalLeads }: { totalLeads: number }) => (
   <div className="flex flex-col font-sans">
     <h1 className="text-3xl font-bold text-app-text tracking-tight mb-3">Leads CRM</h1>
     <div className="flex items-center gap-3">
-      <div className="inline-flex items-center bg-app-surface px-3 py-1.5 rounded-full border border-app shadow-sm">
+      <div className="inline-flex items-center bg-app-surface px-3 py-1.5 rounded-full border border-app-border shadow-sm">
         <span className="text-sm font-medium text-app-muted">Total Leads</span>
-        <span className="ml-2 text-sm font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full">{totalLeads}</span>
+        <span className="ml-2 text-sm font-bold text-app-primary bg-app-primary/10 px-2.5 py-0.5 rounded-full">{totalLeads}</span>
       </div>
     </div>
   </div>
@@ -43,7 +43,7 @@ const Tab = ({ label, isActive, onClick }: TabProps) => (
     onClick={onClick}
     className={`pb-4 px-2 text-sm font-medium transition-colors border-b-2 relative -mb-px whitespace-nowrap ${
       isActive 
-        ? "border-blue-600 text-blue-600" 
+        ? "border-blue-600 text-app-primary" 
         : "border-transparent text-app-muted hover:text-app-text hover:border-app-border-strong"
     }`}
   >
@@ -55,7 +55,7 @@ const IconButton = ({ icon: Icon, onClick, title }: { icon: React.ElementType, o
   <button
     onClick={onClick}
     title={title}
-    className="p-2 text-app-muted hover:text-app-text bg-app-surface border border-app rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+    className="p-2 text-app-muted hover:text-app-text bg-app-surface border border-app-border rounded-lg focus:outline-none focus:ring-2 focus:ring-app-primary/25 transition-colors"
   >
     <Icon size={16} />
   </button>
@@ -581,7 +581,7 @@ export default function Leads() {
             {showNewOrderArrivalsOnly && (
               <button
                 onClick={() => toggleNewOrderArrivals(false)}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium underline px-2"
+                className="text-app-primary hover:text-app-primary-strong text-sm font-medium underline px-2"
               >
                 Clear Arrivals Filter
               </button>
@@ -603,7 +603,7 @@ export default function Leads() {
 
         {/* 2. Tabs */}
         {!showNewOrderArrivalsOnly && (
-          <div className="flex space-x-6 border-b border-app overflow-x-auto font-sans">
+          <div className="flex space-x-6 border-b border-app-border overflow-x-auto font-sans">
             <Tab label="All" isActive={filter === "all"} onClick={() => setFilter("all")} />
             <Tab label="Mine" isActive={filter === "me"} onClick={() => setFilter("me")} />
             <Tab label="Unassigned" isActive={filter === "unassigned"} onClick={() => setFilter("unassigned")} />
@@ -618,8 +618,8 @@ export default function Leads() {
             value={leads.filter((l: any) => l.pendingOrderState === "PENDING_APPROVAL").length} 
             description="Last 24 hours" 
             icon={ShoppingCart} 
-            iconBgColor="bg-blue-50" 
-            iconColor="text-blue-600" 
+            iconBgColor="bg-app-primary/10" 
+            iconColor="text-app-primary" 
           />
           <MetricsCard 
             title="High Priority Leads" 
@@ -648,7 +648,7 @@ export default function Leads() {
         </div>
 
         {/* 4. CRM Action Toolbar */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-app-surface p-2 rounded-xl border border-app shadow-sm">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-app-surface p-2 rounded-xl border border-app-border shadow-sm">
           <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto px-2">
             <div className="relative w-full sm:w-64 shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
@@ -656,7 +656,7 @@ export default function Leads() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search leads..."
-                className="w-full pl-9 pr-8 py-2 text-sm border border-app bg-app-bg rounded-lg focus:outline-none focus:bg-app-surface focus:border-blue-300 focus:ring-2 focus:ring-blue-100 transition-colors"
+                className="w-full pl-9 pr-8 py-2 text-sm border border-app-border bg-app-bg rounded-lg focus:outline-none focus:bg-app-surface focus:border-app-primary/20 focus:ring-2 focus:ring-app-primary/25 transition-colors"
               />
               {search && (
                 <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-app-text">
@@ -670,7 +670,7 @@ export default function Leads() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none flex items-center gap-2 pl-3 pr-8 py-2 text-sm font-medium text-app-muted bg-app-surface border border-app rounded-lg hover:bg-app-bg focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors cursor-pointer"
+                className="appearance-none flex items-center gap-2 pl-3 pr-8 py-2 text-sm font-medium text-app-muted bg-app-surface border border-app-border rounded-lg hover:bg-app-bg focus:outline-none focus:ring-2 focus:ring-app-primary/25 transition-colors cursor-pointer"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="OPEN">Open Status</option>
@@ -691,7 +691,7 @@ export default function Leads() {
               <select
                 value={dateRangeFilter}
                 onChange={(e) => setDateRangeFilter(e.target.value)}
-                className="appearance-none flex items-center gap-2 pl-8 pr-8 py-2 text-sm font-medium text-app-muted bg-app-surface border border-app rounded-lg hover:bg-app-bg focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors cursor-pointer"
+                className="appearance-none flex items-center gap-2 pl-8 pr-8 py-2 text-sm font-medium text-app-muted bg-app-surface border border-app-border rounded-lg hover:bg-app-bg focus:outline-none focus:ring-2 focus:ring-app-primary/25 transition-colors cursor-pointer"
               >
                 <option value="ALL">All Dates</option>
                 <option value="TODAY">Today</option>
@@ -712,14 +712,14 @@ export default function Leads() {
               <button
                 onClick={() => setViewMode("table")}
                 title="Table view"
-                className={`p-1.5 rounded transition ${viewMode === "table" ? "bg-app-surface shadow text-blue-600" : "text-slate-400 hover:text-app-muted"}`}
+                className={`p-1.5 rounded transition ${viewMode === "table" ? "bg-app-surface shadow text-app-primary" : "text-slate-400 hover:text-app-muted"}`}
               >
                 <List size={16} />
               </button>
               <button
                 onClick={() => setViewMode("kanban")}
                 title="Kanban view"
-                className={`p-1.5 rounded transition ${viewMode === "kanban" ? "bg-app-surface shadow text-blue-600" : "text-slate-400 hover:text-app-muted"}`}
+                className={`p-1.5 rounded transition ${viewMode === "kanban" ? "bg-app-surface shadow text-app-primary" : "text-slate-400 hover:text-app-muted"}`}
               >
                 <LayoutGrid size={16} />
               </button>
@@ -731,9 +731,9 @@ export default function Leads() {
 
         {/* 5. Warning / Active Filter Notice */}
         {!loading && showNewOrderArrivalsOnly && (
-          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-            <ShoppingCart size={16} className="text-blue-600" />
-            <span className="text-blue-800 font-medium text-sm">
+          <div className="flex items-center gap-2 bg-app-primary/10 border border-app-primary/20 rounded-xl px-4 py-3">
+            <ShoppingCart size={16} className="text-app-primary" />
+            <span className="text-app-primary font-medium text-sm">
               Showing only new order arrivals - any available agent can claim these orders
             </span>
           </div>
@@ -743,8 +743,8 @@ export default function Leads() {
         loadingManualLeads ? (
           <TableSkeleton rows={8} cols={8} />
         ) : filteredManualLeads.length === 0 ? (
-          <div className="bg-app-surface rounded-[20px] p-12 text-center border border-app shadow-sm font-sans flex flex-col items-center justify-center">
-            <div className="p-4 bg-blue-50 text-blue-600 rounded-full mb-4">
+          <div className="bg-app-surface rounded-[20px] p-12 text-center border border-app-border shadow-sm font-sans flex flex-col items-center justify-center">
+            <div className="p-4 bg-app-primary/10 text-app-primary rounded-full mb-4">
               <Plus size={32} />
             </div>
             <h3 className="text-lg font-bold text-app-text font-sans">No Manual Entries</h3>
@@ -767,7 +767,7 @@ export default function Leads() {
       ) : filteredLeads.length === 0 ? (
         <div className="bg-app-surface rounded-xl border p-10 text-center font-sans">
           <p className="text-slate-400 text-sm">No leads match your filters.</p>
-          <button onClick={() => { setSearch(""); setChannelFilter("ALL"); setPriorityFilter("ALL"); }} className="mt-3 text-indigo-500 text-xs font-bold hover:underline cursor-pointer">
+          <button onClick={() => { setSearch(""); setChannelFilter("ALL"); setPriorityFilter("ALL"); }} className="mt-3 text-app-primary text-xs font-bold hover:underline cursor-pointer">
             Clear filters
           </button>
         </div>
@@ -819,7 +819,7 @@ export default function Leads() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-app-surface rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 border border-app"
+              className="bg-app-surface rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 border border-app-border"
             >
               <div className="h-2 w-full bg-red-500" />
               <div className="p-6">
@@ -832,7 +832,7 @@ export default function Leads() {
                 <div className="flex gap-2 justify-end font-sans">
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="px-3 py-2 text-app-muted hover:bg-app-bg rounded-xl text-xs font-bold border border-app cursor-pointer"
+                    className="px-3 py-2 text-app-muted hover:bg-app-bg rounded-xl text-xs font-bold border border-app-border cursor-pointer"
                   >
                     Cancel
                   </button>

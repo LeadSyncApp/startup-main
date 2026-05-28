@@ -18,8 +18,8 @@ interface User {
 
 const ROLE_BADGE: Record<string, string> = {
   OWNER: "bg-amber-100 text-amber-800 border border-amber-200",
-  ADMIN: "bg-indigo-100 text-indigo-800 border border-indigo-200",
-  AGENT: "bg-app-bg-soft text-app-muted border border-app",
+  ADMIN: "bg-app-primary/10 text-app-primary border border-app-primary/20",
+  AGENT: "bg-app-bg-soft text-app-muted border border-app-border",
 };
 
 function Avatar({ name }: { name: string }) {
@@ -122,12 +122,12 @@ export default function UserManagement() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Total Members", value: total, icon: Users, color: "text-indigo-600 bg-indigo-50" },
+          { label: "Total Members", value: total, icon: Users, color: "text-app-primary bg-app-primary/10" },
           { label: "Active", value: active, icon: UserCheck, color: "text-green-600 bg-green-50" },
           { label: "Inactive", value: inactive, icon: UserX, color: "text-red-500 bg-red-50" },
           { label: "Admins", value: admins, icon: Shield, color: "text-amber-600 bg-amber-50" },
         ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="bg-app-surface rounded-2xl border border-app p-4 shadow-sm">
+          <div key={label} className="bg-app-surface rounded-2xl border border-app-border p-4 shadow-sm">
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${color}`}>
               <Icon className="w-4 h-4" />
             </div>
@@ -141,7 +141,7 @@ export default function UserManagement() {
       {loading ? (
         <div className="bg-app-surface rounded-2xl border p-10 text-center text-slate-400 animate-pulse">Loading team...</div>
       ) : (
-        <div className="bg-app-surface rounded-2xl border border-app shadow-sm overflow-hidden">
+        <div className="bg-app-surface rounded-2xl border border-app-border shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
@@ -266,18 +266,18 @@ export default function UserManagement() {
               <h2 className="text-lg font-bold text-app-text mb-5">Add Team Member</h2>
               <div className="space-y-3">
                 <input type="text" placeholder="Full Name"
-                  className="w-full border border-app rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-app-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                 <input type="text" placeholder="Staff ID (e.g. AGENT001)"
-                  className="w-full border border-app rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-app-border rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} />
                 <input type="email" placeholder="Email Address"
-                  className="w-full border border-app rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-app-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
                 <input type="password" placeholder="Assign Password"
-                  className="w-full border border-app rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-app-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-                <select className="w-full border border-app rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-app-surface"
+                <select className="w-full border border-app-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-app-surface"
                   value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })}>
                   <option value="AGENT">Agent — manage leads & orders</option>
                   <option value="ADMIN">Admin — full access except billing</option>
@@ -285,7 +285,7 @@ export default function UserManagement() {
               </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button onClick={() => setShowModal(false)}
-                  className="px-5 py-2.5 rounded-xl border border-app text-sm font-medium text-app-muted hover:bg-app-bg transition">
+                  className="px-5 py-2.5 rounded-xl border border-app-border text-sm font-medium text-app-muted hover:bg-app-bg transition">
                   Cancel
                 </button>
                 <button onClick={handleCreateUser}
@@ -317,7 +317,7 @@ export default function UserManagement() {
               </p>
               <div className="flex gap-3">
                 <button onClick={() => setConfirmDisable(null)}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-app text-sm font-medium hover:bg-app-bg transition">
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-app-border text-sm font-medium hover:bg-app-bg transition">
                   Cancel
                 </button>
                 <button onClick={() => handleDisable(confirmDisable)}

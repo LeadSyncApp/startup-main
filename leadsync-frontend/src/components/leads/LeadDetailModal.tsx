@@ -150,7 +150,7 @@ export default function LeadDetailModal({
               onClick={() => setActiveTab(tab as typeof activeTab)}
               className={`border-b-2 px-1 py-3 text-sm font-bold tracking-wide transition-all ${
                 activeTab === tab
-                  ? 'border-cyan-600 text-cyan-600'
+                  ? 'border-cyan-600 text-app-primary'
                   : 'border-transparent text-app-muted hover:text-app-text'
               }`}
             >
@@ -215,7 +215,7 @@ export default function LeadDetailModal({
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.1 }}
                   whileHover={{ scale: 1.02 }}
-                  className="mt-2 text-cyan-600 hover:text-cyan-700 font-medium hover:underline transition-all"
+                  className="mt-2 text-app-primary hover:text-app-primary-strong font-medium hover:underline transition-all"
                 >
                   {lead.email}
                 </motion.a>
@@ -236,7 +236,7 @@ export default function LeadDetailModal({
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.15 }}
                     whileHover={{ scale: 1.02 }}
-                    className="mt-2 text-cyan-600 hover:text-cyan-700 font-medium hover:underline transition-all"
+                    className="mt-2 text-app-primary hover:text-app-primary-strong font-medium hover:underline transition-all"
                   >
                     {lead.phone}
                   </motion.a>
@@ -300,7 +300,7 @@ export default function LeadDetailModal({
                       : lead.priority === 'high'
                       ? 'bg-amber-100/80 text-amber-700 border border-amber-200/50'
                       : lead.priority === 'medium'
-                      ? 'bg-sky-100/80 text-sky-700 border border-sky-200/50'
+                      ? 'bg-app-primary/10 text-app-primary border border-app-primary/20'
                       : 'bg-app-bg-soft/80 text-app-text border border-app-border/50'
                   }`}
                 >
@@ -536,7 +536,7 @@ export default function LeadDetailModal({
                           ? 'ml-0 mr-8 bg-app-bg-soft/80 border border-app-border-strong/50 text-app-text'
                           : m.sender === 'auto'
                           ? 'ml-8 mr-0 bg-amber-100/80 border border-amber-200/50 text-amber-900'
-                          : 'ml-8 mr-0 bg-cyan-100/80 border border-cyan-200/50 text-cyan-900'
+                          : 'ml-8 mr-0 bg-app-primary/10 border border-app-primary/20 text-app-primary'
                       }`}
                     >
                       <motion.span

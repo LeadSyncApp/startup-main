@@ -26,7 +26,7 @@ export function MessageComposer({ onSend, placeholder = "Type a message...", isS
 
   return (
     <div className="bg-app-surface border-t border-app-border p-4">
-      <div className="flex flex-col border border-app-border rounded-md focus-within:ring-1 focus-within:ring-[#0052CC] focus-within:border-[#0052CC] transition-shadow shadow-sm">
+      <div className="flex flex-col border border-app-border rounded-md focus-within:ring-1 focus-within:ring-app-primary focus-within:border-app-primary transition-shadow shadow-sm">
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -50,7 +50,7 @@ export function MessageComposer({ onSend, placeholder = "Type a message...", isS
           <button
             onClick={handleSend}
             disabled={!text.trim() || isSubmitting}
-            className="flex items-center justify-center gap-2 px-4 py-1.5 bg-[#0052CC] text-white text-sm font-semibold rounded hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px] min-h-[36px]"
+            className="flex items-center justify-center gap-2 px-4 py-1.5 bg-app-primary text-white text-sm font-semibold rounded hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px] min-h-[36px]"
           >
             {isSubmitting ? "Sending" : "Send"}
             <Send className="w-3.5 h-3.5 ml-1" />

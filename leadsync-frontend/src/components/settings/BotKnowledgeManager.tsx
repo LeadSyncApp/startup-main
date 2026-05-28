@@ -15,7 +15,7 @@ interface KnowledgeItem {
 }
 
 const TYPE_CONFIG = {
-  FAQ: { label: "FAQ", color: "bg-blue-100 text-blue-700 border-blue-200" },
+  FAQ: { label: "FAQ", color: "bg-app-primary/10 text-app-primary border-app-primary/20" },
   RULE: { label: "Rule", color: "bg-amber-100 text-amber-700 border-amber-200" },
   PRODUCT: { label: "Product", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
 };
@@ -25,7 +25,7 @@ const getTypeConfig = (type?: string) => {
   if (t === "FAQ") return TYPE_CONFIG.FAQ;
   if (t === "RULE") return TYPE_CONFIG.RULE;
   if (t === "PRODUCT") return TYPE_CONFIG.PRODUCT;
-  return { label: type || "FAQ", color: "bg-app-bg-soft text-app-text border-app" };
+  return { label: type || "FAQ", color: "bg-app-bg-soft text-app-text border-app-border" };
 };
 
 export function BotKnowledgeManager() {
@@ -100,9 +100,9 @@ export function BotKnowledgeManager() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Brain size={18} className="text-indigo-600" />
+          <Brain size={18} className="text-app-primary" />
           <h2 className="text-lg font-bold text-app-text">Bot Knowledge Base</h2>
-          <span className="text-xs bg-indigo-50 text-indigo-600 font-bold px-2 py-0.5 rounded-full border border-indigo-100">
+          <span className="text-xs bg-app-primary/10 text-app-primary font-bold px-2 py-0.5 rounded-full border border-app-primary/20">
             {items.filter(i => i.isActive).length} active
           </span>
         </div>
@@ -130,13 +130,13 @@ export function BotKnowledgeManager() {
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4 space-y-3">
+            <div className="bg-app-primary/10 border border-app-primary/20 rounded-xl p-4 mb-4 space-y-3">
               <div className="flex gap-2">
                 {(["FAQ", "RULE", "PRODUCT"] as const).map(t => (
                   <button
                     key={t}
                     onClick={() => setNewType(t)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${newType === t ? TYPE_CONFIG[t].color + " shadow-sm" : "bg-app-surface border-app text-app-muted hover:border-app-border-strong"}`}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${newType === t ? TYPE_CONFIG[t].color + " shadow-sm" : "bg-app-surface border-app-border text-app-muted hover:border-app-border-strong"}`}
                   >
                     {TYPE_CONFIG[t].label}
                   </button>
@@ -148,7 +148,7 @@ export function BotKnowledgeManager() {
                 value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
                 maxLength={120}
-                className="w-full border border-app rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                className="w-full border border-app-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-app-primary/25"
               />
               <div>
                 <textarea
@@ -157,7 +157,7 @@ export function BotKnowledgeManager() {
                   onChange={e => setNewContent(e.target.value)}
                   rows={3}
                   maxLength={600}
-                  className="w-full border border-app rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                  className="w-full border border-app-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-app-primary/25 resize-none"
                 />
                 <div className="text-right text-[10px] text-slate-400 -mt-1">{newContent.length}/600</div>
               </div>
@@ -200,7 +200,7 @@ export function BotKnowledgeManager() {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className={`border rounded-xl p-3.5 transition-all ${item.isActive ? "bg-app-surface border-app" : "bg-app-bg border-app opacity-60"}`}
+                  className={`border rounded-xl p-3.5 transition-all ${item.isActive ? "bg-app-surface border-app-border" : "bg-app-bg border-app-border opacity-60"}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
@@ -216,11 +216,11 @@ export function BotKnowledgeManager() {
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         onClick={() => handleToggle(item)}
-                        className="text-slate-400 hover:text-indigo-600 transition"
+                        className="text-slate-400 hover:text-app-primary-strong transition"
                         title={item.isActive ? "Deactivate" : "Activate"}
                       >
                         {item.isActive
-                          ? <ToggleRight size={20} className="text-indigo-600" />
+                          ? <ToggleRight size={20} className="text-app-primary" />
                           : <ToggleLeft size={20} />
                         }
                       </button>

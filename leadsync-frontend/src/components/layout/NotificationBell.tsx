@@ -15,7 +15,7 @@ interface Notification {
 }
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
-  ORDER: <ShoppingCart className="w-4 h-4 text-indigo-500" />,
+  ORDER: <ShoppingCart className="w-4 h-4 text-app-primary" />,
   MESSAGE: <MessageSquare className="w-4 h-4 text-green-500" />,
   ALERT: <AlertTriangle className="w-4 h-4 text-amber-500" />,
   SYSTEM: <Info className="w-4 h-4 text-slate-400" />,
@@ -141,7 +141,7 @@ export default function NotificationBell() {
                 <button
                   onClick={markAllAsRead}
                   disabled={markingAll}
-                  className="flex items-center gap-1 text-xs text-cyan-600 hover:text-cyan-500 font-medium transition-colors"
+                  className="flex items-center gap-1 text-xs text-app-primary hover:text-app-primary-strong font-medium transition-colors"
                 >
                   <CheckCheck className="w-3.5 h-3.5" />
                   {markingAll ? "Marking..." : "Mark all read"}
@@ -165,7 +165,7 @@ export default function NotificationBell() {
                   key={n.id}
                   onClick={() => !n.isRead && markAsRead(n.id)}
                   className={`flex gap-3 px-4 py-3 cursor-pointer transition-colors ${
-                    n.isRead ? "bg-[var(--app-surface)]" : "bg-cyan-50/50 hover:bg-cyan-50/80 dark:bg-cyan-500/10"
+                    n.isRead ? "bg-[var(--app-surface)]" : "bg-app-primary/10 hover:bg-app-primary/15 dark:bg-cyan-500/10"
                   }`}
                 >
                   {/* Type icon */}

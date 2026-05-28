@@ -7,7 +7,7 @@ import { PageTransition } from "../../components/ui/Animations";
 import { EmptyBroadcasts } from "../../components/ui/EmptyState";
 
 const CHANNELS = [
-  { value: "TELEGRAM", label: "Telegram", color: "bg-blue-100 text-blue-700 border-blue-200" },
+  { value: "TELEGRAM", label: "Telegram", color: "bg-app-primary/10 text-app-primary border-app-primary/20" },
   { value: "INSTAGRAM", label: "Instagram", color: "bg-pink-100 text-pink-700 border-pink-200" },
 ];
 
@@ -21,14 +21,14 @@ const SEGMENTS = [
 
 const STATUS_ICON: Record<string, JSX.Element> = {
   PENDING: <Clock className="h-4 w-4 text-slate-400" />,
-  SENDING: <Radio className="h-4 w-4 text-blue-500 animate-pulse" />,
+  SENDING: <Radio className="h-4 w-4 text-app-primary animate-pulse" />,
   DONE: <CheckCircle className="h-4 w-4 text-emerald-500" />,
   FAILED: <AlertTriangle className="h-4 w-4 text-red-500" />,
 };
 
 const STATUS_BADGE: Record<string, string> = {
   PENDING: "bg-app-bg-soft text-app-muted",
-  SENDING: "bg-blue-100 text-blue-700",
+  SENDING: "bg-app-primary/10 text-app-primary",
   DONE: "bg-emerald-100 text-emerald-700",
   FAILED: "bg-red-100 text-red-600",
 };
@@ -100,8 +100,8 @@ export default function Broadcasts() {
 
       {/* COMPOSE */}
       <div className="rounded-2xl border bg-app-surface shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-app flex items-center gap-2">
-          <Megaphone className="h-5 w-5 text-cyan-600" />
+        <div className="px-6 py-4 border-b border-app-border flex items-center gap-2">
+          <Megaphone className="h-5 w-5 text-app-primary" />
           <h2 className="text-lg font-semibold text-app-text">New Broadcast</h2>
         </div>
 
@@ -117,7 +117,7 @@ export default function Broadcasts() {
                   className={`px-4 py-2 rounded-xl border text-sm font-medium transition ${
                     channel === ch.value
                       ? ch.color + " ring-2 ring-offset-1 ring-current"
-                      : "bg-app-bg text-app-muted border-app hover:bg-app-bg-soft"
+                      : "bg-app-bg text-app-muted border-app-border hover:bg-app-bg-soft"
                   }`}
                 >
                   {ch.label}
@@ -137,7 +137,7 @@ export default function Broadcasts() {
                   className={`p-3 rounded-xl border text-left transition ${
                     segment === seg.value
                       ? "bg-slate-900 text-white border-slate-900"
-                      : "bg-app-bg text-app-text border-app hover:bg-app-bg-soft"
+                      : "bg-app-bg text-app-text border-app-border hover:bg-app-bg-soft"
                   }`}
                 >
                   <p className="font-semibold text-sm">{seg.label}</p>
@@ -157,7 +157,7 @@ export default function Broadcasts() {
               onChange={(e) => setMessage(e.target.value.slice(0, charLimit))}
               rows={5}
               placeholder="Hi! 👋 We have a special offer just for you…"
-              className="w-full rounded-xl border border-app bg-app-bg px-4 py-3 text-sm text-app-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
+              className="w-full rounded-xl border border-app-border bg-app-bg px-4 py-3 text-sm text-app-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
             />
             <p className="mt-1 text-xs text-slate-400 text-right">
               {message.length}/{charLimit}
@@ -198,7 +198,7 @@ export default function Broadcasts() {
               <span className="font-semibold text-app-text">{selectedChannelLabel}</span>. This cannot
               be undone.
             </p>
-            <div className="bg-app-bg rounded-xl p-4 text-sm text-app-text italic border border-app">
+            <div className="bg-app-bg rounded-xl p-4 text-sm text-app-text italic border border-app-border">
               "{message.slice(0, 120)}{message.length > 120 ? "…" : ""}"
             </div>
             <div className="flex gap-3 justify-end">
@@ -221,7 +221,7 @@ export default function Broadcasts() {
 
       {/* HISTORY */}
       <div className="rounded-2xl border bg-app-surface shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-app">
+        <div className="px-6 py-4 border-b border-app-border">
           <h2 className="text-lg font-semibold text-app-text">Broadcast History</h2>
         </div>
 

@@ -60,7 +60,7 @@ export default function Signup() {
             <Zap className="h-8 w-8 text-white" />
           </div>
           <div>
-            <span className="text-3xl font-bold text-cyan-500 dark:text-cyan-400">LeadSync</span>
+            <span className="text-3xl font-bold text-app-primary dark:text-app-primary">LeadSync</span>
             <p className="text-xs text-[var(--app-text-muted)]">CRM Platform</p>
           </div>
         </div>
@@ -154,7 +154,7 @@ export default function Signup() {
 
           <p className="mt-6 text-center text-sm text-[var(--app-text-muted)]">
             Already have an account?{" "}
-            <Link to="/login" className="text-cyan-600 dark:text-cyan-400 font-semibold">
+            <Link to="/login" className="text-app-primary dark:text-app-primary font-semibold">
               Log in
             </Link>
           </p>

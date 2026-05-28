@@ -20,6 +20,35 @@ const REPLACEMENTS = [
   { regex: /\bborder-slate-200\b/g, replace: 'border-app-border' },
   { regex: /\bborder-slate-300\b/g, replace: 'border-app-border-strong' },
   { regex: /\bborder-app\/(\d{1,3})\b/g, replace: 'border-app-border/$1' },
+  { regex: /\bborder-app\b(?!-)/g, replace: 'border-app-border' },
+
+  // Accent tints that are too bright in dark mode
+  // Normalize common blue/indigo/cyan/sky "tint" utilities to semantic app primary.
+  { regex: /\bhover:bg-(?:blue|indigo|cyan|sky)-(?:50|100|200)(?:\/(\d{1,3}))?\b/g, replace: 'hover:bg-app-primary/15' },
+  { regex: /\bbg-(?:blue|indigo|cyan|sky)-(?:50|100|200)(?:\/(\d{1,3}))?\b/g, replace: 'bg-app-primary/10' },
+  { regex: /\bhover:text-(?:blue|indigo|cyan|sky)-(?:400|500|600|700|800|900)\b/g, replace: 'hover:text-app-primary-strong' },
+  { regex: /\btext-(?:blue|indigo|cyan|sky)-(?:400|500|600|700|800|900)\b/g, replace: 'text-app-primary' },
+  { regex: /\bhover:border-(?:blue|indigo|cyan|sky)-(?:50|100|200|300)(?:\/(\d{1,3}))?\b/g, replace: 'hover:border-app-primary/30' },
+  { regex: /\bborder-(?:blue|indigo|cyan|sky)-(?:50|100|200|300)(?:\/(\d{1,3}))?\b/g, replace: 'border-app-primary/20' },
+  { regex: /\bring-(?:blue|indigo|cyan|sky)-(?:100|200|300|400)(?:\/(\d{1,3}))?\b/g, replace: 'ring-app-primary/25' },
+  { regex: /\bfocus:ring-(?:blue|indigo|cyan|sky)-(?:100|200|300|400)(?:\/(\d{1,3}))?\b/g, replace: 'focus:ring-app-primary/25' },
+
+  { regex: /\bfrom-(?:blue|indigo|cyan|sky)-(?:50|100|200)(?:\/(\d{1,3}))?\b/g, replace: 'from-app-primary/15' },
+  { regex: /\bto-(?:blue|indigo|cyan|sky)-(?:50|100|200)(?:\/(\d{1,3}))?\b/g, replace: 'to-app-primary/10' },
+  { regex: /\bvia-(?:blue|indigo|cyan|sky)-(?:50|100|200)(?:\/(\d{1,3}))?\b/g, replace: 'via-app-primary/12' },
+
+  // Accent (hex) cleanup for common brand blues
+  { regex: /bg-\[#0052CC\]/gi, replace: 'bg-app-primary' },
+  { regex: /hover:bg-\[#0844A3\]/gi, replace: 'hover:bg-app-primary-strong' },
+  { regex: /text-\[#0052CC\]/gi, replace: 'text-app-primary' },
+  { regex: /border-\[#0052CC\]/gi, replace: 'border-app-primary' },
+  { regex: /ring-\[#0052CC\]/gi, replace: 'ring-app-primary' },
+  { regex: /focus:border-\[#0052CC\]/gi, replace: 'focus:border-app-primary' },
+  { regex: /focus:ring-\[#0052CC\]/gi, replace: 'focus:ring-app-primary' },
+  { regex: /hover:text-\[#003D99\]/gi, replace: 'hover:text-app-primary-strong' },
+  { regex: /text-\[#2563EB\]/gi, replace: 'text-app-primary' },
+  { regex: /bg-\[#EEF4FF\]/gi, replace: 'bg-app-primary/10' },
+  { regex: /text-\[#0047CC\]/gi, replace: 'text-app-primary-strong' },
 
   { regex: /bg-\[#F8FAFC\]/gi, replace: 'bg-app-bg' },
   { regex: /bg-\[#F8F9FF\]/gi, replace: 'bg-app-bg' },

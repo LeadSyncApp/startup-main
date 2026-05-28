@@ -10,15 +10,15 @@ interface SectionSummaryProps {
 
 export default function SectionSummary({ title, description, stats }: SectionSummaryProps) {
   return (
-    <div className="mb-8 rounded-2xl border border-white/10 bg-[#111827] p-6">
-      <h1 className="text-3xl font-semibold tracking-tight text-white">{title}</h1>
-      <p className="mt-2 text-slate-400">{description}</p>
+    <div className="mb-8 rounded-2xl border border-app-border bg-app-surface p-6">
+      <h1 className="text-3xl font-semibold tracking-tight text-app-text">{title}</h1>
+      <p className="mt-2 text-app-muted">{description}</p>
       {stats && stats.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-6">
           {stats.map(({ label, value }) => (
             <div key={label}>
-              <span className="text-sm text-slate-400">{label}: </span>
-              <span className="font-semibold text-white">{value}</span>
+              <span className="text-sm text-app-muted">{label}: </span>
+              <span className="font-semibold text-app-text">{value}</span>
             </div>
           ))}
         </div>

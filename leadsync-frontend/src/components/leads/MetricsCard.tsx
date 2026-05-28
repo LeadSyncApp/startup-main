@@ -14,8 +14,8 @@ export default function MetricsCard({
   value,
   description,
   icon: Icon,
-  iconBgColor = "bg-blue-50",
-  iconColor = "text-blue-600",
+  iconBgColor = "bg-app-primary/10",
+  iconColor = "text-app-primary",
 }: MetricsCardProps) {
   return (
     <div className="bg-app-surface rounded-lg p-4 border border-app-border shadow-sm flex items-center justify-between">

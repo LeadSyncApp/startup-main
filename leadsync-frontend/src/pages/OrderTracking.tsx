@@ -77,7 +77,7 @@ export default function OrderTracking() {
         <div className="min-h-screen bg-app-bg py-12 px-4 sm:px-6 lg:px-8">
             {/* {order.status === "DELIVERED" && <Confetti numberOfPieces={200} recycle={false} />} */}
 
-            <div className="max-w-md mx-auto bg-app-surface rounded-3xl shadow-xl overflow-hidden border border-app">
+            <div className="max-w-md mx-auto bg-app-surface rounded-3xl shadow-xl overflow-hidden border border-app-border">
 
                 {/* Header */}
                 <div className="bg-indigo-600 p-8 text-center relative overflow-hidden">
@@ -95,7 +95,7 @@ export default function OrderTracking() {
 
                 {/* Content */}
                 <div className="p-8">
-                    <div className="flex justify-between items-center mb-8 pb-8 border-b border-app">
+                    <div className="flex justify-between items-center mb-8 pb-8 border-b border-app-border">
                         <div>
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Customer</p>
                             <p className="font-bold text-app-text text-lg">{order.lead?.name || "Guest"}</p>
@@ -128,8 +128,8 @@ export default function OrderTracking() {
                                         <div className={`
                         h-12 w-12 rounded-full flex items-center justify-center border-4 transition-all z-10
                         ${isActive
-                                                ? `bg-indigo-600 border-indigo-100 text-white shadow-lg shadow-indigo-500/30 ${isCurrent ? 'scale-110 ring-4 ring-indigo-50' : ''}`
-                                                : 'bg-app-surface border-app text-slate-300'}
+                                                ? `bg-indigo-600 border-app-primary/20 text-white shadow-lg shadow-indigo-500/30 ${isCurrent ? 'scale-110 ring-4 ring-indigo-50' : ''}`
+                                                : 'bg-app-surface border-app-border text-slate-300'}
                       `}>
                                             <Icon size={isCurrent ? 24 : 18} />
                                         </div>
@@ -138,7 +138,7 @@ export default function OrderTracking() {
                                                 {step.label}
                                             </h3>
                                             {isCurrent && (
-                                                <p className="text-xs text-indigo-500 font-medium mt-0.5">
+                                                <p className="text-xs text-app-primary font-medium mt-0.5">
                                                     Current Status
                                                 </p>
                                             )}
@@ -155,15 +155,15 @@ export default function OrderTracking() {
                         </div>
                     )}
 
-                    <div className="mt-10 pt-6 border-t border-app">
+                    <div className="mt-10 pt-6 border-t border-app-border">
                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Order Summary</h4>
-                        <p className="text-app-text font-medium bg-app-bg p-4 rounded-2xl border border-app text-sm leading-relaxed">
+                        <p className="text-app-text font-medium bg-app-bg p-4 rounded-2xl border border-app-border text-sm leading-relaxed">
                             {order.summary}
                         </p>
                     </div>
 
                     <div className="mt-8 text-center">
-                        <a href="/" className="text-indigo-600 font-bold text-sm hover:underline">
+                        <a href="/" className="text-app-primary font-bold text-sm hover:underline">
                             Need Help? Contact Support
                         </a>
                     </div>

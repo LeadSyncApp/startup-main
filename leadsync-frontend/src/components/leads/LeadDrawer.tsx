@@ -51,7 +51,7 @@ interface LeadDrawerProps {
 
 const SEGMENT_BADGE: Record<string, string> = {
   VIP: "bg-yellow-100 text-yellow-700 border-yellow-200",
-  REGULAR: "bg-blue-100 text-blue-700 border-blue-200",
+  REGULAR: "bg-app-primary/10 text-app-primary border-app-primary/20",
   NEW: "bg-green-100 text-green-700 border-green-200",
   CHURN_RISK: "bg-red-100 text-red-700 border-red-200",
 };
@@ -68,7 +68,7 @@ const CHANNEL_EMOJI: Record<string, string> = {
 const PRIORITY_COLOR: Record<string, string> = {
   URGENT: "text-red-600 bg-red-50 border-red-200",
   HIGH: "text-orange-600 bg-orange-50 border-orange-200",
-  NORMAL: "text-app-muted bg-app-bg border-app",
+  NORMAL: "text-app-muted bg-app-bg border-app-border",
 };
 
 function formatRelative(dateStr: string) {
@@ -125,12 +125,12 @@ export default function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
             className="relative w-full max-w-sm bg-app-surface shadow-2xl flex flex-col h-full z-10 overflow-y-auto"
           >
             {/* Header */}
-            <div className="px-6 pt-6 pb-4 border-b border-app flex items-start justify-between">
+            <div className="px-6 pt-6 pb-4 border-b border-app-border flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <div className={`h-12 w-12 rounded-2xl flex items-center justify-center text-xl font-black shadow-sm ${
                   lead.segment === "VIP" ? "bg-yellow-100 text-yellow-600" :
                   lead.priority === "URGENT" ? "bg-red-100 text-red-600" :
-                  "bg-indigo-100 text-indigo-600"
+                  "bg-app-primary/10 text-app-primary"
                 }`}>
                   {(lead.name || "?").charAt(0).toUpperCase()}
                 </div>
@@ -152,7 +152,7 @@ export default function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
 
             {/* Badges Row */}
             <div className="px-6 py-3 flex items-center gap-2 flex-wrap border-b border-slate-50">
-              <span className={`text-[10px] font-black px-2 py-1 rounded-lg border ${SEGMENT_BADGE[lead.segment] || "bg-app-bg-soft text-app-muted border-app"}`}>
+              <span className={`text-[10px] font-black px-2 py-1 rounded-lg border ${SEGMENT_BADGE[lead.segment] || "bg-app-bg-soft text-app-muted border-app-border"}`}>
                 {lead.segment || "REGULAR"}
               </span>
               <span className={`text-[10px] font-black px-2 py-1 rounded-lg border ${PRIORITY_COLOR[lead.priority] || PRIORITY_COLOR.NORMAL}`}>
@@ -176,10 +176,10 @@ export default function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
                 </div>
                 <p className="text-lg font-black text-app-text">₹{(lead.totalSpend || 0).toLocaleString()}</p>
               </div>
-              <div className="bg-indigo-50 rounded-xl p-3 border border-indigo-100">
+              <div className="bg-app-primary/10 rounded-xl p-3 border border-app-primary/20">
                 <div className="flex items-center gap-1.5 mb-1">
-                  <ShoppingCart size={13} className="text-indigo-500" />
-                  <span className="text-[9px] font-black uppercase tracking-wider text-indigo-600">Orders</span>
+                  <ShoppingCart size={13} className="text-app-primary" />
+                  <span className="text-[9px] font-black uppercase tracking-wider text-app-primary">Orders</span>
                 </div>
                 <p className="text-lg font-black text-app-text">{lead.orderCount || 0}</p>
               </div>
@@ -224,7 +224,7 @@ export default function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
             {lead.lastMessage && (
               <div className="px-6 py-4 border-b border-slate-50">
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider font-black mb-2">Last Message</p>
-                <div className="bg-app-bg rounded-xl p-3 border border-app">
+                <div className="bg-app-bg rounded-xl p-3 border border-app-border">
                   <p className="text-sm text-app-text leading-relaxed line-clamp-4">
                     "{lead.lastMessage}"
                   </p>
@@ -259,7 +259,7 @@ export default function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
             <div className="flex-1" />
 
             {/* Actions */}
-            <div className="px-6 py-5 border-t border-app bg-app-bg space-y-2">
+            <div className="px-6 py-5 border-t border-app-border bg-app-bg space-y-2">
               {lead.conversationId && (
                 <button
                   onClick={() => {

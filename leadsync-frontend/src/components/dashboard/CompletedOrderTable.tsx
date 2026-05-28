@@ -8,7 +8,7 @@ export default function CompletedOrderTable({ orders }: Props) {
   if (orders.length === 0) return null;
 
   return (
-    <div className="w-full overflow-x-auto bg-app-surface rounded-2xl border border-app shadow-sm">
+    <div className="w-full overflow-x-auto bg-app-surface rounded-2xl border border-app-border shadow-sm">
       <table className="w-full text-xs text-left">
         <thead className="bg-app-bg text-app-muted uppercase font-bold">
           <tr>

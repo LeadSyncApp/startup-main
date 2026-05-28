@@ -14,11 +14,11 @@ import { Tag, X } from "lucide-react";
 // ─── Config ─────────────────────────────────────────────────────────────────
 
 export const PREDEFINED_TAGS = [
-  { id: "follow_up",  label: "Follow-up",  color: "bg-blue-100 text-blue-700 border-blue-200" },
+  { id: "follow_up",  label: "Follow-up",  color: "bg-app-primary/10 text-app-primary border-app-primary/20" },
   { id: "hot_lead",   label: "Hot Lead",   color: "bg-orange-100 text-orange-700 border-orange-200" },
   { id: "vip",        label: "VIP",        color: "bg-yellow-100 text-yellow-700 border-yellow-200" },
   { id: "support",    label: "Support",    color: "bg-purple-100 text-purple-700 border-purple-200" },
-  { id: "spam",       label: "Spam",       color: "bg-app-bg-soft text-app-muted border-app" },
+  { id: "spam",       label: "Spam",       color: "bg-app-bg-soft text-app-muted border-app-border" },
   { id: "pending",    label: "Pending",    color: "bg-amber-100 text-amber-700 border-amber-200" },
   { id: "resolved",   label: "Resolved",   color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
   { id: "escalated",  label: "Escalated",  color: "bg-red-100 text-red-700 border-red-200" },
@@ -112,7 +112,7 @@ export function TagChips({ convId, max = 2 }: TagChipsProps) {
         );
       })}
       {overflow > 0 && (
-        <span className="text-[9px] font-black px-1.5 py-0.5 rounded border bg-app-bg-soft text-app-muted border-app">
+        <span className="text-[9px] font-black px-1.5 py-0.5 rounded border bg-app-bg-soft text-app-muted border-app-border">
           +{overflow}
         </span>
       )}
@@ -137,7 +137,7 @@ export function TagPicker({ convId, onClose }: TagPickerProps) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -6, scale: 0.97 }}
         transition={{ duration: 0.15 }}
-        className="absolute right-0 top-full mt-2 w-56 bg-app-surface rounded-2xl shadow-2xl border border-app p-3 z-50"
+        className="absolute right-0 top-full mt-2 w-56 bg-app-surface rounded-2xl shadow-2xl border border-app-border p-3 z-50"
       >
         <div className="flex items-center justify-between mb-2 px-1">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tag conversation</span>
@@ -155,7 +155,7 @@ export function TagPicker({ convId, onClose }: TagPickerProps) {
                 className={`text-[10px] font-bold px-2 py-1.5 rounded-xl border text-left transition active:scale-95 ${
                   active
                     ? `${tag.color} ring-1 ring-offset-1 ring-current`
-                    : "bg-app-surface text-app-muted border-app hover:border-slate-400"
+                    : "bg-app-surface text-app-muted border-app-border hover:border-slate-400"
                 }`}
               >
                 {active ? "✓ " : ""}{tag.label}
@@ -185,7 +185,7 @@ export function TagButton({ convId }: TagButtonProps) {
         title="Tag conversation"
         className={`p-2.5 rounded-2xl transition active:scale-90 relative ${
           tags.length > 0
-            ? "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+            ? "bg-app-primary/10 text-app-primary hover:bg-app-primary/15"
             : "bg-app-bg text-app-muted hover:bg-app-bg-soft"
         }`}
       >

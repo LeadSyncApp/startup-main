@@ -5,7 +5,7 @@ import { api } from "../../lib/api";
 import toast from "react-hot-toast";
 
 const SEGMENTS = [
-  { key: "NEW",         label: "New",         color: "bg-blue-500",   light: "bg-blue-50 border-blue-200",  text: "text-blue-700"   },
+  { key: "NEW",         label: "New",         color: "bg-blue-500",   light: "bg-app-primary/10 border-app-primary/20",  text: "text-app-primary"   },
   { key: "REGULAR",     label: "Regular",     color: "bg-emerald-500",light: "bg-emerald-50 border-emerald-200", text: "text-emerald-700" },
   { key: "VIP",         label: "VIP",         color: "bg-violet-500", light: "bg-violet-50 border-violet-200",  text: "text-violet-700"  },
   { key: "CHURN_RISK",  label: "Churn Risk",  color: "bg-red-500",    light: "bg-red-50 border-red-200",     text: "text-red-700"    },
@@ -14,11 +14,11 @@ const SEGMENTS = [
 const PRIORITY_COLOR: Record<string, string> = {
   URGENT: "bg-red-100 text-red-700 border-red-200",
   HIGH:   "bg-orange-100 text-orange-700 border-orange-200",
-  NORMAL: "bg-app-bg-soft text-app-muted border-app",
+  NORMAL: "bg-app-bg-soft text-app-muted border-app-border",
 };
 
 const CHANNEL_COLOR: Record<string, string> = {
-  TELEGRAM: "bg-blue-100 text-blue-700",
+  TELEGRAM: "bg-app-primary/10 text-app-primary",
   INSTAGRAM: "bg-pink-100 text-pink-700",
   WHATSAPP:  "bg-green-100 text-green-700",
   OFFLINE:   "bg-app-bg-soft text-app-muted border border-app-border-strong",
@@ -61,7 +61,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ type: "spring", stiffness: 340, damping: 28 }}
-      className="bg-app-surface border border-app rounded-xl p-3.5 shadow-sm hover:shadow-md hover:border-app-border-strong transition-all cursor-pointer group"
+      className="bg-app-surface border border-app-border rounded-xl p-3.5 shadow-sm hover:shadow-md hover:border-app-border-strong transition-all cursor-pointer group"
       onClick={() => onRowClick(lead)}
     >
       {/* Avatar + name row */}
@@ -122,7 +122,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
           />
         </div>
         {lead.suggestedAction && lead.suggestedAction !== "Monitor" && (
-          <span className="text-[9px] font-bold text-indigo-600 mt-1 inline-block">⚡ {lead.suggestedAction}</span>
+          <span className="text-[9px] font-bold text-app-primary mt-1 inline-block">⚡ {lead.suggestedAction}</span>
         )}
       </div>
 
@@ -130,7 +130,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
       <div className="relative" onClick={e => e.stopPropagation()}>
         <button
           onClick={() => setMenuOpen(o => !o)}
-          className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition py-0.5"
+          className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-app-primary-strong transition py-0.5"
         >
           Move to <ChevronDown size={10} className={`transition-transform ${menuOpen ? "rotate-180" : ""}`} />
         </button>
@@ -141,7 +141,7 @@ function LeadCard({ lead, onRowClick, onSegmentChange }: {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -4, scale: 0.96 }}
               transition={{ duration: 0.12 }}
-              className="absolute bottom-full mb-1 left-0 bg-app-surface border border-app rounded-xl shadow-xl z-30 overflow-hidden min-w-[140px]"
+              className="absolute bottom-full mb-1 left-0 bg-app-surface border border-app-border rounded-xl shadow-xl z-30 overflow-hidden min-w-[140px]"
             >
               {SEGMENTS.filter(s => s.key !== lead.segment).map(seg => (
                 <button
@@ -208,7 +208,7 @@ export default function LeadsKanban({ leads, onRowClick, onSegmentChange }: Prop
                     key="empty"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="border-2 border-dashed border-app rounded-xl p-4 text-center"
+                    className="border-2 border-dashed border-app-border rounded-xl p-4 text-center"
                   >
                     <p className="text-xs text-slate-300 font-medium">No leads</p>
                   </motion.div>

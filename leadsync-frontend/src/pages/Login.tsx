@@ -107,7 +107,7 @@ export default function Login() {
             <Zap className="h-8 w-8 text-white" />
           </div>
           <div>
-            <span className="text-3xl font-bold text-cyan-500 dark:text-cyan-400">
+            <span className="text-3xl font-bold text-app-primary dark:text-app-primary">
               LeadSync
             </span>
             <p className="text-xs text-[var(--app-text-muted)]">
@@ -181,7 +181,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setMode("forgot")}
-                  className="text-cyan-600 hover:underline"
+                  className="text-app-primary hover:underline"
                 >
                   Forgot Password?
                 </button>
@@ -279,7 +279,7 @@ export default function Login() {
           {mode === "login" && (
             <p className="mt-6 text-center text-sm text-[var(--app-text-muted)]">
               Don’t have an account?{" "}
-              <Link to="/signup" className="text-cyan-600 dark:text-cyan-400 font-semibold">
+              <Link to="/signup" className="text-app-primary dark:text-app-primary font-semibold">
                 Sign up
               </Link>
             </p>

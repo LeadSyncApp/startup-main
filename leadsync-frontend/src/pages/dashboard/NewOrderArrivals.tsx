@@ -183,7 +183,7 @@ export default function NewOrderArrivals() {
   const getPriorityColor = (priorityScore: number) => {
     if (priorityScore >= 80) return "text-red-600 bg-red-50 border-red-200";
     if (priorityScore >= 60) return "text-orange-600 bg-orange-50 border-orange-200";
-    return "text-blue-600 bg-blue-50 border-blue-200";
+    return "text-app-primary bg-app-primary/10 border-app-primary/20";
   };
 
   const getCustomerTypeBadge = (history: CustomerHistory) => {
@@ -191,7 +191,7 @@ export default function NewOrderArrivals() {
       return { text: "Returning Deleted", color: "bg-purple-100 text-purple-700 border-purple-200" };
     }
     if (history.wasClosed) {
-      return { text: "Returning Closed", color: "bg-indigo-100 text-indigo-700 border-indigo-200" };
+      return { text: "Returning Closed", color: "bg-app-primary/10 text-app-primary border-app-primary/20" };
     }
     if (history.isExistingCustomer) {
       return { text: "Returning Customer", color: "bg-green-100 text-green-700 border-green-200" };
@@ -233,7 +233,7 @@ export default function NewOrderArrivals() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-black text-app-text flex items-center gap-3">
-            <ShoppingCart className="text-indigo-600" />
+            <ShoppingCart className="text-app-primary" />
             New Order Arrivals
           </h1>
           <p className="text-app-muted mt-2">
@@ -258,7 +258,7 @@ export default function NewOrderArrivals() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-app-surface p-6 rounded-2xl border border-app">
+        <div className="bg-app-surface p-6 rounded-2xl border border-app-border">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-app-muted">In Queue</p>
@@ -268,7 +268,7 @@ export default function NewOrderArrivals() {
           </div>
         </div>
         
-        <div className="bg-app-surface p-6 rounded-2xl border border-app">
+        <div className="bg-app-surface p-6 rounded-2xl border border-app-border">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-app-muted">New Customers</p>
@@ -280,7 +280,7 @@ export default function NewOrderArrivals() {
           </div>
         </div>
         
-        <div className="bg-app-surface p-6 rounded-2xl border border-app">
+        <div className="bg-app-surface p-6 rounded-2xl border border-app-border">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-app-muted">Returning</p>
@@ -292,7 +292,7 @@ export default function NewOrderArrivals() {
           </div>
         </div>
         
-        <div className="bg-app-surface p-6 rounded-2xl border border-app">
+        <div className="bg-app-surface p-6 rounded-2xl border border-app-border">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-app-muted">High Priority</p>
@@ -307,15 +307,15 @@ export default function NewOrderArrivals() {
 
       {/* Orders Table */}
       {orders.length === 0 ? (
-        <div className="bg-app-surface rounded-2xl border border-app p-12 text-center">
+        <div className="bg-app-surface rounded-2xl border border-app-border p-12 text-center">
           <ShoppingCart className="mx-auto text-slate-300 mb-4" size={48} />
           <h3 className="text-xl font-bold text-app-text mb-2">No new orders</h3>
           <p className="text-app-muted">All orders have been claimed. Check back later for new arrivals.</p>
         </div>
       ) : (
-        <div className="bg-app-surface rounded-2xl border border-app overflow-hidden">
+        <div className="bg-app-surface rounded-2xl border border-app-border overflow-hidden">
           {/* Table Header */}
-          <div className="bg-app-bg px-6 py-4 border-b border-app">
+          <div className="bg-app-bg px-6 py-4 border-b border-app-border">
             <div className="flex items-center gap-4">
               <input
                 type="checkbox"

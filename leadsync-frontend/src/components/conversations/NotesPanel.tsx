@@ -164,7 +164,7 @@ export function NotesPanel({ conversationId }: Props) {
                     <p className="text-xs text-app-text leading-relaxed whitespace-pre-wrap">
                       {note.content.split(/(@\w+)/g).map((part, i) =>
                         part.startsWith("@")
-                          ? <span key={i} className="text-indigo-600 font-semibold">{part}</span>
+                          ? <span key={i} className="text-app-primary font-semibold">{part}</span>
                           : part
                       )}
                     </p>
@@ -194,15 +194,15 @@ export function NotesPanel({ conversationId }: Props) {
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 4 }}
-              className="absolute bottom-full left-3 right-3 mb-1 bg-app-surface border border-app rounded-xl shadow-xl overflow-hidden z-50"
+              className="absolute bottom-full left-3 right-3 mb-1 bg-app-surface border border-app-border rounded-xl shadow-xl overflow-hidden z-50"
             >
               {filteredMembers.slice(0, 5).map(m => (
                 <button
                   key={m.id}
                   onMouseDown={e => { e.preventDefault(); insertMention(m); }}
-                  className="w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-app-primary/15 flex items-center gap-2"
                 >
-                  <AtSign size={11} className="text-indigo-400" />
+                  <AtSign size={11} className="text-app-primary" />
                   <span className="font-semibold text-app-text">{m.name}</span>
                 </button>
               ))}

@@ -133,7 +133,7 @@ export default function GlobalSearch() {
   const typeIcon = (type: string) => {
     switch (type) {
       case "lead":
-        return <Users className="w-4 h-4 text-cyan-500" />;
+        return <Users className="w-4 h-4 text-app-primary" />;
       case "conversation":
         return <MessageSquare className="w-4 h-4 text-emerald-500" />;
       case "order":
@@ -213,7 +213,7 @@ export default function GlobalSearch() {
                         key={`${result.type}-${result.id}`}
                         className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
                           index === selectedIndex
-                            ? "bg-cyan-50 text-[var(--app-text)] font-medium dark:bg-cyan-500/10"
+                            ? "bg-app-primary/10 text-[var(--app-text)] font-medium dark:bg-cyan-500/10"
                             : "text-[var(--app-text-muted)] hover:bg-[var(--app-bg-soft)]"
                         }`}
                         onClick={() => {

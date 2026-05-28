@@ -10,8 +10,8 @@ const statusStyles: Record<StatusType, string> = {
   success: "bg-green-100 text-green-700 border-green-200",
   warning: "bg-amber-100 text-amber-700 border-amber-200",
   danger: "bg-red-100 text-red-700 border-red-200",
-  info: "bg-blue-100 text-blue-700 border-blue-200",
-  neutral: "bg-app-bg-soft text-app-text border-app",
+  info: "bg-app-primary/10 text-app-primary border-app-primary/20",
+  neutral: "bg-app-bg-soft text-app-text border-app-border",
 };
 
 export function StatusBadge({ status, label, className = "" }: StatusBadgeProps) {

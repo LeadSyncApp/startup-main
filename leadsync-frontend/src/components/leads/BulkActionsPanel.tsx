@@ -30,7 +30,7 @@ export default function BulkActionsPanel({
           transition={{ type: "spring", stiffness: 340, damping: 30 }}
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl shadow-slate-900/40 border border-slate-700"
         >
-          <CheckSquare size={16} className="text-indigo-400 shrink-0" />
+          <CheckSquare size={16} className="text-app-primary shrink-0" />
           <span className="text-sm font-black mr-2 min-w-[80px] font-sans">
             {selectedCount} selected
           </span>

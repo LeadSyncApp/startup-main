@@ -31,13 +31,13 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 const TRIGGER_COLOR: Record<string, string> = {
-  LEAD_COLD: "bg-blue-50 text-blue-700 border-blue-200",
+  LEAD_COLD: "bg-app-primary/10 text-app-primary border-app-primary/20",
   ORDER_PENDING: "bg-amber-50 text-amber-700 border-amber-200",
   NEW_LEAD: "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
 const ACTION_COLOR: Record<string, string> = {
-  SEND_MESSAGE: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  SEND_MESSAGE: "bg-app-primary/10 text-app-primary border-app-primary/20",
   CHANGE_SEGMENT: "bg-violet-50 text-violet-700 border-violet-200",
 };
 
@@ -183,11 +183,11 @@ export function AutomationManager() {
               <button
                 key={t.name}
                 onClick={() => applyTemplate(t)}
-                className="text-left bg-app-bg hover:bg-indigo-50 border border-app hover:border-indigo-200 rounded-xl p-3 transition group"
+                className="text-left bg-app-bg hover:bg-app-primary/15 border border-app-border hover:border-app-primary/30 rounded-xl p-3 transition group"
               >
                 <div className="flex items-center gap-1.5 mb-1">
-                  <Play size={11} className="text-indigo-400 group-hover:text-indigo-600" />
-                  <span className="text-xs font-bold text-app-text group-hover:text-indigo-700">{t.name}</span>
+                  <Play size={11} className="text-app-primary group-hover:text-app-primary-strong" />
+                  <span className="text-xs font-bold text-app-text group-hover:text-app-primary-strong">{t.name}</span>
                 </div>
                 <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-2">
                   Trigger: <strong>{TRIGGER_LABELS[t.trigger]}</strong> after {Math.round(t.triggerDelayMinutes / 60)}h
@@ -213,7 +213,7 @@ export function AutomationManager() {
                 placeholder="Rule name — e.g. 'Re-engage cold leads'"
                 value={newName}
                 onChange={e => setNewName(e.target.value)}
-                className="w-full border border-app rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-app-surface"
+                className="w-full border border-app-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-app-surface"
               />
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -221,7 +221,7 @@ export function AutomationManager() {
                   <select
                     value={newTrigger}
                     onChange={e => setNewTrigger(e.target.value)}
-                    className="w-full border border-app rounded-lg px-3 py-2 text-sm bg-app-surface focus:outline-none focus:ring-2 focus:ring-amber-300"
+                    className="w-full border border-app-border rounded-lg px-3 py-2 text-sm bg-app-surface focus:outline-none focus:ring-2 focus:ring-amber-300"
                   >
                     {Object.entries(TRIGGER_LABELS).map(([k, v]) => (
                       <option key={k} value={k}>{v}</option>
@@ -238,7 +238,7 @@ export function AutomationManager() {
                     max={720}
                     value={newDelayHours}
                     onChange={e => setNewDelayHours(Number(e.target.value))}
-                    className="w-full border border-app rounded-lg px-3 py-2 text-sm bg-app-surface focus:outline-none focus:ring-2 focus:ring-amber-300"
+                    className="w-full border border-app-border rounded-lg px-3 py-2 text-sm bg-app-surface focus:outline-none focus:ring-2 focus:ring-amber-300"
                   />
                 </div>
               </div>
@@ -248,7 +248,7 @@ export function AutomationManager() {
                   <select
                     value={newAction}
                     onChange={e => setNewAction(e.target.value)}
-                    className="w-full border border-app rounded-lg px-3 py-2 text-sm bg-app-surface focus:outline-none focus:ring-2 focus:ring-amber-300"
+                    className="w-full border border-app-border rounded-lg px-3 py-2 text-sm bg-app-surface focus:outline-none focus:ring-2 focus:ring-amber-300"
                   >
                     {Object.entries(ACTION_LABELS).map(([k, v]) => (
                       <option key={k} value={k}>{v}</option>
@@ -261,7 +261,7 @@ export function AutomationManager() {
                     <select
                       value={newSegment}
                       onChange={e => setNewSegment(e.target.value)}
-                      className="w-full border border-app rounded-lg px-3 py-2 text-sm bg-app-surface focus:outline-none focus:ring-2 focus:ring-amber-300"
+                      className="w-full border border-app-border rounded-lg px-3 py-2 text-sm bg-app-surface focus:outline-none focus:ring-2 focus:ring-amber-300"
                     >
                       {["NEW","REGULAR","VIP","CHURN_RISK"].map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -276,7 +276,7 @@ export function AutomationManager() {
                     onChange={e => setNewMessage(e.target.value)}
                     rows={3}
                     maxLength={500}
-                    className="w-full border border-app rounded-lg px-3 py-2 text-sm bg-app-surface focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
+                    className="w-full border border-app-border rounded-lg px-3 py-2 text-sm bg-app-surface focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
                   />
                   <div className="text-right text-[10px] text-slate-400 -mt-1">{newMessage.length}/500</div>
                 </div>
@@ -316,24 +316,24 @@ export function AutomationManager() {
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className={`border rounded-xl p-3.5 transition-all ${rule.isActive ? "bg-app-surface border-app" : "bg-app-bg border-app opacity-60"}`}
+                className={`border rounded-xl p-3.5 transition-all ${rule.isActive ? "bg-app-surface border-app-border" : "bg-app-bg border-app-border opacity-60"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-app-text mb-1.5">{rule.name}</p>
                     <div className="flex flex-wrap gap-1.5">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${TRIGGER_COLOR[rule.trigger] ?? "bg-app-bg-soft text-app-muted border-app"}`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${TRIGGER_COLOR[rule.trigger] ?? "bg-app-bg-soft text-app-muted border-app-border"}`}>
                         {TRIGGER_LABELS[rule.trigger] ?? rule.trigger}
                       </span>
-                      <span className="text-[10px] text-slate-400 flex items-center gap-0.5 bg-app-bg border border-app px-2 py-0.5 rounded">
+                      <span className="text-[10px] text-slate-400 flex items-center gap-0.5 bg-app-bg border border-app-border px-2 py-0.5 rounded">
                         <Clock size={9} />
                         {rule.triggerDelayMinutes >= 60 ? `${Math.round(rule.triggerDelayMinutes / 60)}h` : `${rule.triggerDelayMinutes}m`}
                       </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${ACTION_COLOR[rule.action] ?? "bg-app-bg-soft text-app-muted border-app"}`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${ACTION_COLOR[rule.action] ?? "bg-app-bg-soft text-app-muted border-app-border"}`}>
                         {ACTION_LABELS[rule.action] ?? rule.action}
                       </span>
                       {rule.runCount > 0 && (
-                        <span className="text-[10px] text-slate-400 bg-app-bg border border-app px-2 py-0.5 rounded">
+                        <span className="text-[10px] text-slate-400 bg-app-bg border border-app-border px-2 py-0.5 rounded">
                           ran {rule.runCount}×
                         </span>
                       )}

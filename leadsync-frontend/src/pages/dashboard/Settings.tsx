@@ -523,7 +523,7 @@ export default function Settings() {
         </div>
 
         {/* Individual Availability Toggle */}
-        <div className="border-t md:border-t-0 md:border-l border-app pt-4 md:pt-0 md:pl-6 flex flex-col justify-center min-w-[280px]">
+        <div className="border-t md:border-t-0 md:border-l border-app-border pt-4 md:pt-0 md:pl-6 flex flex-col justify-center min-w-[280px]">
           <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">
             Auto-Assignment Availability
           </label>
@@ -626,22 +626,22 @@ export default function Settings() {
       </div>
 
       {/* SAVED REPLIES */}
-      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app-border">
         <SavedRepliesManager />
       </div>
 
       {/* BOT KNOWLEDGE */}
-      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app-border">
         <BotKnowledgeManager />
       </div>
 
       {/* AUTOMATION RULES */}
-      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app-border">
         <AutomationManager />
       </div>
 
       {/* AUTOMATED CHAT ASSIGNMENT STRATEGIES */}
-      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app">
+      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app-border">
         <AssignmentStrategyManager
           currentStrategy={assignmentStrategy}
           workloads={agentWorkloads}
@@ -699,7 +699,7 @@ export default function Settings() {
         )}
 
         <p className="text-xs text-app-muted mt-2">
-          Paste your bot token from <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-blue-500 underline">BotFather</a> to connect.
+          Paste your bot token from <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-app-primary underline">BotFather</a> to connect.
         </p>
       </div>
 
@@ -718,10 +718,10 @@ export default function Settings() {
         {!instagramConnected ? (
           <div className="space-y-3">
             {/* Webhook URL hint */}
-            <div className="bg-app-bg rounded-xl px-4 py-3 border border-app space-y-1">
+            <div className="bg-app-bg rounded-xl px-4 py-3 border border-app-border space-y-1">
               <p className="text-xs font-bold text-app-muted uppercase tracking-wide">Step 1 — Register Webhook in Meta Developer Console</p>
               <p className="text-xs text-app-muted">Callback URL (paste this in your Meta App → Webhooks):</p>
-              <code className="block text-xs bg-app-surface border border-app rounded-lg px-3 py-2 font-mono text-indigo-700 break-all select-all">
+              <code className="block text-xs bg-app-surface border border-app-border rounded-lg px-3 py-2 font-mono text-app-primary break-all select-all">
                 {DISPLAY_WEBHOOK_URL}
               </code>
               <p className="text-xs text-slate-400 mt-1">Verify Token: use <span className="font-mono bg-app-bg-soft px-1 rounded">{igVerifyToken || "leadsync_ig_verify_2026"}</span> in Meta App verification.</p>
@@ -772,9 +772,9 @@ export default function Settings() {
               </button>
             </div>
             {/* Webhook URL reminder when connected */}
-            <div className="bg-app-bg rounded-xl px-4 py-3 border border-app">
+            <div className="bg-app-bg rounded-xl px-4 py-3 border border-app-border">
               <p className="text-xs font-bold text-app-muted uppercase tracking-wide mb-1">Webhook URL (for Meta App)</p>
-              <code className="text-xs font-mono text-indigo-700 break-all select-all">
+              <code className="text-xs font-mono text-app-primary break-all select-all">
                 {DISPLAY_WEBHOOK_URL}
               </code>
             </div>
@@ -783,9 +783,9 @@ export default function Settings() {
       </div>
 
       {/* COMMERCE AI ONBOARDING WIZARD */}
-      <div className="bg-app-surface p-8 rounded-3xl shadow-xl border border-app space-y-6 relative overflow-hidden">
+      <div className="bg-app-surface p-8 rounded-3xl shadow-xl border border-app-border space-y-6 relative overflow-hidden">
         {/* Abstract Background Decoration */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
+        <div className="absolute top-0 right-0 w-32 h-32 bg-app-primary/10 rounded-full -mr-16 -mt-16 opacity-50"></div>
 
         <div className="relative">
           <h2 className="text-2xl font-black text-app-text tracking-tight flex items-center gap-2">
@@ -798,19 +798,19 @@ export default function Settings() {
         <div className="flex p-1 bg-app-bg-soft rounded-xl w-fit">
           <button
             onClick={() => setOnboardingMode('PASTE')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'PASTE' ? 'bg-app-surface text-indigo-600 shadow-sm' : 'text-app-muted hover:text-app-text'}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'PASTE' ? 'bg-app-surface text-app-primary shadow-sm' : 'text-app-muted hover:text-app-text'}`}
           >
             ✨ AI Smart Paste
           </button>
           <button
             onClick={() => setOnboardingMode('MANUAL')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'MANUAL' ? 'bg-app-surface text-indigo-600 shadow-sm' : 'text-app-muted hover:text-app-text'}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'MANUAL' ? 'bg-app-surface text-app-primary shadow-sm' : 'text-app-muted hover:text-app-text'}`}
           >
             🧱 Manual Entry
           </button>
           <button
             onClick={() => setOnboardingMode('FILE')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'FILE' ? 'bg-app-surface text-indigo-600 shadow-sm' : 'text-app-muted hover:text-app-text'}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${onboardingMode === 'FILE' ? 'bg-app-surface text-app-primary shadow-sm' : 'text-app-muted hover:text-app-text'}`}
           >
             🧾 Upload Document
           </button>
@@ -818,9 +818,9 @@ export default function Settings() {
 
         {onboardingMode === 'PASTE' ? (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50">
-              <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-2">Instructions</p>
-              <p className="text-sm text-indigo-900/70">Paste your raw product list, price menu, or even a WhatsApp message. Our AI will extract items and prices for you.</p>
+            <div className="bg-app-primary/10 p-4 rounded-2xl border border-app-primary/20">
+              <p className="text-xs font-bold text-app-primary uppercase tracking-widest mb-2">Instructions</p>
+              <p className="text-sm text-app-primary/70">Paste your raw product list, price menu, or even a WhatsApp message. Our AI will extract items and prices for you.</p>
             </div>
 
             <textarea
@@ -830,7 +830,7 @@ Latte - 300
 Cheese Croissant 180..."
               value={shopDescription}
               onChange={(e) => setShopDescription(e.target.value)}
-              className="w-full border-2 border-app rounded-2xl px-4 py-4 h-48 focus:border-indigo-500 focus:ring-0 transition-all text-sm font-medium bg-app-bg/30"
+              className="w-full border-2 border-app-border rounded-2xl px-4 py-4 h-48 focus:border-indigo-500 focus:ring-0 transition-all text-sm font-medium bg-app-bg/30"
             />
 
             <div className="flex items-center gap-3">
@@ -848,7 +848,7 @@ Cheese Croissant 180..."
                   id="mergeCheck"
                   checked={mergeWithExisting}
                   onChange={(e) => setMergeWithExisting(e.target.checked)}
-                  className="rounded border-app-border-strong text-indigo-600 focus:ring-indigo-500"
+                  className="rounded border-app-border-strong text-app-primary focus:ring-indigo-500"
                 />
                 <label htmlFor="mergeCheck" className="text-xs font-bold text-app-muted cursor-pointer">Merge with existing items</label>
               </div>
@@ -856,24 +856,24 @@ Cheese Croissant 180..."
           </div>
         ) : onboardingMode === 'FILE' ? (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100/50 flex justify-between items-center">
+            <div className="bg-app-primary/10 p-6 rounded-2xl border border-app-primary/20 flex justify-between items-center">
               <div>
-                <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-1">Document Analysis</p>
-                <p className="text-sm text-indigo-900/70">Upload PDF, Word, Excel, or CSV catalogs.</p>
+                <p className="text-xs font-bold text-app-primary uppercase tracking-widest mb-1">Document Analysis</p>
+                <p className="text-sm text-app-primary/70">Upload PDF, Word, Excel, or CSV catalogs.</p>
               </div>
               <div className="flex gap-4">
                 <button
                   onClick={downloadCsvTemplate}
-                  className="text-xs font-bold text-indigo-600 hover:underline"
+                  className="text-xs font-bold text-app-primary hover:underline"
                 >
                   Download CSV Template ↓
                 </button>
               </div>
             </div>
 
-            <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-app rounded-3xl cursor-pointer hover:bg-app-bg hover:border-indigo-400 transition-all group">
+            <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-app-border rounded-3xl cursor-pointer hover:bg-app-bg hover:border-indigo-400 transition-all group">
               <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
-                <div className="bg-indigo-50 p-4 rounded-full text-indigo-600 mb-3 group-hover:scale-110 transition-transform">
+                <div className="bg-app-primary/10 p-4 rounded-full text-app-primary mb-3 group-hover:scale-110 transition-transform">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                 </div>
                 <p className="text-sm font-bold text-app-muted">Click to upload catalog</p>
@@ -943,7 +943,7 @@ Cheese Croissant 180..."
                   {cat.items.map((item, ii) => (
                     <div key={ii} className="flex justify-between text-sm py-1 border-b border-slate-50 last:border-0">
                       <span className="text-app-text font-medium">{item.name}</span>
-                      <span className="text-indigo-600 font-bold">₹{item.price}</span>
+                      <span className="text-app-primary font-bold">₹{item.price}</span>
                     </div>
                   ))}
                 </div>
@@ -960,7 +960,7 @@ Cheese Croissant 180..."
             </button>
             <button
               onClick={() => setPreviewMenu(null)}
-              className="bg-app-surface text-app-muted px-6 py-4 rounded-2xl font-bold border border-app hover:bg-app-bg transition-all"
+              className="bg-app-surface text-app-muted px-6 py-4 rounded-2xl font-bold border border-app-border hover:bg-app-bg transition-all"
             >
               Cancel
             </button>
@@ -1015,7 +1015,7 @@ Cheese Croissant 180..."
 
           <button
             onClick={handleSaveKnowledge}
-            className="border border-app text-app-muted px-5 py-2 rounded-lg hover:bg-app-bg transition"
+            className="border border-app-border text-app-muted px-5 py-2 rounded-lg hover:bg-app-bg transition"
           >
             Save Knowledge Manually
           </button>
@@ -1113,7 +1113,7 @@ Cheese Croissant 180..."
 
               <button
                 onClick={() => addItem(cIndex)}
-                className="text-indigo-600 text-sm"
+                className="text-app-primary text-sm"
               >
                 + Add Item
               </button>
@@ -1122,7 +1122,7 @@ Cheese Croissant 180..."
 
           <button
             onClick={addCategory}
-            className="text-indigo-600 text-sm"
+            className="text-app-primary text-sm"
           >
             + Add Category
           </button>

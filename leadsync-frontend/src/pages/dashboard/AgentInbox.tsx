@@ -529,12 +529,12 @@ export default function AgentInbox() {
           <div className="relative">
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="w-full flex items-center justify-between px-3 py-2 bg-app-surface border border-app-border hover:border-[#0052CC] rounded-lg shadow-sm text-sm transition-all"
+              className="w-full flex items-center justify-between px-3 py-2 bg-app-surface border border-app-border hover:border-app-primary rounded-lg shadow-sm text-sm transition-all"
             >
               <span className="text-app-muted flex items-center gap-2">
                 <Users className="w-4 h-4" /> Start a new chat...
               </span>
-              <span className="text-xs font-semibold text-[#0052CC]">
+              <span className="text-xs font-semibold text-app-primary">
                 Select Agent
               </span>
             </button>
@@ -607,7 +607,7 @@ export default function AgentInbox() {
                 placeholder="Filter recent chats..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-app-bg border border-app-border rounded-md text-sm outline-none focus:border-[#0052CC] focus:ring-1 focus:ring-[#0052CC] transition-shadow placeholder-app-placeholder"
+                className="w-full pl-9 pr-3 py-2 bg-app-bg border border-app-border rounded-md text-sm outline-none focus:border-app-primary focus:ring-1 focus:ring-app-primary transition-shadow placeholder-app-placeholder"
               />
             </div>
           </div>
@@ -619,7 +619,7 @@ export default function AgentInbox() {
               if (isSelectionMode) clearSelection();
               else setIsSelectionMode(true);
             }}
-            className="text-xs font-semibold text-[#0052CC] hover:text-[#003d99] transition-colors"
+            className="text-xs font-semibold text-app-primary hover:text-app-primary-strong transition-colors"
           >
             {isSelectionMode ? "Cancel Selection" : "Select Chats"}
           </button>
@@ -673,15 +673,15 @@ export default function AgentInbox() {
                   }}
                   className={`relative overflow-visible cursor-pointer bg-app-surface border rounded-lg p-4 transition-all duration-200 hover:shadow-xs group ${
                     isSelected && !isSelectionMode
-                      ? "border-[#0052CC] ring-1 ring-[#0052CC]/50 shadow-xs"
+                      ? "border-app-primary ring-1 ring-app-primary/50 shadow-xs"
                       : isChecked
-                        ? "border-[#0052CC] ring-1 ring-[#0052CC]/30 bg-blue-50/30"
+                        ? "border-app-primary ring-1 ring-app-primary/30 bg-app-primary/10"
                         : "border-app-border hover:border-app-border-strong"
                   }`}
                 >
                   {/* Left indicator accent strip when selected */}
                   {isSelected && !isSelectionMode && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0052CC] rounded-l-lg" />
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-app-primary rounded-l-lg" />
                   )}
 
                   <div className="flex items-start justify-between">
@@ -695,7 +695,7 @@ export default function AgentInbox() {
                               toggleListSelection(agent.id, e as any)
                             }
                             onClick={(e) => e.stopPropagation()}
-                            className="w-4 h-4 text-[#0052CC] border-gray-300 rounded focus:ring-[#0052CC] cursor-pointer"
+                            className="w-4 h-4 text-app-primary border-gray-300 rounded focus:ring-app-primary cursor-pointer"
                           />
                         </div>
                       )}
@@ -705,12 +705,7 @@ export default function AgentInbox() {
                         </div>
                         {/* Live pulsating dot anchor */}
                         <span
-                          className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white bg-green-500"
-                          style={{
-                            backgroundColor: agent.isActive
-                              ? "#22C55E"
-                              : "#94A3B8",
-                          }}
+                          className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-app-surface ${agent.isActive ? "bg-green-500" : "bg-app-text-muted"}`}
                         >
                           {agent.isActive && (
                             <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 animate-ping" />
@@ -861,8 +856,8 @@ export default function AgentInbox() {
                   }
                   className={`p-2 border rounded-md transition-colors duration-200 flex items-center justify-center min-w-[44px] min-h-[44px] cursor-pointer ${
                     soundEnabled
-                      ? "bg-blue-50 text-[#0052CC] border-blue-200 hover:bg-blue-100"
-                      : "bg-app-bg text-slate-400 border-app hover:bg-app-bg-soft"
+                      ? "bg-app-primary/10 text-app-primary border-app-primary/20 hover:bg-app-primary/15"
+                      : "bg-app-bg text-slate-400 border-app-border hover:bg-app-bg-soft"
                   }`}
                 >
                   {soundEnabled ? (
@@ -873,7 +868,7 @@ export default function AgentInbox() {
                 </button>
                 <button
                   onClick={() => setMobileView("context")}
-                  className="px-3 py-2 text-xs font-semibold bg-app-bg text-[#0052CC] border border-app-border rounded-md hover:bg-blue-50 transition lg:hidden w-full sm:w-auto"
+                  className="px-3 py-2 text-xs font-semibold bg-app-bg text-app-primary border border-app-border rounded-md hover:bg-app-primary/15 transition lg:hidden w-full sm:w-auto"
                 >
                   View Profile
                 </button>
@@ -921,7 +916,7 @@ export default function AgentInbox() {
 
                 <div className="space-y-4">
                   {notesLoading ? (
-                    <div className="text-center py-10 text-sm text-app-muted bg-app-surface border border-app rounded-xl shadow-xs">
+                    <div className="text-center py-10 text-sm text-app-muted bg-app-surface border border-app-border rounded-xl shadow-xs">
                       <div className="animate-pulse flex flex-col items-center justify-center gap-2">
                         <div className="h-4 w-24 bg-app-bg-soft rounded"></div>
                         <div className="text-xs text-slate-400">
@@ -931,7 +926,7 @@ export default function AgentInbox() {
                     </div>
                   ) : notes.length === 0 ? (
                     <div className="text-center py-12 px-6 text-sm text-app-muted bg-app-surface border border-app-border rounded-xl shadow-sm">
-                      <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-[#0052CC] mx-auto mb-3">
+                      <div className="w-12 h-12 bg-app-primary/10 rounded-full flex items-center justify-center text-app-primary mx-auto mb-3">
                         <MessageSquare className="w-6 h-6" />
                       </div>
                       <p className="font-semibold text-app-text text-base">
@@ -942,7 +937,7 @@ export default function AgentInbox() {
                         below.
                       </p>
 
-                      <div className="border-t border-app pt-4 max-w-md mx-auto">
+                      <div className="border-t border-app-border pt-4 max-w-md mx-auto">
                         <p className="text-xs font-semibold text-app-muted mb-2">
                           💡 Try one of these quick topics:
                         </p>
@@ -957,7 +952,7 @@ export default function AgentInbox() {
                               onClick={() => {
                                 handleSendNote(suggestion);
                               }}
-                              className="text-xs p-2 bg-app-bg hover:bg-blue-50 text-app-text hover:text-[#0052CC] border border-app hover:border-blue-200 rounded-lg text-left transition"
+                              className="text-xs p-2 bg-app-bg hover:bg-app-primary/15 text-app-text hover:text-app-primary border border-app-border hover:border-app-primary/30 rounded-lg text-left transition"
                             >
                               ⚡ {suggestion}
                             </button>
@@ -997,7 +992,7 @@ export default function AgentInbox() {
                             <div
                               className={`relative p-3.5 rounded-2xl ${
                                 isMe
-                                  ? "bg-[#0052CC] text-white rounded-tr-none shadow-sm"
+                                  ? "bg-app-primary text-white rounded-tr-none shadow-sm"
                                   : "bg-app-surface text-app-text border border-app-border rounded-tl-none shadow-xs"
                               }`}
                             >
@@ -1010,7 +1005,7 @@ export default function AgentInbox() {
                                   className={`flex items-center gap-1.5 pt-2 border-t mt-2 ${
                                     isMe
                                       ? "border-blue-500/50"
-                                      : "border-app"
+                                      : "border-app-border"
                                   }`}
                                 >
                                   <span
@@ -1023,7 +1018,7 @@ export default function AgentInbox() {
                                     className={`text-[10px] font-semibold rounded-md px-2 py-0.5 border flex items-center gap-1 transition-all ${
                                       isMe
                                         ? "bg-blue-800/40 text-blue-50 border-blue-400/30 hover:bg-blue-800/80"
-                                        : "bg-blue-50 text-[#0052CC] border-blue-100 hover:bg-blue-100"
+                                        : "bg-app-primary/10 text-app-primary border-app-primary/20 hover:bg-app-primary/15"
                                     }`}
                                   >
                                     <ExternalLink className="w-3 h-3" />
@@ -1042,10 +1037,10 @@ export default function AgentInbox() {
                                     msgReactions["👍"]
                                       ? isMe
                                         ? "bg-blue-700 border-blue-500 text-white"
-                                        : "bg-blue-50 border-blue-200 text-blue-700"
+                                        : "bg-app-primary/10 border-app-primary/20 text-app-primary"
                                       : isMe
                                         ? "bg-blue-600/30 border-blue-500/20 text-blue-100 hover:bg-blue-600/50"
-                                        : "bg-app-bg border-app text-slate-400 hover:bg-app-bg-soft"
+                                        : "bg-app-bg border-app-border text-slate-400 hover:bg-app-bg-soft"
                                   }`}
                                   title="Thumbs Up"
                                 >
@@ -1060,7 +1055,7 @@ export default function AgentInbox() {
 
                           {isMe && (
                             <div className="flex-shrink-0 self-end mb-1">
-                              <div className="w-8 h-8 rounded-full bg-blue-100 text-[#0052CC] font-bold text-xs flex items-center justify-center shadow-xs uppercase border border-blue-200">
+                              <div className="w-8 h-8 rounded-full bg-app-primary/10 text-app-primary font-bold text-xs flex items-center justify-center shadow-xs uppercase border border-app-primary/20">
                                 {note.authorInitials || "ME"}
                               </div>
                             </div>
@@ -1102,7 +1097,7 @@ export default function AgentInbox() {
                 <button
                   key={idx}
                   onClick={() => handleSendNote(chip.text)}
-                  className="text-[11px] font-medium px-2.5 py-1 bg-app-surface hover:bg-blue-50 text-app-muted hover:text-[#0052CC] border border-app hover:border-blue-200 rounded-full transition-all shadow-xs cursor-pointer select-none active:scale-95"
+                  className="text-[11px] font-medium px-2.5 py-1 bg-app-surface hover:bg-app-primary/15 text-app-muted hover:text-app-primary border border-app-border hover:border-app-primary/30 rounded-full transition-all shadow-xs cursor-pointer select-none active:scale-95"
                 >
                   {chip.label}
                 </button>
@@ -1118,7 +1113,7 @@ export default function AgentInbox() {
         ) : (
           <div className="flex-1 flex items-center justify-center bg-app-bg text-app-muted">
             <div className="text-center">
-              <Users className="w-12 h-12 mx-auto mb-4 text-[#D9DADC]" />
+              <Users className="w-12 h-12 mx-auto mb-4 text-app-muted" />
               <p className="font-medium text-app-text">Select a team member</p>
               <p className="text-sm">
                 Choose an agent to view details and collaborate
@@ -1149,7 +1144,7 @@ export default function AgentInbox() {
               Member Profile
             </h3>
 
-            <div className="flex flex-col items-center text-center gap-3 mb-6 bg-app-bg p-4 rounded-xl border border-app">
+            <div className="flex flex-col items-center text-center gap-3 mb-6 bg-app-bg p-4 rounded-xl border border-app-border">
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold uppercase shadow-sm">
                 {selectedAgent.name.charAt(0)}
               </div>
@@ -1187,7 +1182,7 @@ export default function AgentInbox() {
                         Active Account
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1.5 text-xs font-medium text-app-muted bg-app-bg-soft px-2 py-0.5 rounded border border-app">
+                      <span className="flex items-center gap-1.5 text-xs font-medium text-app-muted bg-app-bg-soft px-2 py-0.5 rounded border border-app-border">
                         Disabled
                       </span>
                     )}
@@ -1204,11 +1199,11 @@ export default function AgentInbox() {
                 onClick={() => setMobileView("detail")}
                 className="flex flex-col items-center justify-center gap-2 p-3 border border-app-border rounded-md hover:bg-app-bg transition text-app-text min-h-[80px]"
               >
-                <MessageSquare className="w-5 h-5 text-[#0052CC]" />
+                <MessageSquare className="w-5 h-5 text-app-primary" />
                 <span className="text-xs font-semibold">Message</span>
               </button>
               <button className="flex flex-col items-center justify-center gap-2 p-3 border border-app-border rounded-md hover:bg-app-bg transition text-app-text min-h-[80px]">
-                <Clock className="w-5 h-5 text-[#0052CC]" />
+                <Clock className="w-5 h-5 text-app-primary" />
                 <span className="text-xs font-semibold">Schedule Sync</span>
               </button>
             </div>
@@ -1224,7 +1219,7 @@ export default function AgentInbox() {
 
       {confirmModal.isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="bg-app-surface rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform scale-100 transition-all border border-app animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-app-surface rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform scale-100 transition-all border border-app-border animate-in fade-in zoom-in-95 duration-200">
             <div className="p-6">
               <h3 className="text-lg font-bold text-app-text mb-2">
                 {confirmModal.title}
@@ -1233,7 +1228,7 @@ export default function AgentInbox() {
                 {confirmModal.message}
               </p>
             </div>
-            <div className="bg-app-bg px-6 py-4 flex items-center justify-end gap-3 border-t border-app">
+            <div className="bg-app-bg px-6 py-4 flex items-center justify-end gap-3 border-t border-app-border">
               <button
                 onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
                 className="px-4 py-2 text-sm font-semibold text-app-text bg-app-surface border border-app-border-strong rounded-lg hover:bg-app-bg transition"

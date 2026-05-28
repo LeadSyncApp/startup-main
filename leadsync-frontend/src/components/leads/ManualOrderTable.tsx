@@ -25,17 +25,17 @@ export default function ManualOrderTable({
   const isAllSelected = orders.length > 0 && selectedLeads.size === orders.length;
 
   return (
-    <div className="bg-app-surface rounded-[20px] border border-app shadow-sm overflow-hidden font-sans">
+    <div className="bg-app-surface rounded-[20px] border border-app-border shadow-sm overflow-hidden font-sans">
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse select-none">
           <thead>
-            <tr className="border-b border-app bg-app-bg text-app-muted font-sans text-xs uppercase font-extrabold tracking-wider">
+            <tr className="border-b border-app-border bg-app-bg text-app-muted font-sans text-xs uppercase font-extrabold tracking-wider">
               <th className="py-4 px-4 w-10">
                 <input
                   type="checkbox"
                   checked={isAllSelected}
                   onChange={onSelectAll}
-                  className="h-4 w-4 rounded border-app-border-strong text-blue-600 cursor-pointer accent-blue-600 focus:ring-blue-500"
+                  className="h-4 w-4 rounded border-app-border-strong text-app-primary cursor-pointer accent-blue-600 focus:ring-blue-500"
                   title="Select all"
                 />
               </th>
@@ -57,13 +57,13 @@ export default function ManualOrderTable({
               const state = order.items?.state || "—";
               const isSelected = selectedLeads.has(order.id);
               return (
-                <tr key={order.id} className={`hover:bg-app-bg/60 transition-colors ${isSelected ? "bg-blue-50/50" : ""}`}>
+                <tr key={order.id} className={`hover:bg-app-bg/60 transition-colors ${isSelected ? "bg-app-primary/10" : ""}`}>
                   <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => onSelect(order.id)}
-                      className="h-4 w-4 rounded border-app-border-strong text-blue-600 cursor-pointer accent-blue-600 focus:ring-blue-500"
+                      className="h-4 w-4 rounded border-app-border-strong text-app-primary cursor-pointer accent-blue-600 focus:ring-blue-500"
                     />
                   </td>
                   <td className="py-4 px-6">
@@ -82,7 +82,7 @@ export default function ManualOrderTable({
                     </div>
                   </td>
                   <td className="py-4 px-6 text-left">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-app-text bg-app-bg-soft border border-app rounded-lg font-bold font-sans">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-app-text bg-app-bg-soft border border-app-border rounded-lg font-bold font-sans">
                       👤 {agentName}
                     </span>
                   </td>
@@ -102,7 +102,7 @@ export default function ManualOrderTable({
                         ₹{order.amount?.toLocaleString("en-IN") || "0"}
                       </span>
                       <span className={`inline-block text-center text-[10px] font-extrabold px-2 py-0.5 rounded-full w-fit ${
-                        order.priority === "URGENT" ? "bg-red-50 text-red-600 border border-red-100" : "bg-app-bg text-app-muted border border-app"
+                        order.priority === "URGENT" ? "bg-red-50 text-red-600 border border-red-100" : "bg-app-bg text-app-muted border border-app-border"
                       }`}>
                         {order.priority}
                       </span>
@@ -153,7 +153,7 @@ export default function ManualOrderTable({
                             top: dropdownPosition ? `${dropdownPosition.top}px` : "auto",
                             left: dropdownPosition ? `${dropdownPosition.left}px` : "auto",
                           }}
-                          className="w-52 bg-app-surface rounded-xl shadow-xl border border-app py-1.5 z-50 text-left font-sans select-none animate-in fade-in slide-in-from-top-1 duration-100"
+                          className="w-52 bg-app-surface rounded-xl shadow-xl border border-app-border py-1.5 z-50 text-left font-sans select-none animate-in fade-in slide-in-from-top-1 duration-100"
                         >
                           <button
                             onClick={(e) => {
@@ -164,7 +164,7 @@ export default function ManualOrderTable({
                             }}
                             className="w-full px-3.5 py-2 text-xs font-bold text-app-text hover:bg-app-bg flex items-center gap-2 transition cursor-pointer"
                           >
-                            <Eye size={14} className="text-blue-500" />
+                            <Eye size={14} className="text-app-primary" />
                             Read Detailed Report
                           </button>
                           <button
@@ -176,7 +176,7 @@ export default function ManualOrderTable({
                             }}
                             className="w-full px-3.5 py-2 text-xs font-bold text-app-text hover:bg-app-bg flex items-center gap-2 transition cursor-pointer"
                           >
-                            <User size={14} className="text-indigo-500" />
+                            <User size={14} className="text-app-primary" />
                             Open CRM Lead Drawer
                           </button>
                           <button

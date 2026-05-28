@@ -166,7 +166,7 @@ export default function DashboardHome() {
         {/* Live Alerts / Featured Section */}
         <section>
           <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Live Alerts</h2>
-          <div className="relative overflow-hidden rounded-[24px] bg-[#2563eb] p-6 text-white shadow-lg shadow-blue-100">
+          <div className="relative overflow-hidden rounded-[24px] bg-app-primary p-6 text-white shadow-lg">
             {/* Background Accent */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-app-surface/10 rounded-full -mr-16 -mt-8 blur-2xl"></div>
             
@@ -182,14 +182,14 @@ export default function DashboardHome() {
               <h3 className="text-2xl font-bold leading-tight">
                 {urgentLeads} {urgentLeads === 1 ? "Lead" : "Leads"} requiring immediate action
               </h3>
-              <p className="text-sm text-blue-50/80 leading-relaxed max-w-[85%]">
+              <p className="text-sm text-white/80 leading-relaxed max-w-[85%]">
                 {urgentLeads > 0 
                   ? `AI has categorized ${Math.ceil(urgentLeads * 0.3)} leads as high-intent. Dispatch recommended.`
                   : "No urgent leads at the moment."}
               </p>
               <button 
                 onClick={() => navigate("/dashboard/leads")}
-                className="flex items-center gap-2 bg-app-surface text-[#2563eb] px-5 py-3 rounded-xl font-bold text-sm transition active:scale-95 hover:bg-blue-50"
+                className="flex items-center gap-2 bg-app-surface text-app-primary px-5 py-3 rounded-xl font-bold text-sm transition active:scale-95 hover:bg-app-primary/15"
               >
                 Review Priority <ArrowRight className="w-4 h-4" />
               </button>
@@ -204,15 +204,15 @@ export default function DashboardHome() {
             value={`₹${revenue30d.toLocaleString()}`} 
             trend={revenueTrend} 
             icon={DollarSign}
-            iconColor="text-blue-600"
-            iconBg="bg-blue-50"
+            iconColor="text-app-primary"
+            iconBg="bg-app-primary/10"
           />
           <StatCard 
             label="Orders" 
             value={kpis.orders.toLocaleString()} 
             icon={ShoppingCart}
-            iconColor="text-indigo-600"
-            iconBg="bg-indigo-50"
+            iconColor="text-app-primary"
+            iconBg="bg-app-primary/10"
           />
           <StatCard 
             label="AOV" 
@@ -225,13 +225,13 @@ export default function DashboardHome() {
             label="Leads" 
             value={kpis.leads.toLocaleString()} 
             icon={Users}
-            iconColor="text-blue-600"
-            iconBg="bg-blue-50"
+            iconColor="text-app-primary"
+            iconBg="bg-app-primary/10"
           />
         </section>
 
         {/* Revenue Trend Chart */}
-        <section className="bg-app-surface p-6 rounded-[24px] border border-app shadow-sm">
+        <section className="bg-app-surface p-6 rounded-[24px] border border-app-border shadow-sm">
           <div className="flex justify-between items-start mb-6">
             <div>
               <h3 className="text-lg font-bold text-app-text">Revenue Trend</h3>
@@ -249,14 +249,14 @@ export default function DashboardHome() {
               <AreaChart data={analytics?.revenueChart || []}>
                 <defs>
                   <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                    <stop offset="5%" stopColor="var(--app-primary)" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="var(--app-primary)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <Area 
                   type="monotone" 
                   dataKey="amount" 
-                  stroke="#2563eb" 
+                  stroke="var(--app-primary)" 
                   strokeWidth={3} 
                   fill="url(#colorAmount)" 
                 />
@@ -279,14 +279,14 @@ export default function DashboardHome() {
             <div className="grid grid-cols-2 gap-3">
               <button 
                 onClick={() => navigate("/dashboard/leads")}
-                className="flex items-center justify-center gap-2 bg-[#eef4ff] text-[#0047cc] py-4 rounded-[16px] font-bold text-sm transition active:scale-95 hover:bg-blue-100"
+                className="flex items-center justify-center gap-2 bg-app-primary/10 text-app-primary-strong py-4 rounded-[16px] font-bold text-sm transition active:scale-95 hover:bg-app-primary/15"
                 aria-label="Add lead"
               >
                 <Users className="w-4 h-4" /> Add Lead
               </button>
               <button 
                 onClick={() => navigate("/dashboard/conversations")}
-                className="flex items-center justify-center gap-2 bg-[#eef4ff] text-[#0047cc] py-4 rounded-[16px] font-bold text-sm transition active:scale-95 hover:bg-blue-100"
+                className="flex items-center justify-center gap-2 bg-app-primary/10 text-app-primary-strong py-4 rounded-[16px] font-bold text-sm transition active:scale-95 hover:bg-app-primary/15"
                 aria-label="View inbox"
               >
                 <MessageSquare className="w-4 h-4" /> Inbox
@@ -296,9 +296,9 @@ export default function DashboardHome() {
         </section>
 
         {/* Top Products */}
-        <section className="bg-[#f0f4ff] p-6 rounded-[24px]">
+        <section className="bg-app-surface p-6 rounded-[24px] border border-app-border shadow-sm">
           <h3 className="text-lg font-bold text-app-text mb-5 flex items-center gap-2">
-            <Package className="w-5 h-5 text-blue-600" /> Top Products
+            <Package className="w-5 h-5 text-app-primary" /> Top Products
           </h3>
           <div className="space-y-3">
             {analytics?.topProducts?.length > 0 ? (
@@ -342,7 +342,7 @@ export default function DashboardHome() {
 
 function StatCard({ label, value, trend, icon: Icon, iconColor, iconBg }: StatCardProps) {
   return (
-    <div className="bg-app-surface p-5 rounded-[24px] border border-app shadow-sm relative overflow-hidden hover:shadow-md transition">
+    <div className="bg-app-surface p-5 rounded-[24px] border border-app-border shadow-sm relative overflow-hidden hover:shadow-md transition">
       <div className="flex justify-between items-start mb-4">
         <div className={`p-2.5 rounded-xl ${iconBg} ${iconColor}`}>
           <Icon className="w-5 h-5" />
@@ -365,7 +365,7 @@ function ProductRow({ rank, name, sub, count }: ProductRowProps) {
   return (
     <div className="flex items-center justify-between bg-app-surface p-4 rounded-2xl border border-slate-50 hover:shadow-md transition">
       <div className="flex items-center gap-4">
-        <span className="text-xs font-extrabold text-blue-600 bg-blue-50 w-8 h-8 flex items-center justify-center rounded-lg">
+        <span className="text-xs font-extrabold text-app-primary bg-app-primary/10 w-8 h-8 flex items-center justify-center rounded-lg">
           {rank}
         </span>
         <div>
@@ -383,8 +383,8 @@ function ProductRow({ rank, name, sub, count }: ProductRowProps) {
 
 function AgentCard({ name, orders, initial }: AgentCardProps) {
   return (
-    <div className="min-w-[140px] bg-app-surface p-5 rounded-[24px] border border-app shadow-sm text-center hover:shadow-md transition">
-      <div className="w-12 h-12 rounded-full bg-blue-50 text-[#2563eb] flex items-center justify-center mx-auto mb-3 font-extrabold text-lg">
+    <div className="min-w-[140px] bg-app-surface p-5 rounded-[24px] border border-app-border shadow-sm text-center hover:shadow-md transition">
+      <div className="w-12 h-12 rounded-full bg-app-primary/10 text-app-primary flex items-center justify-center mx-auto mb-3 font-extrabold text-lg">
         {initial}
       </div>
       <h5 className="text-sm font-bold text-app-text">{name}</h5>
