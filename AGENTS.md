@@ -33,6 +33,7 @@ Conventions and caveats
 - Prefer minimal, reversible changes. Avoid sweeping refactors without tests.
 - Tests are not present in the repo root; run local lint/build steps only when relevant.
 - Environment variables are used (see `leadsync-backend/.env` references in code). Do not commit secrets.
+- General operating standard for agents: see `.github/CORE_IDENTITY_ARCHITECTURE.md`.
 
 Suggested next customizations
 - Create a per-area `.github/copilot-instructions.md` focusing on backend developer workflows (migrations, seeding, env setup).

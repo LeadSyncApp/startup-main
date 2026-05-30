@@ -28,6 +28,14 @@ Agent behavior guidelines
 - When changing database schema: update `prisma/schema.prisma`, then create a migration and run `npm run migrate`.
 - When asked to run commands, request confirmation before executing anything that alters data (migrations, resets).
 
+Core identity (applies to all work in this repo)
+- Context before code: clarify problem, users, constraints, and success metrics.
+- Verify before modifying: discover existing patterns and match them; don’t assume.
+- Production-grade: explicit types/contracts, validation, error handling, security-by-default, and accessible UX.
+- Consistency over cleverness: preserve working behavior; avoid new paradigms without approval.
+- Git safety: atomic commits; **never push to `main` without explicit permission**.
+- Full checklist and templates: see `.github/CORE_IDENTITY_ARCHITECTURE.md`.
+
 Files added to support this:
 - `leadsync-backend/.env.example` — environment template for backend.
 - `leadsync-frontend/.env.example` — environment template for frontend.
