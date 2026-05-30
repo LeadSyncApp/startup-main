@@ -256,12 +256,19 @@ export default function UserManagement() {
       {/* Add Member Modal */}
       <AnimatePresence>
         {showModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="fixed inset-0 z-[100] px-4 flex items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-white/80 backdrop-blur-md"
+              onClick={() => setShowModal(false)}
+            />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-app-surface p-6 rounded-2xl w-full max-w-md shadow-2xl"
+              className="bg-white p-6 rounded-2xl w-full max-w-md shadow-2xl relative z-10 border border-slate-200"
             >
               <h2 className="text-lg font-bold text-app-text mb-5">Add Team Member</h2>
               <div className="space-y-3">
@@ -301,12 +308,19 @@ export default function UserManagement() {
       {/* Confirm Disable Modal */}
       <AnimatePresence>
         {confirmDisable && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="fixed inset-0 z-[100] px-4 flex items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-white/80 backdrop-blur-md"
+              onClick={() => setConfirmDisable(null)}
+            />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-app-surface p-6 rounded-2xl w-full max-w-sm shadow-2xl"
+              className="bg-white p-6 rounded-2xl w-full max-w-sm shadow-2xl relative z-10 border border-slate-200"
             >
               <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center mb-4 mx-auto">
                 <UserX className="w-6 h-6 text-red-500" />

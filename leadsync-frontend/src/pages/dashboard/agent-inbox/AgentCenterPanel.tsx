@@ -1,5 +1,5 @@
 import React from "react";
-import { MoreHorizontal, Trash, Volume2, ArrowLeft } from "lucide-react";
+import { MoreHorizontal, Trash, Volume2, ArrowLeft, Users } from "lucide-react";
 import { AgentChatFeed } from "./AgentChatFeed";
 import { AgentChatFooter } from "./AgentChatFooter";
 import { UserData } from "./types";
@@ -44,25 +44,25 @@ export function AgentCenterPanel({
 }: Props) {
   return (
     <div
-      className={`flex-1 flex-col bg-[#F4F6F8] ${mobileView === "detail" ? "flex z-10 absolute inset-0 lg:relative lg:flex" : "hidden lg:flex"}`}
+      className={`flex-1 flex-col bg-app-bg-soft ${mobileView === "detail" ? "flex z-10 absolute inset-0 lg:relative lg:flex" : "hidden lg:flex"}`}
     >
       {selectedAgent ? (
         <>
-          <div className="flex items-center justify-between p-4 border-b border-[#E6E9EE] bg-app-bg sticky top-0 z-30">
+          <div className="flex items-center justify-between p-4 border-b border-app bg-app-surface sticky top-0 z-30">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setMobileView("list")}
-                className="lg:hidden p-1 -ml-2 text-[#6B7280] hover:bg-slate-100 rounded-md"
+                className="lg:hidden p-1 -ml-2 text-app-text-muted hover:bg-app-bg-soft rounded-md"
                 title="Back"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold uppercase">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold uppercase ring-2 ring-app-bg-soft">
                 {selectedAgent.name.charAt(0)}
               </div>
               <div>
-                <h3 className="text-sm font-bold text-[#1F2937]">{selectedAgent.name}</h3>
-                <p className="text-xs text-slate-500">{selectedAgent.role}</p>
+                <h3 className="text-sm font-bold text-app-text">{selectedAgent.name}</h3>
+                <p className="text-xs text-app-text-muted">{selectedAgent.role}</p>
               </div>
             </div>
 
@@ -70,7 +70,7 @@ export function AgentCenterPanel({
               <button
                 onClick={() => setSoundEnabled(!soundEnabled)}
                 title={soundEnabled ? "Disable sound" : "Enable sound"}
-                className="p-2 rounded-md text-slate-600 hover:bg-slate-100"
+                className="p-2 rounded-md text-app-text-muted hover:bg-app-bg-soft"
               >
                 <Volume2 className="w-4 h-4" />
               </button>
@@ -78,7 +78,7 @@ export function AgentCenterPanel({
               <button
                 onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
                 title="More"
-                className="p-2 rounded-md text-slate-600 hover:bg-slate-100"
+                className="p-2 rounded-md text-app-text-muted hover:bg-app-bg-soft"
               >
                 <MoreHorizontal className="w-4 h-4" />
               </button>
@@ -86,7 +86,7 @@ export function AgentCenterPanel({
               <button
                 onClick={() => handleDeleteChat(false)}
                 title="Delete chat"
-                className="p-2 rounded-md text-red-600 hover:bg-red-50"
+                className="p-2 rounded-md text-red-500 hover:bg-red-500/10"
               >
                 <Trash className="w-4 h-4" />
               </button>
@@ -103,7 +103,7 @@ export function AgentCenterPanel({
             handleSendNote={handleSendNote}
           />
 
-          <div className="border-t border-[#E6E9EE] bg-app-bg">
+          <div className="border-t border-app bg-app-surface">
             <AgentChatFooter
               selectedAgent={selectedAgent}
               isSubmittingMessage={isSubmittingMessage}
@@ -112,10 +112,13 @@ export function AgentCenterPanel({
           </div>
         </>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-slate-500">
-          <div className="text-center">
-            <p className="text-sm font-medium">Select a team member to start collaborating.</p>
-            <p className="text-xs text-slate-400 mt-2">Open an existing chat or start a new one from the left.</p>
+        <div className="flex-1 flex items-center justify-center text-app-text-muted bg-app-bg-soft">
+          <div className="text-center p-8 bg-app-surface rounded-3xl border border-app shadow-xl max-w-sm">
+            <div className="w-16 h-16 bg-app-primary-soft rounded-full flex items-center justify-center mx-auto mb-4">
+              <Users className="w-8 h-8 text-app-primary" />
+            </div>
+            <p className="text-base font-bold text-app-text">Team Collaboration</p>
+            <p className="text-sm text-app-text-muted mt-2 leading-relaxed">Select a teammate from the left panel to start sharing internal notes and updates.</p>
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { Megaphone, Send, CheckCircle, Clock, AlertTriangle, Radio } from "lucide-react";
 import toast from "react-hot-toast";
@@ -19,7 +19,7 @@ const SEGMENTS = [
   { value: "CHURN_RISK", label: "Churn Risk", desc: "Inactive or low-sentiment leads" },
 ];
 
-const STATUS_ICON: Record<string, JSX.Element> = {
+const STATUS_ICON: Record<string, React.ReactNode> = {
   PENDING: <Clock className="h-4 w-4 text-slate-400" />,
   SENDING: <Radio className="h-4 w-4 text-blue-500 animate-pulse" />,
   DONE: <CheckCircle className="h-4 w-4 text-emerald-500" />,
@@ -179,13 +179,22 @@ export default function Broadcasts() {
       </div>
 
       {/* CONFIRMATION MODAL */}
-      {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-app-surface rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4"
-          >
+      <AnimatePresence>
+        {showConfirm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-white/80 backdrop-blur-md"
+              onClick={() => setShowConfirm(false)}
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4 relative z-10 border border-slate-200"
+            >
             <div className="flex items-center gap-3">
               <div className="bg-amber-100 p-2 rounded-xl">
                 <Megaphone className="h-5 w-5 text-amber-600" />
@@ -218,6 +227,7 @@ export default function Broadcasts() {
           </motion.div>
         </div>
       )}
+      </AnimatePresence>
 
       {/* HISTORY */}
       <div className="rounded-2xl border bg-app-surface shadow-sm overflow-hidden">

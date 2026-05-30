@@ -10,64 +10,68 @@ interface Props {
 export function AgentRightPanel({ selectedAgent, mobileView, setMobileView }: Props) {
   return (
     <div
-      className={`w-full lg:w-[320px] bg-app-surface flex-col shrink-0 h-full overflow-y-auto lg:overflow-visible border-l border-[#D9DADC] ${mobileView === "context" ? "flex z-20 absolute inset-0 lg:relative lg:flex" : "hidden lg:flex"}`}
+      className={`w-full lg:w-[320px] bg-app-surface flex-col shrink-0 h-full overflow-y-auto lg:overflow-visible border-l border-app ${mobileView === "context" ? "flex z-20 absolute inset-0 lg:relative lg:flex" : "hidden lg:flex"}`}
     >
       {selectedAgent ? (
         <div className="p-6">
           <div className="flex items-center gap-2 mb-4 lg:hidden">
             <button
               onClick={() => setMobileView("detail")}
-              className="p-1 -ml-2 text-[#6B7280] hover:bg-slate-100 rounded-md"
+              className="p-1 -ml-2 text-app-text-muted hover:bg-app-bg-soft rounded-md"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <h3 className="text-sm font-bold text-[#1F2937] uppercase tracking-wider">
+            <h3 className="text-sm font-bold text-app-text uppercase tracking-wider">
               Profile
             </h3>
           </div>
-          <h3 className="hidden lg:block text-sm font-bold text-[#1F2937] uppercase tracking-wider mb-4">
+          <h3 className="hidden lg:block text-sm font-bold text-app-text-muted uppercase tracking-wider mb-4">
             Member Profile
           </h3>
 
-          <div className="flex flex-col items-center text-center gap-3 mb-6 bg-app-bg p-4 rounded-xl border border-app">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold uppercase shadow-sm">
+          <div className="flex flex-col items-center text-center gap-3 mb-6 bg-app-bg-soft p-6 rounded-2xl border border-app">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-3xl font-bold uppercase shadow-lg ring-4 ring-app-surface">
               {selectedAgent.name.charAt(0)}
             </div>
             <div>
-              <h4 className="text-base font-bold text-[#1F2937]">
+              <h4 className="text-lg font-bold text-app-text">
                 {selectedAgent.name}
               </h4>
-              <p className="text-sm text-[#6B7280] font-medium mt-1 uppercase tracking-wider">
+              <p className="text-xs text-app-primary font-bold mt-1 uppercase tracking-widest">
                 {selectedAgent.role}
               </p>
             </div>
           </div>
 
-          <div className="space-y-4 mb-8">
+          <div className="space-y-5 mb-8">
             <div className="flex items-start gap-3 text-sm">
-              <Mail className="w-4 h-4 text-[#6B7280] mt-0.5" />
-              <div className="break-all">
-                <p className="text-[#6B7280] text-xs uppercase tracking-wider mb-0.5">
+              <div className="w-8 h-8 rounded-lg bg-app-bg flex items-center justify-center shrink-0 border border-app">
+                <Mail className="w-4 h-4 text-app-text-muted" />
+              </div>
+              <div className="break-all pt-0.5">
+                <p className="text-app-text-muted text-[10px] font-bold uppercase tracking-widest mb-0.5">
                   Email Address
                 </p>
-                <p className="text-[#1F2937] font-medium">
+                <p className="text-app-text font-medium">
                   {selectedAgent.email}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3 text-sm">
-              <Shield className="w-4 h-4 text-[#6B7280] mt-0.5" />
-              <div>
-                <p className="text-[#6B7280] text-xs uppercase tracking-wider mb-0.5">
+              <div className="w-8 h-8 rounded-lg bg-app-bg flex items-center justify-center shrink-0 border border-app">
+                <Shield className="w-4 h-4 text-app-text-muted" />
+              </div>
+              <div className="pt-0.5">
+                <p className="text-app-text-muted text-[10px] font-bold uppercase tracking-widest mb-0.5">
                   System Status
                 </p>
                 <div className="flex items-center gap-2 mt-0.5">
                   {selectedAgent.isActive ? (
-                    <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold text-green-500 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20 uppercase tracking-wider">
                       Active Account
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-app">
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold text-app-text-muted bg-app-bg-soft px-2 py-0.5 rounded border border-app uppercase tracking-wider">
                       Disabled
                     </span>
                   )}
@@ -76,26 +80,26 @@ export function AgentRightPanel({ selectedAgent, mobileView, setMobileView }: Pr
             </div>
           </div>
 
-          <h3 className="text-sm font-bold text-[#1F2937] uppercase tracking-wider mb-4 border-t border-[#D9DADC] pt-6">
+          <h3 className="text-sm font-bold text-app-text-muted uppercase tracking-wider mb-4 border-t border-app pt-6">
             Collaboration Tools
           </h3>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => setMobileView("detail")}
-              className="flex flex-col items-center justify-center gap-2 p-3 border border-[#D9DADC] rounded-md hover:bg-app-bg transition text-[#1F2937] min-h-[80px]"
+              className="flex flex-col items-center justify-center gap-2 p-3 border border-app rounded-xl bg-app-surface hover:bg-app-bg-soft transition text-app-text min-h-[90px] group active:scale-95 shadow-sm"
             >
-              <MessageSquare className="w-5 h-5 text-[#0052CC]" />
-              <span className="text-xs font-semibold">Message</span>
+              <MessageSquare className="w-5 h-5 text-app-primary group-hover:scale-110 transition-transform" />
+              <span className="text-[10px] font-bold uppercase tracking-tight">Message</span>
             </button>
-            <button className="flex flex-col items-center justify-center gap-2 p-3 border border-[#D9DADC] rounded-md hover:bg-app-bg transition text-[#1F2937] min-h-[80px]">
-              <Clock className="w-5 h-5 text-[#0052CC]" />
-              <span className="text-xs font-semibold">Schedule Sync</span>
+            <button className="flex flex-col items-center justify-center gap-2 p-3 border border-app rounded-xl bg-app-surface hover:bg-app-bg-soft transition text-app-text min-h-[90px] group active:scale-95 shadow-sm">
+              <Clock className="w-5 h-5 text-app-primary group-hover:scale-110 transition-transform" />
+              <span className="text-[10px] font-bold uppercase tracking-tight">Schedule Sync</span>
             </button>
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-[#6B7280] p-6 text-center">
-          <p className="text-sm">
+        <div className="flex-1 flex items-center justify-center text-app-text-muted p-6 text-center bg-app-bg-soft">
+          <p className="text-sm font-medium">
             Select a team member to view their profile.
           </p>
         </div>

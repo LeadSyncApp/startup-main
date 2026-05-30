@@ -4,66 +4,92 @@ Houses UI views, states interfaces, layout modules, and sub-components for the *
 
 ## Files and Responsibilities
 
-### 📄 `ChatPanel.tsx`
+---
 
-Core chat display pane outputting typing indicators, incoming channels, and interactive text timeline.
+### 📄 `Conversations.tsx`
+
+The core Inbox and workspace interface. It manages customer conversation lists, chat timelines, active orders, and live-chat inputs.
+
+**Responsibilities & Features:**
+
+- Displays unified customer listing with quick sub-filtering (Channel vs Manual leads).
+- Houses state management for real-time WebSocket messaging and automated background polling.
+- Orchestrates conversational flow tracking, agent claim overrides, and direct order workflows.
 
 **Inter-Module Linkages:**
 
-This component is currently not imported or used anywhere in the application (unused file).
+- Imported by `src/App.tsx` as the main Route-level dashboard view.
+- Leverages types from `./types.ts` and formatting hooks/utilities from `./helpers.ts`.
+
+---
+
+### 📄 `ContactIntelligence.tsx`
+
+Right-side user insight and analytics layout panel that reveals CRM transactions and engagement analytics.
+
+**Responsibilities & Features:**
+
+- Parses active customer segments, transaction histories, total spends, and AI recommendation metrics.
+- Provides triggers for voice stream calling (`window.open("tel:...")`).
+- Transitions gracefully to display contextual operator internal notes.
+
+**Inter-Module Linkages:**
+
+- Rendered conditionally inside `./Conversations.tsx`.
+- Instantiates `./NotesPanel.tsx` inside its modular internal notes tab.
 
 ---
 
 ### 📄 `ConversationTags.tsx`
 
-Small widget lists assigning status priorities and labels to specific conversion rows.
+Lightweight, localStorage-based tag coloring and selector subscription model.
 
-**Inter-Module Linkages:**
+**Responsibilities & Features:**
 
-Called or imported by files in other folders:
-
-- **frontend: pages/dashboard/conversations/Conversations.tsx** (Line 8):
-
-  ```typescript
-
-  import{TagChips,TagButton}from'../../../components/conversations/ConversationTags';
-
-  ```
+- Exports the `TagChips` read-only indicator for visual cards on the inbox list directory.
+- Exports `TagButton` and `TagPicker` dynamic popup panels to assign label descriptors (e.g., VIP, Escalated).
+- Uses standard singleton notifier listeners to synchronize tags instantaneously across multiple sub-view tabs.
 
 ---
 
 ### 📄 `NotesPanel.tsx`
 
-Sidebar box accepting persistent notes shared strictly across HUMAN operators.
+Operators' notepad designed for collaborative context building.
 
-**Inter-Module Linkages:**
+**Responsibilities & Features:**
 
-Called or imported by files in other folders:
-
-- **frontend: pages/dashboard/conversations/Conversations.tsx** (Line 9):
-
-  ```typescript
-
-  import{NotesPanel}from'../../../components/conversations/NotesPanel';
-
-  ```
+- Stores operator notes and critical sync information securely by customer thread.
+- Interchanges smoothly with standard profile detail cards.
 
 ---
 
 ### 📄 `SavedReplies.tsx`
 
-Macros panel injecting predefined responses under specific template shortcuts.
+Intelligent macros selector facilitating repeatable canned shortcuts.
 
-**Inter-Module Linkages:**
+**Responsibilities & Features:**
 
-Called or imported by files in other folders:
-
-- **frontend: pages/dashboard/conversations/Conversations.tsx** (Line 6):
-
-  ```typescript
-
-  import{SavedRepliesPopup}from'../../../components/conversations/SavedReplies';
-
-  ```
+- Renders pre-defined template replies contextually.
+- Triggers typing overlays dynamically whenever an operator enters `/` during live input.
 
 ---
+
+### 📄 `types.ts`
+
+Centralized TypeScript interfaces for strict typing guidelines.
+
+**Responsibilities & Features:**
+
+- Standardizes the `Conversation` data model representation.
+- Standardizes the `Message` structures across sockets, APIs, and timeline elements.
+
+---
+
+### 📄 `helpers.ts`
+
+Core visual and data parsing utilities.
+
+**Responsibilities & Features:**
+
+- Generates dynamic, deterministic background color gradients from lead names.
+- Computes standard character initials, timestamp strings, relative duration formats, and system log message overrides.

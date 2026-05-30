@@ -578,12 +578,12 @@ export default function Orders() {
       {/* --- Delete Confirmation Modal --- */}
       <AnimatePresence>
         {deleteConfirmId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              className="fixed inset-0 bg-white/80 backdrop-blur-md"
               onClick={() => setDeleteConfirmId(null)}
             />
             <motion.div
@@ -621,12 +621,12 @@ export default function Orders() {
       {/* --- ACCEPT/REJECT PENDING APPROVAL DIALOG MODAL --- */}
       <AnimatePresence>
         {actionOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              className="fixed inset-0 bg-white/80 backdrop-blur-md"
               onClick={() => {
                 setActionOrder(null);
                 setActionType(null);
@@ -681,7 +681,7 @@ export default function Orders() {
       <AnimatePresence>
         {invoicePreview && (
           <div
-            className="fixed inset-0 z-50 flex flex-col"
+            className="fixed inset-0 z-[100] flex flex-col"
             onKeyDown={e => e.key === "Escape" && setInvoicePreview(null)}
             tabIndex={-1}
           >
@@ -689,7 +689,7 @@ export default function Orders() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              className="fixed inset-0 bg-white/80 backdrop-blur-md"
               onClick={() => setInvoicePreview(null)}
             />
             <motion.div

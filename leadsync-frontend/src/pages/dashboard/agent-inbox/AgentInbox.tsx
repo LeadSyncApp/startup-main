@@ -8,7 +8,7 @@ export default function AgentInbox() {
   const state = useAgentInboxState();
 
   return (
-    <div className="flex flex-col lg:flex-row h-full lg:h-[calc(100vh-80px)] bg-[#F8F9FB] -mx-6 lg:-mx-10 -my-8 lg:-my-10 font-['Inter',sans-serif] overflow-hidden">
+    <div className="flex flex-col lg:flex-row h-full lg:h-[calc(100vh-80px)] bg-app-bg -mx-6 lg:-mx-10 -my-8 lg:-my-10 overflow-hidden">
       <AgentLeftPanel
         mobileView={state.mobileView}
         loading={state.loading}

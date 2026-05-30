@@ -33,19 +33,19 @@ export default function ManualOrderDetailModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+          className="fixed inset-0 bg-white/80 backdrop-blur-md"
           onClick={onClose}
         />
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          className="bg-app-surface rounded-[24px] shadow-2xl w-full max-w-xl overflow-hidden relative z-10 border border-app flex flex-col font-sans select-none"
+          className="bg-white rounded-[24px] shadow-2xl w-full max-w-xl overflow-hidden relative z-10 border border-slate-200 flex flex-col font-sans select-none"
         >
           {/* Modal Header */}
           <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-[#0047cc] p-6 text-white text-left relative">

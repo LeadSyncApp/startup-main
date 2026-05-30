@@ -48,22 +48,22 @@ export function AgentLeftPanel({
 }: Props) {
   return (
     <div
-      className={`w-full lg:w-[380px] bg-app-surface border-r border-[#D9DADC] flex-col z-10 shrink-0 h-full overflow-hidden ${mobileView === "list" ? "flex" : "hidden lg:flex"}`}
+      className={`w-full lg:w-[380px] bg-app-surface border-r border-app flex-col z-10 shrink-0 h-full overflow-hidden ${mobileView === "list" ? "flex" : "hidden lg:flex"}`}
     >
-      <div className="p-4 border-b border-[#D9DADC] bg-app-surface flex flex-col gap-3 sticky top-0 z-20">
+      <div className="p-4 border-b border-app bg-app-surface flex flex-col gap-3 sticky top-0 z-20">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-[#1F2937]">Team Inbox</h2>
+          <h2 className="text-xl font-bold text-app-text">Team Inbox</h2>
         </div>
 
         <div className="relative">
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="w-full flex items-center justify-between px-3 py-2 bg-app-surface border border-[#D9DADC] hover:border-[#0052CC] rounded-lg shadow-sm text-sm transition-all"
+            className="w-full flex items-center justify-between px-3 py-2 bg-app-surface border border-app hover:border-app-primary rounded-lg shadow-sm text-sm transition-all"
           >
-            <span className="text-[#6B7280] flex items-center gap-2">
+            <span className="text-app-text-muted flex items-center gap-2">
               <Users className="w-4 h-4" /> Start a new chat...
             </span>
-            <span className="text-xs font-semibold text-[#0052CC]">
+            <span className="text-xs font-semibold text-app-primary">
               Select Agent
             </span>
           </button>
@@ -74,14 +74,14 @@ export function AgentLeftPanel({
                 className="fixed inset-0 z-30"
                 onClick={() => setIsDropdownOpen(false)}
               />
-              <div className="absolute top-full left-0 right-0 mt-1 bg-app-surface border border-[#E2E8F0] shadow-lg rounded-lg max-h-[300px] overflow-y-auto z-40">
-                <div className="p-2 border-b border-[#E2E8F0] sticky top-0 bg-app-surface">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-app-surface border border-app shadow-lg rounded-lg max-h-[300px] overflow-y-auto z-40">
+                <div className="p-2 border-b border-app sticky top-0 bg-app-surface">
+                  <p className="text-xs font-semibold text-app-text-muted uppercase tracking-wider">
                     Available Agents
                   </p>
                 </div>
                 {filteredAgents.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-slate-500">
+                  <div className="p-4 text-center text-sm text-app-text-muted">
                     No other agents found
                   </div>
                 ) : (
@@ -92,28 +92,28 @@ export function AgentLeftPanel({
                         handleSelectAgent(agent);
                         setIsDropdownOpen(false);
                       }}
-                      className="w-full flex items-center justify-between p-3 hover:bg-app-bg border-b border-[#F1F5F9] last:border-0 transition-colors text-left"
+                      className="w-full flex items-center justify-between p-3 hover:bg-app-bg border-b border-app last:border-0 transition-colors text-left"
                     >
                       <div className="flex items-center gap-3">
                         <div className="relative">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-app-muted font-bold uppercase text-xs">
+                          <div className="w-8 h-8 rounded-full bg-app-bg-soft flex items-center justify-center text-app-text-muted font-bold uppercase text-xs">
                             {agent.name.charAt(0)}
                           </div>
                           <span
-                            className={`absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white ${agent.isActive ? "bg-green-500" : "bg-slate-400"}`}
+                            className={`absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-app-surface ${agent.isActive ? "bg-green-500" : "bg-slate-400"}`}
                           />
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-[#1F2937]">
+                          <div className="text-sm font-semibold text-app-text">
                             {agent.name}
                           </div>
-                          <div className="text-[10px] text-slate-500">
+                          <div className="text-[10px] text-app-text-muted">
                             {agent.role}
                           </div>
                         </div>
                       </div>
                       <span
-                        className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${agent.isActive ? "bg-green-50 text-green-700" : "bg-slate-100 text-app-muted"}`}
+                        className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${agent.isActive ? "bg-green-500/10 text-green-500" : "bg-app-bg text-app-text-muted"}`}
                       >
                         {agent.isActive ? "Active" : "Away"}
                       </span>
@@ -126,29 +126,29 @@ export function AgentLeftPanel({
         </div>
 
         <div className="flex flex-col gap-2 mt-2">
-          <p className="text-xs font-semibold text-[#6B7280] uppercase tracking-widest pl-1">
+          <p className="text-xs font-semibold text-app-text-muted uppercase tracking-widest pl-1">
             Recent Chats
           </p>
           <div className="flex items-center gap-2 relative">
-            <Search className="w-4 h-4 text-[#6B7280] absolute left-3" />
+            <Search className="w-4 h-4 text-app-text-muted absolute left-3" />
             <input
               type="text"
               placeholder="Filter recent chats..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-app-bg border border-[#D9DADC] rounded-md text-sm outline-none focus:border-[#0052CC] focus:ring-1 focus:ring-[#0052CC] transition-shadow placeholder-[#6B7280]"
+              className="w-full pl-9 pr-3 py-2 bg-app-bg border border-app rounded-md text-sm outline-none focus:border-app-primary focus:ring-1 focus:ring-app-primary transition-shadow placeholder-app-text-muted"
             />
           </div>
         </div>
       </div>
 
-      <div className="flex bg-app-bg border-b border-[#E2E8F0] px-4 py-2 items-center justify-between z-10">
+      <div className="flex bg-app-bg border-b border-app px-4 py-2 items-center justify-between z-10">
         <button
           onClick={() => {
             if (isSelectionMode) clearSelection();
             else setIsSelectionMode(true);
           }}
-          className="text-xs font-semibold text-[#0052CC] hover:text-[#003d99] transition-colors"
+          className="text-xs font-semibold text-app-primary hover:opacity-80 transition-colors"
         >
           {isSelectionMode ? "Cancel Selection" : "Select Chats"}
         </button>
@@ -170,18 +170,18 @@ export function AgentLeftPanel({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#F8F9FB]">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-app-bg-soft">
         {loading ? (
-          <div className="text-center py-10 text-[#6B7280] text-sm">
+          <div className="text-center py-10 text-app-text-muted text-sm">
             Loading inbox...
           </div>
         ) : activeInboxAgents.length === 0 ? (
-          <div className="text-center py-10 text-[#6B7280] flex flex-col items-center">
-            <MessageSquare className="w-8 h-8 text-slate-300 mb-2" />
-            <p className="text-sm font-medium text-slate-700">
+          <div className="text-center py-10 text-app-text-muted flex flex-col items-center">
+            <MessageSquare className="w-8 h-8 text-app-border-strong mb-2" />
+            <p className="text-sm font-medium text-app-text">
               No active chats
             </p>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-app-text-muted mt-1">
               Select an agent from the dropdown to start chatting.
             </p>
           </div>
@@ -202,14 +202,14 @@ export function AgentLeftPanel({
                 }}
                 className={`relative overflow-visible cursor-pointer bg-app-surface border rounded-lg p-4 transition-all duration-200 hover:shadow-xs group ${
                   isSelected && !isSelectionMode
-                    ? "border-[#0052CC] ring-1 ring-[#0052CC]/50 shadow-xs"
+                    ? "border-app-primary ring-1 ring-app-primary/50 shadow-xs"
                     : isChecked
-                      ? "border-[#0052CC] ring-1 ring-[#0052CC]/30 bg-blue-50/30"
-                      : "border-[#E2E8F0] hover:border-slate-300"
+                      ? "border-app-primary ring-1 ring-app-primary/30 bg-app-primary-soft"
+                      : "border-app hover:border-app-border-strong"
                 }`}
               >
                 {isSelected && !isSelectionMode && (
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0052CC] rounded-l-lg" />
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-app-primary rounded-l-lg" />
                 )}
 
                 <div className="flex items-start justify-between">
@@ -221,7 +221,7 @@ export function AgentLeftPanel({
                           checked={isChecked}
                           onChange={(e) => toggleListSelection(agent.id, e as any)}
                           onClick={(e) => e.stopPropagation()}
-                          className="w-4 h-4 text-[#0052CC] border-gray-300 rounded focus:ring-[#0052CC] cursor-pointer"
+                          className="w-4 h-4 text-app-primary border-app bg-app-bg rounded focus:ring-app-primary cursor-pointer"
                         />
                       </div>
                     )}
@@ -230,7 +230,7 @@ export function AgentLeftPanel({
                         {agent.name.charAt(0).toUpperCase()}
                       </div>
                       <span
-                        className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white bg-green-500"
+                        className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-app-surface bg-green-500"
                         style={{
                           backgroundColor: agent.isActive ? "#22C55E" : "#94A3B8",
                         }}
@@ -241,10 +241,10 @@ export function AgentLeftPanel({
                       </span>
                     </div>
                     <div>
-                      <h4 className="text-xs sm:text-sm font-bold text-[#1F2937] leading-tight flex items-center gap-1.5">
+                      <h4 className="text-xs sm:text-sm font-bold text-app-text leading-tight flex items-center gap-1.5">
                         {agent.name}
                       </h4>
-                      <p className="text-[11px] text-slate-500 mt-1 font-medium select-none">
+                      <p className="text-[11px] text-app-text-muted mt-1 font-medium select-none">
                         {agent.role}
                       </p>
                     </div>
@@ -264,7 +264,7 @@ export function AgentLeftPanel({
                             listMenuOpenId === agent.id ? null : agent.id,
                           );
                         }}
-                        className="absolute right-0 opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition"
+                        className="absolute right-0 opacity-0 group-hover:opacity-100 p-1.5 text-app-text-muted hover:text-app-text hover:bg-app-bg-soft rounded-md transition"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
@@ -279,18 +279,18 @@ export function AgentLeftPanel({
                             }}
                           ></div>
                           <div
-                            className="absolute top-8 right-0 w-44 bg-app-surface border border-[#E2E8F0] shadow-lg rounded-md overflow-hidden z-30"
+                            className="absolute top-8 right-0 w-44 bg-app-surface border border-app shadow-lg rounded-md overflow-hidden z-30"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <button
                               onClick={(e) => handleDeleteSingleListChat(agent.id, false, e)}
-                              className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                              className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-500/10 transition-colors"
                             >
                               Delete (For me)
                             </button>
                             <button
                               onClick={(e) => handleDeleteSingleListChat(agent.id, true, e)}
-                              className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors border-t border-[#E2E8F0]"
+                              className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-500/10 transition-colors border-t border-app"
                             >
                               Delete (Both sides)
                             </button>

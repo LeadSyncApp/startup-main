@@ -76,15 +76,15 @@ export default function Home() {
       <section className="relative py-20 sm:py-32 lg:py-40 px-4 sm:px-6 lg:px-8 overflow-hidden">
         {/* Background gradient elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-100 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
+          <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full mix-blend-multiply filter blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-500/10 rounded-full mix-blend-multiply filter blur-3xl animate-pulse"></div>
         </div>
 
         <div className="relative mx-auto max-w-4xl text-center">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-cyan-50 border border-cyan-200">
-            <Sparkles className="h-4 w-4 text-cyan-600" />
-            <span className="text-sm font-semibold text-cyan-700">Lead Management for SMEs</span>
+          <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-app-primary-soft border border-[var(--app-primary-soft)]">
+            <Sparkles className="h-4 w-4 text-app-primary" />
+            <span className="text-sm font-semibold text-app-primary">Lead Management for SMEs</span>
           </div>
 
           {/* Main heading */}
@@ -152,8 +152,8 @@ export default function Home() {
                 className="group rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-8 hover:border-cyan-300 hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 cursor-default"
               >
                 {/* Icon container */}
-                <div className="rounded-xl bg-gradient-to-br from-cyan-100 to-blue-100 p-3 w-fit mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <Icon className="h-6 w-6 text-cyan-600" />
+                <div className="rounded-xl bg-app-primary-soft p-3 w-fit mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <Icon className="h-6 w-6 text-app-primary" />
                 </div>
 
                 {/* Content */}

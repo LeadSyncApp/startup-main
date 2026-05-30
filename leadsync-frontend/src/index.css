@@ -2,10 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Outfit:wght@100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+
 /* Base styles for LeadSync CRM - semantic color system and typography */
 @layer base {
   :root {
     color-scheme: light;
+    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+    --font-display: "Outfit", var(--font-sans);
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
     --app-bg: #f8fafc;
     --app-bg-soft: #f1f5f9;
     --app-surface: #ffffff;
@@ -31,45 +37,37 @@
     color-scheme: dark;
     --app-bg: #020617;
     --app-bg-soft: #0f172a;
-    --app-surface: #111827;
+    --app-surface: #0b1120;
     --app-surface-alt: #0f172a;
-    --app-text: #e2e8f0;
+    --app-text: #f1f5f9; /* High brightness slate for readability */
     --app-text-muted: #94a3b8;
-    --app-border: #334155;
-    --app-border-strong: #475569;
+    --app-border: #1e293b;
+    --app-border-strong: #334155;
     --app-primary: #22d3ee;
     --app-primary-strong: #06b6d4;
-    --app-primary-soft: rgba(34, 211, 238, 0.12);
+    --app-primary-soft: rgba(34, 211, 238, 0.1);
     --app-input-bg: #0f172a;
     --app-input-placeholder: #64748b;
     --app-scroll-track: #0f172a;
-    --app-scroll-thumb: #475569;
-    --app-scroll-thumb-hover: #64748b;
-    --app-backdrop: rgba(2, 6, 23, 0.72);
-    --app-shadow-soft: 0 1px 2px rgba(2, 6, 23, 0.3);
-    --app-shadow-lg: 0 24px 60px rgba(2, 6, 23, 0.5);
+    --app-scroll-thumb: #334155;
+    --app-scroll-thumb-hover: #475569;
+    --app-backdrop: rgba(2, 6, 23, 0.8);
+    --app-shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --app-shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.6);
   }
 
   body {
-    @apply antialiased;
+    @apply antialiased selection:bg-cyan-500/30;
     background-color: var(--app-bg);
     color: var(--app-text);
-    font-feature-settings: "rlig" 1 "calt" 1;
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
   }
 
-  h1 {
-    @apply font-bold tracking-tight;
-    color: var(--app-text);
-  }
-
-  h2 {
-    @apply font-bold;
-    color: var(--app-text);
-  }
-
-  h3 {
-    @apply font-semibold;
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight;
+    font-family: var(--font-display);
     color: var(--app-text);
   }
 
@@ -149,7 +147,7 @@
 
   /* Input styling with focus states */
   .input-base {
-    @apply w-full rounded-lg border px-4 py-2.5 placeholder-opacity-100 focus:outline-none focus:ring-2 transition-all duration-200;
+    @apply w-full rounded-lg border px-4 py-2.5 focus:outline-none focus:ring-2 transition-all duration-200;
     border-color: var(--app-border);
     background-color: var(--app-input-bg);
     color: var(--app-text);

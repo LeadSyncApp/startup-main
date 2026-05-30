@@ -141,11 +141,11 @@ export default function DashboardHome() {
   }
 
   return (
-    <div className="space-y-8 font-['Manrope']">
+    <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Dashboard Overview</h1>
-          <p className="text-slate-500 font-medium text-sm mt-1">Real-time performance metrics and business monitoring</p>
+          <h1 className="text-3xl font-extrabold text-app-text tracking-tight">Dashboard Overview</h1>
+          <p className="text-app-text-muted font-medium text-sm mt-1">Real-time performance metrics and business monitoring</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -204,29 +204,29 @@ export default function DashboardHome() {
             value={`₹${revenue30d.toLocaleString()}`} 
             trend={revenueTrend} 
             icon={DollarSign}
-            iconColor="text-blue-600"
-            iconBg="bg-blue-50"
+            iconColor="text-app-primary"
+            iconBg="bg-app-primary-soft"
           />
           <StatCard 
             label="Orders" 
             value={kpis.orders.toLocaleString()} 
             icon={ShoppingCart}
-            iconColor="text-indigo-600"
-            iconBg="bg-indigo-50"
+            iconColor="text-app-primary"
+            iconBg="bg-app-primary-soft"
           />
           <StatCard 
             label="AOV" 
             value={`₹${aov.toLocaleString()}`} 
             icon={TrendingUp}
-            iconColor="text-app-muted"
-            iconBg="bg-slate-100"
+            iconColor="text-app-text-muted"
+            iconBg="bg-app-bg-soft"
           />
           <StatCard 
             label="Leads" 
             value={kpis.leads.toLocaleString()} 
             icon={Users}
-            iconColor="text-blue-600"
-            iconBg="bg-blue-50"
+            iconColor="text-app-primary"
+            iconBg="bg-app-primary-soft"
           />
         </section>
 
@@ -234,11 +234,11 @@ export default function DashboardHome() {
         <section className="bg-app-surface p-6 rounded-[24px] border border-app shadow-sm">
           <div className="flex justify-between items-start mb-6">
             <div>
-              <h3 className="text-lg font-bold text-[#1e293b]">Revenue Trend</h3>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">Last 14 days activity</p>
+              <h3 className="text-lg font-bold text-app-text">Revenue Trend</h3>
+              <p className="text-xs text-app-text-muted font-medium mt-0.5">Last 14 days activity</p>
             </div>
             <button 
-              className="p-2.5 bg-app-bg rounded-xl text-slate-500 hover:bg-slate-100 transition"
+              className="p-2.5 bg-app-bg rounded-xl text-app-text-muted hover:bg-app-bg-soft transition"
               aria-label="Filter chart"
             >
               <Filter className="w-5 h-5" />
@@ -274,19 +274,19 @@ export default function DashboardHome() {
 
         {/* Quick Actions */}
         <section>
-          <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Quick Actions</h2>
+          <h2 className="text-[10px] font-bold text-app-text-muted uppercase tracking-widest mb-4">Quick Actions</h2>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <button 
                 onClick={() => navigate("/dashboard/leads")}
-                className="flex items-center justify-center gap-2 bg-[#eef4ff] text-[#0047cc] py-4 rounded-[16px] font-bold text-sm transition active:scale-95 hover:bg-blue-100"
+                className="flex items-center justify-center gap-2 bg-app-primary-soft text-app-primary py-4 rounded-[16px] font-bold text-sm transition active:scale-95 hover:opacity-80"
                 aria-label="Add lead"
               >
                 <Users className="w-4 h-4" /> Add Lead
               </button>
               <button 
                 onClick={() => navigate("/dashboard/conversations")}
-                className="flex items-center justify-center gap-2 bg-[#eef4ff] text-[#0047cc] py-4 rounded-[16px] font-bold text-sm transition active:scale-95 hover:bg-blue-100"
+                className="flex items-center justify-center gap-2 bg-app-primary-soft text-app-primary py-4 rounded-[16px] font-bold text-sm transition active:scale-95 hover:opacity-80"
                 aria-label="View inbox"
               >
                 <MessageSquare className="w-4 h-4" /> Inbox
@@ -296,9 +296,9 @@ export default function DashboardHome() {
         </section>
 
         {/* Top Products */}
-        <section className="bg-[#f0f4ff] p-6 rounded-[24px]">
-          <h3 className="text-lg font-bold text-[#1e293b] mb-5 flex items-center gap-2">
-            <Package className="w-5 h-5 text-blue-600" /> Top Products
+        <section className="bg-app-primary-soft p-6 rounded-[24px]">
+          <h3 className="text-lg font-bold text-app-text mb-5 flex items-center gap-2">
+            <Package className="w-5 h-5 text-app-primary" /> Top Products
           </h3>
           <div className="space-y-3">
             {analytics?.topProducts?.length > 0 ? (
@@ -348,14 +348,14 @@ function StatCard({ label, value, trend, icon: Icon, iconColor, iconBg }: StatCa
           <Icon className="w-5 h-5" />
         </div>
         {trend && (
-          <span className="text-[10px] font-bold text-green-500 bg-green-50 px-2 py-0.5 rounded-full">
+          <span className="text-[10px] font-bold text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full">
             {trend}
           </span>
         )}
       </div>
       <div>
-        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">{label}</p>
-        <h4 className="text-xl font-extrabold text-[#1e293b]">{value}</h4>
+        <p className="text-[11px] font-bold text-app-text-muted uppercase tracking-wide mb-0.5">{label}</p>
+        <h4 className="text-xl font-extrabold text-app-text">{value}</h4>
       </div>
     </div>
   );
@@ -363,19 +363,19 @@ function StatCard({ label, value, trend, icon: Icon, iconColor, iconBg }: StatCa
 
 function ProductRow({ rank, name, sub, count }: ProductRowProps) {
   return (
-    <div className="flex items-center justify-between bg-app-surface p-4 rounded-2xl border border-slate-50 hover:shadow-md transition">
+    <div className="flex items-center justify-between bg-app-surface p-4 rounded-2xl border border-app hover:shadow-md transition">
       <div className="flex items-center gap-4">
-        <span className="text-xs font-extrabold text-blue-600 bg-blue-50 w-8 h-8 flex items-center justify-center rounded-lg">
+        <span className="text-xs font-extrabold text-app-primary bg-app-primary-soft w-8 h-8 flex items-center justify-center rounded-lg">
           {rank}
         </span>
         <div>
-          <h5 className="text-sm font-bold text-[#1e293b]">{name}</h5>
-          <p className="text-[10px] font-medium text-slate-400">{sub}</p>
+          <h5 className="text-sm font-bold text-app-text">{name}</h5>
+          <p className="text-[10px] font-medium text-app-text-muted">{sub}</p>
         </div>
       </div>
       <div className="text-right">
-        <span className="text-sm font-extrabold text-[#1e293b]">{count}</span>
-        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">sold</p>
+        <span className="text-sm font-extrabold text-app-text">{count}</span>
+        <p className="text-[8px] font-bold text-app-text-muted uppercase tracking-tighter">sold</p>
       </div>
     </div>
   );
@@ -384,11 +384,11 @@ function ProductRow({ rank, name, sub, count }: ProductRowProps) {
 function AgentCard({ name, orders, initial }: AgentCardProps) {
   return (
     <div className="min-w-[140px] bg-app-surface p-5 rounded-[24px] border border-app shadow-sm text-center hover:shadow-md transition">
-      <div className="w-12 h-12 rounded-full bg-blue-50 text-[#2563eb] flex items-center justify-center mx-auto mb-3 font-extrabold text-lg">
+      <div className="w-12 h-12 rounded-full bg-app-primary-soft text-app-primary flex items-center justify-center mx-auto mb-3 font-extrabold text-lg">
         {initial}
       </div>
-      <h5 className="text-sm font-bold text-[#1e293b]">{name}</h5>
-      <p className="text-[11px] font-bold text-slate-400 mt-0.5">{orders} Orders</p>
+      <h5 className="text-sm font-bold text-app-text">{name}</h5>
+      <p className="text-[11px] font-bold text-app-text-muted mt-0.5">{orders} Orders</p>
       <div className="flex justify-center gap-0.5 mt-2">
         {[1, 2, 3].map((i) => (
           <motion.span key={i} className="text-[10px] text-amber-400">

@@ -7,6 +7,11 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-sans)', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'Outfit', 'sans-serif'],
+        mono: ['var(--font-mono)', 'JetBrains Mono', 'monospace'],
+      },
       colors: {
         primary: {
           50: '#eff6ff',
@@ -14,15 +19,15 @@ export default {
           200: '#bfdbfe',
           300: '#93c5fd',
           400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
+          500: '#0891b2', // Updated to match LeadSync brand cyan
+          600: '#0e7490',
+          700: '#155e75',
+          800: '#164e63',
+          900: '#164e63',
         },
         leadsync: {
-          accent: '#0ea5e9',
-          dark: '#0f172a',
+          accent: '#22d3ee',
+          dark: '#020617',
         },
         app: {
           bg: 'var(--app-bg)',
@@ -34,7 +39,8 @@ export default {
           border: 'var(--app-border)',
           'border-strong': 'var(--app-border-strong)',
           primary: 'var(--app-primary)',
-          'primary-strong': 'var(--app-primary-strong)'
+          'primary-strong': 'var(--app-primary-strong)',
+          'primary-soft': 'var(--app-primary-soft)',
         }
       },
     },
