@@ -69,6 +69,25 @@ async function main() {
   await prisma.user.upsert({
     where: {
       email_companyId: {
+        email: 'owner@urbanretail.com',
+        companyId: retailCompany.id,
+      },
+    },
+    update: {},
+    create: {
+      name: 'Urban Retail Owner',
+      email: 'owner@urbanretail.com',
+      passwordHash,
+      role: 'OWNER',
+      company: {
+        connect: { id: retailCompany.id },
+      },
+    },
+  })
+
+  await prisma.user.upsert({
+    where: {
+      email_companyId: {
         email: 'sneha@quickbite.com',
         companyId: foodCompany.id,
       },
@@ -79,6 +98,25 @@ async function main() {
       email: 'sneha@quickbite.com',
       passwordHash,
       role: 'AGENT', // ✅ correct
+      company: {
+        connect: { id: foodCompany.id },
+      },
+    },
+  })
+
+  await prisma.user.upsert({
+    where: {
+      email_companyId: {
+        email: 'owner@quickbite.com',
+        companyId: foodCompany.id,
+      },
+    },
+    update: {},
+    create: {
+      name: 'QuickBite Owner',
+      email: 'owner@quickbite.com',
+      passwordHash,
+      role: 'OWNER',
       company: {
         connect: { id: foodCompany.id },
       },
