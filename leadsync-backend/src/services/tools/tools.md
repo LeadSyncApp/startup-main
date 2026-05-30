@@ -10,7 +10,7 @@ Utility playground executing quick AI tests from local terminal flags.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Standalone diagnostic script intended for direct terminal or CLI execution. It is not imported by any other files in the application.
 
 ---
 
@@ -20,6 +20,28 @@ Checks system prompt structures against guardrails to maintain response quality.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Standalone verification script intended for direct terminal or CLI execution. It is not imported by other files, but it makes imports from other modules:
+
+- **backend: services/ai/intelligence.service.ts** (Line 5):
+
+  ```typescript
+
+  import{ intelligenceService }from"../ai/intelligence.service";
+
+  ```
+- **backend: services/ai/ai.service.ts** (Line 6):
+
+  ```typescript
+
+  import{ generateBotReply }from"../ai/ai.service";
+
+  ```
+- **backend: services/ai/orderParser.service.ts** (Line 7):
+
+  ```typescript
+
+  import{ orderParserService }from"../ai/orderParser.service";
+
+  ```
 
 ---

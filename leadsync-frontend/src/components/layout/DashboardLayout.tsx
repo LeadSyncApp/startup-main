@@ -10,7 +10,7 @@ import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 
 export default function DashboardLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const { socket } = useSocket();
   const { user } = useAuth();
 
@@ -85,6 +85,8 @@ export default function DashboardLayout() {
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
+        setSidebarOpen(true);
+      } else {
         setSidebarOpen(false);
       }
     };
@@ -104,16 +106,20 @@ export default function DashboardLayout() {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - Dynamic open/close container */}
       <div
         className={`
-          fixed inset-y-0 left-0 z-40 transform
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-          transition-transform duration-300 ease-in-out
-          lg:translate-x-0 lg:static
+          fixed inset-y-0 left-0 z-40 transform transition-all duration-300 ease-in-out h-full shrink-0
+          lg:static
+          ${sidebarOpen 
+            ? "translate-x-0 lg:w-64 opacity-100" 
+            : "-translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:pointer-events-none overflow-hidden"
+          }
         `}
       >
-        <Sidebar closeSidebar={() => setSidebarOpen(false)} />
+        <div className="w-64 h-full">
+          <Sidebar closeSidebar={() => setSidebarOpen(false)} />
+        </div>
       </div>
 
       {/* Main Content */}
@@ -121,9 +127,18 @@ export default function DashboardLayout() {
 
         {/* Desktop Top Bar */}
         <div className="hidden lg:flex sticky top-0 z-30 items-center justify-between px-10 py-3 border-b border-[var(--app-border)] bg-[var(--app-surface)]/85 backdrop-blur shadow-sm">
-          <p className="text-sm text-[var(--app-text-muted)]">
-            Welcome back, <span className="font-semibold text-[var(--app-text)]">{user?.name}</span>
-          </p>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="text-[var(--app-text)] hover:bg-[var(--app-bg-soft)] p-2 rounded-xl border border-[var(--app-border)] transition-colors shadow-sm bg-[var(--app-surface)] cursor-pointer"
+              title={sidebarOpen ? "Hide Sidebar" : "Show Sidebar"}
+            >
+              <Menu size={18} />
+            </button>
+            <p className="text-sm text-[var(--app-text-muted)]">
+              Welcome back, <span className="font-semibold text-[var(--app-text)]">{user?.name}</span>
+            </p>
+          </div>
           <div className="flex items-center gap-3">
             <GlobalSearch />
             <NotificationBell />

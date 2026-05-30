@@ -10,7 +10,57 @@ Declares Framer Motion fade-ins, sliding panels, and modal transition configs.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in other folders:
+
+- **frontend: pages/dashboard/new-order-arrivals/NewOrderArrivals.tsx** (Line 15):
+
+  ```typescript
+
+  import{PageTransition}from"@/components/ui/Animations";
+
+  ```
+- **frontend: pages/dashboard/revenue/Revenue.tsx** (Line 26):
+
+  ```typescript
+
+  import{PageTransition}from"@/components/ui/Animations";
+
+  ```
+- **frontend: pages/dashboard/leads/Leads.tsx** (Line 11):
+
+  ```typescript
+
+  import{PageTransition}from"@/components/ui/Animations";
+
+  ```
+- **frontend: pages/dashboard/orders/Orders.tsx** (Line 13):
+
+  ```typescript
+
+  import{PageTransition}from"@/components/ui/Animations";
+
+  ```
+- **frontend: pages/dashboard/reports/Reports.tsx** (Line 5):
+
+  ```typescript
+
+  import{PageTransition}from"@/components/ui/Animations";
+
+  ```
+- **frontend: pages/dashboard/broadcasts/Broadcasts.tsx** (Line 6):
+
+  ```typescript
+
+  import{PageTransition}from"@/components/ui/Animations";
+
+  ```
+- **frontend: pages/dashboard/settings/Settings.tsx** (Line 5):
+
+  ```typescript
+
+  import{PageTransition}from"@/components/ui/Animations";
+
+  ```
 
 ---
 
@@ -20,7 +70,22 @@ Placeholder layout showing instructions when table lists or feeds are blank.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in other folders:
+
+- **frontend: pages/dashboard/leads/Leads.tsx** (Line 10):
+
+  ```typescript
+
+  import{EmptyLeads}from"@/components/ui/EmptyState";
+
+  ```
+- **frontend: pages/dashboard/broadcasts/Broadcasts.tsx** (Line 7):
+
+  ```typescript
+
+  import{EmptyBroadcasts}from"@/components/ui/EmptyState";
+
+  ```
 
 ---
 
@@ -66,7 +131,36 @@ Elegant placeholder bars reflecting loading structures before actual data loads.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in other folders:
+
+- **frontend: pages/dashboard/new-order-arrivals/NewOrderArrivals.tsx** (Line 16):
+
+  ```typescript
+
+  import{TableSkeleton}from"@/components/ui/Skeleton";
+
+  ```
+- **frontend: pages/dashboard/revenue/Revenue.tsx** (Line 27):
+
+  ```typescript
+
+  import{ChartSkeleton,StatCardSkeleton}from"@/components/ui/Skeleton";
+
+  ```
+- **frontend: pages/dashboard/dashboard-home/DashboardHome.tsx** (Line 21):
+
+  ```typescript
+
+  import{DashboardSkeleton}from"@/components/ui/Skeleton";
+
+  ```
+- **frontend: pages/dashboard/leads/Leads.tsx** (Line 9):
+
+  ```typescript
+
+  import{TableSkeleton}from"@/components/ui/Skeleton";
+
+  ```
 
 ---
 
@@ -76,7 +170,7 @@ Adaptive rotating loader indicator of background API updates.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+This component is currently not imported or used anywhere in the application (unused file).
 
 ---
 
@@ -111,7 +205,7 @@ Tab selectors controlling sliding state transitions in settings panels.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+This component is currently not imported or used anywhere in the application (unused file).
 
 ---
 
@@ -153,7 +247,7 @@ Self-closing floating indicator populating message warnings.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+This component is currently not imported or used anywhere in the application (unused file).
 
 ---
 

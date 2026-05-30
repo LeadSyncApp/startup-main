@@ -6,7 +6,7 @@ Houses UI views, states interfaces, layout modules, and sub-components for the *
 
 ### 📄 `formatINR.ts`
 
-Handles rendering and interface presentation.
+Utility library for formatting currency in Indian Rupees (INR) and Indian date style formatting.
 
 **Inter-Module Linkages:**
 
@@ -19,15 +19,29 @@ Called or imported by files in other folders:
   import{ formatDateIN }from'../../utils/formatINR';
 
   ```
+- **frontend: pages/dashboard/revenue/Revenue.tsx** (Line 15):
+
+  ```typescript
+
+  import{ formatINR }from"@/utils/formatINR";
+
+  ```
+- **frontend: pages/dashboard/reports/Reports.tsx** (Line 4):
+
+  ```typescript
+
+  import{ formatINR }from"@/utils/formatINR";
+
+  ```
 
 ---
 
 ### 📄 `industryConfig.ts`
 
-Handles rendering and interface presentation.
+Configuration map defining customized pipeline step names, terms, icons, and colors based on the business industry field.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+This utility file is currently not imported or used anywhere in the application (unused file).
 
 ---

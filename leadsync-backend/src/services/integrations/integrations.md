@@ -103,6 +103,16 @@ Bridges order processors to checkout engines to create links or verify remote ho
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or exported by:
+
+- **backend: services/index.ts** (Line 15):
+
+  ```typescript
+
+  export{ paymentService }from"./integrations/payment.service";
+
+  ```
+
+  *(Note: This service has no other active callers or references in the codebase.)*
 
 ---

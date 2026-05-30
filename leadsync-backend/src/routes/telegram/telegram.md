@@ -1,3 +1,4 @@
+
 # Route Module: `routes/telegram`
 
 Responsible for handling HTTP traffic regarding the **TELEGRAM** domain context.
@@ -10,7 +11,15 @@ Dispatches incoming Telegram bot updates to the adapter layer or triggers verifi
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in the same folder:
+
+- **backend: routes/telegram/telegram.routes.ts** (Line 2):
+
+  ```typescript
+
+  import{ telegramWebhook }from'./telegram.controller'
+
+  ```
 
 ---
 

@@ -46,7 +46,15 @@ Dynamic status badge displaying numeric highlights for new notification alerts.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in the same/other folders:
+
+- **frontend: components/layout/DashboardLayout.tsx** (Line 4):
+
+  ```typescript
+
+  importNotificationBellfrom"./NotificationBell";
+
+  ```
 
 ---
 
@@ -56,6 +64,14 @@ Left-rail controls containing role-restricted routes and responsive navigation l
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in the same/other folders:
+
+- **frontend: components/layout/DashboardLayout.tsx** (Line 3):
+
+  ```typescript
+
+  importSidebarfrom"./Sidebar";
+
+  ```
 
 ---

@@ -1,3 +1,4 @@
+
 # Service Module: `services/messaging`
 
 Houses the business logic engines, calculators, integrations, and database transition sequences for the **MESSAGING** contextual layer.
@@ -46,7 +47,17 @@ Exposes standard API wrappers to dispatch formatted Telegram texts, media files,
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or exported by:
+
+- **backend: services/index.ts** (Line 21):
+
+  ```typescript
+
+  export{ createOrder }from"./messaging/telegram.service";
+
+  ```
+
+  *(Note: This service has no other active callers or references in the codebase.)*
 
 ---
 
@@ -56,7 +67,7 @@ Registers local service URLs with Telegram webhook lists.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+This service is currently not imported or used anywhere in the application (unused file).
 
 ---
 

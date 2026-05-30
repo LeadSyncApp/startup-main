@@ -1,4 +1,3 @@
-
 # Frontend Module: `src/components/leads`
 
 Houses UI views, states interfaces, layout modules, and sub-components for the **COMPONENTS/LEADS** domain layer.
@@ -11,7 +10,15 @@ Multi-selector bottom rails bulk updates assignments, deletions, or priority var
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in other folders:
+
+- **frontend: pages/dashboard/leads/Leads.tsx** (Line 21):
+
+  ```typescript
+
+  importBulkActionsPanelfrom"@/components/leads/BulkActionsPanel.tsx";
+
+  ```
 
 ---
 
@@ -21,7 +28,7 @@ Provides modal workspace reviewing customer chats history, custom metrics, and t
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+This component is currently not imported or used anywhere in the application (unused file).
 
 ---
 
@@ -31,7 +38,15 @@ Slides in from screen right to inspect inline profiles, details, and priorities 
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in other folders:
+
+- **frontend: pages/dashboard/leads/Leads.tsx** (Line 7):
+
+  ```typescript
+
+  importLeadDrawerfrom"@/components/leads/LeadDrawer";
+
+  ```
 
 ---
 
@@ -41,7 +56,15 @@ Grid drag-and-drop workflow tracking lead stages from PROSPECT to DELIVERED.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in other folders:
+
+- **frontend: pages/dashboard/leads/Leads.tsx** (Line 13):
+
+  ```typescript
+
+  importLeadsKanbanfrom"@/components/leads/LeadsKanban";
+
+  ```
 
 ---
 
@@ -51,7 +74,15 @@ Paginated workspace layout listing details columns and individual lead row modif
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in other folders:
+
+- **frontend: pages/dashboard/leads/Leads.tsx** (Line 6):
+
+  ```typescript
+
+  importLeadsTablefrom"@/components/leads/LeadsTable";
+
+  ```
 
 ---
 
@@ -61,7 +92,15 @@ Displays individual manual orders detail logs.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in other folders:
+
+- **frontend: pages/dashboard/leads/Leads.tsx** (Line 19):
+
+  ```typescript
+
+  importManualOrderDetailModalfrom"@/components/leads/ManualOrderDetailModal";
+
+  ```
 
 ---
 
@@ -71,7 +110,15 @@ Table tracking draft lists and human-input POS entries.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in other folders:
+
+- **frontend: pages/dashboard/leads/Leads.tsx** (Line 20):
+
+  ```typescript
+
+  importManualOrderTablefrom"@/components/leads/ManualOrderTable";
+
+  ```
 
 ---
 
@@ -81,7 +128,15 @@ Numeric KPI block detailed with dynamic sparkline vectors or visual delta stats.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in other folders:
+
+- **frontend: pages/dashboard/leads/Leads.tsx** (Line 17):
+
+  ```typescript
+
+  importMetricsCardfrom"@/components/leads/MetricsCard";
+
+  ```
 
 ---
 
@@ -91,6 +146,14 @@ Form popup building instant direct shopping carts on behalf of customer.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in other folders:
+
+- **frontend: pages/dashboard/leads/Leads.tsx** (Line 18):
+
+  ```typescript
+
+  importTakeOrderModalfrom"@/components/leads/TakeOrderModal";
+
+  ```
 
 ---

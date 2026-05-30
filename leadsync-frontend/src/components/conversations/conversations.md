@@ -10,7 +10,7 @@ Core chat display pane outputting typing indicators, incoming channels, and inte
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+This component is currently not imported or used anywhere in the application (unused file).
 
 ---
 

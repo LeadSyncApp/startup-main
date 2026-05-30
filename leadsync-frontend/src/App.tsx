@@ -20,7 +20,7 @@ const Leads          = lazy(() => import("./pages/dashboard/leads/Leads"));
 const Orders         = lazy(() => import("./pages/dashboard/orders/Orders"));
 const Revenue        = lazy(() => import("./pages/dashboard/revenue/Revenue"));
 const Reports        = lazy(() => import("./pages/dashboard/reports/Reports"));
-const Settings       = lazy(() => import("./pages/dashboard/settings/Settings"));
+const Settings       = lazy(() => import("./components/settings/Settings"));
 const UserManagement = lazy(() => import("./pages/dashboard/user-management/UserManagement"));
 const Broadcasts     = lazy(() => import("./pages/dashboard/broadcasts/Broadcasts"));
 const OwnerDashboard = lazy(() => import("./pages/dashboard/owner-dashboard/OwnerDashboard"));

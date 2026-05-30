@@ -1,3 +1,4 @@
+
 # Frontend Module: `src/pages/dashboard/agent-inbox`
 
 Houses UI views, states interfaces, layout modules, and sub-components for the **PAGES/DASHBOARD/AGENT-INBOX** domain layer.
@@ -10,7 +11,15 @@ Main conversational canvas feeding real-time message streams.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in the same folder:
+
+- **frontend: pages/dashboard/agent-inbox/AgentInbox.tsx** (Line 3):
+
+  ```typescript
+
+  import{AgentCenterPanel}from"./AgentCenterPanel";
+
+  ```
 
 ---
 
@@ -20,7 +29,15 @@ Lists historical bubble logs, time indicators, and sender tags.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in the same folder:
+
+- **frontend: pages/dashboard/agent-inbox/AgentCenterPanel.tsx** (Line 3):
+
+  ```typescript
+
+  import{AgentChatFeed}from"./AgentChatFeed";
+
+  ```
 
 ---
 
@@ -30,7 +47,15 @@ Input footer containing quick buttons for voice translations and saved replies.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in the same folder:
+
+- **frontend: pages/dashboard/agent-inbox/AgentCenterPanel.tsx** (Line 4):
+
+  ```typescript
+
+  import{AgentChatFooter}from"./AgentChatFooter";
+
+  ```
 
 ---
 
@@ -40,7 +65,7 @@ Header bar details of current customer channels and manual controls.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+This component is currently not imported or used anywhere in the application (unused file).
 
 ---
 
@@ -50,7 +75,15 @@ Confirmation popups executing operator updates of claims actions.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in the same folder:
+
+- **frontend: pages/dashboard/agent-inbox/AgentInbox.tsx** (Line 5):
+
+  ```typescript
+
+  import{AgentConfirmModal}from"./AgentConfirmModal";
+
+  ```
 
 ---
 
@@ -78,7 +111,15 @@ Sidebar displaying current active conversations queues.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in the same folder:
+
+- **frontend: pages/dashboard/agent-inbox/AgentInbox.tsx** (Line 2):
+
+  ```typescript
+
+  import{AgentLeftPanel}from"./AgentLeftPanel";
+
+  ```
 
 ---
 
@@ -88,7 +129,15 @@ Right-bar dashboard capturing quick order records, transaction metadata, and log
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in the same folder:
+
+- **frontend: pages/dashboard/agent-inbox/AgentInbox.tsx** (Line 4):
+
+  ```typescript
+
+  import{AgentRightPanel}from"./AgentRightPanel";
+
+  ```
 
 ---
 
@@ -98,7 +147,50 @@ Enums and interfaces organizing inbox states.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in the same folder:
+
+- **frontend: pages/dashboard/agent-inbox/AgentLeftPanel.tsx** (Line 3):
+
+  ```typescript
+
+  import{UserData}from"./types";
+
+  ```
+- **frontend: pages/dashboard/agent-inbox/AgentCenterPanel.tsx** (Line 5):
+
+  ```typescript
+
+  import{UserData}from"./types";
+
+  ```
+- **frontend: pages/dashboard/agent-inbox/AgentRightPanel.tsx** (Line 2):
+
+  ```typescript
+
+  import{UserData}from"./types";
+
+  ```
+- **frontend: pages/dashboard/agent-inbox/useInboxState.ts** (Line 6):
+
+  ```typescript
+
+  import{UserData,ConfirmModalState}from"./types";
+
+  ```
+- **frontend: pages/dashboard/agent-inbox/AgentChatFooter.tsx** (Line 3):
+
+  ```typescript
+
+  import{UserData}from"./types";
+
+  ```
+- **frontend: pages/dashboard/agent-inbox/AgentConfirmModal.tsx** (Line 1):
+
+  ```typescript
+
+  import{ConfirmModalState}from"./types";
+
+  ```
 
 ---
 
@@ -108,6 +200,14 @@ Helper managing react selectors, active state caches, and timeline messages.
 
 **Inter-Module Linkages:**
 
-No external linkages or imports from other directories.
+Called or imported by files in the same folder:
+
+- **frontend: pages/dashboard/agent-inbox/AgentInbox.tsx** (Line 1):
+
+  ```typescript
+
+  import{ useAgentInboxState }from"./useInboxState";
+
+  ```
 
 ---
