@@ -109,7 +109,7 @@ export const INDUSTRY_CONFIGS: Record<BusinessType, IndustryConfig> = {
         },
         colors: {
             primary: 'gray-500',
-            badge: 'bg-gray-100 text-gray-800'
+            badge: 'bg-app-bg-soft text-app-muted'
         }
     }
 };

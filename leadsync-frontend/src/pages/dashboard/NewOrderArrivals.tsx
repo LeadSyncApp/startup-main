@@ -196,7 +196,7 @@ export default function NewOrderArrivals() {
     if (history.isExistingCustomer) {
       return { text: "Returning Customer", color: "bg-green-100 text-green-700 border-green-200" };
     }
-    return { text: "New Customer", color: "bg-gray-100 text-gray-700 border-gray-200" };
+    return { text: "New Customer", color: "bg-app-bg-soft text-app-muted border-app-border" };
   };
 
   const handleSelect = (orderId: string) => {

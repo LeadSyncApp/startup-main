@@ -32,6 +32,7 @@ export default {
           surface: withAlpha('--app-surface-rgb'),
           'surface-alt': withAlpha('--app-surface-alt-rgb'),
           text: withAlpha('--app-text-rgb'),
+          muted: withAlpha('--app-text-muted-rgb'),
           'text-muted': withAlpha('--app-text-muted-rgb'),
           border: withAlpha('--app-border-rgb'),
           'border-strong': withAlpha('--app-border-strong-rgb'),

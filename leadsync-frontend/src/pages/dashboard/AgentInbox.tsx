@@ -695,7 +695,7 @@ export default function AgentInbox() {
                               toggleListSelection(agent.id, e as any)
                             }
                             onClick={(e) => e.stopPropagation()}
-                            className="w-4 h-4 text-app-primary border-gray-300 rounded focus:ring-app-primary cursor-pointer"
+                            className="w-4 h-4 text-app-primary border-app-border-strong rounded focus:ring-app-primary cursor-pointer"
                           />
                         </div>
                       )}
