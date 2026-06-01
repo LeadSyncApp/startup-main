@@ -96,7 +96,7 @@ export default function DashboardLayout() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[var(--app-bg)] text-[var(--app-text)] flex relative overflow-hidden">
+    <div className="h-[100dvh] w-full bg-[var(--app-bg)] text-[var(--app-text)] flex relative overflow-hidden">
 
       {/* Mobile Overlay */}
       {sidebarOpen && (
@@ -110,20 +110,20 @@ export default function DashboardLayout() {
       <div
         className={`
           fixed inset-y-0 left-0 z-40 transform transition-all duration-300 ease-in-out h-full shrink-0
-          lg:static
+          lg:relative lg:self-stretch
           ${sidebarOpen 
             ? "translate-x-0 lg:w-64 opacity-100" 
-            : "-translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:pointer-events-none overflow-hidden"
+            : "-translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:pointer-events-none"
           }
         `}
       >
-        <div className="w-64 h-full">
+        <div className="w-64 h-full relative overflow-hidden">
           <Sidebar closeSidebar={() => setSidebarOpen(false)} />
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col relative z-10 min-h-screen">
+      <div className="flex-1 flex flex-col relative z-10 h-full overflow-y-auto bg-[var(--app-bg)]">
 
         {/* Desktop Top Bar */}
         <div className="hidden lg:flex sticky top-0 z-30 items-center justify-between px-10 py-3 border-b border-[var(--app-border)] bg-[var(--app-surface)]/85 backdrop-blur shadow-sm">

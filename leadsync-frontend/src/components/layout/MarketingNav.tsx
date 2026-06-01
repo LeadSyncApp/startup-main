@@ -3,7 +3,6 @@
  */
 
 import { Link, useNavigate } from "react-router-dom";
-import { Zap } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../ui/ThemeToggle";
 
@@ -25,7 +24,7 @@ export default function MarketingNav() {
           to="/"
           className="flex items-center gap-2 font-bold text-[var(--app-text)]"
         >
-          <Zap className="h-8 w-8 text-cyan-500" />
+          <img src="/favicon.svg" alt="LeadSync Logo" className="h-8 w-8 rounded-md object-contain" />
           <span className="text-xl">LeadSync</span>
         </Link>
 
