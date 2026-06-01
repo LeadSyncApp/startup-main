@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Zap, Mail, Lock, User, Building2, ArrowRight } from "lucide-react";
+import { Mail, Lock, User, Building2, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api"; // ✅ centralized API
@@ -56,11 +56,9 @@ export default function Signup() {
         className="w-full max-w-md"
       >
         <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="bg-cyan-600 rounded-xl p-2.5 shadow-sm">
-            <Zap className="h-8 w-8 text-white" />
-          </div>
+          <img src="/favicon.svg" alt="LeadSync Logo" className="h-12 w-12 rounded-xl shadow-sm object-contain" />
           <div>
-            <span className="text-3xl font-bold text-cyan-500 dark:text-cyan-400">LeadSync</span>
+            <span className="text-3xl font-bold text-[var(--app-text)]">LeadSync</span>
             <p className="text-xs text-[var(--app-text-muted)]">CRM Platform</p>
           </div>
         </div>
