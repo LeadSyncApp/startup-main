@@ -15,8 +15,8 @@ export function AgentChatFooter({
 }: Props) {
   return (
     <>
-      <div className="px-4 py-2.5 bg-app-bg border-t border-[#D9DADC] flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1 select-none">
+      <div className="px-4 py-2.5 bg-app-surface border-t border-app flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-bold text-app-text-muted uppercase tracking-widest flex items-center gap-1 select-none">
           <Sparkles className="w-3 h-3 text-amber-500 animate-pulse" />{" "}
           Collaboration Chips:
         </span>
@@ -41,7 +41,7 @@ export function AgentChatFooter({
           <button
             key={idx}
             onClick={() => handleSendNote(chip.text)}
-            className="text-[11px] font-medium px-2.5 py-1 bg-app-surface hover:bg-blue-50 text-app-muted hover:text-[#0052CC] border border-app hover:border-blue-200 rounded-full transition-all shadow-xs cursor-pointer select-none active:scale-95"
+            className="text-[11px] font-semibold px-2.5 py-1 bg-app-bg hover:bg-app-primary-soft text-app-text-muted hover:text-app-primary border border-app hover:border-app-primary/30 rounded-full transition-all shadow-xs cursor-pointer select-none active:scale-95"
           >
             {chip.label}
           </button>

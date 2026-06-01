@@ -18,14 +18,14 @@ export default function MetricsCard({
   iconColor = "text-blue-600",
 }: MetricsCardProps) {
   return (
-    <div className="bg-app-surface rounded-lg p-4 border border-[#E2E8F0] shadow-sm flex items-center justify-between">
+    <div className="bg-app-surface rounded-lg p-4 border border-app shadow-sm flex items-center justify-between">
       <div className="space-y-1">
-        <p className="text-sm font-medium text-slate-500 font-sans">{title}</p>
+        <p className="text-sm font-medium text-app-text-muted font-sans">{title}</p>
         <div className="text-2xl font-bold text-app-text font-sans">{value}</div>
-        <p className="text-xs text-slate-400 font-sans">{description}</p>
+        <p className="text-xs text-app-text-muted/60 font-sans">{description}</p>
       </div>
-      <div className={`p-3 rounded-md ${iconBgColor}`}>
-        <Icon size={20} className={iconColor} />
+      <div className={`p-3 rounded-md ${iconBgColor || "bg-app-primary/10"}`}>
+        <Icon size={20} className={iconColor || "text-app-primary"} />
       </div>
     </div>
   );

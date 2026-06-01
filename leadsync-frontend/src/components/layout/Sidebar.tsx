@@ -142,7 +142,7 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
                 onClick={closeSidebar}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${isActive
-                    ? "bg-cyan-50/70 text-cyan-700 border border-cyan-100/70"
+                    ? "bg-app-primary-soft text-app-primary border border-[var(--app-primary-soft)]"
                     : "text-[var(--app-text-muted)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-soft)]"
                   }`
                 }
@@ -156,7 +156,7 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
         {/* User Section - Tucked closely underneath the navigation */}
         <div className="mt-6 px-3 pt-4 border-t border-[var(--app-border)]">
           <div className="flex items-center gap-3 px-3 py-1.5 mb-3">
-            <div className="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center text-cyan-700 font-bold text-xs shrink-0">
+            <div className="w-8 h-8 rounded-full bg-app-primary-soft flex items-center justify-center text-app-primary font-bold text-xs shrink-0">
               {user?.name?.charAt(0)?.toUpperCase() || "?"}
             </div>
             <div className="min-w-0 flex-1">

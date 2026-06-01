@@ -15,7 +15,7 @@ const OrderTracking = lazy(() => import("./pages/OrderTracking"));
 // ─── Lazy dashboard pages ────────────────────────────────────────
 const DashboardHome  = lazy(() => import("./pages/dashboard/dashboard-home/DashboardHome"));
 const AgentInbox     = lazy(() => import("./pages/dashboard/agent-inbox/AgentInbox"));
-const Conversations  = lazy(() => import("./pages/dashboard/conversations/Conversations"));
+const Conversations  = lazy(() => import("./components/conversations/Conversations"));
 const Leads          = lazy(() => import("./pages/dashboard/leads/Leads"));
 const Orders         = lazy(() => import("./pages/dashboard/orders/Orders"));
 const Revenue        = lazy(() => import("./pages/dashboard/revenue/Revenue"));
@@ -28,10 +28,10 @@ const OwnerDashboard = lazy(() => import("./pages/dashboard/owner-dashboard/Owne
 // ─── Route-level loading fallback ───────────────────────────────
 function PageFallback() {
   return (
-    <div className="flex-1 flex items-center justify-center min-h-[60vh]">
+    <div className="flex-1 flex items-center justify-center min-h-[60vh] bg-[var(--app-bg)]">
       <div className="flex flex-col items-center gap-4">
-        <div className="h-8 w-8 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin" />
-        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading…</span>
+        <div className="h-10 w-10 rounded-full border-4 border-app-primary border-t-transparent animate-spin" />
+        <span className="text-xs font-bold text-[var(--app-text-muted)] uppercase tracking-widest animate-pulse">Loading…</span>
       </div>
     </div>
   );

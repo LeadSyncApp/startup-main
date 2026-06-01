@@ -21,12 +21,12 @@ import ManualOrderTable from "@/components/leads/ManualOrderTable";
 import BulkActionsPanel from "@/components/leads/BulkActionsPanel.tsx";
 
 const LeadsHeader = ({ totalLeads }: { totalLeads: number }) => (
-  <div className="flex flex-col font-sans">
+  <div className="flex flex-col">
     <h1 className="text-3xl font-bold text-app-text tracking-tight mb-3">Leads CRM</h1>
     <div className="flex items-center gap-3">
       <div className="inline-flex items-center bg-app-surface px-3 py-1.5 rounded-full border border-app shadow-sm">
-        <span className="text-sm font-medium text-app-muted">Total Leads</span>
-        <span className="ml-2 text-sm font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full">{totalLeads}</span>
+        <span className="text-sm font-medium text-app-text-muted">Total Leads</span>
+        <span className="ml-2 text-sm font-bold text-app-primary bg-app-primary-soft px-2.5 py-0.5 rounded-full">{totalLeads}</span>
       </div>
     </div>
   </div>
@@ -43,8 +43,8 @@ const Tab = ({ label, isActive, onClick }: TabProps) => (
     onClick={onClick}
     className={`pb-4 px-2 text-sm font-medium transition-colors border-b-2 relative -mb-px whitespace-nowrap ${
       isActive 
-        ? "border-blue-600 text-blue-600" 
-        : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+        ? "border-app-primary text-app-primary" 
+        : "border-transparent text-app-text-muted hover:text-app-text hover:border-[var(--app-border)]"
     }`}
   >
     {label}
@@ -55,7 +55,7 @@ const IconButton = ({ icon: Icon, onClick, title }: { icon: React.ElementType, o
   <button
     onClick={onClick}
     title={title}
-    className="p-2 text-slate-500 hover:text-slate-700 bg-app-surface border border-app rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
+    className="p-2 text-app-text-muted hover:text-app-text bg-app-surface border border-app rounded-lg focus:outline-none focus:ring-2 focus:ring-app-primary/20 transition-colors"
   >
     <Icon size={16} />
   </button>
@@ -572,7 +572,7 @@ export default function Leads() {
   useEffect(() => { setSelectedLeads(new Set()); }, [filter, search, channelFilter, priorityFilter, statusFilter, dateRangeFilter, showNewOrderArrivalsOnly]);
 
   return (
-    <PageTransition className="bg-[#F8FAFC] min-h-screen font-sans">
+    <PageTransition className="bg-app-bg min-h-screen">
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 md:space-y-8 w-full block">
         {/* 1. Header & Primary Action */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
@@ -581,29 +581,44 @@ export default function Leads() {
             {showNewOrderArrivalsOnly && (
               <button
                 onClick={() => toggleNewOrderArrivals(false)}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium underline px-2"
+                className="text-app-primary hover:opacity-80 text-sm font-bold underline px-2 transition-all active:scale-95"
               >
                 Clear Arrivals Filter
               </button>
             )}
-            <button
+            <motion.button
               id="manual-entry-and-take-order-btn"
+              initial={{ scale: 1 }}
+              whileHover={{ scale: 1.03, boxShadow: "0 0 25px rgba(249, 115, 22, 0.5)" }}
+              whileTap={{ scale: 0.97 }}
+              animate={{ 
+                backgroundColor: ["#f97316", "#fb923c", "#f97316"],
+                boxShadow: [
+                  "0 4px 14px 0 rgba(249, 115, 22, 0.39)",
+                  "0 4px 20px 0 rgba(249, 115, 22, 0.6)",
+                  "0 4px 14px 0 rgba(249, 115, 22, 0.39)"
+                ]
+              }}
+              transition={{ 
+                backgroundColor: { repeat: Infinity, duration: 3, ease: "easeInOut" },
+                boxShadow: { repeat: Infinity, duration: 2, ease: "easeInOut" }
+              }}
               onClick={() => {
                 setPrefCustomerName("");
                 setPrefPhoneNumber("");
                 setShowCreateModal(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors w-full sm:w-auto justify-center shadow-sm h-10 mt-1 active:scale-95 cursor-pointer"
+              className="flex items-center gap-2 px-6 py-3 text-white text-sm font-black rounded-xl transition-all w-full sm:w-auto justify-center cursor-pointer border-2 border-white/20"
             >
-              <Plus size={16} />
+              <Plus size={20} strokeWidth={3} />
               <span>Manual Entry / Take Order</span>
-            </button>
+            </motion.button>
           </div>
         </div>
 
         {/* 2. Tabs */}
         {!showNewOrderArrivalsOnly && (
-          <div className="flex space-x-6 border-b border-app overflow-x-auto font-sans">
+          <div className="flex space-x-6 border-b border-app overflow-x-auto">
             <Tab label="All" isActive={filter === "all"} onClick={() => setFilter("all")} />
             <Tab label="Mine" isActive={filter === "me"} onClick={() => setFilter("me")} />
             <Tab label="Unassigned" isActive={filter === "unassigned"} onClick={() => setFilter("unassigned")} />
@@ -618,59 +633,77 @@ export default function Leads() {
             value={leads.filter((l: any) => l.pendingOrderState === "PENDING_APPROVAL").length} 
             description="Last 24 hours" 
             icon={ShoppingCart} 
-            iconBgColor="bg-blue-50" 
-            iconColor="text-blue-600" 
+            iconBgColor="bg-app-primary/10" 
+            iconColor="text-app-primary" 
           />
           <MetricsCard 
             title="High Priority Leads" 
             value={leads.filter((l: any) => l.priority === "URGENT" || l.priority === "HIGH").length} 
             description="Needs immediate action" 
             icon={AlertTriangle} 
-            iconBgColor="bg-amber-50" 
-            iconColor="text-amber-600" 
+            iconBgColor="bg-red-500/10" 
+            iconColor="text-red-500" 
           />
           <MetricsCard 
             title="AI Conversion Score" 
             value={averageAiScore} 
             description="Average prediction" 
             icon={Activity} 
-            iconBgColor="bg-emerald-50" 
-            iconColor="text-emerald-600" 
+            iconBgColor="bg-emerald-500/10" 
+            iconColor="text-emerald-500" 
           />
           <MetricsCard 
             title="Pipeline Revenue" 
             value={totalPipelineRevenue} 
             description="Total potential value" 
             icon={DollarSign} 
-            iconBgColor="bg-purple-50" 
-            iconColor="text-purple-600" 
+            iconBgColor="bg-indigo-500/10" 
+            iconColor="text-indigo-500" 
           />
         </div>
 
         {/* 4. CRM Action Toolbar */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-app-surface p-2 rounded-xl border border-app shadow-sm">
           <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto px-2">
-            <div className="relative w-full sm:w-64 shrink-0">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+            <div className="relative w-full sm:w-80 shrink-0">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-app-primary h-5 w-5" strokeWidth={3} />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search leads..."
-                className="w-full pl-9 pr-8 py-2 text-sm border border-app bg-app-bg rounded-lg focus:outline-none focus:bg-app-surface focus:border-blue-300 focus:ring-2 focus:ring-blue-100 transition-colors"
+                className="w-full pl-11 pr-10 py-2.5 text-sm font-bold border-2 border-app bg-app-bg-soft rounded-xl focus:outline-none focus:bg-app-surface focus:border-app-primary/40 focus:ring-4 focus:ring-app-primary/10 transition-all placeholder:text-app-text-muted/50 text-app-text shadow-sm"
               />
               {search && (
-                <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
-                  <X size={13} />
+                <button onClick={() => setSearch("")} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-app-text-muted hover:text-red-500 transition-colors">
+                  <X size={16} strokeWidth={3} />
                 </button>
               )}
             </div>
             
+            {/* Channel Filter */}
+            <div className="relative shrink-0">
+              <select
+                value={channelFilter}
+                onChange={(e) => setChannelFilter(e.target.value)}
+                className="appearance-none flex items-center gap-4 pl-4 pr-10 py-2.5 text-sm font-black text-app-text bg-app-bg-soft border-2 border-app rounded-xl hover:bg-app-bg-soft/80 focus:outline-none focus:ring-4 focus:ring-app-primary/10 transition-all cursor-pointer shadow-sm shadow-app-primary/5 uppercase tracking-tight"
+              >
+                <option value="ALL">All Channels</option>
+                <option value="TELEGRAM">Telegram</option>
+                <option value="INSTAGRAM">Instagram</option>
+                <option value="WHATSAPP">WhatsApp</option>
+                <option value="WEBSITE">Offline/Web</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-app-primary">
+                <ChevronDown size={16} strokeWidth={3} />
+              </div>
+            </div>
+
             {/* Real-time Status Dropdown filter */}
-            <div className="relative shrink-0 font-sans">
+            <div className="relative shrink-0">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none flex items-center gap-2 pl-3 pr-8 py-2 text-sm font-medium text-app-muted bg-app-surface border border-app rounded-lg hover:bg-app-bg focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors cursor-pointer"
+                className="appearance-none flex items-center gap-4 pl-4 pr-10 py-2.5 text-sm font-black text-app-text bg-app-bg-soft border-2 border-app rounded-xl hover:bg-app-bg-soft/80 focus:outline-none focus:ring-4 focus:ring-app-primary/10 transition-all cursor-pointer shadow-sm shadow-app-primary/5 uppercase tracking-tight"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="OPEN">Open Status</option>
@@ -681,8 +714,8 @@ export default function Leads() {
                 <option value="HIGH">High Priority</option>
                 <option value="NORMAL">Normal Priority</option>
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400">
-                <ChevronDown size={14} />
+              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-app-primary">
+                <ChevronDown size={16} strokeWidth={3} />
               </div>
             </div>
 
@@ -691,7 +724,7 @@ export default function Leads() {
               <select
                 value={dateRangeFilter}
                 onChange={(e) => setDateRangeFilter(e.target.value)}
-                className="appearance-none flex items-center gap-2 pl-8 pr-8 py-2 text-sm font-medium text-app-muted bg-app-surface border border-app rounded-lg hover:bg-app-bg focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors cursor-pointer"
+                className="appearance-none flex items-center gap-4 pl-10 pr-10 py-2.5 text-sm font-black text-app-text bg-app-bg-soft border-2 border-app rounded-xl hover:bg-app-bg-soft/80 focus:outline-none focus:ring-4 focus:ring-app-primary/10 transition-all cursor-pointer shadow-sm shadow-app-primary/5 uppercase tracking-tight"
               >
                 <option value="ALL">All Dates</option>
                 <option value="TODAY">Today</option>
@@ -699,27 +732,27 @@ export default function Leads() {
                 <option value="LAST_7_DAYS">Last 7 Days</option>
                 <option value="LAST_30_DAYS">Last 30 Days</option>
               </select>
-              <div className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-slate-400">
-                <Calendar size={14} />
+              <div className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-app-primary">
+                <Calendar size={16} strokeWidth={3} />
               </div>
-              <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400">
-                <ChevronDown size={14} />
+              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-app-primary">
+                <ChevronDown size={16} strokeWidth={3} />
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2 px-2 pb-2 md:pb-0 w-full md:w-auto justify-end">
-            <div className="flex bg-slate-100 p-1 rounded-lg mr-2 shrink-0">
+            <div className="flex bg-app-bg-soft p-1 rounded-lg mr-2 shrink-0">
               <button
                 onClick={() => setViewMode("table")}
                 title="Table view"
-                className={`p-1.5 rounded transition ${viewMode === "table" ? "bg-app-surface shadow text-blue-600" : "text-slate-400 hover:text-app-muted"}`}
+                className={`p-1.5 rounded transition ${viewMode === "table" ? "bg-app-surface shadow text-app-primary" : "text-app-text-muted hover:text-app-text"}`}
               >
                 <List size={16} />
               </button>
               <button
                 onClick={() => setViewMode("kanban")}
                 title="Kanban view"
-                className={`p-1.5 rounded transition ${viewMode === "kanban" ? "bg-app-surface shadow text-blue-600" : "text-slate-400 hover:text-app-muted"}`}
+                className={`p-1.5 rounded transition ${viewMode === "kanban" ? "bg-app-surface shadow text-app-primary" : "text-app-text-muted hover:text-app-text"}`}
               >
                 <LayoutGrid size={16} />
               </button>
@@ -731,9 +764,9 @@ export default function Leads() {
 
         {/* 5. Warning / Active Filter Notice */}
         {!loading && showNewOrderArrivalsOnly && (
-          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-            <ShoppingCart size={16} className="text-blue-600" />
-            <span className="text-blue-800 font-medium text-sm">
+          <div className="flex items-center gap-2 bg-app-primary/10 border border-app-primary/20 rounded-xl px-4 py-3">
+            <ShoppingCart size={16} className="text-app-primary" />
+            <span className="text-app-text font-bold text-sm">
               Showing only new order arrivals - any available agent can claim these orders
             </span>
           </div>
@@ -743,12 +776,12 @@ export default function Leads() {
         loadingManualLeads ? (
           <TableSkeleton rows={8} cols={8} />
         ) : filteredManualLeads.length === 0 ? (
-          <div className="bg-app-surface rounded-[20px] p-12 text-center border border-app shadow-sm font-sans flex flex-col items-center justify-center">
-            <div className="p-4 bg-blue-50 text-blue-600 rounded-full mb-4">
-              <Plus size={32} />
+          <div className="bg-app-surface rounded-[24px] p-16 text-center border border-app shadow-lg font-sans flex flex-col items-center justify-center">
+            <div className="p-5 bg-app-primary/10 text-app-primary rounded-full mb-6">
+              <Plus size={40} strokeWidth={3} />
             </div>
-            <h3 className="text-lg font-bold text-slate-800 font-sans">No Manual Entries</h3>
-            <p className="text-slate-500 mt-2 max-w-sm text-sm font-sans">Create a new manual entry using the "Manual Entry / Take Order" button above to record your first offline lead.</p>
+            <h3 className="text-xl font-black text-app-text font-sans">No Manual Entries</h3>
+            <p className="text-app-text-muted mt-3 max-w-sm text-sm font-bold uppercase tracking-wider">Create a new manual entry using the button above to record your first offline lead.</p>
           </div>
         ) : (
           <ManualOrderTable 
@@ -765,9 +798,9 @@ export default function Leads() {
       ) : leads.length === 0 ? (
         <EmptyLeads onAction={() => navigate("/dashboard/settings")} />
       ) : filteredLeads.length === 0 ? (
-        <div className="bg-app-surface rounded-xl border p-10 text-center font-sans">
-          <p className="text-slate-400 text-sm">No leads match your filters.</p>
-          <button onClick={() => { setSearch(""); setChannelFilter("ALL"); setPriorityFilter("ALL"); }} className="mt-3 text-indigo-500 text-xs font-bold hover:underline cursor-pointer">
+        <div className="bg-app-surface rounded-xl border border-app p-10 text-center font-sans">
+          <p className="text-app-text-muted text-sm font-bold">No leads match your filters.</p>
+          <button onClick={() => { setSearch(""); setChannelFilter("ALL"); setPriorityFilter("ALL"); }} className="mt-3 text-app-primary text-xs font-black hover:underline cursor-pointer uppercase tracking-wider">
             Clear filters
           </button>
         </div>
@@ -807,38 +840,38 @@ export default function Leads() {
       {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {showDeleteConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm shadow-xl"
+              className="fixed inset-0 bg-[var(--app-backdrop)] backdrop-blur-md"
               onClick={() => setShowDeleteConfirm(false)}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-app-surface rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 border border-app"
+              className="bg-app-surface rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] w-full max-w-sm overflow-hidden relative z-10 border border-app"
             >
-              <div className="h-2 w-full bg-red-500" />
+              <div className="h-2 w-full bg-red-500/80" />
               <div className="p-6">
-                <h3 className="text-base font-bold text-app-text mb-1 font-sans text-left">
+                <h3 className="text-base font-black text-app-text mb-1 font-sans text-left uppercase tracking-tight">
                   {filter === "manual" ? "Delete Orders?" : "Delete Leads?"}
                 </h3>
-                <p className="text-xs text-slate-500 leading-normal mb-5 font-sans text-left">
+                <p className="text-xs text-app-text-muted leading-relaxed mb-6 font-bold text-left">
                   Are you sure you want to delete {selectedLeads.size} {filter === "manual" ? "manual order" : "lead"}{selectedLeads.size !== 1 ? 's' : ''}? This action cannot be undone.
                 </p>
                 <div className="flex gap-2 justify-end font-sans">
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="px-3 py-2 text-slate-500 hover:bg-app-bg rounded-xl text-xs font-bold border border-app cursor-pointer"
+                    className="px-4 py-2 text-app-text-muted hover:bg-app-bg-soft rounded-xl text-xs font-bold border border-app cursor-pointer transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleBulkDelete}
-                    className="px-4 py-2 text-white text-xs font-bold rounded-xl shadow-lg bg-red-600 hover:bg-red-700 shadow-red-100 cursor-pointer"
+                    className="px-5 py-2 text-white text-xs font-black rounded-xl shadow-lg bg-red-600 hover:bg-red-700 shadow-red-600/20 active:scale-95 transition-all cursor-pointer"
                   >
                     Confirm Delete
                   </button>

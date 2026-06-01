@@ -39,7 +39,7 @@ export default function DashboardLayout() {
           <div className="flex border-l border-[var(--app-border)]">
             <button
               onClick={() => toast.dismiss(t.id)}
-              className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-cyan-600 hover:text-cyan-500 focus:outline-none"
+              className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-semibold text-app-primary hover:text-cyan-500 focus:outline-none"
             >
               Close
             </button>
@@ -65,7 +65,7 @@ export default function DashboardLayout() {
           <div className="flex border-l border-[var(--app-border)]">
             <button
               onClick={() => toast.dismiss(t.id)}
-              className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-cyan-600 hover:text-cyan-500 focus:outline-none"
+              className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-semibold text-app-primary hover:text-cyan-500 focus:outline-none"
             >
               Close
             </button>
@@ -171,11 +171,11 @@ export default function DashboardLayout() {
         <footer className="border-t border-[var(--app-border)] bg-[var(--app-surface)]/85 backdrop-blur py-6 pb-28 lg:pb-6">
           <div className="px-6 lg:px-10 text-center text-sm text-[var(--app-text-muted)]">
             LeadSync CRM © 2025 •{" "}
-            <a href="#" className="text-cyan-600 hover:text-cyan-500">
+            <a href="#" className="text-app-primary hover:underline">
               Privacy
             </a>{" "}
             •{" "}
-            <a href="#" className="text-cyan-600 hover:text-cyan-500">
+            <a href="#" className="text-app-primary hover:underline">
               Terms
             </a>
           </div>
@@ -188,7 +188,7 @@ export default function DashboardLayout() {
             end
             className={({ isActive }) =>
               `flex flex-col items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition ${
-                isActive ? "text-cyan-600" : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
+                isActive ? "text-app-primary" : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
               }`
             }
           >
@@ -199,7 +199,7 @@ export default function DashboardLayout() {
             to="/dashboard/leads"
             className={({ isActive }) =>
               `flex flex-col items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition ${
-                isActive ? "text-cyan-600" : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
+                isActive ? "text-app-primary" : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
               }`
             }
           >
@@ -210,7 +210,7 @@ export default function DashboardLayout() {
             to="/dashboard/conversations"
             className={({ isActive }) =>
               `flex flex-col items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition ${
-                isActive ? "text-cyan-600" : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
+                isActive ? "text-app-primary" : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
               }`
             }
           >
@@ -221,7 +221,7 @@ export default function DashboardLayout() {
             to="/dashboard/orders"
             className={({ isActive }) =>
               `flex flex-col items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition ${
-                isActive ? "text-cyan-600" : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
+                isActive ? "text-app-primary" : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
               }`
             }
           >
