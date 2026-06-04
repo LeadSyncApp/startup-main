@@ -19,6 +19,9 @@ const createUserSchema = z.object({
 
 const router = Router();
 
+// Map from internal note id to a map of emoji -> string[] of user ids who have reacted
+export const inMemoryReactions = new Map<string, Record<string, string[]>>();
+
 /* ===============================
    GET COMPACT LIST (all roles)
    Returns id + name + role + email + isActive for @mention / assignment / inbox UI
@@ -472,12 +475,133 @@ router.get(
         return false;
       });
 
-      res.json(filteredNotes);
+      // Collect all user IDs from all reactions of filteredNotes
+      const allUserIdsInReactions = new Set<string>();
+      filteredNotes.forEach(note => {
+        const noteReacts = inMemoryReactions.get(note.id) || {};
+        Object.values(noteReacts).forEach(users => {
+          users.forEach(uid => allUserIdsInReactions.add(uid));
+        });
+      });
+
+      // Fetch user info for those IDs
+      const reactionUsers = allUserIdsInReactions.size > 0 
+        ? await prisma.user.findMany({
+            where: { id: { in: Array.from(allUserIdsInReactions) } },
+            select: { id: true, name: true }
+          })
+        : [];
+
+      const userMap = new Map(reactionUsers.map(u => [u.id, u.name]));
+
+      const notesWithReactions = filteredNotes.map(note => {
+        const noteReacts = inMemoryReactions.get(note.id) || {};
+        const summarizedCount: Record<string, number> = {};
+        const reactionsDetail: Record<string, Array<{ id: string; name: string }>> = {};
+
+        for (const [em, users] of Object.entries(noteReacts)) {
+          if (users.length > 0) {
+            summarizedCount[em] = users.length;
+            reactionsDetail[em] = users.map(uid => ({
+              id: uid,
+              name: userMap.get(uid) || "Teammate"
+            }));
+          }
+        }
+        return {
+          ...note,
+          reactions: summarizedCount,
+          reactionsDetail: reactionsDetail
+        };
+      });
+
+      res.json(notesWithReactions);
     } catch (error) {
       console.error("Fetch agent notes error:", error);
       res.status(500).json({ message: "Failed to fetch notes" });
     }
   },
+);
+
+/* =========================================
+   POST AGENT NOTE REACTION TOGGLE
+   ========================================= */
+router.post(
+  "/:id/notes/:noteId/react",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const { noteId } = req.params;
+      const { emoji } = req.body;
+
+      if (!emoji) {
+        return res.status(400).json({ message: "Emoji is required" });
+      }
+
+      let noteReacts = inMemoryReactions.get(noteId) || {};
+      let userList = noteReacts[emoji] || [];
+
+      if (userList.includes(userId)) {
+        userList = userList.filter((id) => id !== userId);
+      } else {
+        userList.push(userId);
+      }
+
+      noteReacts[emoji] = userList;
+      inMemoryReactions.set(noteId, noteReacts);
+
+      // Collect all unique user IDs involved in this note's reactions
+      const noteUserIds = new Set<string>();
+      Object.values(noteReacts).forEach(users => {
+        users.forEach(uid => noteUserIds.add(uid));
+      });
+
+      const reactionUsersInfo = noteUserIds.size > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: Array.from(noteUserIds) } },
+            select: { id: true, name: true }
+          })
+        : [];
+      
+      const userMap = new Map(reactionUsersInfo.map(u => [u.id, u.name]));
+
+      const summarizedCount: Record<string, number> = {};
+      const reactionsDetail: Record<string, Array<{ id: string; name: string }>> = {};
+      for (const [em, users] of Object.entries(noteReacts)) {
+        if (users.length > 0) {
+          summarizedCount[em] = users.length;
+          reactionsDetail[em] = users.map(uid => ({
+            id: uid,
+            name: userMap.get(uid) || "Teammate"
+          }));
+        }
+      }
+
+      // Live realtime push to target agent
+      const note = await prisma.internalNote.findUnique({
+        where: { id: noteId },
+        select: { authorId: true, mentionedIds: true, companyId: true }
+      });
+
+      if (note) {
+        const mentions = Array.isArray(note.mentionedIds) ? (note.mentionedIds as string[]) : [];
+        const affectedUsers = new Set<string>([note.authorId, ...mentions]);
+        affectedUsers.forEach((targetId) => {
+          emitToAgent(targetId, "agent_note_reaction_updated", {
+            noteId,
+            reactions: summarizedCount,
+            reactionsDetail: reactionsDetail
+          });
+        });
+      }
+
+      res.json({ success: true, reactions: summarizedCount, reactionsDetail: reactionsDetail });
+    } catch (err: any) {
+      console.error("Toggle reaction error:", err);
+      res.status(500).json({ message: "Failed to toggle reaction" });
+    }
+  }
 );
 
 router.delete(
@@ -574,7 +698,7 @@ router.post(
       const userId = req.user!.userId;
       const companyId = req.user!.companyId;
       const targetUserId = req.params.id;
-      const { content } = req.body;
+      const { content, conversationId } = req.body;
 
       if (!content?.trim()) {
         return res.status(400).json({ message: "Content is required" });
@@ -593,24 +717,21 @@ router.post(
         return res.status(404).json({ message: "Target user not found" });
       }
 
-      // Direct Collab conversation discovery or setup:
-      let conv = await prisma.conversation.findFirst({
-        where: {
-          companyId,
-          OR: [{ assignedToId: userId }, { assignedToId: targetUserId }],
-        },
-        orderBy: { updatedAt: "desc" },
-      });
+      let conv;
 
-      if (!conv) {
+      if (conversationId) {
         conv = await prisma.conversation.findFirst({
-          where: { companyId },
-          orderBy: { updatedAt: "desc" },
+          where: {
+            id: conversationId,
+            companyId,
+          },
         });
       }
 
       if (!conv) {
-        // Setup default collaboration placeholder
+        // Fallback to the dedicated "Team Collaboration" internal conversation.
+        // This prevents teammates' direct messages from accidentally associating with and polluting
+        // real customer/lead conversations and triggering automatic notifications or tagging.
         let lead = await prisma.lead.findFirst({
           where: { contact: "INTERNAL_COLLAB", companyId },
         });
@@ -627,15 +748,24 @@ router.post(
           });
         }
 
-        conv = await prisma.conversation.create({
-          data: {
-            channel: "WEBSITE",
+        conv = await prisma.conversation.findFirst({
+          where: {
             leadId: lead.id,
             companyId,
-            mode: "HUMAN",
-            status: "OPEN",
           },
         });
+
+        if (!conv) {
+          conv = await prisma.conversation.create({
+            data: {
+              channel: "WEBSITE",
+              leadId: lead.id,
+              companyId,
+              mode: "HUMAN",
+              status: "OPEN",
+            },
+          });
+        }
       }
 
       // Save the internal note

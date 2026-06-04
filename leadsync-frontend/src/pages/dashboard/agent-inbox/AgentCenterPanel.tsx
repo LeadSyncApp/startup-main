@@ -18,10 +18,13 @@ interface Props {
   notes: NoteData[];
   user: any;
   reactions: Record<string, Record<string, number>>;
+  reactionsDetail: Record<string, Record<string, Array<{ id: string; name: string }>>>;
   handleToggleReaction: (noteId: string, emoji: string) => void;
   messagesEndRef: React.RefObject<HTMLDivElement>;
   isSubmittingMessage: boolean;
-  handleSendNote: (text: string) => void;
+  handleSendNote: (text: string, conversationId?: string) => void;
+  replyToNote: NoteData | null;
+  setReplyToNote: (n: NoteData | null) => void;
 }
 
 export function AgentCenterPanel({
@@ -37,10 +40,13 @@ export function AgentCenterPanel({
   notes,
   user,
   reactions,
+  reactionsDetail,
   handleToggleReaction,
   messagesEndRef,
   isSubmittingMessage,
   handleSendNote,
+  replyToNote,
+  setReplyToNote,
 }: Props) {
   return (
     <div
@@ -98,9 +104,11 @@ export function AgentCenterPanel({
             notes={notes}
             user={user}
             reactions={reactions}
+            reactionsDetail={reactionsDetail}
             handleToggleReaction={handleToggleReaction}
             messagesEndRef={messagesEndRef}
             handleSendNote={handleSendNote}
+            setReplyToNote={setReplyToNote}
           />
 
           <div className="border-t border-app bg-app-surface">
@@ -108,6 +116,8 @@ export function AgentCenterPanel({
               selectedAgent={selectedAgent}
               isSubmittingMessage={isSubmittingMessage}
               handleSendNote={handleSendNote}
+              replyToNote={replyToNote}
+              setReplyToNote={setReplyToNote}
             />
           </div>
         </>

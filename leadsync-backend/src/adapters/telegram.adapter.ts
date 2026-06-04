@@ -428,7 +428,10 @@ export class TelegramAdapter implements ChannelAdapter {
             // ... (cache and token logic) ...
             let company: any = cacheService.get(cacheService.getCompanyKey(companyId));
             if (!company) {
-                company = await prisma.company.findUnique({ where: { id: companyId } });
+                company = await prisma.company.findUnique({
+                    where: { id: companyId },
+                    include: { botConfiguration: true }
+                });
                 if (company) cacheService.set(cacheService.getCompanyKey(companyId), company);
             }
             if (!company || !company.telegramBotToken) return;
@@ -531,7 +534,7 @@ export class TelegramAdapter implements ChannelAdapter {
 
             // 🧠 BACKGROUND TASKS
             intelligenceService.analyzeMessage(companyId, lead.id, conversation.id, text).catch(() => { });
-            orderParserService.processPotentialOrder(companyId, conversation.id, lead.id, text, company.botStructuredMenu).catch(() => { });
+            orderParserService.processPotentialOrder(companyId, conversation.id, lead.id, text, company.botConfiguration?.botStructuredMenu).catch(() => { });
 
             // 🔔 NOTIFICATION: Notify Assigned Agent & All Agents (if unclaimed)
             const notifyBody = `${name}: ${text.length > 50 ? text.slice(0, 50) + "..." : text}`;

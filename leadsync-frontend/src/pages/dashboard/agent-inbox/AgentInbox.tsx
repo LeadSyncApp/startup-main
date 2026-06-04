@@ -44,10 +44,13 @@ export default function AgentInbox() {
         notes={state.notes}
         user={state.user}
         reactions={state.reactions}
+        reactionsDetail={state.reactionsDetail}
         handleToggleReaction={state.handleToggleReaction}
         messagesEndRef={state.messagesEndRef}
         isSubmittingMessage={state.isSubmittingMessage}
         handleSendNote={state.handleSendNote}
+        replyToNote={state.replyToNote}
+        setReplyToNote={state.setReplyToNote}
       />
 
       <AgentRightPanel

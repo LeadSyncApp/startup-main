@@ -7,6 +7,32 @@ import { upload, fileParserService } from "../../services/integrations/fileParse
 
 const router = Router();
 
+function formatCompanyResponse(company: any) {
+  if (!company) return null;
+  return {
+    id: company.id,
+    name: company.name,
+    createdAt: company.createdAt,
+    telegramBotToken: company.telegramBotToken,
+    telegramBotUsername: company.telegramBotUsername,
+    telegramWebhookSecret: company.telegramWebhookSecret,
+    telegramConnected: company.telegramConnected,
+    instagramConnected: company.instagramConnected,
+    instagramPageId: company.instagramPageId,
+    botBusinessType: company.botBusinessType,
+    botWelcomeMessage: company.botWelcomeMessage,
+    botStructuredMenu: company.botConfiguration?.botStructuredMenu || null,
+    botMenu: company.botConfiguration?.botMenu || null,
+    botKnowledgeBase: company.botConfiguration?.botKnowledgeBase || null,
+    botLearnedContext: company.botConfiguration?.botLearnedContext || null,
+    botPolicies: company.botConfiguration?.botPolicies || "",
+    businessName: company.businessName,
+    businessAddress: company.businessAddress,
+    gstin: company.gstin,
+    assignmentStrategy: company.assignmentStrategy,
+  };
+}
+
 /* =====================================================
    GET /api/dashboard/kpis
    FIXED: No Promise.all (prevents connection pool crash)
@@ -112,20 +138,12 @@ router.get(
 
       const company = await (prisma.company as any).findUnique({
         where: { id: req.user.companyId },
-        select: {
-          botBusinessType: true,
-          botWelcomeMessage: true,
-          botStructuredMenu: true,
-          botMenu: true,
-          botKnowledgeBase: true,
-          botLearnedContext: true,
-          botPolicies: true,
-          businessName: true,
-          businessAddress: true,
-          gstin: true,
-          assignmentStrategy: true,
+        include: {
+          botConfiguration: true,
         },
       });
+
+      const companyFormatted = formatCompanyResponse(company);
 
       const activeAgents = await prisma.user.findMany({
         where: { companyId: req.user.companyId, isActive: true },
@@ -159,7 +177,7 @@ router.get(
         openChats: countsMap.get(agent.id) || 0
       }));
 
-      res.json({ company, agentWorkloads });
+      res.json({ company: companyFormatted, agentWorkloads });
     } catch (error) {
       console.error("Fetch bot config error:", error);
       res.status(500).json({
@@ -189,11 +207,14 @@ router.patch(
           botBusinessType,
           botWelcomeMessage,
         },
+        include: {
+          botConfiguration: true,
+        },
       });
 
       res.json({
         message: "Welcome updated successfully",
-        company: updatedCompany,
+        company: formatCompanyResponse(updatedCompany),
       });
     } catch (error) {
       console.error("Update welcome error:", error);
@@ -222,10 +243,13 @@ router.patch(
           businessName,
           businessAddress,
           gstin,
-        }
+        },
+        include: {
+          botConfiguration: true,
+        },
       });
 
-      res.json({ message: "Business details updated", company: updated });
+      res.json({ message: "Business details updated", company: formatCompanyResponse(updated) });
     } catch (error) {
       res.status(500).json({ message: "Failed to update business details" });
     }
@@ -260,10 +284,14 @@ router.patch(
 
       const existingCompany = await prisma.company.findUnique({
         where: { id: companyId },
-        select: { botStructuredMenu: true },
+        select: {
+          botConfiguration: {
+            select: { botStructuredMenu: true },
+          },
+        },
       });
 
-      const existingMenu = existingCompany?.botStructuredMenu || null;
+      const existingMenu = existingCompany?.botConfiguration?.botStructuredMenu || null;
 
       const structuredMenu = await generateStructuredMenu(
         shopDescription,
@@ -288,10 +316,25 @@ router.patch(
         data: {
           botBusinessType,
           botWelcomeMessage,
-          botStructuredMenu: structuredMenu,
-          botMenu: keyboardMenu,
+          botConfiguration: {
+            upsert: {
+              create: {
+                botStructuredMenu: structuredMenu,
+                botMenu: keyboardMenu,
+              },
+              update: {
+                botStructuredMenu: structuredMenu,
+                botMenu: keyboardMenu,
+              },
+            },
+          },
+        },
+        include: {
+          botConfiguration: true,
         },
       });
+
+      const companyFormatted = formatCompanyResponse(updatedCompany);
 
       // Invalidate cache
       cacheService.delete(cacheService.getCompanyKey(companyId));
@@ -300,7 +343,7 @@ router.patch(
         message: existingMenu
           ? "Menu updated successfully (merged)"
           : "Menu generated successfully",
-        company: updatedCompany,
+        company: companyFormatted,
       });
 
     } catch (error) {
@@ -329,18 +372,32 @@ router.patch(
       const updatedCompany = await prisma.company.update({
         where: { id: req.user.companyId },
         data: {
-          botStructuredMenu: structuredMenu,
           botBusinessType,
           botWelcomeMessage,
+          botConfiguration: {
+            upsert: {
+              create: {
+                botStructuredMenu: structuredMenu,
+              },
+              update: {
+                botStructuredMenu: structuredMenu,
+              },
+            },
+          },
+        },
+        include: {
+          botConfiguration: true,
         },
       });
+
+      const companyFormatted = formatCompanyResponse(updatedCompany);
 
       // Invalidate cache
       cacheService.delete(cacheService.getCompanyKey(req.user.companyId));
 
       res.json({
         message: "Menu saved successfully",
-        company: updatedCompany,
+        company: companyFormatted,
       });
     } catch (error) {
       console.error("Save menu error:", error);
@@ -366,13 +423,27 @@ router.patch(
       const updated = await (prisma.company as any).update({
         where: { id: req.user.companyId },
         data: {
-          botKnowledgeBase,
-          botLearnedContext,
-          botPolicies
-        }
+          botConfiguration: {
+            upsert: {
+              create: {
+                botKnowledgeBase,
+                botLearnedContext,
+                botPolicies,
+              },
+              update: {
+                botKnowledgeBase,
+                botLearnedContext,
+                botPolicies,
+              },
+            },
+          },
+        },
+        include: {
+          botConfiguration: true,
+        },
       });
 
-      res.json({ message: "Knowledge saved", company: updated });
+      res.json({ message: "Knowledge saved", company: formatCompanyResponse(updated) });
     } catch (error) {
       res.status(500).json({ message: "Failed to save knowledge" });
     }
@@ -399,13 +470,16 @@ router.patch(
         where: { id: req.user.companyId },
         data: {
           assignmentStrategy
-        }
+        },
+        include: {
+          botConfiguration: true,
+        },
       });
 
       // Invalidate cache
       cacheService.delete(cacheService.getCompanyKey(req.user.companyId));
 
-      res.json({ message: `Assignment strategy set to ${assignmentStrategy}`, company: updated });
+      res.json({ message: `Assignment strategy set to ${assignmentStrategy}`, company: formatCompanyResponse(updated) });
     } catch (error) {
       console.error("Set assignment strategy error:", error);
       res.status(500).json({ message: "Failed to set assignment strategy" });
@@ -433,9 +507,19 @@ router.post(
       const updated = await prisma.company.update({
         where: { id: req.user.companyId },
         data: {
-          botKnowledgeBase,
-          botLearnedContext: learned
-        }
+          botConfiguration: {
+            upsert: {
+              create: {
+                botKnowledgeBase,
+                botLearnedContext: learned,
+              },
+              update: {
+                botKnowledgeBase,
+                botLearnedContext: learned,
+              },
+            },
+          },
+        },
       });
 
       res.json({ message: "AI Trained successfully", botLearnedContext: learned });
@@ -466,9 +550,13 @@ router.post(
       if (mergeWithExisting) {
         const company = await prisma.company.findUnique({
           where: { id: req.user.companyId },
-          select: { botStructuredMenu: true },
+          select: {
+            botConfiguration: {
+              select: { botStructuredMenu: true },
+            },
+          },
         });
-        existingMenu = company?.botStructuredMenu;
+        existingMenu = company?.botConfiguration?.botStructuredMenu;
       }
 
       const analyzed = await generateStructuredMenu(rawText, existingMenu);
@@ -514,9 +602,13 @@ router.post(
       if (mergeWithExisting) {
         const company = await prisma.company.findUnique({
           where: { id: req.user.companyId },
-          select: { botStructuredMenu: true },
+          select: {
+            botConfiguration: {
+              select: { botStructuredMenu: true },
+            },
+          },
         });
-        existingMenu = company?.botStructuredMenu;
+        existingMenu = company?.botConfiguration?.botStructuredMenu;
       }
 
       // 3. Let AI structure the extracted data

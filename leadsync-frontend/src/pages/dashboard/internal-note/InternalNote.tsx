@@ -47,7 +47,9 @@ export function InternalNote({ note }: InternalNoteProps) {
         </div>
         <div className="text-sm text-[#1F2937] bg-app-surface border border-[#D9DADC] p-3 rounded-md rounded-tl-none leading-relaxed shadow-sm">
           <div>{note.content}</div>
-          {note.conversationId && (
+          {note.conversationId && 
+            note.leadName !== "Team Collaboration" && 
+            note.leadName !== "INTERNAL_COLLAB" && (
             <div className="flex items-center gap-1.5 pt-1.5 border-t border-app mt-1.5">
               <span className="text-[10px] text-slate-400">Context:</span>
               <a 

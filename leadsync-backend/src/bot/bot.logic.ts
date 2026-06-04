@@ -52,9 +52,7 @@ export async function handleBotMessage(
     select: {
       name: true,
       botBusinessType: true,
-      botStructuredMenu: true,
-      botLearnedContext: true,
-      botPolicies: true,
+      botConfiguration: true,
     },
   });
 
@@ -64,7 +62,7 @@ export async function handleBotMessage(
     orderBy: { createdAt: "asc" },
   });
 
-  let enrichedKnowledge = company?.botLearnedContext || "";
+  let enrichedKnowledge = company?.botConfiguration?.botLearnedContext || "";
   if (knowledgeItems.length > 0) {
     const knowledgeBlock = knowledgeItems
       .map((k: any) => `[${k.type}] ${k.title}: ${k.content}`)
@@ -81,8 +79,8 @@ export async function handleBotMessage(
   const businessType =
     company?.botBusinessType || "general business";
 
-  const structuredMenu = (company?.botStructuredMenu as any) || null;
-  const botLearnedContext = company?.botLearnedContext || "";
+  const structuredMenu = (company?.botConfiguration?.botStructuredMenu as any) || null;
+  const botLearnedContext = company?.botConfiguration?.botLearnedContext || "";
 
   // 2.5️⃣ HARDCODED ROUTING (NO AI - STRICT RULES)
   const isTamil = detectedLanguage.startsWith("ta");
@@ -184,7 +182,7 @@ CALLBACK: VIEW_MENU`;
   // Prefer DB sessionState, fallback to in-memory, fallback to init
   const session_state = (conversation.sessionState as any) || getSession(tenant_id, chat_id);
 
-  const menuSnapshot = getMenuSnapshot(company?.botStructuredMenu);
+  const menuSnapshot = getMenuSnapshot(company?.botConfiguration?.botStructuredMenu);
   const retrievedItems = calculateRetrieval(userMessage, menuSnapshot);
 
   // 6️⃣ Determine if we should start a fresh cart session
@@ -212,7 +210,7 @@ CALLBACK: VIEW_MENU`;
     retrieved_items: retrievedItems,
     learned_knowledge_text: enrichedKnowledge,
     menu_snapshot: menuSnapshot,
-    shop_policies: (company as any)?.botPolicies || "",
+    shop_policies: company?.botConfiguration?.botPolicies || "",
     order_history: orderHistory, // Only completed orders
     latest_order_status: latestOrder?.status,
     modality: modality
@@ -233,7 +231,7 @@ CALLBACK: VIEW_MENU`;
     if (result.orderFinalized && updatedState.cart?.items?.length > 0) {
       try {
         // Validate cart items against menu before creating order
-        const menuItems = (company?.botStructuredMenu as any)?.categories?.flatMap((c: any) => c.items) || [];
+        const menuItems = (company?.botConfiguration?.botStructuredMenu as any)?.categories?.flatMap((c: any) => c.items) || [];
         const validCartItems = updatedState.cart.items.filter((cartItem: any) => {
           const foundInMenu = menuItems.some((menuItem: any) => 
             menuItem.name.toLowerCase().includes(cartItem.name.toLowerCase()) ||

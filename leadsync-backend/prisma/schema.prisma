@@ -8,28 +8,23 @@ datasource db {
 }
 
 model Company {
-  id                       String           @id @default(uuid())
+  id                       String            @id @default(uuid())
   name                     String
-  createdAt                DateTime         @default(now())
+  createdAt                DateTime          @default(now())
   telegramBotToken         String?
   telegramBotUsername      String?
-  telegramWebhookSecret    String?          @unique
-  telegramConnected        Boolean          @default(false)
+  telegramWebhookSecret    String?           @unique
+  telegramConnected        Boolean           @default(false)
   botBusinessType          String?
-  botMenu                  Json?
   botWelcomeMessage        String?
-  botStructuredMenu        Json?
-  botKnowledgeBase         String?
-  botLearnedContext        String?
-  botPolicies              String?          @default("")
   businessAddress          String?
   businessName             String?
   gstin                    String?
-  instagramConnected       Boolean          @default(false)
+  instagramConnected       Boolean           @default(false)
   instagramPageAccessToken String?
-  instagramPageId          String?          @unique
-  invoiceCounter           Int              @default(0)
-  assignmentStrategy       String?          @default("MANUAL")
+  instagramPageId          String?           @unique
+  invoiceCounter           Int               @default(0)
+  assignmentStrategy       String?           @default("MANUAL")
   automationRules          AutomationRule[]
   botKnowledge             BotKnowledge[]
   broadcasts               Broadcast[]
@@ -38,6 +33,8 @@ model Company {
   leads                    Lead[]
   orders                   Order[]
   users                    User[]
+  systemLeases             SystemLease[]
+  botConfiguration         BotConfiguration?
 }
 
 model Invoice {
@@ -97,7 +94,6 @@ model Message {
   conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
-  @@index([conversationId])
 }
 
 model Notification {
@@ -421,4 +417,33 @@ enum OrderApprovalStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+model SystemLease {
+  id               String   @id @default(uuid())
+  companyId        String
+  type             String   // e.g. "TELEGRAM", "INSTAGRAM"
+  activeInstanceId String
+  role             String
+  content          String   // JSON string with heartbeat meta
+  isActive         Boolean  @default(true)
+  lastHeartbeat    DateTime @default(now())
+  createdAt        DateTime @default(now())
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, type])
+  @@index([companyId])
+}
+
+model BotConfiguration {
+  id                String   @id @default(uuid())
+  companyId         String   @unique
+  botMenu           Json?
+  botStructuredMenu Json?
+  botKnowledgeBase  String?
+  botLearnedContext String?
+  botPolicies       String?  @default("")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }

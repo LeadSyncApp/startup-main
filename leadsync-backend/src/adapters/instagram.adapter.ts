@@ -78,7 +78,10 @@ export class InstagramAdapter implements ChannelAdapter {
             // 1. Fetch Company
             let company: any = cacheService.get(cacheService.getCompanyKey(companyId));
             if (!company) {
-                company = await prisma.company.findUnique({ where: { id: companyId } });
+                company = await prisma.company.findUnique({
+                    where: { id: companyId },
+                    include: { botConfiguration: true }
+                });
                 if (company) cacheService.set(cacheService.getCompanyKey(companyId), company);
             }
             if (!company || !(company as any).instagramPageAccessToken) return;
@@ -184,7 +187,7 @@ export class InstagramAdapter implements ChannelAdapter {
                 conversation.id,
                 lead.id,
                 text,
-                company.botStructuredMenu
+                company.botConfiguration?.botStructuredMenu
             ).catch(() => { });
 
             if (conversation.mode === ConversationMode.HUMAN) return;
