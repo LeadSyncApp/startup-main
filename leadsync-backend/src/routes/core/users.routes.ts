@@ -15,6 +15,7 @@ const createUserSchema = z.object({
     .min(6, "Password must be at least 6 characters")
     .max(100),
   role: z.enum(["ADMIN", "AGENT"], { error: "Role must be ADMIN or AGENT" }),
+  roleDefinitionId: z.string().nullable().optional(),
 });
 
 const router = Router();
@@ -144,6 +145,26 @@ router.get(
 );
 
 /* ===============================
+   GET CURRENT COMPANY
+=============================== */
+router.get("/my-company", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    const company = await prisma.company.findUnique({
+      where: { id: req.user.companyId },
+      select: {
+        id: true,
+        name: true,
+        companyCode: true,
+      },
+    });
+    res.json(company);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch company details" });
+  }
+});
+
+/* ===============================
    GET ALL STAFF
 =============================== */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -163,9 +184,20 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         name: true,
         email: true,
         role: true,
+        roleDefinitionId: true,
+        roleDefinition: {
+          select: {
+            name: true,
+          }
+        },
         isActive: true,
         isAvailable: true,
         staffId: true,
+        residingAddress: true,
+        phoneNumber: true,
+        workspaceAuthScale: true,
+        isOnline: true,
+        lastSeenAt: true,
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },
@@ -174,6 +206,113 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     res.json(users);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch users" });
+  }
+});
+
+/* ===============================
+   POST ONBOARD INVITE
+=============================== */
+const onboardInviteSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  staffId: z.string().min(1, "Staff ID token is required").max(50),
+  workspaceAuthScale: z.string().min(1, "Workspace Authorization Scale is required"),
+  role: z.enum(["ADMIN", "AGENT"]).default("AGENT"),
+  roleDefinitionId: z.string().nullable().optional(),
+});
+
+router.post("/onboard-invite", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+    if (!["OWNER", "ADMIN"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const parsed = onboardInviteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0].message });
+    }
+    const { email, staffId, workspaceAuthScale, role, roleDefinitionId } = parsed.data;
+
+    const existingEmail = await prisma.user.findFirst({
+      where: {
+        email: email.toLowerCase(),
+      },
+    });
+
+    if (existingEmail) {
+      return res.status(409).json({ message: "Email already exists" });
+    }
+
+    const existingStaffId = await prisma.user.findFirst({
+      where: {
+        staffId,
+        companyId: req.user.companyId,
+      },
+    });
+
+    if (existingStaffId) {
+      return res.status(409).json({ message: "Staff ID token already taken or assigned in this company" });
+    }
+
+    // Auto-generate placeholder hash since password is required
+    const randomPassword = require("crypto").randomBytes(16).toString("hex");
+    const passwordHash = await bcrypt.hash(randomPassword, 10);
+
+    const newUser = await prisma.user.create({
+      data: {
+        name: "Pending Onboarding", // Default dummy name
+        email: email.toLowerCase(),
+        passwordHash,
+        role,
+        roleDefinitionId: (roleDefinitionId === "" || !roleDefinitionId) ? null : roleDefinitionId,
+        staffId,
+        workspaceAuthScale,
+        companyId: req.user.companyId,
+        isActive: true, // Visible in list as pending signup
+        isAvailable: false, // Not available for chats until complete
+      },
+    });
+
+    // Log the audit event
+    await prisma.systemAuditLog.create({
+      data: {
+        companyId: req.user.companyId,
+        userId: req.user.userId,
+        action: "TEAM_MEMBER_INVITED",
+        metadata: {
+          email,
+          staffId,
+          workspaceAuthScale,
+          role,
+        }
+      }
+    });
+
+    res.status(201).json(newUser);
+  } catch (err: any) {
+    console.error("Onboard invite error:", err);
+    res.status(500).json({ message: "Failed to create onboard invitation" });
+  }
+});
+
+/* ===============================
+   POST HEARTBEAT (Online Check)
+=============================== */
+router.post("/heartbeat", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    await prisma.user.update({
+      where: { id: req.user.userId },
+      data: {
+        isOnline: true,
+        lastSeenAt: new Date(),
+      },
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Heartbeat failed for user ID:", req.user?.userId, "Error details:", err);
+    res.status(500).json({ message: "Heartbeat failed", error: err?.message });
   }
 });
 
@@ -192,7 +331,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0].message });
     }
-    const { name, email, role, staffId, password } = parsed.data;
+    const { name, email, role, staffId, password, roleDefinitionId } = parsed.data;
 
     const existingEmail = await prisma.user.findFirst({
       where: {
@@ -223,6 +362,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         email: email.toLowerCase(),
         passwordHash,
         role,
+        roleDefinitionId,
         staffId,
         companyId: req.user.companyId,
       },
@@ -827,6 +967,163 @@ router.post(
       res.status(500).json({ message: "Failed to create note" });
     }
   },
+);
+
+/* ===============================
+   PUT /:id (Update User Details & Status)
+=============================== */
+router.put(
+  "/:id",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+      if (!["OWNER", "ADMIN"].includes(req.user.role)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const { id } = req.params;
+      const { name, email, staffId, role, isActive, roleDefinitionId, workspaceAuthScale } = req.body;
+
+      const targetUser = await prisma.user.findUnique({ where: { id } });
+      if (!targetUser || targetUser.companyId !== req.user.companyId) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Security restrictions
+      if (targetUser.role === "OWNER" && req.user.role !== "OWNER") {
+        return res
+          .status(403)
+          .json({ message: "Only owners can modify the Owner account" });
+      }
+
+      // If user tries to change role TO owner or upgrade themselves/someone else to owner, restrict
+      if (role === "OWNER" && req.user.role !== "OWNER") {
+        return res
+          .status(403)
+          .json({ message: "Only current owners can assign the OWNER role" });
+      }
+
+      if (email && email.toLowerCase() !== targetUser.email.toLowerCase()) {
+        const existingEmail = await prisma.user.findFirst({
+          where: {
+            email: email.toLowerCase(),
+            companyId: req.user.companyId,
+            id: { not: id },
+          },
+        });
+        if (existingEmail) {
+          return res.status(409).json({ message: "Email already taken inside company" });
+        }
+      }
+
+      if (staffId && staffId !== targetUser.staffId) {
+        const existingStaffId = await prisma.user.findFirst({
+          where: {
+            staffId,
+            companyId: req.user.companyId,
+            id: { not: id },
+          },
+        });
+        if (existingStaffId) {
+          return res.status(409).json({ message: "Staff ID already taken" });
+        }
+      }
+
+      // Prevent OWNER from disabling their own account or changing their own role to AGENT/ADMIN
+      if (targetUser.id === req.user.userId && targetUser.role === "OWNER") {
+        if (role && role !== "OWNER") {
+          return res.status(403).json({ message: "You cannot change your own OWNER role" });
+        }
+        if (isActive === false) {
+          return res.status(403).json({ message: "You cannot deactivate your own OWNER account" });
+        }
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id },
+        data: {
+          name: name ?? undefined,
+          email: email ? email.toLowerCase() : undefined,
+          staffId: staffId ?? undefined,
+          role: role ?? undefined,
+          roleDefinitionId: roleDefinitionId === '' ? null : (roleDefinitionId !== undefined ? roleDefinitionId : undefined),
+          isActive: typeof isActive === "boolean" ? isActive : undefined,
+          workspaceAuthScale: workspaceAuthScale ?? undefined,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          isAvailable: true,
+          staffId: true,
+          createdAt: true,
+        },
+      });
+
+      res.json({
+        message: "User details updated successfully",
+        user: updatedUser,
+      });
+    } catch (err: any) {
+      console.error("Failed to update user:", err);
+      res.status(500).json({ message: "Failed to update user details" });
+    }
+  }
+);
+
+/* ===============================
+   PATCH /:id/password (Change User Password)
+=============================== */
+router.patch(
+  "/:id/password",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+      const { id } = req.params;
+      const { password } = req.body;
+
+      if (!password || password.length < 6) {
+        return res
+          .status(400)
+          .json({ message: "Password must be at least 6 characters" });
+      }
+
+      const isSelf = id === req.user.userId;
+      const isManager = ["OWNER", "ADMIN"].includes(req.user.role);
+
+      if (!isSelf && !isManager) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const targetUser = await prisma.user.findUnique({ where: { id } });
+      if (!targetUser || targetUser.companyId !== req.user.companyId) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (targetUser.role === "OWNER" && req.user.role !== "OWNER") {
+        return res
+          .status(403)
+          .json({ message: "Only owners can change the Owner password" });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      await prisma.user.update({
+        where: { id },
+        data: { passwordHash },
+      });
+
+      res.json({ message: "Password updated successfully" });
+    } catch (err: any) {
+      console.error("Failed to update user password:", err);
+      res.status(500).json({ message: "Failed to update user password" });
+    }
+  }
 );
 
 export default router;

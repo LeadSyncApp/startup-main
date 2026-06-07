@@ -61,6 +61,12 @@ export default function Sidebar({ closeSidebar }: SidebarProps) {
       show: isOwner || isAdmin || isAgent,
     },
     {
+      label: "Products",
+      icon: ShoppingCart,
+      path: "/dashboard/products",
+      show: isOwner || isAdmin || isAgent,
+    },
+    {
       label: "Orders",
       icon: ShoppingCart,
       path: "/dashboard/orders",

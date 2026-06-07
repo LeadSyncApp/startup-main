@@ -22,7 +22,8 @@ export function useSavedReplies() {
   const [replies, setReplies] = useState<SavedReply[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : DEFAULT_REPLIES;
+      const parsed = saved ? JSON.parse(saved) : null;
+      return Array.isArray(parsed) ? parsed : DEFAULT_REPLIES;
     } catch {
       return DEFAULT_REPLIES;
     }

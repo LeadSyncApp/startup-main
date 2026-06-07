@@ -21,9 +21,13 @@ import instagramRoutes from "./routes/messaging/instagram.routes";
 import broadcastsRoutes from "./routes/messaging/broadcasts.routes";
 
 import dashboardRoutes from "./routes/core/dashboard.routes";
+import { rbacRoutes } from "./routes/core/rbac.routes";
+import { auditLogRoutes } from "./routes/core/audit.routes";
+import { authMiddleware } from "./middleware/auth.middleware";
 import usersRoutes from "./routes/core/users.routes";
 import analyticsRoutes from "./routes/core/analytics.routes";
 import notificationRoutes from "./routes/core/notification.routes";
+import productsRoutes from "./routes/core/products.routes";
 
 import ordersRoutes from "./routes/orders/orders.routes";
 import newOrderArrivalsRoutes from "./routes/orders/newOrderArrivals.routes";
@@ -112,6 +116,9 @@ app.use("/api/secure", secureRoutes);
 app.use("/api/leads", leadsRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/products", productsRoutes);
+app.use("/api/rbac", authMiddleware, rbacRoutes);
+app.use("/api/audit-logs", authMiddleware, auditLogRoutes);
 app.use("/api/orders", ordersRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/analytics", analyticsRoutes);
@@ -123,6 +130,8 @@ app.use("/api/automation", automationRoutes);
 
 // 🆕 Add New Order Arrivals routes
 app.use("/api/newOrderArrivals", newOrderArrivalsRoutes);
+
+import path from "path";
 
 /* 🩺 DIAGNOSTIC ROUTE */
 app.get("/api/debug/system", async (req, res) => {
@@ -139,6 +148,17 @@ app.get("/api/debug/system", async (req, res) => {
     }
   };
   res.json(diagnostics);
+});
+
+// Serve frontend static files
+const frontendDistPath = path.resolve(__dirname, '../../leadsync-frontend/dist');
+app.use(express.static(frontendDistPath));
+app.get('*', (req, res) => {
+  if (!req.path.startsWith('/api')) {
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  } else {
+    res.status(404).json({ error: 'API route not found' });
+  }
 });
 
 export default app;

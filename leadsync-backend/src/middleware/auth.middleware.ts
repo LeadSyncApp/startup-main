@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt, { JwtPayload as DefaultJwtPayload } from "jsonwebtoken";
+import { prisma } from "../lib/prisma";
 
 export interface AuthRequest extends Request {
   user?: {
@@ -26,7 +27,7 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
-export const authMiddleware = (
+export const authMiddleware = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -55,6 +56,16 @@ export const authMiddleware = (
 
     if (!["OWNER", "ADMIN", "AGENT"].includes(decoded.role)) {
       return res.status(401).json({ message: "Invalid role" });
+    }
+
+    // Verify user exists and is active in database to prevent stale token database errors
+    const userExists = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, isActive: true },
+    });
+
+    if (!userExists || !userExists.isActive) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
     req.user = {

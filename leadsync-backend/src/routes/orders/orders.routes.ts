@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
 import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
+import { eventBus, Events } from "../../services/infrastructure/eventBus";
 import {
   OrderPriority,
   OrderStatus,
@@ -129,6 +130,23 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       }
     });
 
+    // 🆕 Create relational Order Items (Link to the Master Catalog)
+    const items = req.body.items;
+    if (items && Array.isArray(items)) {
+      const itemRecords = items.map((item: any) => ({
+        orderId: order.id,
+        productId: item.productId || null,
+        sku: item.sku || null,
+        name: item.name,
+        quantity: Number(item.quantity) || 1,
+        price: Number(item.price) || 0,
+      }));
+
+      await prisma.orderItem.createMany({
+        data: itemRecords
+      });
+    }
+
     // 🆕 Update lead with pending order approval state
     await (prisma.lead as any).update({
       where: { id: conversation.leadId },
@@ -231,6 +249,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         processedBy: {
           select: { id: true, name: true }
         },
+        orderItems: true,
         invoice: {
           select: { pdfUrl: true, invoiceNumber: true }
         }
@@ -298,6 +317,9 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
         hasPendingOrderApproval: false,
         pendingOrderState: "NONE"
       });
+
+      // 🚀 FIRE IMMUTABLE EVENT TO MICROSERVICES (Deducts stock and creates bill)
+      eventBus.emit(Events.ORDER_CREATED, result.order.id, companyId);
     }
 
     return res.json(result.order);

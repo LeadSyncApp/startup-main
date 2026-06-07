@@ -1,3 +1,5 @@
+import { Box } from "lucide-react";
+
 interface AdvancedTuningSectionProps {
   botKnowledgeBase: string;
   setBotKnowledgeBase: (kb: string) => void;
@@ -8,6 +10,7 @@ interface AdvancedTuningSectionProps {
   handleSaveKnowledge: () => void;
   botPolicies: string;
   setBotPolicies: (policies: string) => void;
+  onSyncFromCatalog?: () => void;
 }
 
 export function AdvancedTuningSection({
@@ -20,17 +23,30 @@ export function AdvancedTuningSection({
   handleSaveKnowledge,
   botPolicies,
   setBotPolicies,
+  onSyncFromCatalog,
 }: AdvancedTuningSectionProps) {
   return (
     <>
       {/* AI KNOWLEDGE BASE & LEARNING */}
       <div className="bg-app-surface p-6 rounded-2xl shadow border space-y-4" id="advanced-tuning-knowledge-section">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <span>🧠</span> AI Shop Knowledge (Advanced Tuning)
-        </h2>
-        <p className="text-sm text-slate-500">
-          Enter detailed descriptions, suggestions, or "facts" about your products here. The AI will learn from this to answer customer questions better.
-        </p>
+        <div className="flex justify-between items-start">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <span>🧠</span> AI Shop Knowledge (Advanced Tuning)
+            </h2>
+            <p className="text-sm text-slate-500">
+              Enter detailed descriptions, suggestions, or "facts" about your products here.
+            </p>
+          </div>
+          {onSyncFromCatalog && (
+            <button
+               onClick={onSyncFromCatalog}
+               className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition"
+            >
+              <Box className="w-3.5 h-3.5" /> Pull from Catalog
+            </button>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">

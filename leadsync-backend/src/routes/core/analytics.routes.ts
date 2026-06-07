@@ -36,6 +36,7 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
                 amount: true,
                 createdAt: true,
                 summary: true,
+                items: true,
                 processedBy: { select: { name: true } }
             }
         });
@@ -70,26 +71,43 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
         })).reverse();
 
 
-        // 4. Calculate Top Products (Simple frequency analysis)
+        // 4. Calculate Top Products (Enhanced logic: Sum quantities across orders)
         const productMap: Record<string, number> = {};
+        
         orders.forEach(o => {
-            // Summary format: "2 x Dosa" or "Dosa"
-            // Split by newline if multiple products
-            const lines = o.summary.split('\n');
-            lines.forEach(line => {
-                // Remove quantity prefix (e.g., "2 x ")
-                // Regex: Start with number, optional x, space
-                let cleanName = line.replace(/^\d+\s*x\s*/i, "").trim();
-                // Remove optional (Location: ...) text
-                cleanName = cleanName.replace(/\s*\(Location:\s*.*?\)$/i, "").trim();
-                if (cleanName) {
-                    productMap[cleanName] = (productMap[cleanName] || 0) + 1;
-                }
-            });
+            // Priority 1: Use structured items if available
+            if (o.items && Array.isArray(o.items) && o.items.length > 0) {
+                (o.items as any[]).forEach(item => {
+                    if (item.name) {
+                        const name = item.name.trim();
+                        const qty = Number(item.quantity) || 1;
+                        productMap[name] = (productMap[name] || 0) + qty;
+                    }
+                });
+            } else {
+                // Priority 2: Fallback to summary parsing (for legacy/manual orders)
+                const lines = o.summary.split('\n');
+                lines.forEach(line => {
+                    // Try to extract quantity and name
+                    // Pattern: "2 x Cold Coffee" or "Cold Coffee x 2" or "2 Cold Coffee"
+                    let qty = 1;
+                    const qtyMatch = line.match(/^(\d+)\s*x?\s*/i) || line.match(/\s*x\s*(\d+)$/i);
+                    if (qtyMatch) {
+                        qty = parseInt(qtyMatch[1]) || 1;
+                    }
+
+                    let cleanName = line.replace(/^\d+\s*x?\s*/i, "").replace(/\s*x\s*\d+$/i, "").trim();
+                    cleanName = cleanName.replace(/\s*\(Location:\s*.*?\)$/i, "").trim();
+                    
+                    if (cleanName) {
+                        productMap[cleanName] = (productMap[cleanName] || 0) + qty;
+                    }
+                });
+            }
         });
 
         const topProducts = Object.entries(productMap)
-            .sort((a, b) => b[1] - a[1]) // Sort desc by count
+            .sort((a, b) => b[1] - a[1]) // Sort desc by quantity sold
             .slice(0, 5)
             .map(([name, count]) => ({ name, count }));
 

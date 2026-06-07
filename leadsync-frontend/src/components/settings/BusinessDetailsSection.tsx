@@ -20,7 +20,7 @@ export function BusinessDetailsSection({
   return (
     <div className="bg-app-surface p-6 rounded-2xl shadow border space-y-4" id="settings-business-details-section">
       <h2 className="text-lg font-semibold flex items-center gap-2">
-        <span>🏢</span> Business Details (for Invoices)
+        <span>🏢</span> Business Details (For Invoices)
       </h2>
       <p className="text-sm text-slate-500">
         These details will appear on the invoices generated for your customers.

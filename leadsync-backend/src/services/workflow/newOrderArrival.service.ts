@@ -9,6 +9,7 @@ import { Prisma,
 } from "@prisma/client";
 import { emitToCompany, emitToCompanyAdmin, emitToAgent, safeEmitConversationUpdate } from "../../lib/socket";
 import { notificationService } from "../../services/infrastructure/notification.service";
+import { eventBus, Events } from "../../services/infrastructure/eventBus";
 import { recalculateLeadCRM } from "../integrations/crm.service";
 
 /**
@@ -85,29 +86,49 @@ export class NewOrderArrivalService {
             }
         }
 
-        // 2. Create the order
-        const order = await prisma.order.create({
-            data: {
-                companyId,
-                conversationId,
-                leadId,
-                summary,
-                amount,
-                items: items ?? undefined,
-                status: initialStatus,
-                source: source || OrderSource.BOT_DETECTED,
-                priority: priority || (amount > 0 ? OrderPriority.URGENT : OrderPriority.NORMAL),
-                priorityScore: this.calculatePriorityScore(amount, customerHistory),
-                predictedValue: amount,
-                isUrgent: amount > 0,
-                processedById: assignedToId,
-            },
-            include: {
-                conversation: {
-                    include: { lead: true }
+        // 2. Create the order and items in a transaction
+        const order = await prisma.$transaction(async (tx) => {
+            const newOrder = await tx.order.create({
+                data: {
+                    companyId,
+                    conversationId,
+                    leadId,
+                    summary,
+                    amount,
+                    items: items ?? undefined,
+                    status: initialStatus,
+                    source: source || OrderSource.BOT_DETECTED,
+                    priority: priority || (amount > 0 ? OrderPriority.URGENT : OrderPriority.NORMAL),
+                    priorityScore: this.calculatePriorityScore(amount, customerHistory),
+                    predictedValue: amount,
+                    isUrgent: amount > 0,
+                    processedById: assignedToId,
                 },
-                lead: true
+                include: {
+                    conversation: {
+                        include: { lead: true }
+                    },
+                    lead: true
+                }
+            });
+
+            // Create relational Order Items (The "Master Catalog" link)
+            if (items && Array.isArray(items)) {
+                const itemRecords = items.map(item => ({
+                    orderId: newOrder.id,
+                    productId: item.productId || null,
+                    sku: item.sku || null,
+                    name: item.name,
+                    quantity: Number(item.quantity) || 1,
+                    price: Number(item.price) || 0,
+                }));
+
+                await (tx as any).orderItem.createMany({
+                    data: itemRecords
+                });
             }
+
+            return newOrder;
         });
 
         // 3. Update lead with pending order state (only for confirmed orders)
@@ -543,6 +564,9 @@ export class NewOrderArrivalService {
 
         // 6. Notify about the claim
         await this.notifyOrderClaimed(updatedOrder, agentId, agentName, customerHistory);
+
+        // 🚀 FIRE IMMUTABLE EVENT TO MICROSERVICES (Now that it's claimed/confirmed)
+        eventBus.emit(Events.ORDER_CREATED, updatedOrder.id, updatedOrder.companyId);
 
         console.log(`✅ [NewOrderArrival] Order ${orderId} claimed by ${agentName}`);
 

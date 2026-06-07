@@ -19,6 +19,7 @@ model Company {
   botWelcomeMessage        String?
   businessAddress          String?
   businessName             String?
+  companyCode              String?           @unique
   gstin                    String?
   instagramConnected       Boolean           @default(false)
   instagramPageAccessToken String?
@@ -35,6 +36,30 @@ model Company {
   users                    User[]
   systemLeases             SystemLease[]
   botConfiguration         BotConfiguration?
+  products                 Product[]
+  customRoles              RoleDefinition[]
+  auditLogs                SystemAuditLog[]
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  companyId   String
+  sku         String?
+  name        String
+  description String?
+  price       Float
+  stockQuantity Int      @default(0)
+  trackInventory Boolean @default(false)
+  category    String?
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+
+  @@unique([companyId, sku])
+  @@index([companyId])
 }
 
 model Invoice {
@@ -64,11 +89,17 @@ model User {
   name                  String
   passwordHash          String
   role                  Role           @default(AGENT)
+  roleDefinitionId      String?
   companyId             String
   createdAt             DateTime       @default(now())
   isActive              Boolean        @default(true)
   isAvailable           Boolean        @default(true)
   staffId               String?
+  residingAddress       String?
+  phoneNumber           String?
+  workspaceAuthScale    String?
+  isOnline              Boolean        @default(false)
+  lastSeenAt            DateTime?
   resetToken            String?
   resetTokenExpiry      DateTime?
   assignedConversations Conversation[] @relation("AssignedConversations")
@@ -76,6 +107,9 @@ model User {
   notifications         Notification[]
   processedOrders       Order[]        @relation("ProcessedOrders")
   company               Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  roleDefinition        RoleDefinition? @relation(fields: [roleDefinitionId], references: [id], onDelete: SetNull)
+  sessions              UserSession[]
+  auditLogs             SystemAuditLog[]
 
   @@unique([email, companyId])
   @@index([companyId])
@@ -149,6 +183,7 @@ model Lead {
   id                      String            @id @default(uuid())
   name                    String?
   contact                 String
+  preferredLanguage       String?
   channel                 Channel
   companyId               String
   createdAt               DateTime          @default(now())
@@ -200,6 +235,7 @@ model Order {
   priorityScore  Int                 @default(0)
   version        Int                 @default(1)
   invoice        Invoice?
+  orderItems     OrderItem[]
   company        Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   lead           Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -250,6 +286,22 @@ model OrderLog {
 
   @@index([orderId])
   @@index([timestamp])
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  productId String?
+  sku       String?
+  name      String
+  quantity  Int
+  price     Float
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([sku])
 }
 
 model BotKnowledge {
@@ -440,10 +492,51 @@ model BotConfiguration {
   companyId         String   @unique
   botMenu           Json?
   botStructuredMenu Json?
+  botCommands       Json?
   botKnowledgeBase  String?
   botLearnedContext String?
   botPolicies       String?  @default("")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model RoleDefinition {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  description String?
+  permissions Json     // String[] natively wrapped or JSON array
+  createdAt   DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users       User[]
+
+  @@unique([companyId, name])
+}
+
+model SystemAuditLog {
+  id          String   @id @default(uuid())
+  companyId   String
+  userId      String?
+  action      String   // e.g., "USER_DELETED", "INTEGRATION_UPDATED"
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+}
+
+model UserSession {
+  id           String   @id @default(uuid())
+  userId       String
+  deviceInfo   String?
+  ipAddress    String?
+  lastActiveAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  isActive     Boolean  @default(true)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive])
 }

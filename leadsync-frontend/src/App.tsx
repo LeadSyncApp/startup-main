@@ -25,6 +25,8 @@ const UserManagement = lazy(() => import("./pages/dashboard/user-management/User
 const Broadcasts     = lazy(() => import("./pages/dashboard/broadcasts/Broadcasts"));
 const OwnerDashboard = lazy(() => import("./pages/dashboard/owner-dashboard/OwnerDashboard"));
 
+const Products       = lazy(() => import("./pages/dashboard/products/Products"));
+
 // ─── Route-level loading fallback ───────────────────────────────
 function PageFallback() {
   return (
@@ -97,6 +99,15 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={["OWNER", "ADMIN", "AGENT"]}>
               <Orders />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="products"
+          element={
+            <ProtectedRoute allowedRoles={["OWNER", "ADMIN", "AGENT"]}>
+              <Products />
             </ProtectedRoute>
           }
         />

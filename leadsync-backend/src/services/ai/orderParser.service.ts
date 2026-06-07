@@ -41,14 +41,43 @@ class OrderParserService {
                 console.log(`🚫 [OrderParser] Active order already exists for Conv ${conversationId}. Skipping new detection.`);
                 return;
             }
-            // 1. Parse content (Regex First)
-            let items: ParsedItem[] = this.parseItemsRegex(text, menu);
+            // 1. Get ALL valid products for this company to act as strict guardrails
+            const companyProducts = await prisma.product.findMany({
+                where: { companyId, isActive: true }
+            });
 
-            // 2. AI Deep extraction (Groq) if regex fails and it looks like an order
-            if (items.length === 0 && this.looksLikeOrder(text)) {
-                const aiResult = await generateStructuredOrder(text, menu);
+            const normalize = (s: string) => s.toLowerCase().trim();
+
+            const mapToSKU = (rawName: string) => {
+                const normalizedRaw = normalize(rawName);
+                
+                // 1. Check for Exact Match (High Confidence)
+                const exactMatch = companyProducts.find(p => normalize(p.name) === normalizedRaw);
+                if (exactMatch) return exactMatch;
+
+                // 2. Check for Ambiguity (Low Confidence)
+                // If "Pizza" matches "Veg Pizza" and "Cheese Pizza", it is ambiguous.
+                const potentialMatches = companyProducts.filter(p => 
+                    normalize(p.name).includes(normalizedRaw) ||
+                    normalizedRaw.includes(normalize(p.name))
+                );
+
+                if (potentialMatches.length > 1) {
+                    console.log(`⚠️ [OrderParser] Ambiguity Detected for "${rawName}": Matches ${potentialMatches.length} items. Refusing to guess.`);
+                    return null; // Refuse to pick one arbitrarily
+                }
+
+                return potentialMatches[0] || null;
+            };
+
+            // 2. Parse content (Regex + AI)
+            let rawItems: ParsedItem[] = this.parseItemsRegex(text, companyProducts);
+
+            if (rawItems.length === 0 && this.looksLikeOrder(text)) {
+                // Pass product list to AI as context for strict mapping
+                const aiResult = await generateStructuredOrder(text, { categories: [] }, companyProducts);
                 if (aiResult.items && aiResult.items.length > 0) {
-                    items = aiResult.items.map((i: any) => ({
+                    rawItems = aiResult.items.map((i: any) => ({
                         name: i.name,
                         quantity: i.quantity,
                         price: i.price || 0
@@ -56,15 +85,29 @@ class OrderParserService {
                 }
             }
 
-            if (items.length === 0) return; // No order detected
+            // 3. STRICT VALIDATION: Filter out items not in Master Catalog
+            const validatedItems: any[] = [];
+            for (const item of rawItems) {
+                const product = mapToSKU(item.name);
+                if (product) {
+                    validatedItems.push({
+                        productId: product.id,
+                        sku: product.sku,
+                        name: product.name,
+                        quantity: item.quantity,
+                        price: product.price // Always trust Master Catalog price
+                    });
+                } else {
+                    console.log(`🚫 [OrderParser] "Samosa Bug" Intercepted: "${item.name}" not in Catalog. Dropping item.`);
+                }
+            }
 
-            if (items.length === 0) return; // No order detected
+            if (validatedItems.length === 0) return; // No valid items found
 
-            const summary = items.map(i => `${i.quantity} x ${i.name}`).join(", ");
-            const totalAmount = items.reduce((sum, item) => sum + (item.price || 0) * item.quantity, 0);
+            const summary = validatedItems.map(i => `${i.quantity} x ${i.name}`).join(", ");
+            const totalAmount = validatedItems.reduce((sum, item) => sum + (item.price || 0) * item.quantity, 0);
 
-            // 🍔 DE-DUPLICATION: Check if ANY active order with the same summary exists in last 15 mins
-            // This prevents duplicate cards if the customer repeats themselves or AI re-triggers.
+            // ... (rest of the deduplication logic remains)
             const recentOrder = await prisma.order.findFirst({
                 where: {
                     conversationId,
@@ -90,26 +133,21 @@ class OrderParserService {
                 return;
             }
 
-            console.log(`🍔 [OrderParser] Detected ${items.length} items for Conv ${conversationId} (unified new order arrival)`);
+            console.log(`🍔 [OrderParser] Detected ${validatedItems.length} validated items for Conv ${conversationId}`);
 
-            const isUrgent = totalAmount > 0; // Alert on ANY amount > 0, not just > 500
+            const isUrgent = totalAmount > 0;
 
-            // 🆕 UNIFIED WORKFLOW: Route ALL orders through New Order Arrivals
-            // This bypasses the old direct order creation and ensures universal intake
+            // 🆕 UNIFIED WORKFLOW: Pass validated items with Product IDs
             const orderArrival = await newOrderArrivalService.processNewOrderArrival({
                 companyId,
                 conversationId,
                 leadId,
                 summary,
                 amount: totalAmount,
-                items: items.map(item => ({
-                    name: item.name,
-                    quantity: item.quantity,
-                    price: item.price || 0
-                })),
+                items: validatedItems, // These now contain productId
                 source: OrderSource.BOT_DETECTED,
                 priority: isUrgent ? OrderPriority.URGENT : OrderPriority.NORMAL,
-                detectedLanguage: "en-IN" // This could be detected from the message
+                detectedLanguage: "en-IN"
             });
 
             // 5. Update Conversation & Lead Stats (CRM value tracking)

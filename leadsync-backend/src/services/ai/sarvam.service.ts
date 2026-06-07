@@ -127,33 +127,13 @@ export class SarvamService {
     }
 
     /**
-     * Detects the language of a given text.
-     * Uses local keywords for speed and falls back to Sarvam (if available).
+     * FALLBACK: Detects the language of a given text.
+     * This is strictly a fallback mechanism used only if the user hasn't explicitly set their language via the bot menu.
      */
     async detectLanguage(text: string): Promise<string> {
         // 1. Script-based detection (Strongest signal)
         if (/[\u0B80-\u0BFF]/.test(text)) return "ta-IN"; // Tamil script
         if (/[\u0900-\u097F]/.test(text)) return "hi-IN"; // Hindi/Devanagari script
-
-        // 2. Keyword-based detection for phonetic/Romanized text - more conservative approach
-        const lowerText = text.toLowerCase();
-        const words = lowerText.split(/\s+/);
-
-        // Only detect as Tamil if there are multiple Tamil indicators
-        const tamilPhonetic = [
-            "venum", "vendum", "kodu", "iruku", "illa", "vanga", "enna", "eppadi", "evvalavu", "nanri", "dosa", "idly", "ittly",
-            "yennaku", "enakku", "ungaluku", "irukkuma", "irukinga", "romba", "nalla", "sapada", "sappadu", "thanga", "kodunga", "pannunga", "vaanga"
-        ];
-        
-        // More specific Hindi indicators - require at least 2 Hindi words to trigger
-        const hindiPhonetic = ["chahiye", "kitna", "dena", "lelo", "kya", "kaise", "dhanyawad", "shukriya"];
-
-        const tamilWordCount = words.filter(w => tamilPhonetic.includes(w)).length;
-        const hindiWordCount = words.filter(w => hindiPhonetic.includes(w)).length;
-
-        // Only detect as non-English if there are clear indicators
-        if (tamilWordCount >= 2) return "ta-IN";
-        if (hindiWordCount >= 2) return "hi-IN";
 
         // Default to English for safety
         return "en-IN";

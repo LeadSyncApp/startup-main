@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Mail, Lock, ArrowRight } from "lucide-react";
+import { Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
@@ -17,6 +17,9 @@ export default function Login() {
   
   const [mode, setMode] = useState<Mode>(resetToken ? "reset" : "login");
 
+  const [role, setRole] = useState<"OWNER" | "ADMIN" | "AGENT">("OWNER");
+  const [companyCode, setCompanyCode] = useState("");
+  const [staffId, setStaffId] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -24,6 +27,8 @@ export default function Login() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showCompanyCode, setShowCompanyCode] = useState(false);
 
   /* ================= LOGIN ================= */
   const handleLogin = async (e: React.FormEvent) => {
@@ -33,6 +38,9 @@ export default function Login() {
 
     try {
       const data = await api.post("/auth/login", {
+        role,
+        companyCode: role === "OWNER" ? companyCode : undefined,
+        staffId: role !== "OWNER" ? staffId : undefined,
         email,
         password,
       });
@@ -142,16 +150,74 @@ export default function Login() {
             >
               <div>
                 <label className="block text-sm text-[var(--app-text)] mb-2">
-                  Email / Staff ID
+                  Authenticator Role
+                </label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as any)}
+                  className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 px-4 text-[var(--app-text)] outline-none focus:ring-2 focus:ring-cyan-500/20"
+                >
+                  <option value="OWNER">Owner</option>
+                  <option value="ADMIN">Admin</option>
+                  <option value="AGENT">Staff / Agent</option>
+                </select>
+              </div>
+
+              {role === "OWNER" ? (
+                <div>
+                  <label className="block text-sm text-[var(--app-text)] mb-2">
+                    Company ID / Code
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--app-text-muted)] w-4 h-4 opacity-0" />
+                    <input
+                      type={showCompanyCode ? "text" : "password"}
+                      value={companyCode}
+                      onChange={(e) => setCompanyCode(e.target.value)}
+                      required
+                      className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 pl-4 pr-10 text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/20 font-mono"
+                      placeholder="e.g. GREENEARTH123"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCompanyCode(!showCompanyCode)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--app-text-muted)] hover:text-slate-600 transition"
+                    >
+                      {showCompanyCode ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm text-[var(--app-text)] mb-2">
+                    Staff ID
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--app-text-muted)] w-4 h-4 opacity-0" />
+                    <input
+                      type="text"
+                      value={staffId}
+                      onChange={(e) => setStaffId(e.target.value)}
+                      className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 px-4 text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/20 font-mono"
+                      placeholder="e.g. 2342"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm text-[var(--app-text)] mb-2">
+                  Email
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--app-text-muted)]" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--app-text-muted)] w-4 h-4" />
                   <input
-                    type="text"
+                    type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 pl-11 pr-4 text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
-                    placeholder="Enter email or staff ID"
+                    placeholder="Enter email address"
                     required
                   />
                 </div>
@@ -164,14 +230,21 @@ export default function Login() {
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--app-text-muted)]" />
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) =>
                       setPassword(e.target.value)
                     }
-                    className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 pl-11 pr-4 text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                    className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 pl-11 pr-10 text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--app-text-muted)] hover:text-slate-600 transition"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
                 </div>
               </div>
 
@@ -245,16 +318,25 @@ export default function Login() {
                 </div>
               )}
               
-              <input
-                type="password"
-                placeholder="Enter new password"
-                value={newPassword}
-                onChange={(e) =>
-                  setNewPassword(e.target.value)
-                }
-                className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 px-4 text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter new password"
+                  value={newPassword}
+                  onChange={(e) =>
+                    setNewPassword(e.target.value)
+                  }
+                  className="w-full rounded-lg bg-[var(--app-input-bg)] border border-[var(--app-border)] py-3 pl-4 pr-10 text-[var(--app-text)] placeholder:text-[var(--app-text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--app-text-muted)] hover:text-slate-600 transition"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
 
               <button
                 type="submit"

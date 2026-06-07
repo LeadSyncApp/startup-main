@@ -32,7 +32,7 @@ export default function TakeOrderModal({
   const [newAmount, setNewAmount] = useState("");
   const [newPriority, setNewPriority] = useState<"NORMAL" | "URGENT">("NORMAL");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedMenuItems, setSelectedMenuItems] = useState<Array<{ name: string; price: number; quantity: number }>>([]);
+  const [selectedMenuItems, setSelectedMenuItems] = useState<Array<{ name: string; price: number; quantity: number; productId?: string }>>([]);
 
   const agentName = user?.name || "Agent";
 
@@ -68,7 +68,7 @@ export default function TakeOrderModal({
   }, [selectedMenuItems]);
 
   // Helper actions for items
-  const handleSelectMenuItem = (name: string, price: number) => {
+  const handleSelectMenuItem = (name: string, price: number, productId?: string) => {
     setSelectedMenuItems((prev) => {
       const existingIdx = prev.findIndex(item => item.name === name);
       if (existingIdx > -1) {
@@ -76,7 +76,7 @@ export default function TakeOrderModal({
         next[existingIdx].quantity += 1;
         return next;
       }
-      return [...prev, { name, price, quantity: 1 }];
+      return [...prev, { name, price, quantity: 1, productId }];
     });
   };
 
@@ -120,7 +120,13 @@ export default function TakeOrderModal({
         isUrgent: newPriority === "URGENT",
         agentName,
         city: newCity.trim(),
-        state: newState.trim()
+        state: newState.trim(),
+        items: selectedMenuItems.map(item => ({
+          productId: item.productId || null,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price
+        }))
       });
 
       toast.success("Order manually taken and recorded successfully!");
@@ -293,7 +299,7 @@ export default function TakeOrderModal({
                           const [catIdx, itemIdx] = val.split("-").map(Number);
                           const item = menuCategories[catIdx]?.items?.[itemIdx];
                           if (item) {
-                            handleSelectMenuItem(item.name, Number(item.price) || 0);
+                            handleSelectMenuItem(item.name, Number(item.price) || 0, item.item_id || item.productId || item.id);
                             // Reset dropdown
                             e.target.value = "";
                           }

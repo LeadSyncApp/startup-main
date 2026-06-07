@@ -1,14 +1,27 @@
 import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
+import { Prisma } from "@prisma/client";
 import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
 import { generateStructuredMenu, generateLearnedContext } from "../../services/ai/ai.service";
 import { cacheService } from "../../services/infrastructure/cache.service";
 import { upload, fileParserService } from "../../services/integrations/fileParser.service";
+import { getMenuSnapshot } from "../../utils/shop-ai.utils";
 
 const router = Router();
 
-function formatCompanyResponse(company: any) {
+async function formatCompanyResponse(company: any) {
   if (!company) return null;
+
+  const products = company.products || await prisma.product.findMany({
+    where: { companyId: company.id, isActive: true },
+    orderBy: { name: "asc" }
+  });
+
+  const structuredMenu = getMenuSnapshot(
+    company.botConfiguration?.botStructuredMenu,
+    products
+  );
+
   return {
     id: company.id,
     name: company.name,
@@ -21,8 +34,9 @@ function formatCompanyResponse(company: any) {
     instagramPageId: company.instagramPageId,
     botBusinessType: company.botBusinessType,
     botWelcomeMessage: company.botWelcomeMessage,
-    botStructuredMenu: company.botConfiguration?.botStructuredMenu || null,
+    botStructuredMenu: structuredMenu || null,
     botMenu: company.botConfiguration?.botMenu || null,
+    botCommands: company.botConfiguration?.botCommands || null,
     botKnowledgeBase: company.botConfiguration?.botKnowledgeBase || null,
     botLearnedContext: company.botConfiguration?.botLearnedContext || null,
     botPolicies: company.botConfiguration?.botPolicies || "",
@@ -143,7 +157,7 @@ router.get(
         },
       });
 
-      const companyFormatted = formatCompanyResponse(company);
+      const companyFormatted = await formatCompanyResponse(company);
 
       const activeAgents = await prisma.user.findMany({
         where: { companyId: req.user.companyId, isActive: true },
@@ -214,7 +228,7 @@ router.patch(
 
       res.json({
         message: "Welcome updated successfully",
-        company: formatCompanyResponse(updatedCompany),
+        company: await formatCompanyResponse(updatedCompany),
       });
     } catch (error) {
       console.error("Update welcome error:", error);
@@ -249,7 +263,7 @@ router.patch(
         },
       });
 
-      res.json({ message: "Business details updated", company: formatCompanyResponse(updated) });
+      res.json({ message: "Business details updated", company: await formatCompanyResponse(updated) });
     } catch (error) {
       res.status(500).json({ message: "Failed to update business details" });
     }
@@ -334,7 +348,7 @@ router.patch(
         },
       });
 
-      const companyFormatted = formatCompanyResponse(updatedCompany);
+      const companyFormatted = await formatCompanyResponse(updatedCompany);
 
       // Invalidate cache
       cacheService.delete(cacheService.getCompanyKey(companyId));
@@ -367,42 +381,133 @@ router.patch(
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const { structuredMenu, botBusinessType, botWelcomeMessage } = req.body;
+      const { structuredMenu, botBusinessType, botWelcomeMessage, mergeProducts } = req.body;
+      const companyId = req.user.companyId;
 
-      const updatedCompany = await prisma.company.update({
-        where: { id: req.user.companyId },
-        data: {
-          botBusinessType,
-          botWelcomeMessage,
-          botConfiguration: {
-            upsert: {
-              create: {
-                botStructuredMenu: structuredMenu,
-              },
-              update: {
-                botStructuredMenu: structuredMenu,
+      // 1. Transactionally update Company config and sync Products
+      const result = await prisma.$transaction(async (tx) => {
+        // Update Company/Config
+        const updated = await tx.company.update({
+          where: { id: companyId },
+          data: {
+            botBusinessType,
+            botWelcomeMessage,
+            botConfiguration: {
+              upsert: {
+                create: {
+                  botStructuredMenu: structuredMenu,
+                },
+                update: {
+                  botStructuredMenu: structuredMenu,
+                },
               },
             },
           },
-        },
-        include: {
-          botConfiguration: true,
-        },
+          include: {
+            botConfiguration: true,
+          },
+        });
+
+        // Sync to Product Table (The Master Catalog)
+        if (structuredMenu && Array.isArray(structuredMenu.categories)) {
+          // Sync behavior: overwrite or merge
+          if (!mergeProducts) {
+             await tx.product.deleteMany({ where: { companyId } });
+          }
+
+          // Prepare records
+          const productsToCreate = structuredMenu.categories.flatMap((cat: any) => 
+            (cat.items || []).map((item: any) => ({
+              companyId,
+              name: item.name,
+              price: Number(item.price) || 0,
+              category: cat.name,
+              isActive: true,
+              stockQuantity: typeof item.stock !== 'undefined' ? Number(item.stock) : 999, // use extracted stock, fallback to 999
+              trackInventory: true // default to true so stock updates when sold
+            }))
+          );
+
+          // Seed botKnowledgeBase if it's empty or requested
+          const menuSummary = structuredMenu.categories.map((cat: any) => {
+             const items = (cat.items || []).map((i: any) => `${i.name} (₹${i.price})`).join(", ");
+             return `${cat.name}: ${items}`;
+          }).join("\n");
+
+          if (productsToCreate.length > 0) {
+            if (mergeProducts) {
+                // For merging, skip items with existing names to prevent clutter
+                const existing = await tx.product.findMany({ where: { companyId } });
+                const existingNames = new Set(existing.map((p: any) => p.name.toLowerCase()));
+                const filtered = productsToCreate.filter((p: any) => !existingNames.has(p.name.toLowerCase()));
+                
+                if (filtered.length > 0) {
+                    await tx.product.createMany({
+                        data: filtered,
+                        skipDuplicates: true
+                    });
+                }
+            } else {
+                await tx.product.createMany({
+                    data: productsToCreate,
+                    skipDuplicates: true
+                });
+            }
+          }
+
+          // Update Company/Config with knowledge summary too
+          const finalUpdated = await tx.company.update({
+            where: { id: companyId },
+            data: {
+              botBusinessType,
+              botWelcomeMessage,
+              botConfiguration: {
+                upsert: {
+                  create: {
+                    botStructuredMenu: structuredMenu,
+                    botKnowledgeBase: menuSummary,
+                  },
+                  update: {
+                    botStructuredMenu: structuredMenu,
+                    botKnowledgeBase: menuSummary,
+                  },
+                },
+              },
+            },
+            include: {
+              botConfiguration: true,
+            },
+          });
+
+          return finalUpdated;
+        }
+
+        // Handle case where structuredMenu is null/empty but business types might have changed
+        return await tx.company.update({
+            where: { id: companyId },
+            data: { botBusinessType, botWelcomeMessage },
+            include: { botConfiguration: true }
+        });
       });
 
-      const companyFormatted = formatCompanyResponse(updatedCompany);
+      const companyFormatted = await formatCompanyResponse(result);
 
       // Invalidate cache
-      cacheService.delete(cacheService.getCompanyKey(req.user.companyId));
+      cacheService.delete(cacheService.getCompanyKey(companyId));
 
       res.json({
-        message: "Menu saved successfully",
+        message: "Menu and Master Catalog synchronized successfully",
         company: companyFormatted,
       });
-    } catch (error) {
-      console.error("Save menu error:", error);
+    } catch (error: any) {
+      console.error("[Dashboard Save Menu] Error:", {
+          message: error.message,
+          code: error.code,
+          meta: error.meta
+      });
       res.status(500).json({
         message: "Failed to save menu",
+        error: error.message
       });
     }
   }
@@ -443,7 +548,7 @@ router.patch(
         },
       });
 
-      res.json({ message: "Knowledge saved", company: formatCompanyResponse(updated) });
+      res.json({ message: "Knowledge saved", company: await formatCompanyResponse(updated) });
     } catch (error) {
       res.status(500).json({ message: "Failed to save knowledge" });
     }
@@ -479,7 +584,7 @@ router.patch(
       // Invalidate cache
       cacheService.delete(cacheService.getCompanyKey(req.user.companyId));
 
-      res.json({ message: `Assignment strategy set to ${assignmentStrategy}`, company: formatCompanyResponse(updated) });
+      res.json({ message: `Assignment strategy set to ${assignmentStrategy}`, company: await formatCompanyResponse(updated) });
     } catch (error) {
       console.error("Set assignment strategy error:", error);
       res.status(500).json({ message: "Failed to set assignment strategy" });

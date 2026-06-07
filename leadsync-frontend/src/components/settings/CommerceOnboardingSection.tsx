@@ -3,6 +3,7 @@ import React from "react";
 interface MenuItem {
   name: string;
   price: number;
+  stock?: number;
 }
 
 interface Category {
@@ -182,7 +183,7 @@ Cheese Croissant 180..."
                 />
               </div>
             </div>
-            <p className="text-xs text-slate-500 italic">Use the "Edit Menu" section below to manage your catalog once items are added.</p>
+            <p className="text-xs text-slate-500 italic">Use the "Master Catalog" tab to manage your products individually.</p>
             <button
               id="btn-save-basic-settings"
               onClick={saveEditedMenu}
@@ -218,9 +219,16 @@ Cheese Croissant 180..."
                 <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2 px-1">{cat.name}</p>
                 <div className="space-y-1.5">
                   {cat.items.map((item, ii) => (
-                    <div key={ii} className="flex justify-between text-sm py-1 border-b border-slate-50 last:border-0">
+                    <div key={ii} className="flex justify-between items-center text-sm py-1 border-b border-slate-50 last:border-0">
                       <span className="text-slate-700 font-medium">{item.name}</span>
-                      <span className="text-indigo-600 font-bold">₹{item.price}</span>
+                      <div className="flex items-center gap-3">
+                        {item.stock !== undefined && (
+                          <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-bold">
+                            Stock: {item.stock}
+                          </span>
+                        )}
+                        <span className="text-indigo-600 font-bold">₹{item.price}</span>
+                      </div>
                     </div>
                   ))}
                 </div>

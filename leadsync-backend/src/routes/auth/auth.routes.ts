@@ -5,6 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { signToken } from "../../utils/jwt";
 import crypto from "crypto";
 import { sendEmail, generatePasswordResetHtml } from "../../services/integrations/email.service";
+import { notificationService } from "../../services/infrastructure/notification.service";
 
 const router = Router();
 
@@ -18,7 +19,10 @@ const signupSchema = z.object({
 });
 
 const loginSchema = z.object({
-  email: z.string().min(1, "Email or Staff ID is required"),
+  role: z.enum(["OWNER", "ADMIN", "AGENT"]).default("OWNER"),
+  companyCode: z.string().optional(),
+  staffId: z.string().optional(),
+  email: z.string().min(1, "Email is required"),
   password: z.string().min(1, "Password is required"),
 });
 
@@ -53,10 +57,17 @@ router.post("/signup", async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    
+    // Auto-generate company code
+    const rawName = companyName || `${name} Co`;
+    const sanitizedName = rawName.replace(/[^a-zA-Z]/g, "").substring(0, 8).toUpperCase() || "COMP";
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000); // 4 digits
+    const companyCode = `${sanitizedName}${randomSuffix}`;
 
     const company = await prisma.company.create({
       data: {
         name: companyName || `${name}'s Company`,
+        companyCode,
         users: {
           create: {
             name,
@@ -69,6 +80,7 @@ router.post("/signup", async (req, res) => {
       select: {
         id: true,
         name: true,
+        companyCode: true,
         users: {
           select: {
             id: true,
@@ -118,23 +130,26 @@ router.post("/login", async (req, res) => {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0].message });
     }
-    const { email, password } = parsed.data;
+    const { email, password, staffId, companyCode, role } = parsed.data;
 
     const identifier = email.toLowerCase().trim();
+    const providedStaffId = staffId ? staffId.trim() : "";
+    const providedCompanyCode = companyCode ? companyCode.trim().toUpperCase() : "";
+
+    // Build query based on role
+    const userQuery: any = {
+      email: identifier,
+      isActive: true, // 🔐 block disabled users
+    };
 
     const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email: identifier },
-          { staffId: identifier }
-        ],
-        isActive: true, // 🔐 block disabled users
-      },
+      where: userQuery,
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
+        staffId: true,
         isAvailable: true,
         passwordHash: true,
         companyId: true,
@@ -144,6 +159,33 @@ router.post("/login", async (req, res) => {
 
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    if (user.role !== role) {
+      if (user.role === "OWNER" && role !== "OWNER") {
+        // Technically an owner could log in as ADMIN, but let's strictly require selecting OWNER
+        return res.status(401).json({ message: "Please select the authentic 'Owner' role to login" });
+      }
+      if (user.role !== "OWNER" && role === "OWNER") {
+        return res.status(401).json({ message: "Invalid credentials. You are not an Owner." });
+      }
+    }
+
+    if (role !== "OWNER") {
+      if (!providedStaffId) {
+        return res.status(401).json({ message: "Staff ID is required" });
+      }
+      if (user.staffId !== providedStaffId) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+    } else {
+      // Role is OWNER
+      if (!providedCompanyCode) {
+        return res.status(401).json({ message: "Company ID is required for Owner login" });
+      }
+      if (user.company?.companyCode !== providedCompanyCode) {
+        return res.status(401).json({ message: "Invalid Company ID / Code" });
+      }
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
@@ -350,6 +392,123 @@ router.post("/reset-password", async (req, res) => {
   } catch (err) {
     console.error('❌ Reset password - Unexpected error:', err);
     res.status(500).json({ message: "Failed to reset password" });
+  }
+});
+
+/* =====================================================
+   STAFF SIGNUP (Onboard completion)
+===================================================== */
+const staffSignupSchema = z.object({
+  companyCode: z.string().min(1, "Company Access Code is required"),
+  staffId: z.string().min(1, "Staff ID token is required"),
+  name: z.string().min(1, "Name is required"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  residingAddress: z.string().min(1, "Residing Address is required"),
+  phoneNumber: z.string().min(1, "Phone Number is required"),
+});
+
+router.post("/staff-signup", async (req, res) => {
+  try {
+    const parsed = staffSignupSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0].message });
+    }
+    const { companyCode, staffId, name, password, residingAddress, phoneNumber } = parsed.data;
+
+    const company = await prisma.company.findFirst({
+      where: {
+        companyCode: {
+          equals: companyCode.trim().toUpperCase(),
+          mode: "insensitive",// Case-insensitive comparison
+        }
+      }
+    });
+
+    if (!company) {
+      return res.status(404).json({ message: "Invalid Company Access Code" });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        companyId: company.id,
+        staffId: {
+          equals: staffId.trim(),
+          mode: "insensitive",
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "Invalid Staff ID Token for this company" });
+    }
+
+    // Hash the password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Complete the onboarding / update details
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        name,
+        passwordHash,
+        residingAddress,
+        phoneNumber,
+        isActive: true,
+        isOnline: true,
+        lastSeenAt: new Date(),
+      }
+    });
+
+    // Notify the Owner and Admins
+    await notificationService.notifyCompanyAdmins(
+      company.id,
+      "🎉 Teammate Onboarded",
+      `${name} has completed onboarding & registered successfully with staff ID: ${staffId}`,
+      "SYSTEM"
+    );
+
+    // Insert an Audit Log record
+    await prisma.systemAuditLog.create({
+      data: {
+        companyId: company.id,
+        userId: user.id,
+        action: "STAFF_ONBOARD_COMPLETED",
+        metadata: {
+          name,
+          email: user.email,
+          staffId,
+          residingAddress,
+          phoneNumber,
+        }
+      }
+    });
+
+    // Sign complete token
+    const token = signToken({
+      userId: user.id,
+      companyId: company.id,
+      role: user.role,
+    });
+
+    res.status(200).json({
+      message: "Onboarding details saved successfully!",
+      token,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        role: updatedUser.role,
+        isAvailable: updatedUser.isAvailable,
+      },
+      company: {
+        id: company.id,
+        name: company.name,
+      }
+    });
+
+  } catch (error: any) {
+    console.error("Staff onboarding signup failed:", error);
+    res.status(500).json({ message: "Failed to complete onboarding signup" });
   }
 });
 

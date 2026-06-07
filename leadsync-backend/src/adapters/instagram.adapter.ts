@@ -190,7 +190,18 @@ export class InstagramAdapter implements ChannelAdapter {
                 company.botConfiguration?.botStructuredMenu
             ).catch(() => { });
 
-            if (conversation.mode === ConversationMode.HUMAN) return;
+            const isStartCommand = text.toLowerCase().trim() === "/start" || text.toLowerCase().trim() === "start";
+
+            if (conversation.mode === ConversationMode.HUMAN) {
+                if (isStartCommand) {
+                    conversation = await prisma.conversation.update({
+                        where: { id: conversation.id },
+                        data: { mode: ConversationMode.BOT }
+                    });
+                } else {
+                    return;
+                }
+            }
 
             /* AI REPLY */
             this.sendTyping(psid).catch(() => { });
@@ -230,6 +241,7 @@ export class InstagramAdapter implements ChannelAdapter {
                 }
             } catch (err) {
                 console.error("AI Error (IG):", err);
+                await this.saveAndSendMessage(psid, conversation, "I am experiencing some technical issues right now. My system is taking too long to respond. Please try your request again.");
             }
 
         } catch (err) {
