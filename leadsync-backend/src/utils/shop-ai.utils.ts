@@ -61,7 +61,41 @@ export function updateSession(tenant_id: string, chat_id: string, updates: Parti
     sessions.set(key, { ...current, ...updates });
 }
 
-export function getMenuSnapshot(structuredMenu: any) {
+export function getMenuSnapshot(structuredMenu: any, products?: any[]) {
+    try {
+        const fs = require("fs");
+        fs.appendFileSync("/bot_debug.log", `[getMenuSnapshot] Called at ${new Date().toISOString()}. structuredMenu exists: ${!!structuredMenu}, products length: ${products?.length || 0}\n`);
+        if (products && products.length > 0) {
+            fs.appendFileSync("/bot_debug.log", `[getMenuSnapshot] Raw products list: ${JSON.stringify(products.map(p => ({ id: p.id, name: p.name, isActive: p.isActive, category: p.category })))}\n`);
+        }
+    } catch (err) {}
+
+    // Priority 1: Use the Relational Product Table (Master Catalog)
+    const activeProducts = (products || []).filter((p: any) => p.isActive !== false);
+    if (activeProducts && activeProducts.length > 0) {
+        // Group products by category
+        const categoriesMap: Record<string, any[]> = {};
+        activeProducts.forEach((p: any) => {
+            const cat = p.category || "Uncategorized";
+            if (!categoriesMap[cat]) categoriesMap[cat] = [];
+            categoriesMap[cat].push({
+                item_id: p.id,
+                name: p.name,
+                price: p.price,
+                currency: "INR",
+                category: cat
+            });
+        });
+
+        return {
+            categories: Object.entries(categoriesMap).map(([name, items]) => ({
+                name,
+                items
+            }))
+        };
+    }
+
+    // Priority 2: Fallback to the Legacy JSON blob (botStructuredMenu)
     if (!structuredMenu || !structuredMenu.categories) {
         return { categories: [] };
     }
@@ -80,7 +114,8 @@ export function getMenuSnapshot(structuredMenu: any) {
 }
 
 export function calculateRetrieval(query: string, menuSnapshot: any) {
-    const tokens = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+    const normalizedQuery = query.toLowerCase().replace(/[-_/,;:!?()]/g, " ");
+    const tokens = normalizedQuery.split(/\s+/).filter(t => t.length >= 2);
     const items: any[] = [];
 
     menuSnapshot.categories.forEach((cat: any) => {
@@ -143,15 +178,72 @@ export function sanitizeReply(text: string): string {
     let cleaned = text.replace(/```[a-z]*\n?|```/gi, "").trim();
     // Remove bold and italics
     cleaned = cleaned.replace(/\*\*|\*/g, "");
-
+    
     // DELIBERATELY RETAINING EMOJIS: Emojis are vital for natural chatbot communication (like ✅, 📦, 🚚).
-    // Removed the aggressive emoji filter regex.
-    return cleaned;
+    // Remove any leftover hallucinated XML tool tags
+    cleaned = cleaned.replace(/<(?:function|tool_call|invoke)[^>]*>[\s\S]*?<\/(?:function|tool_call|invoke)>/gi, "");
+    
+    return cleaned.trim();
 }
 
 /**
  * Clear session state for a fresh cart session
  */
+export function validateStateUpdates(raw: any, baseState: SessionState): SessionState {
+    if (!raw || typeof raw !== 'object') return baseState;
+    
+    // Create a deeply cloned fallback to mutate
+    const safeBase = JSON.parse(JSON.stringify(baseState)) as SessionState;
+
+    const safeState: SessionState = { ...safeBase };
+
+    if (raw.last_category !== undefined) {
+        safeState.last_category = typeof raw.last_category === 'string' ? raw.last_category : null;
+    }
+    
+    if (Array.isArray(raw.last_item_names)) {
+        safeState.last_item_names = raw.last_item_names.filter((n: any) => typeof n === 'string');
+    }
+
+    if (raw.preferences && typeof raw.preferences === 'object') {
+        const p = raw.preferences;
+        safeState.preferences = {
+            color: typeof p.color === 'string' ? p.color : safeBase.preferences.color,
+            size: typeof p.size === 'string' ? p.size : safeBase.preferences.size,
+            budget_max: typeof p.budget_max === 'number' ? p.budget_max : safeBase.preferences.budget_max,
+            purpose: typeof p.purpose === 'string' ? p.purpose : safeBase.preferences.purpose,
+        };
+    }
+
+    if (raw.cart && typeof raw.cart === 'object') {
+        const items = Array.isArray(raw.cart.items) ? raw.cart.items : safeBase.cart.items || [];
+        const safeItems: CartItem[] = [];
+        let calculatedTotal = 0;
+
+        for (const item of items) {
+            if (item && typeof item === 'object' && typeof item.name === 'string' && typeof item.price === 'number' && typeof item.quantity === 'number' && item.quantity > 0) {
+                const subtotal = item.quantity * item.price;
+                safeItems.push({
+                    name: item.name,
+                    price: item.price,
+                    quantity: item.quantity,
+                    subtotal: typeof item.subtotal === 'number' ? item.subtotal : subtotal,
+                    color: typeof item.color === 'string' ? item.color : null,
+                    size: typeof item.size === 'string' ? item.size : null
+                });
+                calculatedTotal += subtotal;
+            }
+        }
+
+        safeState.cart = {
+            items: safeItems,
+            total: typeof raw.cart.total === 'number' && raw.cart.total > 0 ? raw.cart.total : calculatedTotal
+        };
+    }
+
+    return safeState;
+}
+
 export function createFreshSessionState(): SessionState {
     return {
         last_category: null,

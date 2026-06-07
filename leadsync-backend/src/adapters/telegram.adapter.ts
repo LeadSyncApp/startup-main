@@ -59,6 +59,33 @@ function buildWelcomeMessage(company: any, name: string) {
     return `👋 Hello ${name}!\n\n${customWelcome}`;
 }
 
+export function escapeHtmlForTelegram(text: string): string {
+    if (!text) return "";
+    
+    // First escape all '&' that are not already part of an HTML entity
+    let escaped = text.replace(/&(?!(amp|lt|gt|quot|apos|#\d+);)/g, "&amp;");
+    
+    // Valid allowed Telegram HTML tags (opening and closing)
+    const allowedTags = /<\/?(b|strong|i|em|u|ins|s|strike|del|code|pre|a\s+href="[^"]*"\s*|a)>/g;
+    
+    // Replace allowed tags with a unique placeholder, escape the rest, then restore placeholders
+    const placeholders: string[] = [];
+    escaped = escaped.replace(allowedTags, (match) => {
+        placeholders.push(match);
+        return `__TG_HTML_TAG_PLACEHOLDER_${placeholders.length - 1}__`;
+    });
+    
+    // Escape standard XML/HTML tags
+    escaped = escaped.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    
+    // Restore placeholders
+    escaped = escaped.replace(/__TG_HTML_TAG_PLACEHOLDER_(\d+)__/g, (_, index) => {
+        return placeholders[parseInt(index, 10)];
+    });
+    
+    return escaped;
+}
+
 const sendTelegramApi = async (url: string, payload: any) => {
     try {
         await axios.post(url, payload, { timeout: 5000 });
@@ -101,7 +128,7 @@ export class TelegramAdapter implements ChannelAdapter {
         const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
         const payload: any = {
             chat_id: to,
-            text,
+            text: escapeHtmlForTelegram(text),
             parse_mode: "HTML",
         };
         await sendTelegramApi(url, payload);
@@ -112,7 +139,8 @@ export class TelegramAdapter implements ChannelAdapter {
         const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
         await sendTelegramApi(url, {
             chat_id: to,
-            text,
+            text: escapeHtmlForTelegram(text),
+            parse_mode: "HTML",
             reply_markup: {
                 inline_keyboard: [[
                     { text: "🔊 Voice Reply", callback_data: `voice_reply:${to}` },
@@ -137,6 +165,163 @@ export class TelegramAdapter implements ChannelAdapter {
         const queryId = callbackQuery.id;
 
         await this.answerCallbackQuery(queryId); // dismiss spinner immediately
+
+        if (data.startsWith("lang_set:")) {
+            const langCode = data.split(":")[1];
+            try {
+                const lead = await prisma.lead.findFirst({
+                    where: { contact: chatId, channel: Channel.TELEGRAM } // Add companyId constraint if necessary, but contact is usually unique enough for this or findMany. Using findFirst.
+                });
+                if (lead) {
+                    await prisma.lead.update({
+                        where: { id: lead.id },
+                        data: { preferredLanguage: langCode }
+                    });
+                    
+                    const responseMap: any = {
+                        "ta-IN": "மொழி தமிழுக்கு மாற்றப்பட்டது. நான் உங்களுக்கு எவ்வாறு உதவலாம்?",
+                        "hi-IN": "भाषा हिंदी में सेट हो गई है। मैं आपकी कैसे मदद कर सकता हूँ?",
+                        "te-IN": "భాష తెలుగుకు సెట్ చేయబడింది. నేను మీకు ఎలా సహాయం చేయగలను?",
+                        "ml-IN": "ഭാഷ മലയാളമായി സജ്ജീകരിച്ചു. നിങ്ങൾക്ക് എങ്ങനെ സഹായം ചെയ്യാം?",
+                        "kn-IN": "ಭಾಷೆ ಕನ್ನಡಕ್ಕೆ ಹೊಂದಿಸಲಾಗಿದೆ. ನಾನು ನಿಮಗೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಬಹುದು?",
+                        "en-IN": "Language set to English. How can I help you today?"
+                    };
+                    const responseMsg = responseMap[langCode] || responseMap["en-IN"];
+                    
+                    const messageId = callbackQuery.message?.message_id;
+                    if (messageId) {
+                        const url = `https://api.telegram.org/bot${this.botToken}/editMessageText`;
+                        const payload = {
+                            chat_id: chatId,
+                            message_id: messageId,
+                            text: responseMsg,
+                            parse_mode: "HTML",
+                            reply_markup: {
+                                inline_keyboard: []
+                            }
+                        };
+                        try {
+                            await sendTelegramApi(url, payload);
+                        } catch (e) {
+                            console.error("❌ editMessageText failed, falling back to sendMessage", e);
+                            await this.sendMessage(chatId, responseMsg);
+                        }
+                    } else {
+                        await this.sendMessage(chatId, responseMsg);
+                    }
+                }
+            } catch (err) {
+                 console.error("❌ lang_set callback failed:", err);
+            }
+            return;
+        }
+
+        if (data === "lang_selection_prompt") {
+            try {
+                const welcomeText = "🌐 Please select your preferred language / உங்கள் விருப்பமான மொழியைத் தேர்ந்தெடுக்கவும்:";
+                const messageId = callbackQuery.message?.message_id;
+                
+                if (messageId) {
+                    const url = `https://api.telegram.org/bot${this.botToken}/editMessageText`;
+                    const payload = {
+                        chat_id: chatId,
+                        message_id: messageId,
+                        text: welcomeText,
+                        parse_mode: "HTML",
+                        reply_markup: {
+                            inline_keyboard: [
+                                [
+                                    { text: "English", callback_data: "lang_set:en-IN" },
+                                    { text: "தமிழ் (Tamil)", callback_data: "lang_set:ta-IN" }
+                                ],
+                                [
+                                    { text: "हिंदी (Hindi)", callback_data: "lang_set:hi-IN" },
+                                    { text: "తెలుగు (Telugu)", callback_data: "lang_set:te-IN" }
+                                ],
+                                [
+                                    { text: "ಕನ್ನಡ (Kannada)", callback_data: "lang_set:kn-IN" },
+                                    { text: "മലയാളం (Malayalam)", callback_data: "lang_set:ml-IN" }
+                                ]
+                            ]
+                        }
+                    };
+                    try {
+                        await sendTelegramApi(url, payload);
+                    } catch (e) {
+                        console.error("❌ editMessageText failed for lang_selection_prompt, falling back to sendMessage", e);
+                        await sendTelegramApi(`https://api.telegram.org/bot${this.botToken}/sendMessage`, {
+                            chat_id: chatId,
+                            text: welcomeText,
+                            parse_mode: "HTML",
+                            reply_markup: payload.reply_markup
+                        });
+                    }
+                } else {
+                    await sendTelegramApi(`https://api.telegram.org/bot${this.botToken}/sendMessage`, {
+                        chat_id: chatId,
+                        text: welcomeText,
+                        parse_mode: "HTML",
+                        reply_markup: {
+                            inline_keyboard: [
+                                [
+                                    { text: "English", callback_data: "lang_set:en-IN" },
+                                    { text: "தமிழ் (Tamil)", callback_data: "lang_set:ta-IN" }
+                                ],
+                                [
+                                    { text: "हिंदी (Hindi)", callback_data: "lang_set:hi-IN" },
+                                    { text: "తెలుగు (Telugu)", callback_data: "lang_set:te-IN" }
+                                ],
+                                [
+                                    { text: "ಕನ್ನಡ (Kannada)", callback_data: "lang_set:kn-IN" },
+                                    { text: "മലയാളം (Malayalam)", callback_data: "lang_set:ml-IN" }
+                                ]
+                            ]
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error("❌ lang_selection_prompt callback failed:", err);
+            }
+            return;
+        }
+
+        if (data === "TODAY_SPECIAL") {
+            try {
+                const specMsg = "☕️ <b>Today's Special Offer</b>:\ncoffee is 15% discount today";
+                const dbMsg = "☕️ Today's Special Offer:\ncoffee is 15% discount today";
+                const conversation = await prisma.conversation.findFirst({
+                    where: { lead: { contact: chatId } },
+                    orderBy: { updatedAt: "desc" }
+                });
+                if (conversation) {
+                    const botMsg = await prisma.message.create({
+                        data: {
+                            content: dbMsg,
+                            sender: MessageSender.SYSTEM,
+                            conversationId: conversation.id,
+                        }
+                    });
+                    emitToConversation(conversation.id, "new_message", botMsg);
+                }
+                const companyId = conversation?.companyId;
+                if (companyId) {
+                    let company: any = cacheService.get(cacheService.getCompanyKey(companyId));
+                    if (!company) {
+                        company = await prisma.company.findUnique({
+                            where: { id: companyId }
+                        });
+                        if (company) cacheService.set(cacheService.getCompanyKey(companyId), company);
+                    }
+                    if (company && company.telegramBotToken) {
+                        this.botToken = company.telegramBotToken;
+                    }
+                }
+                await this.sendMessage(chatId, specMsg);
+            } catch (err) {
+                console.error("❌ TODAY_SPECIAL callback failed:", err);
+            }
+            return;
+        }
 
         if (data.startsWith("voice_reply:")) {
             // Fast path: use pre-cached audio
@@ -294,7 +479,7 @@ export class TelegramAdapter implements ChannelAdapter {
             } catch (err) {
                 console.error("❌ CANCEL_ORDER callback failed:", err);
             }
-        } else if (data === "MENU" || data.startsWith("MENU") || data === "VIEW_MENU") {
+        } else if (data === "MENU" || data === "VIEW_MENU") {
             // Handle the dynamic MENU button from the AI
             try {
                 const conversation = await prisma.conversation.findFirst({
@@ -307,14 +492,12 @@ export class TelegramAdapter implements ChannelAdapter {
                         conversation.id,
                         "/menu",
                         "text",
-                        "en-IN", // generic fallback, AI will redetect
+                        "en-IN",
                         "button_click",
                         "/menu",
                         data
                     );
-                    if (aiReply) {
-                        await this.parseAndSendResponse(chatId, conversation, aiReply);
-                    }
+                    if (aiReply) await this.parseAndSendResponse(chatId, conversation, aiReply);
                 }
             } catch (err) {
                 console.error("❌ MENU callback failed:", err);
@@ -340,6 +523,30 @@ export class TelegramAdapter implements ChannelAdapter {
                 }
             } catch (err) {
                 console.error("❌ Text reply fallback failed:", err);
+            }
+        } else {
+            // 🆕 GENERIC FALLBACK: Pass custom button callbacks to the AI as a text query
+            // This allows buttons like "Today Discount" to be handled by the conversation engine
+            try {
+                const conversation = await prisma.conversation.findFirst({
+                    where: { lead: { contact: chatId } },
+                    orderBy: { updatedAt: "desc" }
+                });
+                if (conversation) {
+                    await this.sendTyping(chatId);
+                    // Convert slug like "today_discount" back to "today discount"
+                    const searchPhrase = data.replace(/_/g, " ");
+                    const aiReply = await handleBotMessage(
+                        conversation.id,
+                        searchPhrase,
+                        "text",
+                        "en-IN",
+                        "button_click"
+                    );
+                    if (aiReply) await this.parseAndSendResponse(chatId, conversation, aiReply);
+                }
+            } catch (err) {
+                console.error(`❌ Custom callback ${data} failed:`, err);
             }
         }
     }
@@ -399,42 +606,18 @@ export class TelegramAdapter implements ChannelAdapter {
             let text = message.text?.trim() || "";
             const isVoiceMsg = !!message.voice;
 
-            let detectedLanguage = "en-IN"; // Default
-
-            // 🎙️ VOICE INPUT: Download and transcribe if voice message
-            if (isVoiceMsg && message.voice) {
-                const { file_id, duration, mime_type } = message.voice;
-                const audioBuffer = await downloadTelegramVoice(this.botToken, file_id);
-                if (audioBuffer) {
-                    const sttResult = await sarvamService.speechToText(audioBuffer, "voice.ogg");
-                    if (sttResult) {
-                        text = sttResult.transcript;
-                        // Voice transcription already detects language, but we can refine it
-                        detectedLanguage = await sarvamService.detectLanguage(text);
-                    } else {
-                        await this.sendMessage(chatId, "Sorry, I had trouble hearing that. Could you try again?");
-                        return;
-                    }
-                } else {
-                    await this.sendMessage(chatId, "The voice message couldn't be received. Please try again.");
-                    return;
-                }
-            } else if (text) {
-                detectedLanguage = await sarvamService.detectLanguage(text);
-            }
-
-            if (!text) return;
-
             // ... (cache and token logic) ...
             let company: any = cacheService.get(cacheService.getCompanyKey(companyId));
             if (!company) {
-                company = await prisma.company.findUnique({ where: { id: companyId } });
+                company = await prisma.company.findUnique({
+                    where: { id: companyId },
+                    include: { botConfiguration: true }
+                });
                 if (company) cacheService.set(cacheService.getCompanyKey(companyId), company);
             }
             if (!company || !company.telegramBotToken) return;
 
             this.botToken = company.telegramBotToken;
-            this.sendTyping(chatId).catch(() => { });
 
             /* FIND / CREATE LEAD (Safe against race conditions) */
             const lead = await prisma.lead.upsert({
@@ -448,6 +631,37 @@ export class TelegramAdapter implements ChannelAdapter {
                 update: { name },
                 create: { name, contact: chatId, channel: Channel.TELEGRAM, companyId },
             });
+
+            this.sendTyping(chatId).catch(() => { });
+
+            let detectedLanguage = lead.preferredLanguage || "en-IN";
+
+            // 🎙️ VOICE INPUT: Download and transcribe if voice message
+            if (isVoiceMsg && message.voice) {
+                const { file_id } = message.voice;
+                const audioBuffer = await downloadTelegramVoice(this.botToken, file_id);
+                if (audioBuffer) {
+                    const sttResult = await sarvamService.speechToText(audioBuffer, "voice.ogg");
+                    if (sttResult) {
+                        text = sttResult.transcript;
+                        if (!lead.preferredLanguage) {
+                            detectedLanguage = await sarvamService.detectLanguage(text);
+                        }
+                    } else {
+                        await this.sendMessage(chatId, "Sorry, I had trouble hearing that. Could you try again?");
+                        return;
+                    }
+                } else {
+                    await this.sendMessage(chatId, "The voice message couldn't be received. Please try again.");
+                    return;
+                }
+            } else if (text) {
+                if (!lead.preferredLanguage) {
+                    detectedLanguage = await sarvamService.detectLanguage(text);
+                }
+            }
+
+            if (!text) return;
 
             /* FIND / CREATE CONVERSATION (Safe against race conditions) */
             let conversation = await prisma.conversation.findUnique({
@@ -531,7 +745,7 @@ export class TelegramAdapter implements ChannelAdapter {
 
             // 🧠 BACKGROUND TASKS
             intelligenceService.analyzeMessage(companyId, lead.id, conversation.id, text).catch(() => { });
-            orderParserService.processPotentialOrder(companyId, conversation.id, lead.id, text, company.botStructuredMenu).catch(() => { });
+            orderParserService.processPotentialOrder(companyId, conversation.id, lead.id, text, company.botConfiguration?.botStructuredMenu).catch(() => { });
 
             // 🔔 NOTIFICATION: Notify Assigned Agent & All Agents (if unclaimed)
             const notifyBody = `${name}: ${text.length > 50 ? text.slice(0, 50) + "..." : text}`;
@@ -541,7 +755,18 @@ export class TelegramAdapter implements ChannelAdapter {
                 notificationService.notifyCompany(companyId, "New Unassigned Message", notifyBody, "MESSAGE");
             }
 
-            if (conversation.mode === ConversationMode.HUMAN) return;
+            const isStartCommand = text.toLowerCase().trim() === "/start" || text.toLowerCase().trim() === "start";
+
+            if (conversation.mode === ConversationMode.HUMAN) {
+                if (isStartCommand) {
+                    conversation = await prisma.conversation.update({
+                        where: { id: conversation.id },
+                        data: { mode: ConversationMode.BOT }
+                    });
+                } else {
+                    return;
+                }
+            }
 
             /* AI REPLY */
             this.sendTyping(chatId).catch(() => { });
@@ -566,6 +791,7 @@ export class TelegramAdapter implements ChannelAdapter {
                 await this.parseAndSendResponse(chatId, conversation, aiReply, detectedLanguage, isVoiceMsg);
             } catch (err) {
                 console.error("Bot Logic Error:", err);
+                await this.sendMessage(chatId, "I am experiencing some technical issues right now. My system is taking too long to respond. Please try your request again.");
             }
 
         } catch (err) {
@@ -628,17 +854,13 @@ export class TelegramAdapter implements ChannelAdapter {
             const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
             const payload: any = {
                 chat_id: chatId,
-                text: messageText,
+                text: escapeHtmlForTelegram(messageText),
                 parse_mode: "HTML",
             };
 
             const buttons: any[] = [];
             if (buttonsList.length > 0) {
-                if (buttonsList.length <= 2) {
-                    buttons.push(buttonsList.map(b => ({ text: b.text, callback_data: b.callback_data })));
-                } else {
-                    buttonsList.forEach(b => buttons.push([{ text: b.text, callback_data: b.callback_data }]));
-                }
+                buttonsList.forEach(b => buttons.push([{ text: b.text, callback_data: b.callback_data }]));
             }
 
             if (isVoiceMsg) {

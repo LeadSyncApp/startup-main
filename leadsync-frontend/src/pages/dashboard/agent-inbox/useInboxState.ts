@@ -30,7 +30,9 @@ export function useAgentInboxState() {
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [reactions, setReactions] = useState<Record<string, Record<string, number>>>({});
+  const [reactionsDetail, setReactionsDetail] = useState<Record<string, Record<string, Array<{ id: string; name: string }>>>>({});
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [replyToNote, setReplyToNote] = useState<NoteData | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
@@ -284,6 +286,26 @@ export function useAgentInboxState() {
             "customer",
           authorId: n.authorId,
         }));
+
+        const initialReactions: Record<string, Record<string, number>> = {};
+        const initialReactionsDetail: Record<string, Record<string, Array<{ id: string; name: string }>>> = {};
+        data.forEach((n: any) => {
+          if (n.reactions) {
+            initialReactions[n.id] = n.reactions;
+          }
+          if (n.reactionsDetail) {
+            initialReactionsDetail[n.id] = n.reactionsDetail;
+          }
+        });
+        setReactions((prev) => ({
+          ...prev,
+          ...initialReactions,
+        }));
+        setReactionsDetail((prev) => ({
+          ...prev,
+          ...initialReactionsDetail,
+        }));
+
         setNotes(formatted);
       } catch (err) {
         console.error("Failed to load agent notes:", err);
@@ -363,9 +385,22 @@ export function useAgentInboxState() {
       }
     };
 
+    const onReactionUpdated = ({ noteId, reactions: updatedReactions, reactionsDetail: updatedDetails }: any) => {
+      setReactions((prev) => ({
+        ...prev,
+        [noteId]: updatedReactions,
+      }));
+      setReactionsDetail((prev) => ({
+        ...prev,
+        [noteId]: updatedDetails || {},
+      }));
+    };
+
     socket.on("agent_inbox_new_note", onNewNote);
+    socket.on("agent_note_reaction_updated", onReactionUpdated);
     return () => {
       socket.off("agent_inbox_new_note", onNewNote);
+      socket.off("agent_note_reaction_updated", onReactionUpdated);
     };
   }, [socket, selectedAgent?.id, soundEnabled, user]);
 
@@ -374,13 +409,20 @@ export function useAgentInboxState() {
     setMobileView("detail");
   };
 
-  const handleSendNote = async (text: string) => {
+  const handleSendNote = async (text: string, conversationId?: string) => {
     if (!selectedAgent || !text.trim()) return;
+
+    let finalContent = text.trim();
+    if (replyToNote) {
+      const cleanContent = replyToNote.content.replace(/^\[REPLY_TO:[^\]]+\]\s*/, "");
+      finalContent = `[REPLY_TO:${replyToNote.authorName}:::${cleanContent}:::${replyToNote.id}] ${finalContent}`;
+    }
 
     setIsSubmittingMessage(true);
     try {
       const res = await api.post(`/users/${selectedAgent.id}/notes`, {
-        content: text.trim(),
+        content: finalContent,
+        conversationId,
       });
 
       setNotes((prev) => {
@@ -408,6 +450,7 @@ export function useAgentInboxState() {
           },
         ];
       });
+      setReplyToNote(null);
       toast.success("Note sent successfully!");
     } catch (err) {
       console.error("Failed to send agent note:", err);
@@ -417,7 +460,10 @@ export function useAgentInboxState() {
     }
   };
 
-  const handleToggleReaction = (noteId: string, emoji: string) => {
+  const handleToggleReaction = async (noteId: string, emoji: string) => {
+    if (!selectedAgent) return;
+
+    // Optimistically update frontend reaction state (adds direct snappiness to UI)
     setReactions((prev) => {
       const currentNoteReacts = prev[noteId] || {};
       const currentEmojiCount = currentNoteReacts[emoji] || 0;
@@ -429,6 +475,50 @@ export function useAgentInboxState() {
         },
       };
     });
+
+    // Optimistically update frontend reactionsDetail
+    setReactionsDetail((prev) => {
+      const currentNoteDetails = prev[noteId] || {};
+      const currentEmojiUsers = currentNoteDetails[emoji] || [];
+      const alreadyReacted = currentEmojiUsers.some((u) => u.id === user?.id);
+
+      let updatedUsers = [...currentEmojiUsers];
+      if (alreadyReacted) {
+        updatedUsers = updatedUsers.filter((u) => u.id !== user?.id);
+      } else if (user) {
+        updatedUsers.push({ id: user.id, name: user.name || "Me" });
+      }
+
+      return {
+        ...prev,
+        [noteId]: {
+          ...currentNoteDetails,
+          [emoji]: updatedUsers,
+        },
+      };
+    });
+
+    try {
+      const res = await api.post(`/users/${selectedAgent.id}/notes/${noteId}/react`, {
+        emoji,
+      });
+      if (res) {
+        if (res.reactions) {
+          setReactions((prev) => ({
+            ...prev,
+            [noteId]: res.reactions,
+          }));
+        }
+        if (res.reactionsDetail) {
+          setReactionsDetail((prev) => ({
+            ...prev,
+            [noteId]: res.reactionsDetail,
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to toggle reaction:", err);
+    }
   };
 
   const filteredAgents = useMemo(() => {
@@ -469,6 +559,7 @@ export function useAgentInboxState() {
     isDropdownOpen,
     setIsDropdownOpen,
     reactions,
+    reactionsDetail,
     soundEnabled,
     setSoundEnabled,
     messagesEndRef,
@@ -488,6 +579,8 @@ export function useAgentInboxState() {
     handleDeleteChat,
     handleSendNote,
     handleToggleReaction,
+    replyToNote,
+    setReplyToNote,
     filteredAgents,
     activeInboxAgents,
   };

@@ -78,7 +78,10 @@ export class InstagramAdapter implements ChannelAdapter {
             // 1. Fetch Company
             let company: any = cacheService.get(cacheService.getCompanyKey(companyId));
             if (!company) {
-                company = await prisma.company.findUnique({ where: { id: companyId } });
+                company = await prisma.company.findUnique({
+                    where: { id: companyId },
+                    include: { botConfiguration: true }
+                });
                 if (company) cacheService.set(cacheService.getCompanyKey(companyId), company);
             }
             if (!company || !(company as any).instagramPageAccessToken) return;
@@ -184,10 +187,21 @@ export class InstagramAdapter implements ChannelAdapter {
                 conversation.id,
                 lead.id,
                 text,
-                company.botStructuredMenu
+                company.botConfiguration?.botStructuredMenu
             ).catch(() => { });
 
-            if (conversation.mode === ConversationMode.HUMAN) return;
+            const isStartCommand = text.toLowerCase().trim() === "/start" || text.toLowerCase().trim() === "start";
+
+            if (conversation.mode === ConversationMode.HUMAN) {
+                if (isStartCommand) {
+                    conversation = await prisma.conversation.update({
+                        where: { id: conversation.id },
+                        data: { mode: ConversationMode.BOT }
+                    });
+                } else {
+                    return;
+                }
+            }
 
             /* AI REPLY */
             this.sendTyping(psid).catch(() => { });
@@ -227,6 +241,7 @@ export class InstagramAdapter implements ChannelAdapter {
                 }
             } catch (err) {
                 console.error("AI Error (IG):", err);
+                await this.saveAndSendMessage(psid, conversation, "I am experiencing some technical issues right now. My system is taking too long to respond. Please try your request again.");
             }
 
         } catch (err) {

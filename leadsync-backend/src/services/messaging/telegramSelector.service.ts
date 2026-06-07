@@ -18,96 +18,138 @@ export const MY_ROLE = envRole === "PRIMARY" || envRole === "PASSIVE"
   ? envRole 
   : (IS_LOCAL ? "PRIMARY" : "PASSIVE");
 
-console.log(`🤖 [Telegram Selector] Instance ID: ${INSTANCE_ID} | Env: ${IS_LOCAL ? "LOCAL" : "CLOUD"} | Role: ${MY_ROLE}`);
+console.log(`🤖 [System Lease Selector] Instance ID: ${INSTANCE_ID} | Env: ${IS_LOCAL ? "LOCAL" : "CLOUD"} | Role: ${MY_ROLE}`);
 
 export class TelegramLeaseService {
   /**
    * Refreshes the database lease to announce this instance is the active PRIMARY consumer.
+   * Leverages cooperative locking: will NOT overwrite an unexpired lease held by another instance.
    */
-  static async acquireOrRefreshLease(companyId: string): Promise<boolean> {
+  static async acquireOrRefreshLease(companyId: string, type: string = "TELEGRAM"): Promise<boolean> {
     if (MY_ROLE !== "PRIMARY") {
       return false;
     }
 
-    const leaseData = {
+    const now = new Date();
+    const leaseMeta = {
       activeInstanceId: INSTANCE_ID,
       role: "PRIMARY",
-      environment: "LOCAL",
-      lastHeartbeat: new Date().toISOString(),
+      environment: IS_LOCAL ? "LOCAL" : "CLOUD",
+      lastHeartbeat: now.toISOString(),
     };
 
     try {
-      const existing = await prisma.botKnowledge.findFirst({
+      const existing = await prisma.systemLease.findUnique({
         where: {
-          companyId,
-          type: "TELEGRAM_CONSUMER_LEASE",
-          title: "active_lease",
+          companyId_type: {
+            companyId,
+            type,
+          },
         },
       });
 
       if (existing) {
-        await prisma.botKnowledge.update({
+        let existingMeta: any = null;
+        try {
+          existingMeta = JSON.parse(existing.content);
+        } catch (e) {}
+
+        const heartbeatTime = new Date(existing.lastHeartbeat).getTime();
+        const ageMs = Date.now() - heartbeatTime;
+
+        // Cooperative Lock: If another instance owns a valid unexpired lease (< 30s), stand down!
+        if (
+          existingMeta &&
+          existingMeta.activeInstanceId !== INSTANCE_ID &&
+          existing.isActive &&
+          ageMs < 30000
+        ) {
+          // Do not log too frequently to prevent spamming
+          if (Math.random() < 0.1) {
+            console.log(`ℹ️ [SystemLease] ${type} lease for company ${companyId} is held by active instance: ${existingMeta.activeInstanceId} (age ${Math.round(ageMs/1000)}s). Standing down cooperative lock.`);
+          }
+          return false;
+        }
+
+        // We own it, or it expired, or inactive: update lease
+        await prisma.systemLease.update({
           where: { id: existing.id },
           data: {
-            content: JSON.stringify(leaseData),
+            activeInstanceId: INSTANCE_ID,
+            role: "PRIMARY",
+            content: JSON.stringify(leaseMeta),
             isActive: true,
+            lastHeartbeat: now,
           },
         });
       } else {
-        await prisma.botKnowledge.create({
+        // Create brand new lease
+        await prisma.systemLease.create({
           data: {
             companyId,
-            type: "TELEGRAM_CONSUMER_LEASE",
-            title: "active_lease",
-            content: JSON.stringify(leaseData),
+            type,
+            activeInstanceId: INSTANCE_ID,
+            role: "PRIMARY",
+            content: JSON.stringify(leaseMeta),
             isActive: true,
+            lastHeartbeat: now,
           },
         });
       }
       return true;
     } catch (err: any) {
-      console.error(`❌ [Telegram Lease] Fault updating lease for company ${companyId}:`, err.message);
+      console.error(`❌ [SystemLease] Fault updating lease for company ${companyId} [${type}]:`, err.message);
       return false;
     }
   }
 
   /**
    * Checks database lease to decide if this instance is authorized.
-   * If PRIMARY role, returns true and refreshes lease in background.
+   * If PRIMARY role, returns true only if it holds the active lease or can acquire it.
    * If PASSIVE, returns true ONLY if the registered PRIMARY heartbeat has expired (>30 seconds old or missing).
    */
-  static async isAuthorizedToConsume(companyId: string): Promise<boolean> {
+  static async isAuthorizedToConsume(companyId: string, type: string = "TELEGRAM"): Promise<boolean> {
     if (MY_ROLE === "PRIMARY") {
-      this.acquireOrRefreshLease(companyId).catch(() => {});
-      return true;
+      const acquired = await this.acquireOrRefreshLease(companyId, type);
+      return acquired;
     }
 
     try {
-      const existing = await prisma.botKnowledge.findFirst({
+      const existing = await prisma.systemLease.findUnique({
         where: {
-          companyId,
-          type: "TELEGRAM_CONSUMER_LEASE",
-          title: "active_lease",
+          companyId_type: {
+            companyId,
+            type,
+          },
         },
       });
 
       if (!existing) {
-        return true; // No primary is running, safe to consume
+        return true; // No primary has registered yet, safe fallback
       }
 
-      const lease = JSON.parse(existing.content);
-      const heartbeatTime = new Date(lease.lastHeartbeat).getTime();
+      const heartbeatTime = new Date(existing.lastHeartbeat).getTime();
       const ageMs = Date.now() - heartbeatTime;
 
-      // If there is an active PRIMARY instance that updated its heartbeat in the last 30 seconds, stand down!
-      if (lease.activeInstanceId !== INSTANCE_ID && lease.role === "PRIMARY" && ageMs < 30000) {
+      let existingMeta: any = null;
+      try {
+        existingMeta = JSON.parse(existing.content);
+      } catch (e) {}
+
+      // Stand down if active PRIMARY registered and updated within last 30 seconds
+      if (
+        existingMeta &&
+        existingMeta.activeInstanceId !== INSTANCE_ID &&
+        existing.isActive &&
+        ageMs < 30000
+      ) {
         return false;
       }
 
-      return true; // Lease expired or matches current instance
+      return true; // Expired or matching current instance
     } catch (err: any) {
-      console.error(`❌ [Telegram Lease] Error validating lease for company ${companyId}:`, err.message);
-      return true; // Fallback to safe mode
+      console.error(`❌ [SystemLease] Error validating lease for company ${companyId} [${type}]:`, err.message);
+      return true; // Safe fallback
     }
   }
 
@@ -120,22 +162,35 @@ export class TelegramLeaseService {
     }
 
     const intervalMs = 10000; // Refresh every 10s
-    console.log(`❤️ [Telegram Lease] Starting active PRIMARY consumer heartbeat loop (every ${intervalMs / 1000}s)...`);
+    console.log(`❤️ [SystemLease] Starting active PRIMARY consumer heartbeat loop (every ${intervalMs / 1000}s)...`);
 
     const refreshAll = async () => {
       try {
-        const companies = await prisma.company.findMany({
+        // Refresh Telegram Polling Leases
+        const telegramConnectedCompanies = await prisma.company.findMany({
           where: {
             telegramBotToken: { not: null },
             telegramConnected: true,
           },
         });
 
-        for (const company of companies) {
-          await this.acquireOrRefreshLease(company.id);
+        for (const company of telegramConnectedCompanies) {
+          await this.acquireOrRefreshLease(company.id, "TELEGRAM");
+        }
+
+        // Refresh Instagram Leases
+        const instagramConnectedCompanies = await prisma.company.findMany({
+          where: {
+            instagramPageAccessToken: { not: null },
+            instagramConnected: true,
+          },
+        });
+
+        for (const company of instagramConnectedCompanies) {
+          await this.acquireOrRefreshLease(company.id, "INSTAGRAM");
         }
       } catch (err: any) {
-        console.error(`❌ [Telegram Lease] Heartbeat loop query failed:`, err.message);
+        console.error(`❌ [SystemLease] Heartbeat loop query failed:`, err.message);
       } finally {
         setTimeout(refreshAll, intervalMs);
       }

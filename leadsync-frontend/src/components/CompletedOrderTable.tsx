@@ -26,7 +26,19 @@ export default function CompletedOrderTable({ orders }: Props) {
                <td className="p-4 text-slate-500 whitespace-nowrap">
                  {order.completedAt ? new Date(order.completedAt).toLocaleDateString() : 'N/A'}
                </td>
-               <td className="p-4 font-bold text-slate-800">{order.summary}</td>
+               <td className="p-4">
+                 {order.orderItems && order.orderItems.length > 0 ? (
+                   <div className="flex flex-col gap-0.5">
+                     {order.orderItems.map((item, idx) => (
+                       <span key={idx} className="text-slate-700">
+                         <span className="font-bold text-indigo-600">{item.quantity}x</span> {item.name}
+                       </span>
+                     ))}
+                   </div>
+                 ) : (
+                   <span className="font-bold text-slate-800">{order.summary}</span>
+                 )}
+               </td>
                <td className="p-4 text-slate-700">{order.lead?.name || '---'}</td>
                <td className="p-4 font-black">₹{order.amount.toLocaleString()}</td>
                <td className="p-4">

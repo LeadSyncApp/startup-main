@@ -8,7 +8,6 @@ import { PageTransition } from "@/components/ui/Animations";
 const DISPLAY_WEBHOOK_URL = "https://your-api-domain.com/api/instagram/webhook";
 
 import { SavedRepliesManager } from "@/components/conversations/SavedReplies";
-import { BotKnowledgeManager } from "@/components/settings/BotKnowledgeManager";
 import { AutomationManager } from "@/components/settings/AutomationManager";
 import { AssignmentStrategyManager } from "@/components/settings/AssignmentStrategyManager";
 
@@ -17,23 +16,9 @@ import { ProfileSection } from "./ProfileSection";
 import { BusinessDetailsSection } from "./BusinessDetailsSection";
 import { TelegramIntegration } from "./TelegramIntegration";
 import { InstagramIntegration } from "./InstagramIntegration";
-import { CommerceOnboardingSection } from "./CommerceOnboardingSection";
-import { AdvancedTuningSection } from "./AdvancedTuningSection";
-import { MenuEditorSection } from "./MenuEditorSection";
-
-interface MenuItem {
-  name: string;
-  price: number;
-}
-
-interface Category {
-  name: string;
-  items: MenuItem[];
-}
-
-interface StructuredMenu {
-  categories: Category[];
-}
+import { CompanyCodeSection } from "./CompanyCodeSection";
+import { RBACSection } from "./RBACSection";
+import { AuditLogsSection } from "./AuditLogsSection";
 
 export default function Settings() {
   const { token, user, updateUser } = useAuth();
@@ -41,19 +26,15 @@ export default function Settings() {
   const [telegramConnected, setTelegramConnected] = useState(false);
   const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
   const [botToken, setBotToken] = useState("");
+  const [botCommands, setBotCommands] = useState<any[]>([]);
 
   const [botBusinessType, setBotBusinessType] = useState("");
-  const [botWelcomeMessage, setBotWelcomeMessage] = useState("");
-  const [shopDescription, setShopDescription] = useState("");
-  const [botKnowledgeBase, setBotKnowledgeBase] = useState("");
-  const [botLearnedContext, setBotLearnedContext] = useState("");
-  const [botPolicies, setBotPolicies] = useState("");
-  const [isTraining, setIsTraining] = useState(false);
 
   // Business Details
   const [businessName, setBusinessName] = useState("");
   const [businessAddress, setBusinessAddress] = useState("");
   const [gstin, setGstin] = useState("");
+  const [companyCode, setCompanyCode] = useState("");
 
   // Instagram State
   const [instagramConnected, setInstagramConnected] = useState(false);
@@ -62,15 +43,9 @@ export default function Settings() {
   const [igTokenInput, setIgTokenInput] = useState("");
   const [igVerifyToken, setIgVerifyToken] = useState("");
 
-  const [onboardingMode, setOnboardingMode] = useState<'PASTE' | 'MANUAL' | 'FILE'>('PASTE');
-  const [previewMenu, setPreviewMenu] = useState<StructuredMenu | null>(null);
-  const [mergeWithExisting, setMergeWithExisting] = useState(true);
-  const [generatedMenu, setGeneratedMenu] = useState<StructuredMenu | null>(null);
-
   const [assignmentStrategy, setAssignmentStrategy] = useState<"MANUAL" | "ROUND_ROBIN" | "LOAD_BALANCED">("MANUAL");
   const [agentWorkloads, setAgentWorkloads] = useState<any[]>([]);
 
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   /* ===============================
@@ -96,15 +71,12 @@ export default function Settings() {
         // Config
         if (configData.company) {
           setBotBusinessType(configData.company.botBusinessType || "");
-          setBotWelcomeMessage(configData.company.botWelcomeMessage || "");
-          setGeneratedMenu(configData.company.botStructuredMenu || null);
-          setBotKnowledgeBase(configData.company.botKnowledgeBase || "");
-          setBotLearnedContext(configData.company.botLearnedContext || "");
-          setBotPolicies(configData.company.botPolicies || "");
           setBusinessName(configData.company.businessName || "");
           setBusinessAddress(configData.company.businessAddress || "");
           setGstin(configData.company.gstin || "");
+          setCompanyCode(configData.company.companyCode || "");
           setAssignmentStrategy(configData.company.assignmentStrategy || "MANUAL");
+          setBotCommands(configData.company.botCommands || []);
         }
         if (configData.agentWorkloads) {
           setAgentWorkloads(configData.agentWorkloads);
@@ -158,6 +130,18 @@ export default function Settings() {
     }
   };
 
+  const handleSaveCommands = async (updatedCommands: any[]) => {
+    try {
+      const response = await api.post("/integrations/telegram/commands", {
+        commands: updatedCommands,
+      });
+      setBotCommands(response.commands);
+      toast.success(response.message);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.message || "Failed to sync commands");
+    }
+  };
+
   /* ===============================
      CONNECT INSTAGRAM
   =============================== */
@@ -197,271 +181,6 @@ export default function Settings() {
     }
   };
 
-  /* ===============================
-     COMMERCE AI ONBOARDING (PHASE 2A)
-  =============================== */
-  // Helper: Convert a StructuredMenu into a human-readable text block for AI Knowledge Base
-  const menuToKnowledgeText = (menu: StructuredMenu): string => {
-    return menu.categories
-      .map((cat) => {
-        const items = cat.items
-          .map((item) => `  - ${item.name}: ₹${item.price}`)
-          .join("\n");
-        return `${cat.name}:\n${items}`;
-      })
-      .join("\n\n");
-  };
-
-  // Helper: Merge two StructuredMenus by category name (frontend merge)
-  const mergeMenus = (existing: StructuredMenu, incoming: StructuredMenu): StructuredMenu => {
-    const merged = { categories: existing.categories.map((c) => ({ ...c, items: [...c.items] })) };
-    for (const incomingCat of incoming.categories) {
-      const existingCat = merged.categories.find(
-        (c) => c.name.toLowerCase() === incomingCat.name.toLowerCase()
-      );
-      if (existingCat) {
-        for (const incomingItem of incomingCat.items) {
-          const alreadyExists = existingCat.items.find(
-            (i) => i.name.toLowerCase() === incomingItem.name.toLowerCase()
-          );
-          if (!alreadyExists) {
-            existingCat.items.push(incomingItem);
-          }
-        }
-      } else {
-        merged.categories.push({ ...incomingCat, items: [...incomingCat.items] });
-      }
-    }
-    return merged;
-  };
-
-  const handleAnalyzeSmartPaste = async () => {
-    if (!shopDescription.trim()) return;
-
-    setIsGenerating(true);
-    const toastId = toast.loading("AI is normalizing your products...");
-
-    try {
-      const data = await api.post("/dashboard/analyze-menu", {
-        rawText: shopDescription,
-        mergeWithExisting: false // We handle merging on frontend
-      });
-
-      setPreviewMenu(data.menu);
-      toast.success("Extraction complete! Review the preview below.", { id: toastId });
-    } catch (err) {
-      toast.error("Normalization failed. Please try a different format.", { id: toastId });
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleConfirmPreview = async () => {
-    if (!previewMenu) return;
-
-    try {
-      // Merge incoming items with existing menu on the frontend
-      const finalMenu = mergeWithExisting && generatedMenu
-        ? mergeMenus(generatedMenu, previewMenu)
-        : previewMenu;
-
-      // Auto-populate AI Knowledge Base with the formatted menu
-      const menuText = menuToKnowledgeText(finalMenu);
-      const newKnowledge = botKnowledgeBase
-        ? botKnowledgeBase + "\n\n" + menuText
-        : menuText;
-
-      await api.patch("/dashboard/save-edited-menu", {
-        structuredMenu: finalMenu,
-        botBusinessType,
-        botWelcomeMessage,
-        botKnowledgeBase: newKnowledge,
-      });
-
-      setGeneratedMenu(finalMenu);
-      setBotKnowledgeBase(newKnowledge);
-      setPreviewMenu(null);
-      setShopDescription("");
-
-      toast.success("Products added! AI Knowledge Base updated — click Train AI to finalize. ✅");
-    } catch {
-      toast.error("Failed to commit menu changes.");
-    }
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const toastId = toast.loading(`Uploading and analyzing ${file.name}...`);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("mergeWithExisting", "false"); // We handle merging on frontend
-
-      const response = await api.post("/dashboard/upload-menu-file", formData);
-
-      setPreviewMenu(response.menu);
-      toast.success("File processed! Review the extracted items below.", { id: toastId });
-    } catch (err: any) {
-      console.error("File upload error:", err);
-      toast.error(err.response?.data?.message || "Failed to process file", { id: toastId });
-    } finally {
-      // Reset input
-      e.target.value = "";
-    }
-  };
-
-  const downloadCsvTemplate = () => {
-    const csvContent = "Category,Name,Price\nCoffee,Cold Brew Coffee,250\nCoffee,Oat Milk Latte,300\nBakery,Cheddar Croissant,180";
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "menu_template.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  /* ===============================
-     MENU EDIT FUNCTIONS
-  =============================== */
-
-  const updateCategoryName = (index: number, name: string) => {
-    if (!generatedMenu) return;
-
-    const updated = { ...generatedMenu };
-    updated.categories[index].name = name;
-    setGeneratedMenu(updated);
-  };
-
-  const updateItem = (
-    catIndex: number,
-    itemIndex: number,
-    field: "name" | "price",
-    value: string
-  ) => {
-    if (!generatedMenu) return;
-
-    const updated = { ...generatedMenu };
-
-    if (field === "price") {
-      updated.categories[catIndex].items[itemIndex].price =
-        Number(value);
-    } else {
-      updated.categories[catIndex].items[itemIndex].name = value;
-    }
-
-    setGeneratedMenu(updated);
-  };
-
-  const addCategory = () => {
-    if (!generatedMenu) return;
-
-    const updated = { ...generatedMenu };
-    updated.categories.push({
-      name: "New Category",
-      items: [],
-    });
-
-    setGeneratedMenu(updated);
-  };
-
-  const addItem = (catIndex: number) => {
-    if (!generatedMenu) return;
-
-    const updated = { ...generatedMenu };
-    updated.categories[catIndex].items.push({
-      name: "New Item",
-      price: 0,
-    });
-
-    setGeneratedMenu(updated);
-  };
-
-  const deleteCategory = (index: number) => {
-    if (!generatedMenu) return;
-
-    const updated = { ...generatedMenu };
-    updated.categories.splice(index, 1);
-    setGeneratedMenu(updated);
-  };
-
-  const deleteItem = (catIndex: number, itemIndex: number) => {
-    if (!generatedMenu) return;
-
-    const updated = { ...generatedMenu };
-    updated.categories[catIndex].items.splice(itemIndex, 1);
-    setGeneratedMenu(updated);
-  };
-
-  const saveEditedMenu = async () => {
-    try {
-      // Also sync the AI Knowledge Base text with the current menu
-      const menuText = generatedMenu ? menuToKnowledgeText(generatedMenu) : "";
-      const syncedKnowledge = menuText
-        ? (botKnowledgeBase && !botKnowledgeBase.includes(menuText)
-            ? botKnowledgeBase + "\n\n" + menuText
-            : botKnowledgeBase || menuText)
-        : botKnowledgeBase;
-
-      await api.patch("/dashboard/save-edited-menu", {
-        structuredMenu: generatedMenu,
-        botBusinessType,
-        botWelcomeMessage,
-        botKnowledgeBase: syncedKnowledge,
-      });
-
-      if (syncedKnowledge !== botKnowledgeBase) {
-        setBotKnowledgeBase(syncedKnowledge);
-      }
-      toast.success("Menu saved successfully ✅");
-    } catch {
-      toast.error("Failed to save menu");
-    }
-  };
-
-  /* ===============================
-     KNOWLEDGE BASE FUNCTIONS
-  =============================== */
-  const handleTrainAI = async () => {
-    if (!botKnowledgeBase.trim()) {
-      toast.error("Enter items and descriptions first");
-      return;
-    }
-
-    setIsTraining(true);
-    const toastId = toast.loading("AI is learning your shop details...");
-
-    try {
-      const data = await api.post("/dashboard/train-ai", {
-        botKnowledgeBase,
-      });
-
-      setBotLearnedContext(data.botLearnedContext);
-      toast.success("AI Training complete! 🧠", { id: toastId });
-    } catch (err) {
-      toast.error("Training failed", { id: toastId });
-    } finally {
-      setIsTraining(false);
-    }
-  };
-
-  const handleSaveKnowledge = async () => {
-    try {
-      await api.patch("/dashboard/save-knowledge", {
-        botKnowledgeBase,
-        botLearnedContext,
-        botPolicies,
-      });
-      toast.success("Knowledge saved manually ✅");
-    } catch {
-      toast.error("Failed to save knowledge");
-    }
-  };
-
   const handleSaveBusinessDetails = async () => {
     try {
       await api.patch("/dashboard/business-details", {
@@ -470,8 +189,8 @@ export default function Settings() {
         gstin,
       });
       toast.success("Business details saved ✅");
-    } catch {
-      toast.error("Failed to save business details");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to save business details");
     }
   };
 
@@ -526,6 +245,15 @@ export default function Settings() {
         setAgentWorkloads={setAgentWorkloads}
       />
 
+      {/* SYSTEM CONFIDENTIAL - COMPANY CODE & RBAC */}
+      {user?.role === "OWNER" && (
+        <>
+          <CompanyCodeSection companyCode={companyCode} />
+          <RBACSection />
+          <AuditLogsSection />
+        </>
+      )}
+
       {/* BUSINESS DETAILS (FOR INVOICING) */}
       <BusinessDetailsSection 
         businessName={businessName}
@@ -540,11 +268,6 @@ export default function Settings() {
       {/* SAVED REPLIES */}
       <div className="bg-app-surface p-6 rounded-2xl shadow border border-app">
         <SavedRepliesManager />
-      </div>
-
-      {/* BOT KNOWLEDGE */}
-      <div className="bg-app-surface p-6 rounded-2xl shadow border border-app">
-        <BotKnowledgeManager />
       </div>
 
       {/* AUTOMATION RULES */}
@@ -570,6 +293,8 @@ export default function Settings() {
         setBotToken={setBotToken}
         handleConnectTelegram={handleConnectTelegram}
         handleDisconnectTelegram={handleDisconnectTelegram}
+        botCommands={botCommands}
+        onSaveCommands={handleSaveCommands}
       />
 
       {/* INSTAGRAM */}
@@ -584,53 +309,6 @@ export default function Settings() {
         DISPLAY_WEBHOOK_URL={DISPLAY_WEBHOOK_URL}
         handleConnectInstagram={handleConnectInstagram}
         handleDisconnectInstagram={handleDisconnectInstagram}
-      />
-
-      {/* COMMERCE AI ONBOARDING WIZARD */}
-      <CommerceOnboardingSection 
-        onboardingMode={onboardingMode}
-        setOnboardingMode={setOnboardingMode}
-        shopDescription={shopDescription}
-        setShopDescription={setShopDescription}
-        isGenerating={isGenerating}
-        handleAnalyzeSmartPaste={handleAnalyzeSmartPaste}
-        mergeWithExisting={mergeWithExisting}
-        setMergeWithExisting={setMergeWithExisting}
-        handleFileUpload={handleFileUpload}
-        downloadCsvTemplate={downloadCsvTemplate}
-        botBusinessType={botBusinessType}
-        setBotBusinessType={setBotBusinessType}
-        botWelcomeMessage={botWelcomeMessage}
-        setBotWelcomeMessage={setBotWelcomeMessage}
-        saveEditedMenu={saveEditedMenu}
-        previewMenu={previewMenu}
-        setPreviewMenu={setPreviewMenu}
-        handleConfirmPreview={handleConfirmPreview}
-      />
-
-      {/* AI KNOWLEDGE BASE & LEARNING & SHOP POLICIES */}
-      <AdvancedTuningSection 
-        botKnowledgeBase={botKnowledgeBase}
-        setBotKnowledgeBase={setBotKnowledgeBase}
-        botLearnedContext={botLearnedContext}
-        setBotLearnedContext={setBotLearnedContext}
-        isTraining={isTraining}
-        handleTrainAI={handleTrainAI}
-        handleSaveKnowledge={handleSaveKnowledge}
-        botPolicies={botPolicies}
-        setBotPolicies={setBotPolicies}
-      />
-
-      {/* MENU EDITOR */}
-      <MenuEditorSection 
-        generatedMenu={generatedMenu}
-        updateCategoryName={updateCategoryName}
-        updateItem={updateItem}
-        addCategory={addCategory}
-        addItem={addItem}
-        deleteCategory={deleteCategory}
-        deleteItem={deleteItem}
-        saveEditedMenu={saveEditedMenu}
       />
 
     </PageTransition>

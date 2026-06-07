@@ -5,6 +5,7 @@ import {
   useState,
   ReactNode,
 } from "react";
+import { api } from "../lib/api";
 
 /* =====================================================
    ROLE TYPES
@@ -122,6 +123,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return updated;
     });
   };
+
+  /* ================= HEARTBEAT (Online presence) ================= */
+  useEffect(() => {
+    if (!token || !user) return;
+    
+    const sendHeartbeat = async () => {
+      try {
+        await api.post("/users/heartbeat");
+      } catch (err) {
+        // Fail silently
+      }
+    };
+    
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 30000); // every 30s
+    
+    return () => {
+      clearInterval(interval);
+    };
+  }, [token, user]);
 
   return (
     <AuthContext.Provider

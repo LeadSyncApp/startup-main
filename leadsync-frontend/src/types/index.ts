@@ -4,7 +4,7 @@
  * Replace with Supabase-generated types when integrating backend
  */
 
-export type UserRole = 'admin' | 'manager' | 'agent';
+export type UserRole = 'OWNER' | 'ADMIN' | 'AGENT' | 'owner' | 'admin' | 'manager' | 'agent';
 
 /** Company / tenant - dynamic placeholder; replace with Supabase companies table */
 export interface Company {
@@ -21,6 +21,24 @@ export interface User {
   avatar?: string;
   /** Company this agent belongs to - for multi-tenant filtering */
   companyId?: string;
+  createdAt?: string | Date;
+  isActive?: boolean;
+  isAvailable?: boolean;
+  isOnline?: boolean;
+  lastSeenAt?: string | Date;
+  staffId?: string;
+  residingAddress?: string;
+  phoneNumber?: string;
+  workspaceAuthScale?: string;
+  roleDefinitionId?: string;
+  roleDefinition?: {
+    id: string;
+    companyId: string;
+    name: string;
+    description?: string;
+    permissions?: any;
+    createdAt: string | Date;
+  };
 }
 
 export type LeadSource = 'website' | 'chat' | 'demo' | 'referral' | 'social' | 'other';
@@ -76,6 +94,14 @@ export type OrderStatus = 'PENDING' | 'NEW' | 'BOT_CREATED_ORDER' | 'USER_CONFIR
   'PROCESSING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'PAID' | 'SHIPPED' | 
   'COMPLETED' | 'DELIVERED' | 'ARCHIVED' | 'CANCELLED' | 'REJECTED';
 
+export interface OrderItem {
+  id: string;
+  name: string;
+  quantity: number;
+  price: number;
+  sku?: string;
+}
+
 export interface Order {
   id: string;
   summary: string;
@@ -84,6 +110,7 @@ export interface Order {
   createdAt: string;
   completedAt?: string;
   version: number;
+  orderItems?: OrderItem[];
   lead?: {
     name: string;
     contact?: string;

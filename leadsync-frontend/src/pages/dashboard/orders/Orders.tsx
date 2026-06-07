@@ -479,7 +479,20 @@ export default function Orders() {
                         </div>
 
                         {/* Order Summary details */}
-                        <h4 className="font-bold text-slate-800 text-sm leading-snug mb-2">{order.summary}</h4>
+                        {order.orderItems && order.orderItems.length > 0 ? (
+                          <div className="mb-2 space-y-1">
+                            {order.orderItems.map((item, idx) => (
+                              <div key={idx} className="flex justify-between items-center text-xs font-medium">
+                                <span className="text-slate-700">
+                                  <span className="font-bold text-indigo-600">{item.quantity}x</span> {item.name}
+                                </span>
+                                <span className="text-slate-400">₹{item.price * item.quantity}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <h4 className="font-bold text-slate-800 text-sm leading-snug mb-2">{order.summary}</h4>
+                        )}
 
                         {/* Customer context info */}
                         <div className="text-xs text-slate-500 flex items-center gap-1.5 py-2 border-b border-dashed border-app mb-3">

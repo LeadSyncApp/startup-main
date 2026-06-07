@@ -84,7 +84,7 @@ export function AutomationManager() {
   const fetchRules = async () => {
     try {
       const data = await api.get("/automation");
-      setRules(data);
+      setRules(Array.isArray(data) ? data : []);
     } catch {
       toast.error("Failed to load automation rules");
     } finally {
