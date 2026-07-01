@@ -4,8 +4,10 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { signToken } from "../../utils/jwt";
 import crypto from "crypto";
-import { sendEmail, generatePasswordResetHtml } from "../../services/integrations/email.service";
+import { generatePasswordResetHtml } from "../../services/integrations/email.service";
+import { queueProvider } from "../../services/infrastructure/queue-provider/queue-provider.factory";
 import { notificationService } from "../../services/infrastructure/notification.service";
+import { authMiddleware } from "../../middleware/auth.middleware";
 
 const router = Router();
 
@@ -13,13 +15,18 @@ console.log("🔥 auth.routes.ts loaded");
 
 const signupSchema = z.object({
   companyName: z.string().max(100).optional(),
-  name: z.string().min(1, "Name is required").max(100),
+  firstName: z.string().min(1, "First Name is required").max(100),
+  lastName: z.string().max(100).optional(),
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters").max(100),
+  phone: z.string().min(10, "Phone number is required").max(20).optional(),
+  currencyCode: z.string().max(10).optional(),
+  currencySymbol: z.string().max(10).optional(),
+  timezone: z.string().max(50).optional(),
 });
 
 const loginSchema = z.object({
-  role: z.enum(["OWNER", "ADMIN", "AGENT"]).default("OWNER"),
+  role: z.enum(["OWNER", "MANAGER", "STAFF"]).optional(),
   companyCode: z.string().optional(),
   staffId: z.string().optional(),
   email: z.string().min(1, "Email is required"),
@@ -44,7 +51,7 @@ router.post("/signup", async (req, res) => {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0].message });
     }
-    const { companyName, name, email, password } = parsed.data;
+    const { companyName, firstName, lastName, email, password, phone, currencyCode, currencySymbol, timezone } = parsed.data;
 
     const normalizedEmail = email.toLowerCase().trim();
 
@@ -59,41 +66,81 @@ router.post("/signup", async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     
     // Auto-generate company code
-    const rawName = companyName || `${name} Co`;
+    const rawName = companyName || `${firstName}${lastName ? ' ' + lastName : ''} Co`;
     const sanitizedName = rawName.replace(/[^a-zA-Z]/g, "").substring(0, 8).toUpperCase() || "COMP";
     const randomSuffix = Math.floor(1000 + Math.random() * 9000); // 4 digits
     const companyCode = `${sanitizedName}${randomSuffix}`;
 
-    const company = await prisma.company.create({
-      data: {
-        name: companyName || `${name}'s Company`,
-        companyCode,
-        users: {
-          create: {
-            name,
-            email: normalizedEmail,
-            role: "OWNER",
-            passwordHash,
+    const result = await prisma.$transaction(async (tx) => {
+      const company = await tx.company.create({
+        data: {
+          name: companyName || `${firstName}'s Company`,
+          companyCode,
+          currencyCode: currencyCode?.toUpperCase() || "INR",
+          currencySymbol: currencySymbol || "₹",
+          timezone: timezone || "Asia/Kolkata",
+          users: {
+            create: {
+              firstName,
+              lastName,
+              email: normalizedEmail,
+              role: "OWNER",
+              passwordHash,
+              phoneNumber: phone,
+            },
           },
         },
-      },
-      select: {
-        id: true,
-        name: true,
-        companyCode: true,
-        users: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-            isAvailable: true,
+        select: {
+          id: true,
+          name: true,
+          companyCode: true,
+          users: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+              isAvailable: true,
+            },
           },
         },
-      },
+      });
+
+      await tx.botConfiguration.create({
+        data: {
+          companyId: company.id,
+          botPolicies: "NOT_CONFIGURED",
+          botCommands: []
+        }
+      });
+
+      await tx.automationRule.create({
+        data: {
+          companyId: company.id,
+          name: "Default Greeting Rule",
+          isActive: false,
+          trigger: "NEW_CONVERSATION",
+          action: "SEND_MESSAGE",
+          actionPayload: { text: "Hello! How can we help?" }
+        }
+      });
+
+      await tx.customFieldDefinition.create({
+        data: {
+          companyId: company.id,
+          module: "LEAD",
+          name: "source",
+          label: "Source",
+          type: "TEXT",
+        }
+      });
+
+      return company;
     });
 
-    const owner = company.users[0];
+    const owner = result.users[0];
+    const company = result;
 
     const token = signToken({
       userId: owner.id,
@@ -106,18 +153,22 @@ router.post("/signup", async (req, res) => {
       user: {
         id: owner.id,
         email: owner.email,
-        name: owner.name,
+        firstName: owner.firstName,
+        lastName: owner.lastName,
+        name: `${owner.firstName} ${owner.lastName || ""}`.trim(),
         role: owner.role,
+        companyId: company.id,
         isAvailable: owner.isAvailable,
       },
       company: {
         id: company.id,
         name: company.name,
+        companyCode: company.companyCode,
       },
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Signup failed" });
+    res.status(500).json({ message: "Signup failed", error: err instanceof Error ? err.message : String(err) });
   }
 });
 
@@ -147,13 +198,16 @@ router.post("/login", async (req, res) => {
       select: {
         id: true,
         email: true,
-        name: true,
+        firstName: true,
+        lastName: true,
         role: true,
         staffId: true,
         isAvailable: true,
         passwordHash: true,
         companyId: true,
         company: true,
+        authProvider: true,
+        googleId: true,
       },
     });
 
@@ -161,9 +215,9 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    if (user.role !== role) {
+    // Role enforcement - only if explicitly requested
+    if (role && user.role !== role) {
       if (user.role === "OWNER" && role !== "OWNER") {
-        // Technically an owner could log in as ADMIN, but let's strictly require selecting OWNER
         return res.status(401).json({ message: "Please select the authentic 'Owner' role to login" });
       }
       if (user.role !== "OWNER" && role === "OWNER") {
@@ -171,33 +225,43 @@ router.post("/login", async (req, res) => {
       }
     }
 
-    if (role !== "OWNER") {
-      if (!providedStaffId) {
-        return res.status(401).json({ message: "Staff ID is required" });
+    const valid = user.passwordHash
+      ? await bcrypt.compare(password, user.passwordHash)
+      : false;
+
+    if (!valid) {
+      const provider = user.authProvider || (user.googleId ? "GOOGLE" : "EMAIL");
+      if (provider === "GOOGLE" || provider === "BOTH") {
+        return res.status(401).json({ message: "You signed up with Google. Please use Google sign-in." });
       }
-      if (user.staffId !== providedStaffId) {
-        return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    // Unified Login logic: If only email/password provided, allow entry if credentials match
+    // If specific identifiers provided, enforce them for security
+    
+    if (role !== "OWNER") {
+      if (providedStaffId && user.staffId !== providedStaffId) {
+        return res.status(401).json({ message: "Invalid Staff ID" });
       }
     } else {
       // Role is OWNER
-      if (!providedCompanyCode) {
-        return res.status(401).json({ message: "Company ID is required for Owner login" });
-      }
-      if (user.company?.companyCode !== providedCompanyCode) {
+      if (providedCompanyCode && user.company.companyCode !== providedCompanyCode) {
         return res.status(401).json({ message: "Invalid Company ID / Code" });
       }
     }
 
-    const valid = await bcrypt.compare(password, user.passwordHash);
-
-    if (!valid) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
+    // Update online status on login
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { isOnline: true, lastSeenAt: new Date() },
+    });
 
     const token = signToken({
       userId: user.id,
       companyId: user.companyId,
       role: user.role,
+      authProvider: user.authProvider || (user.googleId ? "GOOGLE" : "EMAIL"),
     });
 
     res.json({
@@ -205,13 +269,17 @@ router.post("/login", async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        name: `${user.firstName} ${user.lastName || ""}`.trim(),
         role: user.role,
+        companyId: user.companyId,
         isAvailable: user.isAvailable,
       },
       company: {
         id: user.company.id,
         name: user.company.name,
+        companyCode: user.company.companyCode,
       },
     });
   } catch (err) {
@@ -249,7 +317,8 @@ router.post("/forgot-password", async (req, res) => {
       });
     }
 
-    console.log('✅ Forgot password - User found:', { userId: user.id, userName: user.name });
+    const userName = `${user.firstName} ${user.lastName || ""}`.trim();
+    console.log('✅ Forgot password - User found:', { userId: user.id, userName });
 
     // Generate secure reset token
     const rawResetToken = crypto.randomBytes(32).toString('hex');
@@ -280,13 +349,14 @@ router.post("/forgot-password", async (req, res) => {
     console.log('🌐 Forgot password - Frontend URL from env:', frontendUrl);
 
     try {
+      const userName = `${user.firstName} ${user.lastName || ""}`.trim();
       // Send password reset email
-      const emailHtml = generatePasswordResetHtml(resetUrl, user.name);
-      await sendEmail({
+      const emailHtml = generatePasswordResetHtml(resetUrl, userName);
+      await queueProvider.enqueue("sendEmail", {
         to: user.email,
         subject: 'Reset your LeadSync CRM password',
         html: emailHtml,
-        text: `Hello ${user.name},\n\nPlease click the following link to reset your password: ${resetUrl}\n\nThis link will expire in 10 minutes.\n\nIf you didn't request this password reset, you can safely ignore this email.\n\nLeadSync CRM`,
+        text: `Hello ${userName},\n\nPlease click the following link to reset your password: ${resetUrl}\n\nThis link will expire in 10 minutes.\n\nIf you didn't request this password reset, you can safely ignore this email.\n\nLeadSync CRM`,
       });
 
       console.log('📤 Forgot password - Email sent successfully to:', user.email);
@@ -370,7 +440,8 @@ router.post("/reset-password", async (req, res) => {
       return res.status(400).json({ message: "Invalid or expired reset token" });
     }
 
-    console.log('✅ Reset password - Valid token found for user:', { userId: validUser.id, userName: validUser.name });
+    const userName = `${validUser.firstName} ${validUser.lastName || ""}`.trim();
+    console.log('✅ Reset password - Valid token found for user:', { userId: validUser.id, userName });
 
     // Hash new password
     const passwordHash = await bcrypt.hash(newPassword, 10);
@@ -401,7 +472,8 @@ router.post("/reset-password", async (req, res) => {
 const staffSignupSchema = z.object({
   companyCode: z.string().min(1, "Company Access Code is required"),
   staffId: z.string().min(1, "Staff ID token is required"),
-  name: z.string().min(1, "Name is required"),
+  firstName: z.string().min(1, "First Name is required"),
+  lastName: z.string().optional(),
   password: z.string().min(6, "Password must be at least 6 characters"),
   residingAddress: z.string().min(1, "Residing Address is required"),
   phoneNumber: z.string().min(1, "Phone Number is required"),
@@ -413,7 +485,7 @@ router.post("/staff-signup", async (req, res) => {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0].message });
     }
-    const { companyCode, staffId, name, password, residingAddress, phoneNumber } = parsed.data;
+    const { companyCode, staffId, firstName, lastName, password, residingAddress, phoneNumber } = parsed.data;
 
     const company = await prisma.company.findFirst({
       where: {
@@ -449,39 +521,28 @@ router.post("/staff-signup", async (req, res) => {
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
-        name,
+        firstName,
+        lastName,
         passwordHash,
         residingAddress,
         phoneNumber,
         isActive: true,
-        isOnline: true,
+        // Do NOT set isOnline:true here — the socket connection + heartbeat
+        // will set online status once the user actually connects
+        isOnline: false,
         lastSeenAt: new Date(),
       }
     });
+
+    const fullName = `${updatedUser.firstName} ${updatedUser.lastName || ""}`.trim();
 
     // Notify the Owner and Admins
     await notificationService.notifyCompanyAdmins(
       company.id,
       "🎉 Teammate Onboarded",
-      `${name} has completed onboarding & registered successfully with staff ID: ${staffId}`,
+      `${fullName} has completed onboarding & registered successfully with staff ID: ${staffId}`,
       "SYSTEM"
     );
-
-    // Insert an Audit Log record
-    await prisma.systemAuditLog.create({
-      data: {
-        companyId: company.id,
-        userId: user.id,
-        action: "STAFF_ONBOARD_COMPLETED",
-        metadata: {
-          name,
-          email: user.email,
-          staffId,
-          residingAddress,
-          phoneNumber,
-        }
-      }
-    });
 
     // Sign complete token
     const token = signToken({
@@ -496,19 +557,88 @@ router.post("/staff-signup", async (req, res) => {
       user: {
         id: updatedUser.id,
         email: updatedUser.email,
-        name: updatedUser.name,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        name: fullName,
         role: updatedUser.role,
+        companyId: updatedUser.companyId,
         isAvailable: updatedUser.isAvailable,
       },
       company: {
         id: company.id,
         name: company.name,
+        companyCode: company.companyCode,
       }
     });
 
   } catch (error: any) {
     console.error("Staff onboarding signup failed:", error);
     res.status(500).json({ message: "Failed to complete onboarding signup" });
+  }
+});
+
+/* =====================================================
+   COMPLETE GOOGLE ONBOARDING (wizard steps 2 & 3)
+   Called when a Google signup user finishes the wizard
+   Requires auth token (from the initial Google OAuth)
+===================================================== */
+
+const completeGoogleOnboardingSchema = z.object({
+  businessScale: z.enum(["HOME", "SME"]),
+  businessType: z.string().min(1, "Business type is required"),
+  currentWorkflow: z.enum(["PAPER", "SPREADSHEET", "CRM"]),
+  companyName: z.string().min(1, "Company name is required"),
+});
+
+router.put("/complete-google-onboarding", authMiddleware as any, async (req: any, res: any) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const parsed = completeGoogleOnboardingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0].message });
+    }
+
+    const { businessScale, businessType, currentWorkflow, companyName } = parsed.data;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { company: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Map businessScale to the database enum
+    const dbScale = businessScale === "HOME" ? "HOME_GROWN" : "SME_RETAIL";
+
+    // Update company with wizard data
+    const updatedCompany = await prisma.company.update({
+      where: { id: user.companyId },
+      data: {
+        name: companyName,
+        scale: dbScale as any,
+        botBusinessType: businessType,
+      },
+    });
+
+    res.json({
+      message: "Onboarding completed successfully",
+      company: {
+        id: updatedCompany.id,
+        name: updatedCompany.name,
+        companyCode: updatedCompany.companyCode,
+        scale: updatedCompany.scale,
+        botBusinessType: updatedCompany.botBusinessType,
+      },
+    });
+  } catch (err) {
+    console.error("Complete Google onboarding error:", err);
+    res.status(500).json({ message: "Failed to complete onboarding" });
   }
 });
 

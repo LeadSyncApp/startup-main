@@ -1,7 +1,11 @@
 import { prisma } from "../../lib/prisma";
-import { TelegramAdapter } from "../../adapters/telegram.adapter";
+import { ProviderAdapterFactory } from "../../adapters/provider.factory";
 import { TelegramLeaseService, MY_ROLE, INSTANCE_ID } from "./telegramSelector.service";
 import axios from "axios";
+import { taskTracker } from "../infrastructure/taskTracker";
+import { webhookPersistenceService } from "../infrastructure/webhookPersistence.service";
+import { pgBossService } from "../infrastructure/pgboss/pgboss.service";
+import { decryptSecret } from "../../utils/encryption";
 
 declare global {
   var isTelegramPollingStarted: boolean | undefined;
@@ -35,31 +39,44 @@ export async function startTelegramPolling() {
         where: {
           telegramBotToken: { not: null },
           telegramConnected: true
+        },
+        select: {
+            id: true,
+            telegramBotToken: true,
+            telegramBotUsername: true,
+            telegramConnected: true
         }
       });
 
-      for (const company of companies) {
+      // 🛑 FIX: Parallelize polling across all companies instead of sequential.
+      // Each company's poll cycle runs independently via Promise.all.
+      // This eliminates the N*(1s webhook cleanup + fetch + process) bottleneck.
+      await Promise.all(companies.map(async (company) => {
         // Enforce centralized primary/passive consumer selection lease
         const authorized = await TelegramLeaseService.isAuthorizedToConsume(company.id);
         if (!authorized) {
-          continue;
+          return;
         }
 
-        const token = company.telegramBotToken!;
+        const token = decryptSecret(company.telegramBotToken);
+        if (!token) {
+          console.error(`⚠️ Could not decrypt bot token for @${company.telegramBotUsername || "bot"}. Skipping company ${company.id}.`);
+          return;
+        }
         
         // 1. Delete webhook if we haven't done so for this session
         if (offsets[token] === undefined) {
           try {
-            console.log(`🧹 Deleting webhook for bot @${company.telegramBotUsername || "bot"} to enable polling...`);
+            console.log(`🧹 Deleting webhook for bot @${company.telegramBotUsername || "bot"} to enable polling (preserving updates)...`);
             await axios.post(`https://api.telegram.org/bot${token}/deleteWebhook`, {
-              drop_pending_updates: true
+              drop_pending_updates: false
             });
             offsets[token] = 0; // initialize offset
             // Safety delay to let Telegram process webhook deletion
             await new Promise(resolve => setTimeout(resolve, 1000));
           } catch (err: any) {
             console.error(`⚠️ Failed to delete webhook for bot @${company.telegramBotUsername || "bot"}:`, err.message);
-            continue;
+            return;
           }
         }
 
@@ -78,17 +95,45 @@ export async function startTelegramPolling() {
 
           if (res.data?.ok && res.data?.result?.length > 0) {
             const updates = res.data.result;
-            const adapter = new TelegramAdapter(token);
 
             for (const update of updates) {
               console.log(`📥 [Polling Telegram Update] received update_id: ${update.update_id} for bot @${company.telegramBotUsername || "bot"}`);
               
               // Process update using existing adapter logic
-              try {
-                await adapter.processWebhook(update, company.id);
-              } catch (procErr) {
-                console.error("❌ Error processing polled update:", procErr);
-              }
+              const processPromise = (async () => {
+                let webhookRecord: any = null;
+                try {
+                  webhookRecord = await webhookPersistenceService.persist(
+                    "TELEGRAM",
+                    company.id,
+                    String(update.update_id),
+                    update
+                  );
+
+                  const adapter = ProviderAdapterFactory.getAdapter("telegram");
+                  const standardizedFrame = adapter.normalizePayload(update);
+
+                  if (standardizedFrame) {
+                    standardizedFrame.companyId = company.id;
+                    standardizedFrame.contactName = update.message?.from?.first_name || update.callback_query?.from?.first_name || "User";
+                    standardizedFrame.callbackData = update.callback_query?.data;
+
+                    const boss = pgBossService.getBoss();
+                    await boss.send("webhook.process", standardizedFrame);
+                  }
+
+                  if (webhookRecord) {
+                    await webhookPersistenceService.markProcessed(webhookRecord.id);
+                  }
+                } catch (procErr: any) {
+                  console.error("❌ Error processing polled update:", procErr);
+                  if (webhookRecord) {
+                    await webhookPersistenceService.markFailed(webhookRecord.id, procErr?.message || String(procErr));
+                  }
+                }
+              })();
+
+              taskTracker.track(processPromise);
 
               // Advance offset
               offsets[token] = update.update_id + 1;
@@ -104,14 +149,12 @@ export async function startTelegramPolling() {
                 `Setting offset back to retry webhook cleanup...`
               );
               offsets[token] = undefined; // Force a delete webhook retry on next loop
-              // Wait slightly longer in case of conflict to avoid spamming the logs
-              await new Promise(resolve => setTimeout(resolve, 5000));
             } else {
               console.error(`⚠️ Telegram getUpdates error for @${company.telegramBotUsername || "bot"}:`, fetchErr.message);
             }
           }
         }
-      }
+      }));
     } catch (globalErr: any) {
       console.error("❌ Global Telegram Polling Error:", globalErr.message);
     } finally {

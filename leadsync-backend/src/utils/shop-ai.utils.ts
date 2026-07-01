@@ -1,4 +1,35 @@
 
+import { z } from "zod";
+import { getTenantContext } from "../services/context/tenantContext.provider";
+
+// Enforce strict output schema validation at runtime
+const OmniResponseSchema = z.object({
+  intent_type: z.string(),
+  replyText: z.string(),
+  thread_summary: z.string(),
+  suggested_human_response: z.string()
+});
+
+/**
+ * Deterministic JSON validation block.
+ * Replaces old, expensive regex string-fixing heuristics entirely.
+ */
+export function validateAndParseOmniResponse(rawContent: string): any {
+  try {
+    const parsed = JSON.parse(rawContent);
+    return OmniResponseSchema.parse(parsed);
+  } catch (error) {
+    console.error("🚨 [Structural Parsing Fault] LLM output corrupted baseline schema constraints.", error);
+    // Return a structured fallback response frame to allow the thread to safely survive the turn
+    return {
+      intent_type: "HUMAN_HANDOFF",
+      replyText: "I'm having trouble processing that request right now. Let me connect you with an agent.",
+      thread_summary: "Parsing framework failure fallback turn.",
+      suggested_human_response: "System validation fault triggered. Manual interception required."
+    };
+  }
+}
+
 /**
  * Phase 1 AI Helpers
  * - Session Memory (In-memory Map)
@@ -61,129 +92,44 @@ export function updateSession(tenant_id: string, chat_id: string, updates: Parti
     sessions.set(key, { ...current, ...updates });
 }
 
-export function getMenuSnapshot(structuredMenu: any, products?: any[]) {
-    try {
-        const fs = require("fs");
-        fs.appendFileSync("/bot_debug.log", `[getMenuSnapshot] Called at ${new Date().toISOString()}. structuredMenu exists: ${!!structuredMenu}, products length: ${products?.length || 0}\n`);
-        if (products && products.length > 0) {
-            fs.appendFileSync("/bot_debug.log", `[getMenuSnapshot] Raw products list: ${JSON.stringify(products.map(p => ({ id: p.id, name: p.name, isActive: p.isActive, category: p.category })))}\n`);
-        }
-    } catch (err) {}
+/**
+ * Builds a strictly grounded text menu snapshot for injection.
+ * Throws a SystemConfigurationException if the context boundaries are violated.
+ */
+export function getMenuSnapshot(categories: any[]): string {
+  const context = getTenantContext();
 
-    // Priority 1: Use the Relational Product Table (Master Catalog)
-    const activeProducts = (products || []).filter((p: any) => p.isActive !== false);
-    if (activeProducts && activeProducts.length > 0) {
-        // Group products by category
-        const categoriesMap: Record<string, any[]> = {};
-        activeProducts.forEach((p: any) => {
-            const cat = p.category || "Uncategorized";
-            if (!categoriesMap[cat]) categoriesMap[cat] = [];
-            categoriesMap[cat].push({
-                item_id: p.id,
-                name: p.name,
-                price: p.price,
-                currency: "INR",
-                category: cat
-            });
-        });
+  // Explicitly guard against missing profile data instead of assuming default configurations
+  if (!context.currencySymbol || !context.currencyCode) {
+    throw new Error(`SystemConfigurationException: Tenant profile [${context.companyId}] lacks critical currency metadata.`);
+  }
 
-        return {
-            categories: Object.entries(categoriesMap).map(([name, items]) => ({
-                name,
-                items
-            }))
-        };
-    }
-
-    // Priority 2: Fallback to the Legacy JSON blob (botStructuredMenu)
-    if (!structuredMenu || !structuredMenu.categories) {
-        return { categories: [] };
-    }
-    return {
-        categories: structuredMenu.categories.map((cat: any) => ({
-            name: cat.name,
-            items: cat.items.map((item: any) => ({
-                item_id: item.id || item.item_id,
-                name: item.name,
-                price: item.price,
-                currency: item.currency || "INR",
-                category: cat.name
-            }))
-        }))
-    };
+  return categories.map((cat) => {
+    const itemsText = (cat.products || cat.items || []).map((p: any) => {
+      const price = p.price || 0;
+      return `- ${p.name}: ${context.currencySymbol}${price} (${context.currencyCode})`;
+    }).join("\n");
+    return `### ${cat.name}\n${itemsText}`;
+  }).join("\n\n");
 }
 
-export function calculateRetrieval(query: string, menuSnapshot: any) {
-    const normalizedQuery = query.toLowerCase().replace(/[-_/,;:!?()]/g, " ");
-    const tokens = normalizedQuery.split(/\s+/).filter(t => t.length >= 2);
-    const items: any[] = [];
-
-    menuSnapshot.categories.forEach((cat: any) => {
-        cat.items.forEach((item: any) => {
-            const itemName = item.name.toLowerCase();
-            let score = 0;
-
-            // Exact match
-            if (itemName === query.toLowerCase()) score += 10;
-
-            // Substring match
-            if (itemName.includes(query.toLowerCase())) score += 5;
-
-            // Token overlap
-            tokens.forEach(token => {
-                if (itemName.includes(token)) score += 2;
-            });
-
-            if (score > 0) {
-                items.push({ ...item, score });
-            }
-        });
-    });
-
-    // Return top 8 items sorted by score
-    return items.sort((a, b) => b.score - a.score).slice(0, 8);
+/**
+ * Pure deterministic normalization.
+ * Replaces high-overhead regex punctuation stripping loops.
+ */
+export function normalizeSearchQuery(query: string): string {
+    if (!query) return "";
+    return query.toLowerCase().trim();
 }
 
-export function safeJsonParse(text: string, fallback: any = null) {
-    try {
-        if (!text) return fallback;
-
-        // 1. Pre-clean: Remove any markdown backticks if they exist
-        let cleaned = text.replace(/```json\n?|```/gi, "").trim();
-
-        // 2. Extract JSON block (from first '{' to last '}')
-        const firstBrace = cleaned.indexOf("{");
-        const lastBrace = cleaned.lastIndexOf("}");
-
-        if (firstBrace !== -1 && lastBrace !== -1) {
-            cleaned = cleaned.substring(firstBrace, lastBrace + 1);
-        }
-
-        // 3. Handle common model error: unescaped newlines in strings
-        // This regex finds content inside quotes and ensures newlines are escaped
-        const fixed = cleaned.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match) => {
-            return match.replace(/\n/g, "\\n").replace(/\r/g, "\\r");
-        });
-
-        return JSON.parse(fixed);
-    } catch (e) {
-        console.error("❌ [JSON Parse Error] Raw:", text);
-        return fallback;
-    }
-}
-
-export function sanitizeReply(text: string): string {
-    if (!text) return "";
-    // Remove markdown block backticks
-    let cleaned = text.replace(/```[a-z]*\n?|```/gi, "").trim();
-    // Remove bold and italics
-    cleaned = cleaned.replace(/\*\*|\*/g, "");
-    
-    // DELIBERATELY RETAINING EMOJIS: Emojis are vital for natural chatbot communication (like ✅, 📦, 🚚).
-    // Remove any leftover hallucinated XML tool tags
-    cleaned = cleaned.replace(/<(?:function|tool_call|invoke)[^>]*>[\s\S]*?<\/(?:function|tool_call|invoke)>/gi, "");
-    
-    return cleaned.trim();
+/**
+ * Generates a light, high-level structural map of categories to the LLM.
+ * Completely eliminates heavy O(N*M) local string matching algorithms.
+ */
+export function compileLightMenuContext(categories: any[]): string {
+  return categories.map(cat => {
+    return `Category: ${cat.name} (ID: ${cat.id}) - Description: ${cat.description || "Available"}`;
+  }).join("\n");
 }
 
 /**
@@ -259,4 +205,13 @@ export function createFreshSessionState(): SessionState {
             total: 0
         }
     };
+}
+
+/**
+ * Context-Aware Currency Formatter.
+ * Zero hardcoded fallbacks, zero local structural leakage.
+ */
+export function formatCurrencyContextually(amount: number): string {
+  const context = getTenantContext();
+  return `${context.currencySymbol}${amount.toFixed(2)} (${context.currencyCode})`;
 }

@@ -2,12 +2,15 @@ import express from "express";
 import cors from "cors";
 import compression from "compression";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import rateLimit, { MemoryStore } from "express-rate-limit";
 
 // Routes
 import authRoutes from "./routes/auth/auth.routes";
 import publicRoutes from "./routes/auth/public.routes";
 import secureRoutes from "./routes/auth/secure.routes";
+import googleAuthRoutes from "./routes/auth/google.routes";
+import meRoutes from "./routes/auth/me.routes";
+import { initializeGoogleStrategy } from "./services/auth/google.strategy";
 
 import leadsRoutes from "./routes/leads/leads.routes";
 import telegramRoutes from "./routes/telegram/telegram.routes";
@@ -16,43 +19,55 @@ import integrationsRoutes from "./routes/integrations/integrations.routes";
 import telegramIntegrationRoutes from "./routes/integrations/telegram.integration.routes";
 import instagramIntegrationRoutes from "./routes/integrations/instagram.integration.routes";
 
-import conversationRoutes from "./routes/messaging/conversations.routes";
-import instagramRoutes from "./routes/messaging/instagram.routes";
-import broadcastsRoutes from "./routes/messaging/broadcasts.routes";
 
 import dashboardRoutes from "./routes/core/dashboard.routes";
-import { rbacRoutes } from "./routes/core/rbac.routes";
-import { auditLogRoutes } from "./routes/core/audit.routes";
 import { authMiddleware } from "./middleware/auth.middleware";
-import usersRoutes from "./routes/core/users.routes";
 import analyticsRoutes from "./routes/core/analytics.routes";
 import notificationRoutes from "./routes/core/notification.routes";
 import productsRoutes from "./routes/core/products.routes";
+import broadcastRoutes from "./routes/core/broadcast.routes";
 
 import ordersRoutes from "./routes/orders/orders.routes";
 import newOrderArrivalsRoutes from "./routes/orders/newOrderArrivals.routes";
 
 import automationRoutes from "./routes/bot/automation.routes";
+import autoReplyRoutes from "./routes/automation/autoReply.routes";
+import { setupAutoReplyEventListeners } from "./services/automation/autoReplyEventListeners";
 import botKnowledgeRoutes from "./routes/bot/bot-knowledge.routes";
+import conversationalRulesRoutes from "./routes/automation/conversationalRules.routes";
+import ruleGroupsRoutes from "./routes/automation/ruleGroups.routes";
 
 import webhookRoutes from "./routes/webhooks/webhook.routes";
+import telegramWebhookRoutes from "./routes/webhooks/telegram.routes";
+import { metadataRoutes } from "./routes/crm/metadata.routes";
 
 console.log("🔥 app.ts loaded");
+
+// Initialize OAuth strategies
+initializeGoogleStrategy();
 
 const app = express();
 
 app.set("trust proxy", 1); // Trust first proxy for Railway deployment
 
 app.use(compression()); // ✅ GZIP Compression
-app.use(helmet({ contentSecurityPolicy: false })); // ✅ Security headers (CSP off — API-only backend)
+app.use(helmet({ 
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  frameguard: false
+})); // ✅ Security headers (CSP/CORP/COOP off for dev/cross-origin compatibility)
 
 // Rate limiters
+// Fallback template tracker proxy for cluster safety: Swap this to 'new RedisStore({ client })' when deploying active Redis cluster instances.
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20,
   message: { message: "Too many requests from this IP, please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  store: new MemoryStore(),
 });
 
 const generalLimiter = rateLimit({
@@ -60,76 +75,94 @@ const generalLimiter = rateLimit({
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  store: new MemoryStore(),
 });
 
 // CORS configuration
-const envOrigins = (process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map(o => o.trim())
-  .filter(Boolean);
-
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  ...envOrigins,
-];
-
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(new Error(`CORS blocked for origin: ${origin}`));
-    },
+    origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 
 // Global API rate limiter (auth routes also have their own stricter limiter)
 app.use("/api", generalLimiter);
 
+import { pgBossService } from "./services/infrastructure/pgboss/pgboss.service";
+import { WorkerRegistry } from "./services/infrastructure/pgboss/worker.registry";
+import { SchedulerRegistry } from "./services/infrastructure/pgboss/scheduler.registry";
+
 app.get("/health", (_req, res) => {
-  res.json({ status: "LeadSync backend running 🚀" });
+  res.json({ 
+    status: "LeadSync backend running 🚀",
+    pgBoss: {
+      isRunning: pgBossService.isStarted,
+      workersRegistered: WorkerRegistry.hasRegistered,
+      schedulesRegistered: SchedulerRegistry.hasRegistered
+    }
+  });
 });
 
 /* 🔓 PUBLIC ROUTES */
 app.use("/api/auth", authLimiter, authRoutes); // strict limiter on auth
+app.use("/api/auth", googleAuthRoutes); // Google OAuth routes
+app.use("/api/auth", meRoutes); // /api/auth/me
 app.use("/api/telegram", telegramRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/integrations", integrationsRoutes);
 app.use("/api/integrations", telegramIntegrationRoutes);
 app.use("/api/integrations", instagramIntegrationRoutes);
-app.use("/api/instagram", instagramRoutes);  // Instagram DM webhook
 
 /* 🔐 SECURE ROUTE */
 app.use("/api/secure", secureRoutes);
+app.use("/api/users", secureRoutes);
 
 /* 🔐 MAIN ROUTES */
 app.use("/api/leads", leadsRoutes);
-app.use("/api/conversations", conversationRoutes);
+
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/products", productsRoutes);
-app.use("/api/rbac", authMiddleware, rbacRoutes);
-app.use("/api/audit-logs", authMiddleware, auditLogRoutes);
+app.use("/api/broadcasts", broadcastRoutes);
+app.use("/api/menu", productsRoutes);
 app.use("/api/orders", ordersRoutes);
-app.use("/api/users", usersRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/auto-reply", autoReplyRoutes);
+app.use("/api/automation/rule-groups", authMiddleware, ruleGroupsRoutes);
+app.use("/api/automation/conversational-rules", authMiddleware, conversationalRulesRoutes);
+
+// Setup event-driven auto-reply listeners
+setupAutoReplyEventListeners();
 app.use("/api/webhook", webhookRoutes);
-app.use("/api/broadcasts", broadcastsRoutes);
+app.use("/api/webhook/telegram", telegramWebhookRoutes);
 app.use("/api/bot-knowledge", botKnowledgeRoutes);
 app.use("/api/automation", automationRoutes);
+app.use("/api/bot/automation", automationRoutes);
 
 // 🆕 Add New Order Arrivals routes
 app.use("/api/newOrderArrivals", newOrderArrivalsRoutes);
+
+// CRM Routes
+app.use("/api/metadata", metadataRoutes);
+app.use("/api/crm/metadata", metadataRoutes);
+
+/* 👥 TEAM ROUTES */
+import teamRoutes from "./routes/team/team.routes";
+import invitationsRoutes from "./routes/team/invitations.routes";
+import companyRoutes from "./routes/team/company.routes";
+
+app.use("/api/team", teamRoutes);
+app.use("/api/team/invitations", invitationsRoutes);
+app.use("/api/company", companyRoutes);
 
 import path from "path";
 
@@ -150,6 +183,8 @@ app.get("/api/debug/system", async (req, res) => {
   res.json(diagnostics);
 });
 
+import { errorMiddleware } from "./middleware/error.middleware";
+
 // Serve frontend static files
 const frontendDistPath = path.resolve(__dirname, '../../leadsync-frontend/dist');
 app.use(express.static(frontendDistPath));
@@ -160,5 +195,7 @@ app.get('*', (req, res) => {
     res.status(404).json({ error: 'API route not found' });
   }
 });
+
+app.use(errorMiddleware);
 
 export default app;

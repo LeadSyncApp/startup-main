@@ -1,0 +1,76 @@
+import { Router } from "express";
+import { passport } from "../../services/auth/google.strategy";
+import { prisma } from "../../lib/prisma";
+import { signToken } from "../../utils/jwt";
+
+const router = Router();
+
+/**
+ * GET /api/auth/google/signup
+ * Initiates Google OAuth flow for SIGN UP (creates new account if none exists)
+ */
+router.get("/google/signup", (req, res, next) => {
+  const scope = ["profile", "email"];
+  const state = "mode=signup";
+  passport.authenticate("google", { scope, state, prompt: "select_account" })(req, res, next);
+});
+
+/**
+ * GET /api/auth/google/signin
+ * Initiates Google OAuth flow for SIGN IN (only allows existing accounts)
+ */
+router.get("/google/signin", (req, res, next) => {
+  const scope = ["profile", "email"];
+  const state = "mode=signin";
+  passport.authenticate("google", { scope, state, prompt: "select_account" })(req, res, next);
+});
+
+/**
+ * GET /api/auth/google/callback
+ * Handles OAuth callback from Google
+ */
+router.get(
+  "/google/callback",
+  passport.authenticate("google", { session: false, failureRedirect: "/login?error=google_auth_failed" }),
+  (req: any, res) => {
+    try {
+      const { user, isNew, linked, error, message } = req.auth || req.user || {};
+
+      // Handle error cases (e.g., signin with no account, signup with existing account)
+      if (error) {
+        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        // ACCOUNT_EXISTS: send to signup page so user sees the message and can switch to sign in
+        if (error === "ACCOUNT_EXISTS") {
+          return res.redirect(`${frontendUrl}/onboarding?error=${error}&message=${encodeURIComponent(message || "")}`);
+        }
+        return res.redirect(`${frontendUrl}/login?error=${error}&message=${encodeURIComponent(message || "")}`);
+      }
+
+      if (!user || !user.id) {
+        return res.redirect(`/login?error=no_user`);
+      }
+
+      const token = signToken({
+        userId: user.id,
+        companyId: user.companyId,
+        role: user.role,
+      });
+
+      // Redirect to frontend with token in URL fragment
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+      let redirectPath = "/auth-callback";
+      if (isNew) {
+        redirectPath += "?welcome=true";
+      } else if (linked) {
+        redirectPath += "?linked=true";
+      }
+
+      res.redirect(`${frontendUrl}${redirectPath}#token=${token}`);
+    } catch (error) {
+      console.error("Google callback error:", error);
+      res.redirect("/login?error=callback_failed");
+    }
+  }
+);
+
+export default router;

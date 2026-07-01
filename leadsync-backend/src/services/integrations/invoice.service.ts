@@ -35,7 +35,6 @@ class InvoiceService {
             include: {
                 company: true,
                 lead: true,
-                conversation: true,
             },
         });
 
@@ -179,11 +178,11 @@ class InvoiceService {
 
             // Totals
             const totalY = currentY + 20;
-            doc.font("Helvetica-Bold");
-            this.generateTableRow(doc, totalY, "", "", "Total", `INR ${order.amount.toFixed(2)}`);
+            this.generateInvoiceTotalRow(doc, totalY, order);
 
             // Footer
             doc
+                .font("Helvetica")
                 .fontSize(10)
                 .text("Payment Status: PAID", 50, totalY + 40)
                 .text(`Payment Ref: ${invoice.paymentRef || "N/A"}`, 50, totalY + 55)
@@ -191,6 +190,30 @@ class InvoiceService {
 
             doc.end();
         });
+    }
+
+    /**
+     * Compiles and prints the transactional currency totals row cleanly onto the PDF layout plane.
+     * Removes static prefix strings in favor of contextually driven runtime labels.
+     */
+    public generateInvoiceTotalRow(doc: any, totalY: number, order: any): void {
+        // Gracefully resolve the target ISO token directly from the database schema model
+        const currencyLabel = (order.company?.currencyCode || "USD").toUpperCase();
+        
+        // Enforce precise decimal precision adjustments natively based on currency denomination types
+        const isZeroDecimal = ["JPY", "KRW", "CLP"].includes(currencyLabel);
+        const formattedAmountString = isZeroDecimal 
+            ? Math.round(order.amount).toString() 
+            : order.amount.toFixed(2);
+
+        this.generateTableRow(
+            doc,
+            totalY,
+            "",
+            "",
+            "Total",
+            `${currencyLabel} ${formattedAmountString}`
+        );
     }
 
     private generateTableRow(doc: any, y: number, item: string, qty: string, rate: string, total: string) {

@@ -1,0 +1,229 @@
+/**
+ * Rule Generator Service
+ * 
+ * Converts a shop owner's plain-text prompt (e.g. "When customer asks about biryani, offer 50% discount")
+ * into a structured ConversationalRule with trigger keywords, conditions, and response template.
+ * Uses the same Groq AI infrastructure as aiPersonality.service.ts.
+ */
+
+import { prisma } from "../../lib/prisma";
+
+export interface RuleGenerationInput {
+  prompt: string;                    // Plain-text prompt from the shop owner
+  companyId: string;
+  businessType?: string;             // e.g. "restaurant", "home_bakery", "retail"
+  businessName?: string;
+  productCatalog?: string[];         // List of product names for context
+}
+
+export interface GeneratedRuleData {
+  name: string;
+  triggerKeywords: string[];
+  triggerType: "KEYWORD" | "AI_DETECTED" | "KEYWORD_AND_AI";
+  templateBody: string;
+  useAI: boolean;
+  brandVoice: string;
+  targetLanguage: string;
+  conditions: {
+    segment?: string[];
+    timeRange?: { start: number; end: number };
+    language?: string[];
+  } | null;
+  sourcePrompt: string;
+}
+
+export class RuleGeneratorService {
+  private grokEndpoint = "https://api.groq.com/openai/v1/chat/completions";
+
+  /**
+   * Generate a structured rule from a plain-text prompt
+   */
+  async generateFromPrompt(input: RuleGenerationInput): Promise<GeneratedRuleData> {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      throw new Error("GROQ_API_KEY not configured");
+    }
+
+    const systemPrompt = this.buildSystemPrompt(input);
+    const userPrompt = this.buildUserPrompt(input);
+
+    const response = await fetch(this.grokEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt,
+          },
+          {
+            role: "user",
+            content: userPrompt,
+          },
+        ],
+        max_tokens: 500,
+        temperature: 0.3, // Lower temperature for structured output
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Groq API error ${response.status}: ${errText}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content?.trim();
+    if (!content) {
+      throw new Error("Groq returned empty message");
+    }
+
+    // Parse the JSON response
+    let parsed: any;
+    try {
+      parsed = JSON.parse(content);
+    } catch (err: any) {
+      throw new Error(`Failed to parse AI response as JSON: ${err.message}. Raw: ${content.substring(0, 200)}`);
+    }
+
+    // Validate required fields
+    if (!parsed.triggerKeywords || !Array.isArray(parsed.triggerKeywords) || parsed.triggerKeywords.length === 0) {
+      throw new Error("AI response missing required 'triggerKeywords' array");
+    }
+
+    const generated: GeneratedRuleData = {
+      name: parsed.name || `Rule: ${parsed.triggerKeywords?.slice(0, 2).join(", ") || "auto-generated"}`,
+      triggerKeywords: parsed.triggerKeywords,
+      triggerType: parsed.triggerType || "KEYWORD",
+      templateBody: parsed.templateBody || "",
+      useAI: parsed.useAI !== undefined ? parsed.useAI : false,
+      brandVoice: parsed.brandVoice || "friendly",
+      targetLanguage: parsed.targetLanguage || "auto",
+      conditions: parsed.conditions || null,
+      sourcePrompt: input.prompt,
+    };
+
+    return generated;
+  }
+
+  /**
+   * Build the system prompt that instructs the AI on how to generate rules
+   */
+  private buildSystemPrompt(input: RuleGenerationInput): string {
+    return `You are a smart rule generator for an e-commerce chatbot called LeadSync. 
+Your job is to convert a shop owner's plain-text instruction into a structured JSON rule that the chatbot can execute.
+
+The rule will be used to automatically respond to customer messages based on keywords and conditions.
+
+OUTPUT FORMAT - Return ONLY valid JSON with these fields:
+{
+  "name": "A short, descriptive name for this rule (max 50 chars)",
+  "triggerKeywords": ["array", "of", "keywords", "to", "match", "in", "customer", "messages"],
+  "triggerType": "KEYWORD" | "AI_DETECTED" | "KEYWORD_AND_AI",
+  "templateBody": "The response template. Use {{customerName}} for customer's name, {{shopName}} for shop name. Keep conversational.",
+  "useAI": false,
+  "brandVoice": "friendly" | "casual" | "formal" | "salesy",
+  "targetLanguage": "auto" | "en" | "hi" | "ta" | "te" | "bn",
+  "conditions": {
+    "segment": ["NEW", "REGULAR", "VIP", "CHURN_RISK"],
+    "timeRange": { "start": 8, "end": 22 },
+    "language": ["en", "hi"]
+  }
+}
+
+RULES:
+1. Extract 3-8 most relevant trigger keywords from the prompt - use both English and relevant Indian language transliterations
+2. For triggerType: use "KEYWORD" for simple keyword matching, "KEYWORD_AND_AI" when understanding nuance matters
+3. Template should be natural and conversational, not salesy unless specified
+4. Include Indian language keyword variants (Hindi, Tamil, Telugu, etc.) based on context
+5. If the prompt mentions timing or segments, reflect in conditions
+6. If the prompt is about a special offer/discount, set brandVoice to "salesy"
+7. Keep templateBody under 200 characters`;
+  }
+
+  /**
+   * Build the user prompt with the shop owner's instruction + context
+   */
+  private buildUserPrompt(input: RuleGenerationInput): string {
+    const contextParts: string[] = [];
+
+    if (input.businessName) {
+      contextParts.push(`Shop name: ${input.businessName}`);
+    }
+    if (input.businessType) {
+      contextParts.push(`Business type: ${input.businessType}`);
+    }
+    if (input.productCatalog && input.productCatalog.length > 0) {
+      contextParts.push(`Products available: ${input.productCatalog.join(", ")}`);
+    }
+
+    const contextStr = contextParts.length > 0
+      ? `\n\nSHOP CONTEXT:\n${contextParts.join("\n")}`
+      : "";
+
+    return `Generate a conversational rule based on this shop owner's instruction:
+
+"${input.prompt}"${contextStr}
+
+Return the JSON rule object as specified.`;
+  }
+
+  /**
+   * Suggest improvements or variations for an existing rule
+   */
+  async suggestVariations(
+    existingRule: { name: string; triggerKeywords: string[]; templateBody: string },
+    companyId: string
+  ): Promise<{ suggestions: string[]; additionalKeywords: string[] }> {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      return { suggestions: [], additionalKeywords: [] };
+    }
+
+    const prompt = `Given this chatbot rule:
+- Name: ${existingRule.name}
+- Keywords: ${existingRule.triggerKeywords.join(", ")}
+- Template: ${existingRule.templateBody}
+
+Suggest 3 improvements or variations to make the rule more effective for customer engagement. Also suggest 3-5 additional trigger keywords that could be added.
+Return as JSON: { "suggestions": ["suggestion1", "suggestion2", "suggestion3"], "additionalKeywords": ["kw1", "kw2", "kw3"] }`;
+
+    const response = await fetch(this.grokEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          { role: "system", content: "You are a chatbot strategy expert. Return JSON only." },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 300,
+        temperature: 0.7,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!response.ok) {
+      return { suggestions: [], additionalKeywords: [] };
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content?.trim();
+    if (!content) return { suggestions: [], additionalKeywords: [] };
+
+    try {
+      return JSON.parse(content);
+    } catch {
+      return { suggestions: [], additionalKeywords: [] };
+    }
+  }
+}
+
+export const ruleGeneratorService = new RuleGeneratorService();

@@ -1,12 +1,7 @@
 // Safe environment loading — VITE_API_URL is the single source of truth.
 // Must be a full absolute URL with protocol (http:// or https://)
 
-// IMMEDIATE DEBUG: Check environment variable at module load
-console.log('=== MODULE LOAD DEBUG ===');
-console.log('Raw import.meta.env.VITE_API_URL:', import.meta.env.VITE_API_URL);
-console.log('Type of VITE_API_URL:', typeof import.meta.env.VITE_API_URL);
-
-const rawApiUrl = import.meta.env.VITE_API_URL?.trim();
+const rawApiUrl = (typeof window !== 'undefined' ? window.location.origin + "/api" : process.env.VITE_API_URL)?.trim();
 let API_BASE: string;
 
 // Validate VITE_API_URL is a proper absolute URL
@@ -37,15 +32,7 @@ async function apiFetch(endpoint: string, options: ApiOptions = {}) {
 
   const isFormData = options.body instanceof FormData;
 
-  // DEBUG: Log URL construction details
-  console.log('=== API FETCH DEBUG ===');
-  console.log('1. endpoint:', endpoint);
-  console.log('2. API_BASE:', API_BASE);
-  console.log('3. import.meta.env.VITE_API_URL:', import.meta.env.VITE_API_URL);
-  
   const finalUrl = `${API_BASE}${endpoint}`;
-  console.log('4. finalUrl constructed:', finalUrl);
-  console.log('========================');
 
   try {
     const res = await fetch(finalUrl, {
@@ -115,6 +102,6 @@ export const api = {
   patch: (endpoint: string, body?: any, headers?: Record<string, string>) =>
     apiFetch(endpoint, { method: "PATCH", body, headers }),
 
-  delete: (endpoint: string) =>
-    apiFetch(endpoint, { method: "DELETE" }),
+  delete: (endpoint: string, body?: any) =>
+    apiFetch(endpoint, { method: "DELETE", body }),
 };

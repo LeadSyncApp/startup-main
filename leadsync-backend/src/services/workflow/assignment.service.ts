@@ -1,4 +1,25 @@
-import { prisma } from "../../lib/prisma";
+// ═══════════════════════════════════════════════════════════════════
+// DEPRECATED — 30 Jun 2026
+// This service is DEAD IN PRODUCTION and will be deleted after a
+// grace period.  Do NOT use it for new code.
+//
+// Why dead:
+//   • It reads Company.assignmentStrategy — that column NEV ER existed
+//     in the live PostgreSQL database (migration was never applied).
+//   • Without that column the first branch always hits `strategy ===
+//     "MANUAL"` and returns null, so no auto-assignment ever fires.
+//   • The caller in newOrderArrival.service.ts has already been
+//     removed (Step 1 of deprecation plan, committed 2026-06-30).
+//   • The live auto-assignment logic lives in
+//     src/services/assignment.service.ts which writes claimedById /
+//     claimedByName / claimedAt via the least-loaded algorithm
+//     triggered by ai.orchestrator.worker.ts on AI escalation.
+//   • This file still references the legacy "assignedToId" column
+//     which is a leftover DB column not represented in schema.prisma.
+//
+// Superseded by: src/services/assignment.service.ts
+// ═══════════════════════════════════════════════════════════════════
+import { createTenantRepository } from "../../lib/tenantDb";
 import { safeEmitConversationUpdate, emitToAgent, emitToCompany } from "../../lib/socket";
 import { notificationService } from "../infrastructure/notification.service";
 
@@ -10,9 +31,10 @@ export class AssignmentService {
         try {
             console.log(`[ASSIGNMENT] Checking auto-assignment for conversation ${conversationId} in company ${companyId}`);
             
+            const tenantDb = createTenantRepository(companyId);
+
             // 1. Fetch Company Strategy
-            const company = await prisma.company.findUnique({
-                where: { id: companyId },
+            const company = await tenantDb.company.findUnique({
                 select: { assignmentStrategy: true }
             });
             
@@ -23,9 +45,8 @@ export class AssignmentService {
             }
 
             // 2. Find eligible, active users (agents, admins, or owners who are active and available to take chats)
-            const activeAgents = await prisma.user.findMany({
+            const activeAgents = await tenantDb.user.findMany({
                 where: {
-                    companyId,
                     isActive: true,
                     isAvailable: true,
                     role: { in: ["AGENT", "ADMIN", "OWNER"] }
@@ -42,9 +63,8 @@ export class AssignmentService {
 
             if (strategy === "ROUND_ROBIN") {
                 // Determine last assigned agent in the company
-                const lastAssignedConversation = await prisma.conversation.findFirst({
+                const lastAssignedConversation = await tenantDb.conversation.findFirst({
                     where: {
-                        companyId,
                         assignedToId: { not: null },
                         id: { not: conversationId }
                     },
@@ -54,7 +74,7 @@ export class AssignmentService {
 
                 if (lastAssignedConversation && lastAssignedConversation.assignedToId) {
                     const lastAgentId = lastAssignedConversation.assignedToId;
-                    const lastAgentIdx = activeAgents.findIndex(a => a.id === lastAgentId);
+                    const lastAgentIdx = activeAgents.findIndex((a: any) => a.id === lastAgentId);
                     
                     if (lastAgentIdx !== -1) {
                         const nextAgentIdx = (lastAgentIdx + 1) % activeAgents.length;
@@ -71,10 +91,9 @@ export class AssignmentService {
                 // Strategy: Choose agent with lowest open assigned conversations
                 // Query active counters for agent capacities
                 const agentConversationsCounts = await Promise.all(
-                    activeAgents.map(async (agent) => {
-                        const count = await prisma.conversation.count({
+                    activeAgents.map(async (agent: any) => {
+                        const count = await tenantDb.conversation.count({
                             where: {
-                                companyId,
                                 assignedToId: agent.id,
                                 status: "OPEN"
                             }
@@ -90,19 +109,19 @@ export class AssignmentService {
             }
 
             if (chosenAgentId) {
-                // 3. Make assignment update in Prisma
-                const updatedConversation = await prisma.conversation.update({
+                // 3. Make assignment update in tenantDb
+                const updatedConversation = await tenantDb.conversation.update({
                     where: { id: conversationId },
                     data: { assignedToId: chosenAgentId },
                     include: { 
-                        assignedTo: { select: { id: true, name: true } },
+                        assignedTo: { select: { id: true, firstName: true, lastName: true } },
                         lead: { select: { id: true, name: true, contact: true, channel: true, pendingOrderState: true } }
                     }
                 }) as any;
 
                 // Sync the pending order claimed status if one exists
                 if (updatedConversation.lead?.pendingOrderState === "PENDING_APPROVAL") {
-                    await prisma.lead.update({
+                    await tenantDb.lead.update({
                         where: { id: updatedConversation.leadId },
                         data: {
                             pendingOrderState: "CLAIMED_FOR_APPROVAL",
@@ -119,7 +138,7 @@ export class AssignmentService {
                         pendingOrderState: "CLAIMED_FOR_APPROVAL",
                         pendingOrderClaimedById: chosenAgentId,
                         pendingOrderClaimedAt: new Date(),
-                        agentAssigned: updatedConversation.assignedTo?.name || "Agent"
+                        agentAssigned: updatedConversation.assignedTo ? `${updatedConversation.assignedTo.firstName} ${updatedConversation.assignedTo.lastName || ""}`.trim() : "Agent"
                     });
                 }
 
@@ -137,8 +156,8 @@ export class AssignmentService {
                 });
 
                 // 5. Notify agent
-                const agent = activeAgents.find(a => a.id === chosenAgentId);
-                const agentName = agent?.name || "Agent";
+                const agent = activeAgents.find((a: any) => a.id === chosenAgentId) as any;
+                const agentName = agent ? `${agent.firstName} ${agent.lastName || ""}`.trim() : "Agent";
                 await notificationService.notifyUser(
                     chosenAgentId,
                     "New Auto-Assigned Lead",

@@ -2,8 +2,8 @@ import { Router, Response } from "express";
 import axios from "axios";
 import crypto from "crypto";
 import { prisma } from "../../lib/prisma"; // correct path for src/routes -> src/lib
+import { encrypt, decryptSecret } from "../../utils/encryption";
 import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
-import { generateSuggestedBotCommands } from "../../services/ai/ai.service";
 
 const router = Router();
 
@@ -39,7 +39,7 @@ router.post(
       /* 2️⃣ Generate webhook secret */
       const webhookSecret = crypto.randomBytes(32).toString("hex");
 
-      const webhookUrl = `${process.env.API_BASE_URL}/api/telegram/webhook`;
+      const webhookUrl = `${process.env.API_BASE_URL}/api/webhook/telegram/webhook`;
 
       /* 3️⃣ Set webhook */
       await axios.post(
@@ -84,9 +84,9 @@ router.post(
       await prisma.company.update({
         where: { id: req.user.companyId },
         data: {
-          telegramBotToken: token,
+          telegramBotToken: encrypt(token),
           telegramBotUsername: botUsername,
-          telegramWebhookSecret: webhookSecret,
+          telegramWebhookSecret: encrypt(webhookSecret),
           telegramConnected: true,
         },
       });
@@ -125,13 +125,18 @@ router.post(
         where: { id: req.user.companyId },
       });
 
-      if (!company?.telegramBotToken) {
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const teleToken = decryptSecret(company.telegramBotToken);
+      if (!teleToken) {
         return res.status(400).json({ message: "No bot connected" });
       }
 
       /* Remove webhook */
       await axios.post(
-        `https://api.telegram.org/bot${company.telegramBotToken}/deleteWebhook`,
+        `https://api.telegram.org/bot${teleToken}/deleteWebhook`,
         { drop_pending_updates: true }
       );
 
@@ -228,13 +233,17 @@ router.post(
 
       let synched = false;
       if (company?.telegramConnected && company.telegramBotToken) {
+        const decryptedToken = decryptSecret(company.telegramBotToken);
+        if (!decryptedToken) {
+          return res.status(500).json({ message: "Failed to decrypt bot token for Telegram sync" });
+        }
         // Send only command and description to Telegram api
         const telegramPayload = cleanedCommands.map((c: any) => ({
           command: c.command,
           description: c.description
         }));
         await axios.post(
-          `https://api.telegram.org/bot${company.telegramBotToken}/setMyCommands`,
+          `https://api.telegram.org/bot${decryptedToken}/setMyCommands`,
           {
             commands: telegramPayload,
           }
@@ -280,15 +289,16 @@ router.post(
 
       const businessName = company?.businessName || company?.name || "Our Shop";
 
-      const suggested = await generateSuggestedBotCommands(
-        description,
-        businessName
-      );
+      const suggestedCommands = [
+        { command: "start", description: `Welcome to ${businessName}!`, action: "custom", customReplyText: "Hello! Welcome to " + businessName + ". How can we help you today?" },
+        { command: "menu", description: "Browse catalog", action: "custom", customReplyText: "Sure! Let me show you our current products." },
+        { command: "help", description: "Get support", action: "custom", customReplyText: "Connect with our support team." }
+      ];
 
       return res.json({
         message: "AI has successfully generated customized commands for your business!",
-        optimizedDescription: suggested.optimizedDescription,
-        commands: suggested.commands,
+        optimizedDescription: description,
+        commands: suggestedCommands,
       });
     } catch (error: any) {
       console.error("Failed to generate suggested commands:", error);

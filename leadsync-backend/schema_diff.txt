@@ -1,0 +1,975 @@
+﻿diff --git a/leadsync-backend/prisma/schema.prisma b/leadsync-backend/prisma/schema.prisma
+index 3da268e..1bdd5b8 100644
+--- a/leadsync-backend/prisma/schema.prisma
++++ b/leadsync-backend/prisma/schema.prisma
+@@ -1,8 +1,3 @@
+-// ==========================================
+-// LeadSync Database Schema
+-// Optimized for High-Concurrency Multi-Tenant B2B2C Social-Commerce Systems
+-// ==========================================
+-
+ generator client {
+   provider = "prisma-client-js"
+ }
+@@ -13,109 +8,113 @@ datasource db {
+   directUrl = env("DIRECT_URL")
+ }
+ 
+-// ==========================================
+-// CORE TENANCY & BUSINESS PROFILE
+-// ==========================================
+-
+ model Company {
+-  id                       String            @id @default(uuid())
++  id                       String                  @id @default(uuid())
+   name                     String
+-  createdAt                DateTime          @default(now())
++  scale                    BusinessScale           @default(HOME_GROWN)
++  createdAt                DateTime                @default(now())
+   telegramBotToken         String?
+-  telegramBotTokenHash     String?           @unique
++  telegramBotTokenHash     String?                 @unique
+   telegramBotUsername      String?
+-  telegramWebhookSecret    String?           @unique
+-  telegramConnected        Boolean           @default(false)
++  telegramWebhookSecret    String?                 @unique
++  telegramConnected        Boolean                 @default(false)
+   botBusinessType          String?
+   botWelcomeMessage        String?
+   businessAddress          String?
+   businessName             String?
+-  companyCode              String            @unique
++  companyCode              String                  @unique
+   gstin                    String?
+-  instagramConnected       Boolean           @default(false)
++  instagramConnected       Boolean                 @default(false)
+   instagramPageAccessToken String?
+-  instagramPageId          String?           @unique
++  instagramPageId          String?                 @unique
+   whatsAppSystemToken      String?
+   whatsAppPhoneNumberId    String?
+-  invoiceCounter           Int               @default(0)
+-  dailyRevenueTarget       Float             @default(0.0) // B2B2C Daily Profit/Revenue goals metric
+-  businessStartHour        Int               @default(8)   // 24-hour scale (0-23)
+-  businessEndHour          Int               @default(22)  // 24-hour scale (0-23)
+-  customOooMessage         String            @default("Hello! Our human team is currently offline. Your message has been pinned right at the top of our workbench queue, and we will message you as soon as our shift begins! ΓÿÇ∩╕Å")
+-  isArchived               Boolean           @default(false)
+-  currencySymbol           String            @default("$")
+-  currencyCode             String            @default("USD")
+-  timezone                 String            @default("UTC")
+-  highValueThreshold       Float             @default(5000.0)
+-  bulkItemThreshold        Int               @default(5)
+-  
+-  // Explicit cascading boundaries
+-  users                    User[]
+-  products                 Product[]
+-  leads                    Lead[]
++  invoiceCounter           Int                     @default(0)
++  dailyRevenueTarget       Float                   @default(0.0)
++  businessStartHour        Int                     @default(8)
++  businessEndHour          Int                     @default(22)
++  customOooMessage         String                  @default("Hello! Our human team is currently offline. Your message has been pinned right at the top of our workbench queue, and we will message you as soon as our shift begins! ΓÿÇ∩╕Å")
++  isArchived               Boolean                 @default(false)
++  currencySymbol           String                  @default("Γé╣")
++  currencyCode             String                  @default("INR")
++  timezone                 String                  @default("Asia/Kolkata")
++  highValueThreshold       Float                   @default(5000.0)
++  bulkItemThreshold        Int                     @default(5)
++  upiId                    String?
++  upiName                  String?
++  updatedAt                DateTime                @updatedAt
++  agentFeedPosts           AgentFeedPost[]
++  autoReplyLogs            AutoReplyLog[]
++  autoReplyRules           AutoReplyRule[]
++  automationRules          AutomationRule[]
++  botConfiguration         BotConfiguration?
++  botKnowledge             BotKnowledge[]
++  broadcasts               Broadcast[]
++  ClaimLog                 ClaimLog[]
++  analyticsRollup          CompanyAnalyticsRollup?
+   conversations            Conversation[]
+-  orders                   Order[]
++  conversationalRules      ConversationalRule[]
++  conversationalRuleLogs   ConversationalRuleLog[]
++  customFieldDefinitions   CustomFieldDefinition[]
++  invitations              Invitation[]
+   invoices                 Invoice[]
+-  broadcasts               Broadcast[]
+-  botConfiguration         BotConfiguration?
++  leads                    Lead[]
+   merchantFiles            MerchantFile[]
+-  botKnowledge             BotKnowledge[]
+-  notificationTemplates    NotificationTemplate[]
+-  automationRules          AutomationRule[]
++  Message                  Message[]
+   notifications            Notification[]
+-  agentFeedPosts           AgentFeedPost[]
+-  messages                 Message[]
++  notificationTemplates    NotificationTemplate[]
++  orders                   Order[]
+   orderItems               OrderItem[]
+   orderLogs                OrderLog[]
+-  customFieldDefinitions   CustomFieldDefinition[]
+-  analyticsRollup          CompanyAnalyticsRollup?
++  products                 Product[]
++  ruleGroups               RuleGroup[]
++  users                    User[]
+ }
+ 
+-// ==========================================
+-// TEAM, IDENTITY, AND SYSTEM ACCESS
+-// ==========================================
+-
+ model User {
+-  id                    String           @id @default(uuid())
+-  email                 String
+-  name                  String
+-  passwordHash          String
+-  role                  Role             @default(AGENT)
+-  managerId             String?
+-  companyId             String
+-  createdAt             DateTime         @default(now())
+-  isActive              Boolean          @default(true)
+-  isAvailable           Boolean          @default(true)
+-  staffId               String?
+-  residingAddress       String?
+-  phoneNumber           String?
+-  isOnline              Boolean          @default(false)
+-  lastSeenAt            DateTime?
+-  resetToken            String?
+-  resetTokenExpiry      DateTime?
+-  
+-  // Relations
+-  manager               User?            @relation("UserManagement", fields: [managerId], references: [id])
+-  subordinates          User[]           @relation("UserManagement")
+-  assignedConversations Conversation[]   @relation("AssignedConversations")
+-  internalNotes         InternalNote[]   @relation("InternalNotes")
+-  notifications         Notification[]
+-  processedOrders       Order[]          @relation("ProcessedOrders")
+-  company               Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+-  agentFeedPosts        AgentFeedPost[]  @relation("AgentFeedPosts")
++  id                   String           @id @default(uuid())
++  email                String           @unique
++  firstName            String?
++  lastName             String?
++  passwordHash         String?
++  role                 Role             @default(STAFF)
++  managerId            String?
++  companyId            String
++  createdAt            DateTime         @default(now())
++  isActive             Boolean          @default(true)
++  isAvailable          Boolean          @default(true)
++  staffId              String?
++  residingAddress      String?
++  phoneNumber          String?
++  isOnline             Boolean          @default(false)
++  lastSeenAt           DateTime?
++  resetToken           String?
++  resetTokenExpiry     DateTime?
++  updatedAt            DateTime         @updatedAt
++  authProvider         String           @default("EMAIL")
++  googleId             String?          @unique
++  onboardingStatus     OnboardingStatus @default(PENDING)
++  agentFeedPosts       AgentFeedPost[]  @relation("AgentFeedPosts")
++  claimedConversations Conversation[]   @relation("ClaimedConversations")
++  InternalNote         InternalNote[]
++  sentInvitations      Invitation[]     @relation("InvitedByUser")
++  notifications        Notification[]
++  processedOrders      Order[]          @relation("ProcessedOrders")
++  company              Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
++  manager              User?            @relation("UserManagement", fields: [managerId], references: [id])
++  subordinates         User[]           @relation("UserManagement")
+ 
+   @@unique([email, companyId])
+-  @@index([companyId])
++  @@index([companyId, role])
+   @@index([isActive])
+   @@index([createdAt])
+   @@index([resetToken])
+   @@index([managerId])
++  @@index([authProvider])
++  @@index([googleId])
++  @@index([companyId, onboardingStatus])
+ }
+ 
+-// ==========================================
+-// B2C RETAIL LEADS & AGENT ASSIGNMENT
+-// ==========================================
+-
+ model Lead {
+   id                      String            @id @default(uuid())
+   name                    String?
+@@ -137,93 +136,30 @@ model Lead {
+   pendingOrderState       PendingOrderState @default(NONE)
+   pendingOrderSummary     String?
+   customFields            Json?
+-  
+-  // High-Ticket Priority Matrix for retail intent triage
++  city                    String?
++  state                   String?
++  tags                    String[]          @default([])
+   estimatedValue          Float             @default(0.0)
+   aiPriority              AiPriority        @default(LOW)
+-  
+   isPrivate               Boolean           @default(false)
+   conversations           Conversation[]
+-  company                 Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
++  company                 Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+   orders                  Order[]
+ 
+   @@unique([contact, channel, companyId])
+   @@index([companyId])
+-  // High-value queue reads sorted by priority and estimated values
+   @@index([companyId, aiPriority, estimatedValue])
+   @@index([totalSpend])
+   @@index([lastActiveAt])
+   @@index([status])
+-  @@index([pendingOrderState])
+-  @@index([pendingOrderClaimedById])
+   @@index([deletedAt])
++  @@index([city])
++  @@index([state])
++  @@index([tags])
++  @@index([pendingOrderClaimedById])
++  @@index([pendingOrderState])
+ }
+ 
+-// ==========================================
+-// CHANNELS, CHATS, AND RAW MESSAGES
+-// ==========================================
+-
+-model Conversation {
+-  id             String              @id @default(uuid())
+-  channel        Channel
+-  leadId         String
+-  createdAt      DateTime            @default(now())
+-  companyId      String
+-  mode           ConversationMode    @default(BOT)
+-  updatedAt      DateTime            @updatedAt
+-  aiHandled      Boolean             @default(true)
+-  aiSummary      String?
+-  aiSummaryAt    DateTime?
+-  latestSummary  String?
+-  suggestedAgentReply String?
+-  transientIntentState String?
+-  assignedToId   String?
+-  intent         ConversationIntent?
+-  priorityScore  Int                 @default(0)
+-  sentimentScore Int                 @default(0)
+-  sessionState   Json?
+-  status         ConversationStatus  @default(OPEN)
+-  summary        String?
+-  assignedTo     User?               @relation("AssignedConversations", fields: [assignedToId], references: [id])
+-  company        Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+-  lead           Lead                @relation(fields: [leadId], references: [id], onDelete: Restrict)
+-  internalNotes  InternalNote[]
+-  messages       Message[]
+-  orders         Order[]
+-
+-  @@unique([leadId, companyId, channel], name: "leadId_companyId_channel")
+-  @@index([companyId, updatedAt])
+-  @@index([leadId])
+-  @@index([createdAt])
+-  @@index([sentimentScore])
+-  @@index([assignedToId])
+-  @@index([status])
+-  @@index([priorityScore])
+-}
+-
+-model Message {
+-  id                String        @id @default(uuid())
+-  companyId         String
+-  content           String
+-  sender            MessageSender
+-  conversationId    String
+-  createdAt         DateTime      @default(now())
+-  messageType       String        @default("TEXT")
+-  platform          Channel?
+-  externalMessageId String?
+-  deliveryStatus    String?       @default("SENT")
+-  company           Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+-  conversation      Conversation  @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+-
+-  @@unique([platform, externalMessageId])
+-  @@index([companyId])
+-  @@index([conversationId, createdAt])
+-}
+-
+-// ==========================================
+-// CATALOG, PRODUCTS, AND INVENTORY
+-// ==========================================
+-
+ model Product {
+   id             String      @id @default(uuid())
+   companyId      String
+@@ -231,41 +167,37 @@ model Product {
+   name           String
+   description    String?
+   price          Float
+-  cogs           Float?      // Cost of Goods Sold for profit tracking
++  cogs           Float?
+   stockQuantity  Int         @default(0)
+   trackInventory Boolean     @default(false)
+   category       String?
+   imageUrl       String?
+   isActive       Boolean     @default(true)
+-  attributes     Json?       // Postgres Json attributes supporting cross-domain product specifications
++  attributes     Json?
+   createdAt      DateTime    @default(now())
+   updatedAt      DateTime    @updatedAt
+-  company        Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+   orderItems     OrderItem[]
++  company        Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+ 
+   @@unique([companyId, sku])
+   @@index([companyId])
+ }
+ 
+-// ==========================================
+-// SHOP TRANSACTIONS, BASKETS, AND SALES
+-// ==========================================
+-
+ model Order {
+   id             String              @id @default(uuid())
+   companyId      String
+   conversationId String
+-  leadId         String
++  leadId         String?
+   summary        String
+   priority       OrderPriority       @default(NORMAL)
+   status         OrderStatus         @default(BOT_CREATED_ORDER)
+-  sourceChannel  SourceChannel       @default(WEBSITE) // Media channel pulse metrics
+-  metadata       Json?               // Domain-agnostic transactional variations
++  sourceChannel  SourceChannel       @default(WEBSITE)
++  metadata       Json?
+   createdAt      DateTime            @default(now())
+   updatedAt      DateTime            @updatedAt
+   amount         Float               @default(0)
+-  totalCogs      Float               @default(0) // Captured total cost of goods sold at time of purchase
+-  netProfit      Float               @default(0) // Cached net profit
++  totalCogs      Float               @default(0)
++  netProfit      Float               @default(0)
+   processedById  String?
+   approvalStatus OrderApprovalStatus @default(APPROVED)
+   source         OrderSource         @default(MANUAL)
+@@ -275,15 +207,13 @@ model Order {
+   predictedValue Float?
+   priorityScore  Int                 @default(0)
+   version        Int                 @default(1)
+-  
+-  // Relations
+   invoice        Invoice?
+-  orderItems     OrderItem[]
+-  company        Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+-  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+-  lead           Lead                @relation(fields: [leadId], references: [id], onDelete: Restrict)
++  company        Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
++  lead           Lead?               @relation(fields: [leadId], references: [id])
+   processedBy    User?               @relation("ProcessedOrders", fields: [processedById], references: [id])
++  orderItems     OrderItem[]
+   logs           OrderLog[]
++  conversation   Conversation        @relation(fields: [conversationId], references: [id])
+ 
+   @@index([companyId])
+   @@index([companyId, approvalStatus])
+@@ -291,13 +221,13 @@ model Order {
+   @@index([companyId, source])
+   @@index([companyId, sourceChannel])
+   @@index([companyId, amount])
+-  @@index([conversationId])
+   @@index([leadId])
+   @@index([processedById])
+   @@index([approvalStatus])
+   @@index([createdAt])
+   @@index([priorityScore])
+   @@index([completedAt])
++  @@index([conversationId])
+   @@index([isDeleted])
+ }
+ 
+@@ -308,7 +238,6 @@ model CompanyAnalyticsRollup {
+   totalOrdersCount Int      @default(0)
+   totalLeadsCount  Int      @default(0)
+   updatedAt        DateTime @updatedAt
+-
+   company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+ }
+ 
+@@ -321,10 +250,10 @@ model OrderItem {
+   name      String
+   quantity  Int
+   price     Float
+-  cogs      Float?   // Captured COGS at the time of purchase
++  cogs      Float?
+   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+-  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
++  product   Product? @relation(fields: [productId], references: [id])
+ 
+   @@index([companyId])
+   @@index([orderId])
+@@ -371,25 +300,77 @@ model Invoice {
+   @@unique([companyId, invoiceNumber])
+ }
+ 
+-// ==========================================
+-// BROADCASTING, FAQS, AND RULE ENGINES
+-// ==========================================
++// --------------------------------------------------------------------------
++// Known orphan / unused DB columns on Conversation (not modeled below):
++//   ΓÇó aiSummaryAt, latestSummary, suggestedAgentReply, summary,
++//     transientIntentState, resolutionNote, lastViewedAt
++//     ΓÇö zero code references, zero populated rows (verified 2026-06-30).
++//   ΓÇó aiSummary, intent
++//     ΓÇö DB columns unused; sessionState.aiSummary and sessionState.aiIntent
++//       (JSON keys) are the live data written by ai.triage.worker.ts.
++//   ΓÇó priorityScore, sentimentScore
++//     ΓÇö dead; related feature work removed (priority lives on Order).
++// --------------------------------------------------------------------------
++model Conversation {
++  id                      String            @id @default(uuid())
++  companyId               String
++  leadId                  String?
++  channel                 Channel
++  mode                    ConversationMode  @default(BOT)
++  status                  String            @default("open")
++  claimedById             String?
++  claimedByName           String?
++  claimedAt               DateTime?
++  claimExpiresAt          DateTime?
++  lastClaimHeartbeat      DateTime?
++  needsStaffReason        String?
++  lifecycleStatus         String            @default("active")
++  isReturningCustomer     Boolean           @default(false)
++  previousHandledById     String?
++  previousConversationId  String?
++  deletedAt               DateTime?
++  archivedAt              DateTime?
++  sessionState            Json?
++  createdAt               DateTime     @default(now())
++  updatedAt               DateTime     @updatedAt
++
++  lead            Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
++  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
++  messages        Message[]
++  orders          Order[]
++  claimLogs       ClaimLog[]
++  internalNotes   InternalNote[]
++  claimedBy       User?     @relation("ClaimedConversations", fields: [claimedById], references: [id])
++
++  @@index([companyId, lifecycleStatus])
++  @@index([companyId, claimedById])
++  @@index([companyId, status])
++  @@index([deletedAt])
++  @@index([leadId])
++  @@index([createdAt])
++}
+ 
+-model Broadcast {
+-  id            String    @id @default(uuid())
+-  companyId     String
+-  message       String
+-  channel       Channel
+-  targetSegment String
+-  sentCount     Int       @default(0)
+-  failedCount   Int       @default(0)
+-  status        String    @default("PENDING")
+-  createdAt     DateTime  @default(now())
+-  completedAt   DateTime?
+-  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
++model Message {
++  id                String        @id @default(uuid())
++  companyId         String
++  content           String
++  sender            MessageSender
++  conversationId    String
++  createdAt         DateTime      @default(now())
++  messageType       String        @default("TEXT")
++  platform          Channel?
++  externalMessageId String?
++  deliveryStatus    String?       @default("SENT")
++  senderName        String?
++  senderId          String?
++  isRead            Boolean       @default(false)
++  Company           Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
++  conversation      Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+ 
++  @@unique([platform, externalMessageId])
++  @@index([conversationId, isRead])
+   @@index([companyId])
+-  @@index([createdAt])
++  @@index([conversationId, createdAt])
+ }
+ 
+ model BotKnowledge {
+@@ -422,6 +403,7 @@ model AutomationRule {
+   company             Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+ 
+   @@index([companyId])
++  @@index([companyId, id])
+   @@index([companyId, isActive])
+ }
+ 
+@@ -441,24 +423,113 @@ model AutomationLog {
+   @@index([createdAt])
+ }
+ 
+-// ==========================================
+-// COLLABORATION, NOTIFICATIONS, TEAM FEEDS
+-// ==========================================
++model AutoReplyRule {
++  id             String         @id @default(uuid())
++  companyId      String
++  eventKey       String
++  isEnabled      Boolean        @default(true)
++  messageBody    String
++  delayMinutes   Int            @default(0)
++  createdAt      DateTime       @default(now())
++  updatedAt      DateTime       @updatedAt
++  useAI          Boolean        @default(false)
++  brandVoice     String?        @default("friendly")
++  targetLanguage String?        @default("en")
++  logs           AutoReplyLog[]
++  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
++
++  @@unique([companyId, eventKey])
++  @@index([companyId])
++  @@index([eventKey])
++  @@index([isEnabled])
++}
+ 
+-model InternalNote {
+-  id             String       @id @default(uuid())
+-  conversationId String
++model AutoReplyLog {
++  id           String         @id @default(uuid())
++  companyId    String
++  ruleId       String?
++  eventKey     String
++  triggeredFor String
++  recipient    String
++  channel      String
++  messageBody  String
++  status       String         @default("SENT")
++  error        String?
++  sentAt       DateTime       @default(now())
++  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
++  rule         AutoReplyRule? @relation(fields: [ruleId], references: [id])
++
++  @@index([companyId])
++  @@index([ruleId])
++  @@index([sentAt])
++  @@index([status])
++}
++
++model RuleGroup {
++  id          String               @id @default(uuid())
++  companyId   String
++  name        String
++  description String?
++  type        String               @default("AI_INSTRUCTION")
++  createdAt   DateTime             @default(now())
++  updatedAt   DateTime             @updatedAt
++  rules       ConversationalRule[]
++  company     Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
++
++  @@unique([companyId, name])
++  @@index([companyId])
++  @@index([companyId, type])
++}
++
++model ConversationalRule {
++  id              String                  @id @default(uuid())
++  companyId       String
++  name            String
++  isEnabled       Boolean                 @default(true)
++  triggerKeywords String[]                @default([])
++  triggerType     String                  @default("KEYWORD")
++  conditions      Json?
++  templateBody    String                  @default("")
++  useAI           Boolean                 @default(false)
++  brandVoice      String?                 @default("friendly")
++  targetLanguage  String?                 @default("auto")
++  sourcePrompt    String?
++  triggerCount    Int                     @default(0)
++  lastTriggeredAt DateTime?
++  expiresAt       DateTime?
++  createdAt       DateTime                @default(now())
++  updatedAt       DateTime                @updatedAt
++  groupId         String?
++  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
++  group           RuleGroup?              @relation(fields: [groupId], references: [id])
++  logs            ConversationalRuleLog[]
++
++  @@index([companyId])
++  @@index([companyId, isEnabled])
++  @@index([triggerKeywords])
++  @@index([groupId])
++}
++
++model ConversationalRuleLog {
++  id             String             @id @default(uuid())
+   companyId      String
+-  authorId       String
+-  authorName     String
+-  content        String
+-  mentionedIds   Json?
+-  createdAt      DateTime     @default(now())
+-  author         User         @relation("InternalNotes", fields: [authorId], references: [id])
+-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
++  ruleId         String
++  conversationId String?
++  leadId         String?
++  inboundText    String
++  responseSent   String?
++  matchedKeyword String?
++  aiGenerated    Boolean            @default(false)
++  status         String             @default("TRIGGERED")
++  error          String?
++  createdAt      DateTime           @default(now())
++  company        Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
++  rule           ConversationalRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+ 
+-  @@index([conversationId])
+   @@index([companyId])
++  @@index([ruleId])
++  @@index([createdAt])
++  @@index([status])
+ }
+ 
+ model AgentFeedPost {
+@@ -467,8 +538,8 @@ model AgentFeedPost {
+   authorId  String
+   content   String
+   createdAt DateTime @default(now())
+-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+   author    User     @relation("AgentFeedPosts", fields: [authorId], references: [id], onDelete: Cascade)
++  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+ 
+   @@index([companyId, createdAt])
+ }
+@@ -482,18 +553,14 @@ model Notification {
+   type      String
+   isRead    Boolean  @default(false)
+   createdAt DateTime @default(now())
+-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
++  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+ 
+   @@index([userId])
+   @@index([companyId])
+   @@index([userId, isRead])
+ }
+ 
+-// ==========================================
+-// BACKGROUND AUTOMATION & BOT LOOP PRIMITIVES
+-// ==========================================
+-
+ model BotConfiguration {
+   id                String   @id @default(uuid())
+   companyId         String   @unique
+@@ -506,24 +573,22 @@ model BotConfiguration {
+   createdAt         DateTime @default(now())
+   updatedAt         DateTime @updatedAt
+   company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
++
++  @@index([companyId, createdAt])
+ }
+ 
+ model MerchantFile {
+   id        String   @id @default(uuid())
+   companyId String
+-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+   fileUrl   String?
+   fileName  String?
+-  status    String   @default("PROCESSING") // PROCESSING, SUCCESS, FAILED
++  status    String   @default("PROCESSING")
+   error     String?
+   createdAt DateTime @default(now())
+   updatedAt DateTime @updatedAt
++  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+ }
+ 
+-// ==========================================
+-// DYNAMIC CRM CUSTOM FIELDS DEFINITIONS
+-// ==========================================
+-
+ model NotificationTemplate {
+   id                 String   @id @default(uuid())
+   companyId          String
+@@ -534,33 +599,55 @@ model NotificationTemplate {
+   updatedAt          DateTime @updatedAt
+   company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+ 
++  @@unique([companyId, keyIdentifier, localeCode])
+   @@index([companyId])
+   @@index([keyIdentifier])
+-  @@unique([companyId, keyIdentifier, localeCode])
+ }
+ 
+ model CustomFieldDefinition {
+   id           String   @id @default(uuid())
+   companyId    String
+-  module       String   // "LEAD" | "ACCOUNT" | "DEAL"
++  module       String
+   name         String
+   label        String
+-  type         String   // "TEXT" | "NUMBER" | "BOOLEAN" | "DATE" | "DROPDOWN"
++  type         String
+   required     Boolean  @default(false)
+-  options      Json?    // Array of options for dropdown
++  options      Json?
+   defaultValue String?
+   createdAt    DateTime @default(now())
+   updatedAt    DateTime @updatedAt
+-
+   company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+ 
+   @@unique([companyId, module, name])
+   @@index([companyId])
++  @@index([companyId, module])
+ }
+ 
+-// ==========================================
+-// SYSTEM ACCESS & AUDITING SECURITY
+-// ==========================================
++model Invitation {
++  id              String           @id @default(uuid())
++  companyId       String
++  invitedByUserId String?
++  email           String
++  role            Role
++  status          InvitationStatus @default(PENDING)
++  token           String           @unique
++  tokenLookup     String?          @unique
++  staffId         String?
++  expiresAt       DateTime
++  acceptedAt      DateTime?
++  message         String?
++  createdAt       DateTime         @default(now())
++  updatedAt       DateTime         @updatedAt
++  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
++  invitedBy       User?            @relation("InvitedByUser", fields: [invitedByUserId], references: [id])
++
++  @@index([companyId])
++  @@index([token])
++  @@index([tokenLookup])
++  @@index([email])
++  @@index([status])
++  @@index([status, tokenLookup])
++}
+ 
+ model IncomingWebhook {
+   id          String    @id @default(cuid())
+@@ -576,29 +663,101 @@ model IncomingWebhook {
+   @@index([status, createdAt])
+ }
+ 
+-// ==========================================
+-// CONCURRENCY & TRANSACTION IDEMPOTENCY
+-// ==========================================
+-
+ model Idempotency {
+-  key        String            @id
+-  status     IdempotencyStatus @default(PROCESSING)
+-  result     Json?
+-  createdAt  DateTime          @default(now())
+-  updatedAt  DateTime          @updatedAt
+-  expiresAt  DateTime
++  key       String            @id
++  status    IdempotencyStatus @default(PROCESSING)
++  result    Json?
++  createdAt DateTime          @default(now())
++  updatedAt DateTime          @updatedAt
++  expiresAt DateTime
+ 
+   @@index([expiresAt])
+   @@index([status, updatedAt])
+ }
+ 
+-// ==========================================
+-// ENUMS & SCALABLE TYPES
+-// ==========================================
++model Broadcast {
++  id             String        @id @default(cuid())
++  companyId      String
++  title          String?
++  message        String
++  targetTags     String[]
++  targetSegments LeadSegment[]
++  recipientCount Int           @default(0)
++  status         String        @default("SENT")
++  createdAt      DateTime      @default(now())
++  updatedAt      DateTime      @updatedAt
++  company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+ 
+-enum ConversationMode {
+-  BOT
+-  HUMAN
++  @@index([companyId])
++}
++
++/// Represents the official India Post master postal database index (~155,000 records).
++model PostalPincodeIndex {
++  id        String   @id @default(uuid())
++  pincode   String   @unique
++  state     String
++  district  String
++  region    String?
++  createdAt DateTime @default(now())
++
++  @@index([pincode])
++}
++
++model ClaimLog {
++  id             String       @id
++  companyId      String
++  conversationId String
++  actorId        String?
++  actorName      String
++  action         String
++  createdAt      DateTime     @default(now())
++  Company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
++  conversation   Conversation @relation(fields: [conversationId], references: [id])
++
++  @@index([companyId])
++  @@index([conversationId])
++  @@index([createdAt])
++}
++
++model InternalNote {
++  id             String       @id
++  conversationId String
++  companyId      String
++  authorId       String?
++  authorName     String
++  content        String
++  mentionedIds   Json?
++  createdAt      DateTime     @default(now())
++  User           User?        @relation(fields: [authorId], references: [id])
++  conversation   Conversation @relation(fields: [conversationId], references: [id])
++
++  @@index([companyId])
++  @@index([conversationId])
++}
++
++model socket_io_attachments {
++  id         BigInt    @unique @default(autoincrement())
++  created_at DateTime? @default(now()) @db.Timestamptz(6)
++  payload    Bytes?
++}
++
++enum MessageSender {
++  CLIENT
++  AGENT
++  SYSTEM
++}
++
++enum InvitationStatus {
++  PENDING
++  ACCEPTED
++  EXPIRED
++  REVOKED
++}
++
++enum OnboardingStatus {
++  PENDING
++  INVITE_ACCEPTED
++  ONBOARDED
+ }
+ 
+ enum Channel {
+@@ -608,16 +767,15 @@ enum Channel {
+   INSTAGRAM
+ }
+ 
+-enum Role {
+-  OWNER
+-  AGENT
+-  ADMIN
++enum BusinessScale {
++  HOME_GROWN
++  SME_RETAIL
+ }
+ 
+-enum MessageSender {
+-  CLIENT
+-  AGENT
+-  SYSTEM
++enum Role {
++  OWNER
++  MANAGER
++  STAFF
+ }
+ 
+ enum OrderStatus {
+@@ -644,12 +802,6 @@ enum LeadStatus {
+   ARCHIVED
+ }
+ 
+-enum PendingOrderState {
+-  NONE
+-  PENDING_APPROVAL
+-  CLAIMED_FOR_APPROVAL
+-}
+-
+ enum LeadSegment {
+   NEW
+   REGULAR
+@@ -657,20 +809,6 @@ enum LeadSegment {
+   CHURN_RISK
+ }
+ 
+-enum ConversationIntent {
+-  BROWSING
+-  ORDERING
+-  SUPPORT
+-  COMPLAINT
+-}
+-
+-enum ConversationStatus {
+-  OPEN
+-  ASSIGNED
+-  RESOLVED
+-  SNOOZED
+-}
+-
+ enum OrderPriority {
+   NORMAL
+   URGENT
+@@ -699,6 +837,11 @@ enum AiPriority {
+   LOW
+ }
+ 
++enum ConversationMode {
++  BOT
++  HUMAN
++}
++
+ enum SourceChannel {
+   WEBSITE
+   TELEGRAM
+@@ -706,3 +849,23 @@ enum SourceChannel {
+   INSTAGRAM
+   META
+ }
++
++enum ConversationIntent {
++  BROWSING
++  ORDERING
++  SUPPORT
++  COMPLAINT
++}
++
++enum ConversationStatus {
++  OPEN
++  ASSIGNED
++  RESOLVED
++  SNOOZED
++}
++
++enum PendingOrderState {
++  NONE
++  PENDING_APPROVAL
++  CLAIMED_FOR_APPROVAL
++}

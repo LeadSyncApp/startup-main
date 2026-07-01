@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { MessageSender } from "@prisma/client";
 import { getIO, emitToAgent } from "../../lib/socket";
 
 /* ──────────────────────────────────────────────────────────────
@@ -18,7 +19,7 @@ async function logResult(ruleId: string, companyId: string, triggeredFor: string
   }
 }
 
-async function evaluateRules() {
+export async function evaluateRules() {
   try {
     const rules = await (prisma.automationRule as any).findMany({
       where: { isActive: true },
@@ -42,7 +43,7 @@ async function sendBotMessage(conversationId: string, companyId: string, message
 
   // Save the message
   const msg = await prisma.message.create({
-    data: { conversationId, content: message, sender: "AGENT" },
+    data: { conversationId, content: message, sender: MessageSender.AGENT },
   });
 
   // Update lead's lastActiveAt to NOW — prevents the automation from re-triggering on same lead next cycle
@@ -191,16 +192,21 @@ async function executeRule(rule: any) {
 let intervalHandle: NodeJS.Timeout | null = null;
 
 export function startAutomationRunner() {
-  if (intervalHandle) return;
-  console.log("⚙️ [Automation] Runner started — evaluating every 15 minutes");
-  // Run immediately on start (after 5s delay to let DB connect)
-  setTimeout(evaluateRules, 5000);
-  intervalHandle = setInterval(evaluateRules, DELAY_MS);
+  console.log("⚙️ [Automation] Runner now executes safely on demand via PgBoss scheduled jobs (automation_runner)");
 }
 
 export function stopAutomationRunner() {
-  if (intervalHandle) {
-    clearInterval(intervalHandle);
-    intervalHandle = null;
+  // No-op as startAutomationRunner is no-op
+}
+
+export async function executeDelayedAutomation(payload: { ruleId: string } | any) {
+  console.log("[Automation] Running delayed automation with payload:", payload);
+  if (payload?.ruleId) {
+    const rule = await (prisma.automationRule as any).findUnique({
+      where: { id: payload.ruleId }
+    });
+    if (rule) {
+      await executeRule(rule);
+    }
   }
 }

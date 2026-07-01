@@ -1,206 +1,249 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Outfit:wght@100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Base styles for LeadSync CRM - semantic color system and typography */
+/* LeadSync Design System — Warm, Professional, Indian SME-focused */
 @layer base {
   :root {
     color-scheme: light;
-    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-    --font-display: "Outfit", var(--font-sans);
-    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+    
+    /* Font stack */
+    --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+    --font-display: "Plus Jakarta Sans", "Inter", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
 
-    --app-bg: #f8fafc;
-    --app-bg-soft: #f1f5f9;
-    --app-surface: #ffffff;
-    --app-surface-alt: #f8fafc;
-    --app-text: #0f172a;
-    --app-text-muted: #64748b;
-    --app-border: #e2e8f0;
-    --app-border-strong: #cbd5e1;
-    --app-primary: #0891b2;
-    --app-primary-strong: #0e7490;
-    --app-primary-soft: #ecfeff;
-    --app-input-bg: #ffffff;
-    --app-input-placeholder: #94a3b8;
-    --app-scroll-track: #f1f5f9;
-    --app-scroll-thumb: #cbd5e1;
-    --app-scroll-thumb-hover: #94a3b8;
-    --app-backdrop: rgba(15, 23, 42, 0.55);
-    --app-shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.05);
-    --app-shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.12);
+    /* Brand Colors — Trust & Prosperity */
+    --brand-navy: #1E3A5F;
+    --brand-navy-light: #2D4A7A;
+    --brand-saffron: #D4A843;
+    --brand-saffron-light: #E8C96A;
+    --brand-saffron-soft: #FFF8E7;
+
+    /* Surface colors */
+    --app-bg: #F8FAFC;
+    --app-bg-soft: #F1F5F9;
+    --app-surface: #FFFFFF;
+    --app-surface-alt: #F8FAFC;
+    --app-text: #1E293B;
+    --text-primary: #1E293B;
+    --text-secondary: #475569;
+    --app-text-muted: #94A3B8;
+    --app-border: #E2E8F0;
+    --app-border-strong: #CBD5E1;
+
+    /* Status colors */
+    --app-primary: #1E3A5F;
+    --app-primary-strong: #162D4A;
+    --app-primary-soft: rgba(30, 58, 95, 0.08);
+    --success-green: #16A34A;
+    --warning-amber: #F59E0B;
+    --danger-red: #DC2626;
+    --info-blue: #0284C7;
+
+    /* Input & scroll */
+    --app-input-bg: #FFFFFF;
+    --app-input-placeholder: #94A3B8;
+    --app-scroll-track: #F1F5F9;
+    --app-scroll-thumb: #CBD5E1;
+    --app-scroll-thumb-hover: #94A3B8;
+    --app-backdrop: rgba(30, 41, 59, 0.5);
+
+    /* Shadows */
+    --app-shadow-soft: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --app-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+    --app-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
   }
 
-  html.dark {
+  /* Dark mode — warm & rich, not harsh gray */
+  [data-theme="dark"] {
     color-scheme: dark;
-    --app-bg: #020617;
-    --app-bg-soft: #0f172a;
-    --app-surface: #0b1120;
-    --app-surface-alt: #0f172a;
-    --app-text: #f1f5f9; /* High brightness slate for readability */
-    --app-text-muted: #94a3b8;
-    --app-border: #1e293b;
-    --app-border-strong: #334155;
-    --app-primary: #22d3ee;
-    --app-primary-strong: #06b6d4;
-    --app-primary-soft: rgba(34, 211, 238, 0.1);
-    --app-input-bg: #0f172a;
-    --app-input-placeholder: #64748b;
-    --app-scroll-track: #0f172a;
-    --app-scroll-thumb: #334155;
-    --app-scroll-thumb-hover: #475569;
-    --app-backdrop: rgba(2, 6, 23, 0.8);
-    --app-shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --app-shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.6);
+
+    /* Brand colors stay similar but adjust for dark bg */
+    --brand-navy: #2D5A8A;
+    --brand-navy-light: #3A6FA5;
+    --brand-saffron: #D4A843;
+    --brand-saffron-light: #E8C96A;
+    --brand-saffron-soft: rgba(212, 168, 67, 0.15);
+
+    /* Surface colors — deep warm charcoal */
+    --app-bg: #0F172A;
+    --app-bg-soft: #1E293B;
+    --app-surface: #1E293B;
+    --app-surface-alt: #334155;
+    --app-text: #F1F5F9;
+    --text-primary: #F1F5F9;
+    --text-secondary: #CBD5E1;
+    --app-text-muted: #64748B;
+    --app-border: #334155;
+    --app-border-strong: #475569;
+
+    /* Status colors — slightly brighter for contrast */
+    --app-primary: #2D5A8A;
+    --app-primary-strong: #3A6FA5;
+    --app-primary-soft: rgba(45, 90, 138, 0.2);
+    --success-green: #22C55E;
+    --warning-amber: #FBBF24;
+    --danger-red: #EF4444;
+    --info-blue: #38BDF8;
+
+    /* Input & scroll */
+    --app-input-bg: #1E293B;
+    --app-input-placeholder: #64748B;
+    --app-scroll-track: #1E293B;
+    --app-scroll-thumb: #475569;
+    --app-scroll-thumb-hover: #64748B;
+    --app-backdrop: rgba(0, 0, 0, 0.7);
+
+    /* Shadows — deeper for dark mode */
+    --app-shadow-soft: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --app-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --app-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
   }
 
   body {
-    @apply antialiased selection:bg-cyan-500/30;
+    @apply antialiased;
     background-color: var(--app-bg);
     color: var(--app-text);
     font-family: var(--font-sans);
+    font-size: 15px;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+    line-height: 1.5;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply tracking-tight;
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--app-text);
+    letter-spacing: -0.02em;
+  }
+
+  /* Remove forced italic globally */
+  input, textarea, select, button {
+    font-family: var(--font-sans);
+  }
+
+  /* Focus ring — accessible */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-[var(--brand-saffron)] ring-offset-2;
+    --tw-ring-offset-color: var(--app-surface);
+  }
+}
+
+/* Component layer */
+@layer components {
+  /* Primary Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl px-5 py-2.5 font-semibold text-white shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    background-color: var(--brand-navy);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--brand-navy-light);
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border-2 px-5 py-2.5 font-semibold transition-all duration-200 disabled:opacity-50;
+    border-color: var(--app-border);
+    background-color: var(--app-surface);
+    color: var(--app-text);
+  }
+
+  .btn-saffron {
+    @apply inline-flex items-center justify-center rounded-xl px-5 py-2.5 font-semibold text-white shadow-sm transition-all duration-200 disabled:opacity-50;
+    background-color: var(--brand-saffron);
+    color: #1E293B;
+  }
+  .btn-saffron:hover:not(:disabled) {
+    background-color: var(--brand-saffron-light);
+  }
+
+  /* Card */
+  .card {
+    @apply rounded-xl border shadow-sm;
+    border-color: var(--app-border);
+    background-color: var(--app-surface);
+  }
+
+  .card-hover {
+    @apply rounded-xl border shadow-sm transition-all duration-200;
+    border-color: var(--app-border);
+    background-color: var(--app-surface);
+  }
+  .card-hover:hover {
+    box-shadow: var(--app-shadow-md);
+    border-color: var(--app-border-strong);
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-success {
+    @apply badge;
+    background-color: rgba(22, 163, 74, 0.12);
+    color: rgb(22, 163, 74);
+  }
+  .badge-warning {
+    @apply badge;
+    background-color: rgba(245, 158, 11, 0.12);
+    color: rgb(180, 120, 0);
+  }
+  .badge-error {
+    @apply badge;
+    background-color: rgba(220, 38, 38, 0.12);
+    color: rgb(220, 38, 38);
+  }
+  .badge-info {
+    @apply badge;
+    background-color: rgba(2, 132, 199, 0.12);
+    color: rgb(2, 132, 199);
+  }
+
+  /* Input */
+  .input-field {
+    @apply w-full rounded-xl border px-4 py-2.5 transition-all duration-200;
+    border-color: var(--app-border);
+    background-color: var(--app-input-bg);
+    color: var(--app-text);
+    caret-color: var(--brand-navy);
+    font-size: 14px;
+  }
+  .input-field::placeholder {
+    color: var(--app-input-placeholder);
+  }
+  .input-field:focus {
+    border-color: var(--brand-saffron);
+    box-shadow: 0 0 0 3px rgba(212, 168, 67, 0.15);
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    @apply animate-pulse rounded-lg;
+    background-color: var(--app-border);
+  }
+
+  /* Container */
+  .page-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6;
+  }
+
+  /* Section title */
+  .section-title {
+    @apply text-lg font-bold;
     font-family: var(--font-display);
     color: var(--app-text);
   }
 
-  button {
-    @apply transition-all duration-200;
-  }
-
-  input, textarea, select {
-    @apply transition-colors duration-200;
-  }
-}
-
-/* Custom components using color system */
-@layer components {
-  /* Primary CTA Buttons */
-  .btn-primary {
-    @apply rounded-lg px-4 py-2.5 font-semibold text-white shadow-sm active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
-    background-color: var(--app-primary);
-    box-shadow: var(--app-shadow-soft);
-  }
-
-  .btn-secondary {
-    @apply rounded-lg border-2 px-4 py-2.5 font-semibold transition-all duration-200 disabled:opacity-50;
-    border-color: var(--app-border);
-    background-color: var(--app-surface);
-    color: var(--app-text);
-  }
-
-  .btn-ghost {
-    @apply px-3 py-2 font-medium rounded-lg transition-colors duration-200;
-    color: var(--app-text-muted);
-  }
-
-  .btn-icon {
-    @apply inline-flex items-center justify-center h-10 w-10 rounded-lg transition-colors duration-200;
-    color: var(--app-text-muted);
-  }
-
-  /* Card components with consistent shadows */
-  .card {
-    @apply rounded-xl border shadow-sm hover:shadow-md transition-shadow duration-200;
-    border-color: var(--app-border);
-    background-color: var(--app-surface);
-    box-shadow: var(--app-shadow-soft);
-  }
-
-  .card-compact {
-    @apply rounded-lg border shadow-sm;
-    border-color: var(--app-border);
-    background-color: var(--app-surface);
-  }
-
-  /* Badge/Status components */
-  .badge-success {
-    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
-    background-color: rgba(16, 185, 129, 0.14);
-    color: rgb(5, 150, 105);
-  }
-
-  .badge-error {
-    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
-    background-color: rgba(239, 68, 68, 0.14);
-    color: rgb(220, 38, 38);
-  }
-
-  .badge-warning {
-    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
-    background-color: rgba(245, 158, 11, 0.14);
-    color: rgb(217, 119, 6);
-  }
-
-  .badge-info {
-    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
-    background-color: rgba(14, 165, 233, 0.14);
-    color: rgb(2, 132, 199);
-  }
-
-  /* Input styling with focus states */
-  .input-base {
-    @apply w-full rounded-lg border px-4 py-2.5 focus:outline-none focus:ring-2 transition-all duration-200;
-    border-color: var(--app-border);
-    background-color: var(--app-input-bg);
-    color: var(--app-text);
-    caret-color: var(--app-primary);
-  }
-
-  .input-base::placeholder {
-    color: var(--app-input-placeholder);
-  }
-
-  .input-error {
-    @apply border-red-500 focus:border-red-500 focus:ring-red-500/20;
-  }
-
-  /* Typography utilities */
-  .text-xs-light {
-    @apply text-xs font-medium;
-    color: var(--app-text-muted);
-  }
-
-  .text-sm-muted {
+  .section-subtitle {
     @apply text-sm;
     color: var(--app-text-muted);
   }
-
-  /* Backdrop blur for modals */
-  .backdrop-blur-modal {
-    @apply backdrop-blur-sm;
-    background-color: var(--app-backdrop);
-  }
-
-  /* Responsive container */
-  .container-responsive {
-    @apply px-4 sm:px-6 lg:px-8 py-6 lg:py-8;
-  }
-
-  /* Smooth scroll for chat panels */
-  .scroll-smooth-list {
-    @apply scrollbar-thin scroll-smooth;
-  }
 }
 
-/* Custom scrollbar for chat panels - WebKit browsers */
+/* Utilities */
 @layer utilities {
-  /* Semantic utilities used by codemods */
-  .border-app {
-    border-color: var(--app-border);
-  }
-
-  .border-app-strong {
-    border-color: var(--app-border-strong);
-  }
-
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: var(--app-scroll-thumb) var(--app-scroll-track);
@@ -224,64 +267,21 @@
     background: var(--app-scroll-thumb-hover);
   }
 
-  /* Animation utilities for smooth transitions */
-  .animate-slide-in-bottom {
-    animation: slideInBottom 0.3s ease-out;
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
   }
 
   .animate-fade-in {
-    animation: fadeIn 0.3s ease-out;
-  }
-
-  .animate-pulse-gentle {
-    animation: pulseGentle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  /* Focus ring utilities - accessible */
-  .focus-ring {
-    @apply focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2;
-  }
-
-  /* Disabled state utilities */
-  .disabled-state {
-    @apply opacity-50 cursor-not-allowed;
-  }
-
-  /* Group hover states */
-  .group-item-hover {
-    @apply transition-colors duration-200;
-  }
-
-  .group-item-hover:hover {
-    background-color: var(--app-bg-soft);
+    animation: fadeIn 0.25s ease-out;
   }
 }
 
-@keyframes slideInBottom {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes pulseGentle {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.8;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

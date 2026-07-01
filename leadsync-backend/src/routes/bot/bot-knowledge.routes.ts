@@ -1,11 +1,11 @@
-import { Router } from "express";
+import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
 import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
 
 const router = Router();
 
 /* GET /api/bot-knowledge — list all for company */
-router.get("/", authMiddleware, async (req: AuthRequest, res) => {
+router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { companyId } = req.user!;
     const items = await (prisma.botKnowledge as any).findMany({
@@ -22,10 +22,10 @@ router.get("/", authMiddleware, async (req: AuthRequest, res) => {
 });
 
 /* POST /api/bot-knowledge — create */
-router.post("/", authMiddleware, async (req: AuthRequest, res) => {
+router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { companyId, role } = req.user!;
-    if (role === "AGENT") return res.status(403).json({ message: "Forbidden" });
+    if (role === "STAFF") return res.status(403).json({ message: "Forbidden" });
 
     const { type = "FAQ", title, content } = req.body;
     if (!title?.trim() || !content?.trim())
@@ -41,10 +41,10 @@ router.post("/", authMiddleware, async (req: AuthRequest, res) => {
 });
 
 /* PATCH /api/bot-knowledge/:id — update or toggle */
-router.patch("/:id", authMiddleware, async (req: AuthRequest, res) => {
+router.patch("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { companyId, role } = req.user!;
-    if (role === "AGENT") return res.status(403).json({ message: "Forbidden" });
+    if (role === "STAFF") return res.status(403).json({ message: "Forbidden" });
 
     const existing = await (prisma.botKnowledge as any).findFirst({
       where: { id: req.params.id, companyId },
@@ -68,10 +68,10 @@ router.patch("/:id", authMiddleware, async (req: AuthRequest, res) => {
 });
 
 /* DELETE /api/bot-knowledge/:id */
-router.delete("/:id", authMiddleware, async (req: AuthRequest, res) => {
+router.delete("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { companyId, role } = req.user!;
-    if (role === "AGENT") return res.status(403).json({ message: "Forbidden" });
+    if (role === "STAFF") return res.status(403).json({ message: "Forbidden" });
 
     const existing = await (prisma.botKnowledge as any).findFirst({
       where: { id: req.params.id, companyId },

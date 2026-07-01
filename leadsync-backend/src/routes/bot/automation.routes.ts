@@ -1,33 +1,39 @@
-import { Router } from "express";
+import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
-import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
+import { sysLog } from "../../lib/logger";
+import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
 
 const router = Router();
 
-const OWNER_ADMIN = ["OWNER", "ADMIN"];
-
-/* GET /api/automation — list rules for company */
-router.get("/", authMiddleware, async (req: AuthRequest, res) => {
+// GET /api/automation — list rules for company
+router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { companyId } = req.user!;
-    const rules = await (prisma.automationRule as any).findMany({
+    const automationRule = (prisma as any).automationRule;
+    
+    if (!automationRule) {
+      sysLog.warn(`AutomationRule model is NOT ready in Prisma client. Returning empty results for company: ${companyId}`);
+      return res.json([]);
+    }
+
+    const rules = await automationRule.findMany({
       where: { companyId },
       orderBy: { createdAt: "asc" },
       include: {
         _count: { select: { logs: true } },
       },
     });
-    res.json(rules);
+    res.json(rules || []);
   } catch (e) {
+    sysLog.error('Automation load error:', e);
     res.status(500).json({ message: "Failed to fetch rules" });
   }
 });
 
 /* POST /api/automation — create rule */
-router.post("/", authMiddleware, async (req: AuthRequest, res) => {
+router.post("/", authMiddleware, authorizeRoles("OWNER", "ADMIN"), async (req: AuthRequest, res: Response) => {
   try {
-    const { companyId, role } = req.user!;
-    if (!OWNER_ADMIN.includes(role)) return res.status(403).json({ message: "Forbidden" });
+    const { companyId } = req.user!;
 
     const { name, trigger, triggerDelayMinutes = 1440, action, actionPayload } = req.body;
     if (!name?.trim() || !trigger || !action)
@@ -43,10 +49,9 @@ router.post("/", authMiddleware, async (req: AuthRequest, res) => {
 });
 
 /* PATCH /api/automation/:id — update or toggle */
-router.patch("/:id", authMiddleware, async (req: AuthRequest, res) => {
+router.patch("/:id", authMiddleware, authorizeRoles("OWNER", "ADMIN"), async (req: AuthRequest, res: Response) => {
   try {
-    const { companyId, role } = req.user!;
-    if (!OWNER_ADMIN.includes(role)) return res.status(403).json({ message: "Forbidden" });
+    const { companyId } = req.user!;
 
     const existing = await (prisma.automationRule as any).findFirst({
       where: { id: req.params.id, companyId },
@@ -73,10 +78,9 @@ router.patch("/:id", authMiddleware, async (req: AuthRequest, res) => {
 });
 
 /* DELETE /api/automation/:id */
-router.delete("/:id", authMiddleware, async (req: AuthRequest, res) => {
+router.delete("/:id", authMiddleware, authorizeRoles("OWNER", "ADMIN"), async (req: AuthRequest, res: Response) => {
   try {
-    const { companyId, role } = req.user!;
-    if (!OWNER_ADMIN.includes(role)) return res.status(403).json({ message: "Forbidden" });
+    const { companyId } = req.user!;
 
     const existing = await (prisma.automationRule as any).findFirst({
       where: { id: req.params.id, companyId },
@@ -91,7 +95,7 @@ router.delete("/:id", authMiddleware, async (req: AuthRequest, res) => {
 });
 
 /* GET /api/automation/:id/logs — recent execution logs */
-router.get("/:id/logs", authMiddleware, async (req: AuthRequest, res) => {
+router.get("/:id/logs", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { companyId } = req.user!;
     const rule = await (prisma.automationRule as any).findFirst({

@@ -1,31 +1,52 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../../lib/prisma";
 import crypto from "crypto";
-import { OrderStatus, MessageSender } from "@prisma/client";
+import { OrderStatus, Channel, MessageSender } from "@prisma/client";
 import { emitToConversation, safeEmitConversationUpdate } from "../../lib/socket";
-import { invoiceService } from "../../services/integrations/invoice.service";
+import { queueProvider } from "../../services/infrastructure/queue-provider/queue-provider.factory";
+import instagramRoutes from "./instagram.routes";
 import { orderWorkflowService } from "../../services/workflow/orderWorkflow.service";
 
 
 const router = Router();
 
 /**
+ * 📸 INSTAGRAM WEBHOOK gateway
+ * Secure perimeter resolution via PageID-to-Tenant map
+ */
+router.use("/instagram", instagramRoutes);
+
+/**
  * 💳 RAZORPAY WEBHOOK
  * Handlers for payment events
  */
 router.post("/razorpay", async (req: Request, res: Response) => {
-    const secret = process.env.RAZORPAY_KEY_SECRET || "razorpay_secret";
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET || "razorpay_secret";
     const signature = req.headers["x-razorpay-signature"] as string;
 
     try {
-        // 1️⃣ Verify Signature
+        // 1️⃣ Verify Signature with raw body to guarantee deterministic checksums
+        const rawBody = (req as any).rawBody;
+        if (!rawBody) {
+            console.error("❌ Razorpay Verification Error: rawBody is missing");
+            return res.status(400).json({ error: "rawBody is missing" });
+        }
+
         const expectedSignature = crypto
             .createHmac("sha256", secret)
-            .update(JSON.stringify(req.body))
+            .update(rawBody)
             .digest("hex");
 
-        // NOTE: In production, use razorpay.webhooks.verifySignature
-        // For now, we'll continue if it's a valid JSON payload from Razorpay
+        const signatureBuf = Buffer.from(signature || "", "utf8");
+        const expectedSignatureBuf = Buffer.from(expectedSignature, "utf8");
+
+        if (
+            signatureBuf.length !== expectedSignatureBuf.length ||
+            !crypto.timingSafeEqual(signatureBuf, expectedSignatureBuf)
+        ) {
+            console.error("❌ Razorpay Invalid Signature");
+            return res.status(403).json({ error: "Invalid signature" });
+        }
         const event = req.body;
         console.log(`💳 Razorpay Webhook received: ${event.event}`);
 
@@ -37,12 +58,19 @@ router.post("/razorpay", async (req: Request, res: Response) => {
             if (orderId) {
                 const order = await prisma.order.findUnique({
                     where: { id: orderId },
-                    include: { conversation: true, lead: true }
+                    include: { lead: true }
                 });
 
                 if (order) {
+                    // Find conversation via lead (Order no longer has direct conversation relation)
+                    const conv = order.leadId ? await prisma.conversation.findFirst({
+                        where: { leadId: order.leadId, lifecycleStatus: 'active' }
+                    }) : null;
+                    const conversationId = conv?.id;
+
                     // 1️⃣ Update Order to PAID using Workflow Service
                     const { order: updatedOrder } = await orderWorkflowService.transitionStatus(
+                        order.companyId,
                         orderId,
                         "PAID" as any,
                         { id: "SYSTEM", name: "Razorpay", role: "SYSTEM" }
@@ -50,37 +78,38 @@ router.post("/razorpay", async (req: Request, res: Response) => {
 
                     // 2️⃣ Generate Invoice
                     const paymentId = paymentLink.payment_id || paymentLink.id;
-                    const invoice = await invoiceService.ensureInvoiceForPaidOrder(orderId, paymentId);
+                    await queueProvider.enqueue("generatePdf", { orderId, paymentRef: paymentId });
 
                     // 3️⃣ 🆕 CRM INTELLIGENCE: Update Lead Stats
-                    const newOrderCount = (order.lead?.orderCount || 0) + 1;
-                    const newTotalSpend = (order.lead?.totalSpend || 0) + order.amount;
-                    await prisma.lead.update({
-                        where: { id: order.leadId },
-                        data: {
-                            orderCount: newOrderCount,
-                            totalSpend: newTotalSpend,
-                            segment: newOrderCount > 1 ? "REGULAR" : "NEW",
-                            lastActiveAt: new Date()
-                        }
-                    });
-
-                    // 4️⃣ Create System Message with Invoice Link
-                    let content = "✅ Payment Received successfully! Your order is now being processed.";
-                    if (invoice.pdfUrl) {
-                        content += `\n\n📄 View your invoice: ${invoice.pdfUrl}`;
+                    if (order.leadId) {
+                        const newOrderCount = (order.lead?.orderCount || 0) + 1;
+                        const newTotalSpend = (order.lead?.totalSpend || 0) + order.amount;
+                        await prisma.lead.update({
+                            where: { id: order.leadId },
+                            data: {
+                                orderCount: newOrderCount,
+                                totalSpend: newTotalSpend,
+                                segment: newOrderCount > 1 ? "REGULAR" : "NEW",
+                                lastActiveAt: new Date()
+                            }
+                        });
                     }
 
-                    const sysMsg = await prisma.message.create({
+                    // 4️⃣ Create System Message
+                    let sysMsgText = "✅ Payment Received successfully! Your order is now being processed. An invoice will be generated shortly.";
+
+                    const sysMsg = conversationId ? await prisma.message.create({
                         data: {
-                            content,
+                            content: sysMsgText,
                             sender: MessageSender.SYSTEM,
-                            conversationId: order.conversationId
+                            conversationId
                         }
-                    });
+                    }) : null;
 
                     // Real-time Updates
-                    emitToConversation(order.conversationId, "new_message", sysMsg);
+                    if (sysMsg && conversationId) {
+                        emitToConversation(conversationId, "new_message", sysMsg);
+                    }
                     // Updated order already emitted by workflow service, but we might want to emit it again with invoice details if needed
                     // emitToConversation(order.conversationId, "order_updated", updatedOrder);
 

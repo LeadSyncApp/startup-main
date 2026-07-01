@@ -39,16 +39,6 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
             segment: true,
             status: true
           }
-        },
-        conversation: {
-          select: { 
-            id: true,
-            mode: true,
-            assignedToId: true,
-            assignedTo: {
-              select: { id: true, name: true }
-            }
-          }
         }
       },
       orderBy: [
@@ -59,11 +49,11 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     });
 
     // Enrich with customer history using optimized batch fetcher
-    const leadIds = orders.map(o => o.leadId);
+    const leadIds = orders.map(o => o.leadId).filter((id): id is string => id !== null);
     const historiesMap = await newOrderArrivalService.getCustomerHistoryBatch(companyId, leadIds);
 
     const enrichedOrders = orders.map((order) => {
-      const customerHistory = historiesMap[order.leadId] || {
+      const customerHistory = (order.leadId ? historiesMap[order.leadId] : undefined) || {
         isExistingCustomer: false,
         previousOrderCount: 0,
         previousSpend: 0,
@@ -98,11 +88,12 @@ router.post("/:id/claim", authMiddleware, async (req: AuthRequest, res: Response
     const { userId, companyId, role } = req.user!;
 
     // Only agents, admins, and owners can claim orders
-    if (!["AGENT", "ADMIN", "OWNER"].includes(role)) {
+    if (!["STAFF", "MANAGER", "OWNER"].includes(role)) {
       return res.status(403).json({ message: "Only agents can claim orders" });
     }
 
     const result = await newOrderArrivalService.claimOrderArrival(
+      companyId,
       id,
       userId,
       req.user?.name || "Agent", // Use name from auth middleware
@@ -130,11 +121,11 @@ router.get("/claimed", authMiddleware, async (req: AuthRequest, res: Response) =
     let whereCondition: any = { 
       companyId,
       isDeleted: false,
-      status: { in: ["PROCESSING", "PREPARING", "READY", "SHIPPED"] } // Active processing states
+      status: { in: ["PROCESSING", "PREPARING", "READY"] } // Active processing states
     };
 
     // Role-based filtering for claimed orders
-    if (role === "AGENT") {
+    if (role === "STAFF") {
       whereCondition.OR = [
         { processedById: userId }, // My claimed orders
       ];
@@ -156,14 +147,7 @@ router.get("/claimed", authMiddleware, async (req: AuthRequest, res: Response) =
           }
         },
         processedBy: {
-          select: { id: true, name: true }
-        },
-        conversation: {
-          select: { 
-            id: true,
-            mode: true,
-            assignedToId: true
-          }
+          select: { id: true, firstName: true, lastName: true }
         }
       },
       orderBy: [
@@ -219,7 +203,6 @@ router.post("/confirm-order/:orderId", authMiddleware, async (req: AuthRequest, 
         ]
       },
       include: {
-        conversation: { include: { lead: true } },
         lead: true
       }
     });
@@ -230,6 +213,11 @@ router.post("/confirm-order/:orderId", authMiddleware, async (req: AuthRequest, 
       });
     }
 
+    // Find conversation via lead
+    const conv = order.leadId ? await prisma.conversation.findFirst({
+      where: { leadId: order.leadId, lifecycleStatus: 'active' }
+    }) : null;
+
     // Update order to PENDING status - this moves it to Orders page
     const updatedOrder = await prisma.order.update({
       where: { id: orderId },
@@ -239,27 +227,17 @@ router.post("/confirm-order/:orderId", authMiddleware, async (req: AuthRequest, 
         updatedAt: new Date()
       },
       include: {
-        conversation: { include: { lead: true } },
-        processedBy: { select: { id: true, name: true } },
+        processedBy: { select: { id: true, firstName: true, lastName: true } },
         lead: true
       }
     });
 
-    // Update lead state
-    await prisma.lead.update({
-      where: { id: order.leadId },
-      data: {
-        pendingOrderState: "CLAIMED_FOR_APPROVAL",
-        pendingOrderClaimedById: order.processedById || agentId,
-        pendingOrderClaimedAt: new Date(),
-        lastActiveAt: new Date()
-      }
-    });
+    // pendingOrder fields removed from schema - skip lead update
 
     // Emit events
     emitToCompany(order.companyId, "order_manually_confirmed", {
       orderId: order.id,
-      conversationId: order.conversationId,
+      conversationId: conv?.id,
       leadId: order.leadId,
       confirmedBy: { id: agentId, name: agentName },
       order: updatedOrder
@@ -268,11 +246,11 @@ router.post("/confirm-order/:orderId", authMiddleware, async (req: AuthRequest, 
     // Remove from New Order Arrivals queue
     emitToCompany(order.companyId, "order_arrival_confirmed", {
       orderId: order.id,
-      conversationId: order.conversationId,
+      conversationId: conv?.id,
       confirmedBy: { id: agentId, name: agentName }
     });
 
-    console.log(`\u2705 [NewOrderArrival] Order ${orderId} manually confirmed by ${agentName}`);
+    console.log(`✅ [NewOrderArrival] Order ${orderId} manually confirmed by ${agentName}`);
 
     res.json({
       message: "Order confirmed and moved to Orders page",
