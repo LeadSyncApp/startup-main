@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { ConversationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { can } from "../../services/auth/permissions.service";
@@ -80,7 +81,7 @@ router.post("/archive", authMiddleware as any, async (req: any, res: any) => {
     // Unassign all conversations
     await prisma.conversation.updateMany({
       where: { companyId, claimedById: { not: null } },
-      data: { claimedById: null, status: "OPEN" },
+      data: { claimedById: null, status: ConversationStatus.OPEN },
     });
 
     // Notify the user who archived

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { ConversationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { can } from "../../services/auth/permissions.service";
@@ -228,7 +229,7 @@ router.post("/members/:id/remove", authMiddleware as any, async (req: any, res: 
     // Unassign any conversations
     await prisma.conversation.updateMany({
       where: { claimedById: id },
-      data: { claimedById: null, status: "OPEN" },
+      data: { claimedById: null, status: ConversationStatus.OPEN },
     });
 
     // Notify other admins

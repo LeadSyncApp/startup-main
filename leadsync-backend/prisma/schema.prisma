@@ -317,7 +317,8 @@ model Conversation {
   leadId                  String?
   channel                 Channel
   mode                    ConversationMode  @default(BOT)
-  status                  String            @default("open")
+  status                  ConversationStatus @default(OPEN)
+  intent                  ConversationIntent?
   claimedById             String?
   claimedByName           String?
   claimedAt               DateTime?

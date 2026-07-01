@@ -6,6 +6,7 @@ import { safeEmitConversationUpdate, emitToAgent, emitToCompany } from "../../li
 import { validateAndSanitizeCustomFields } from "../../utils/custom-fields.validator";
 import { applyDataSharingRules } from "../../lib/sharing.engine";
 import { asyncHandler } from "../../middleware/error.middleware";
+import { ConversationStatus } from "@prisma/client";
 
 const router = Router();
 
@@ -116,7 +117,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         intent: conversation?.intent || "BROWSING",
 
         // Multi-Agent Data
-        status: conversation?.status || "OPEN",
+        status: conversation?.status || ConversationStatus.OPEN,
         assignedTo: conversation?.assignedTo || null,
 
         priority,

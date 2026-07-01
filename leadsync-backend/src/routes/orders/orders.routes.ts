@@ -1,4 +1,5 @@
 import { Router, Response } from "express";
+import { ConversationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { createTenantRepository } from "../../lib/tenantDb";
 import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
@@ -287,7 +288,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
             leadId: safeLead.id,
             companyId,
             channel: "WEBSITE",
-            status: "open",
+            status: ConversationStatus.OPEN,
             claimedById: req.user!.userId,
           }
         });

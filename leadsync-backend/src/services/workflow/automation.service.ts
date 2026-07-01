@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { ConversationStatus, ConversationMode } from "@prisma/client";
 import { MessageSender } from "@prisma/client";
 import { getIO, emitToAgent } from "../../lib/socket";
 
@@ -83,7 +84,7 @@ async function executeRule(rule: any) {
         },
         include: {
           conversations: {
-            where: { mode: "BOT" },
+            where: { mode: ConversationMode.BOT },
             orderBy: { updatedAt: "desc" },
             take: 1,
           },
@@ -154,7 +155,7 @@ async function executeRule(rule: any) {
         },
         include: {
           conversations: {
-            where: { mode: "BOT" },
+            where: { mode: ConversationMode.BOT },
             orderBy: { createdAt: "desc" },
             take: 1,
           },

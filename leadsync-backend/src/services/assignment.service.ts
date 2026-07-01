@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma";
+import { ConversationStatus, ConversationMode } from "@prisma/client";
 import { emitToCompanyAdmin, emitToAgent, emitToCompany, safeEmitConversationUpdate } from "../lib/socket";
 
 /**
@@ -60,7 +61,7 @@ export class AssignmentService {
       where: {
         companyId,
         claimedById: { in: staffIds },
-        status: { notIn: ["RESOLVED", "ARCHIVED"] },
+        status: { notIn: [ConversationStatus.RESOLVED, ConversationStatus.SNOOZED] },
       },
       _count: { id: true },
       _max: { claimedAt: true },
@@ -129,7 +130,7 @@ export class AssignmentService {
 
     // Update conversation atomically
     const updateData: any = {};
-    updateData.mode = "HUMAN";
+    updateData.mode = ConversationMode.HUMAN;
     updateData.needsStaffReason = reason;
 
     if (staff) {
@@ -203,12 +204,12 @@ export class AssignmentService {
     const updated = await (prisma.conversation as any).update({
       where: { id: conversationId },
       data: {
-        mode: "BOT",
+        mode: ConversationMode.BOT,
         claimedById: null,
         claimedByName: null,
         claimedAt: null,
         needsStaffReason: null,
-        status: "RESOLVED",
+        status: ConversationStatus.RESOLVED,
       },
       include: {
         lead: { select: { id: true, name: true, contact: true, channel: true } },

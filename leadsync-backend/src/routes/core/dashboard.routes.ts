@@ -1,7 +1,7 @@
 import { decryptSecret } from "../../utils/encryption";
 import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
-import { Prisma } from "@prisma/client";
+import { Prisma, ConversationStatus } from "@prisma/client";
 import { authMiddleware, injectTenantContext, AuthRequest } from "../../middleware/auth.middleware";
 import { getGroq } from "../../services/ai/ai.service";
 import { cacheService } from "../../services/infrastructure/cache.service";
@@ -189,7 +189,7 @@ router.get(
         by: ["claimedById"],
         where: {
           companyId: req.user.companyId,
-          status: "OPEN",
+          status: ConversationStatus.OPEN,
           claimedById: { in: activeAgents.map(a => a.id) }
         },
         _count: {

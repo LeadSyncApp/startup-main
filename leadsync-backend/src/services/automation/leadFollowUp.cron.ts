@@ -9,6 +9,7 @@
  */
 
 import { prisma, getTenantPrismaContext } from "../../lib/prisma";
+import { ConversationStatus } from "@prisma/client";
 import { triggerLeadFollowUp } from "./autoReplyEventListeners";
 
 // Time windows for each event type
@@ -44,7 +45,7 @@ export async function executeLeadFollowUpCron(): Promise<{
           companyId: company.id,
           conversations: {
             some: {
-              status: "OPEN",
+              status: ConversationStatus.OPEN,
             },
           },
         },

@@ -3,7 +3,7 @@ import { pgBossService } from "../infrastructure/pgboss/pgboss.service";
 import { prisma, getTenantPrismaContext } from "../../lib/prisma";
 import { ConcurrencyLock } from "../../utils/concurrencyLock";
 import { outboundDispatcherService } from "../outbound.dispatcher";
-import { Channel, MessageSender } from "@prisma/client";
+import { Channel, MessageSender, ConversationStatus } from "@prisma/client";
 import { generateShopReply } from "../ai/ai.service";
 import { StandardMessageFrame } from "../../interfaces/messaging.interface";
 import { tenantContextStorage, TenantContext } from "../context/tenantContext.provider";
@@ -144,7 +144,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
           data: {
             channel: frame.channel,
             companyId: companyContext.id,
-            status: "open",
+            status: ConversationStatus.OPEN,
             leadId: newLead.id,
             isReturningCustomer: localHasArchivedHistory,
           },
@@ -205,7 +205,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         await tx.lead.update({ where: { id: lead.id }, data: { lastActiveAt: new Date() } });
         const updatedConvo = await tx.conversation.update({
           where: { id: conversation.id },
-          data: { status: "open", updatedAt: new Date() },
+          data: { status: ConversationStatus.OPEN, updatedAt: new Date() },
           include: { claimedBy: { select: { id: true, firstName: true, lastName: true } } }
         });
         await outboundDispatcherService.dispatch({ companyId, conversationId: conversation.id, to: lead.contact, channel: channel === Channel.TELEGRAM ? "TELEGRAM" : "WHATSAPP", content: { text: customOooMessage }, sender: "SYSTEM" });
