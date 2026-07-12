@@ -58,6 +58,7 @@ model Company {
   customFieldDefinitions   CustomFieldDefinition[]
   invitations              Invitation[]
   invoices                 Invoice[]
+  knowledgeChunks          KnowledgeChunk[]
   leads                    Lead[]
   merchantFiles            MerchantFile[]
   Message                  Message[]
@@ -67,42 +68,44 @@ model Company {
   orderItems               OrderItem[]
   orderLogs                OrderLog[]
   products                 Product[]
+  ruleDecisionLogs         RuleDecisionLog[]
   ruleGroups               RuleGroup[]
   users                    User[]
 }
 
 model User {
-  id                   String           @id @default(uuid())
-  email                String           @unique
-  firstName            String?
-  lastName             String?
-  passwordHash         String?
-  role                 Role             @default(STAFF)
-  managerId            String?
-  companyId            String
-  createdAt            DateTime         @default(now())
-  isActive             Boolean          @default(true)
-  isAvailable          Boolean          @default(true)
-  staffId              String?
-  residingAddress      String?
-  phoneNumber          String?
-  isOnline             Boolean          @default(false)
-  lastSeenAt           DateTime?
-  resetToken           String?
-  resetTokenExpiry     DateTime?
-  updatedAt            DateTime         @updatedAt
-  authProvider         String           @default("EMAIL")
-  googleId             String?          @unique
-  onboardingStatus     OnboardingStatus @default(PENDING)
-  agentFeedPosts       AgentFeedPost[]  @relation("AgentFeedPosts")
-  claimedConversations Conversation[]   @relation("ClaimedConversations")
-  InternalNote         InternalNote[]
-  sentInvitations      Invitation[]     @relation("InvitedByUser")
-  notifications        Notification[]
-  processedOrders      Order[]          @relation("ProcessedOrders")
-  company              Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  manager              User?            @relation("UserManagement", fields: [managerId], references: [id])
-  subordinates         User[]           @relation("UserManagement")
+  id                                           String           @id @default(uuid())
+  email                                        String           @unique
+  firstName                                    String?
+  lastName                                     String?
+  passwordHash                                 String?
+  role                                         Role             @default(STAFF)
+  managerId                                    String?
+  companyId                                    String
+  createdAt                                    DateTime         @default(now())
+  isActive                                     Boolean          @default(true)
+  isAvailable                                  Boolean          @default(true)
+  staffId                                      String?
+  residingAddress                              String?
+  phoneNumber                                  String?
+  isOnline                                     Boolean          @default(false)
+  lastSeenAt                                   DateTime?
+  resetToken                                   String?
+  resetTokenExpiry                             DateTime?
+  updatedAt                                    DateTime         @updatedAt
+  authProvider                                 String           @default("EMAIL")
+  googleId                                     String?          @unique
+  onboardingStatus                             OnboardingStatus @default(PENDING)
+  agentFeedPosts                               AgentFeedPost[]  @relation("AgentFeedPosts")
+  Conversation_Conversation_assignedToIdToUser Conversation[]   @relation("Conversation_assignedToIdToUser")
+  claimedConversations                         Conversation[]   @relation("ClaimedConversations")
+  InternalNote                                 InternalNote[]
+  sentInvitations                              Invitation[]     @relation("InvitedByUser")
+  notifications                                Notification[]
+  processedOrders                              Order[]          @relation("ProcessedOrders")
+  company                                      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  manager                                      User?            @relation("UserManagement", fields: [managerId], references: [id])
+  subordinates                                 User[]           @relation("UserManagement")
 
   @@unique([email, companyId])
   @@index([companyId, role])
@@ -176,6 +179,7 @@ model Product {
   attributes     Json?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
+  brand          String?
   orderItems     OrderItem[]
   company        Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -209,11 +213,11 @@ model Order {
   version        Int                 @default(1)
   invoice        Invoice?
   company        Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   lead           Lead?               @relation(fields: [leadId], references: [id])
   processedBy    User?               @relation("ProcessedOrders", fields: [processedById], references: [id])
   orderItems     OrderItem[]
   logs           OrderLog[]
-  conversation   Conversation        @relation(fields: [conversationId], references: [id])
 
   @@index([companyId])
   @@index([companyId, approvalStatus])
@@ -300,55 +304,65 @@ model Invoice {
   @@unique([companyId, invoiceNumber])
 }
 
-// --------------------------------------------------------------------------
-// Known orphan / unused DB columns on Conversation (not modeled below):
-//   • aiSummaryAt, latestSummary, suggestedAgentReply, summary,
-//     transientIntentState, resolutionNote, lastViewedAt
-//     — zero code references, zero populated rows (verified 2026-06-30).
-//   • aiSummary, intent
-//     — DB columns unused; sessionState.aiSummary and sessionState.aiIntent
-//       (JSON keys) are the live data written by ai.triage.worker.ts.
-//   • priorityScore, sentimentScore
-//     — dead; related feature work removed (priority lives on Order).
-// --------------------------------------------------------------------------
 model Conversation {
-  id                      String            @id @default(uuid())
-  companyId               String
-  leadId                  String?
-  channel                 Channel
-  mode                    ConversationMode  @default(BOT)
-  status                  ConversationStatus @default(OPEN)
-  intent                  ConversationIntent?
-  claimedById             String?
-  claimedByName           String?
-  claimedAt               DateTime?
-  claimExpiresAt          DateTime?
-  lastClaimHeartbeat      DateTime?
-  needsStaffReason        String?
-  lifecycleStatus         String            @default("active")
-  isReturningCustomer     Boolean           @default(false)
-  previousHandledById     String?
-  previousConversationId  String?
-  deletedAt               DateTime?
-  archivedAt              DateTime?
-  sessionState            Json?
-  createdAt               DateTime     @default(now())
-  updatedAt               DateTime     @updatedAt
+  id                                   String              @id @default(uuid())
+  channel                              Channel
+  leadId                               String?
+  createdAt                            DateTime            @default(now())
+  companyId                            String
+  mode                                 ConversationMode    @default(BOT)
+  updatedAt                            DateTime            @updatedAt
+  aiHandled                            Boolean             @default(true)
+  aiSummary                            String?
+  aiSummaryAt                          DateTime?
+  latestSummary                        String?
+  suggestedAgentReply                  String?
+  transientIntentState                 String?
+  assignedToId                         String?
+  intent                               ConversationIntent?
+  priorityScore                        Int                 @default(0)
+  sentimentScore                       Int                 @default(0)
+  sessionState                         Json?
+  status                               ConversationStatus  @default(OPEN)
+  summary                              String?
+  claimedById                          String?
+  claimExpiresAt                       DateTime?
+  lastClaimHeartbeat                   DateTime?
+  lastViewedAt                         DateTime?
+  deletedAt                            DateTime?
+  lifecycleStatus                      String              @default("active")
+  archivedAt                           DateTime?
+  resolutionNote                       String?
+  isReturningCustomer                  Boolean             @default(false)
+  claimedAt                            DateTime?
+  needsStaffReason                     String?
+  claimedByName                        String?
+  previousHandledById                  String?
+  previousConversationId               String?
+  claimLogs                            ClaimLog[]
+  User_Conversation_assignedToIdToUser User?               @relation("Conversation_assignedToIdToUser", fields: [assignedToId], references: [id])
+  claimedBy                            User?               @relation("ClaimedConversations", fields: [claimedById], references: [id])
+  company                              Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lead                                 Lead?               @relation(fields: [leadId], references: [id])
+  internalNotes                        InternalNote[]
+  messages                             Message[]
+  orders                               Order[]
+  RuleDecisionLog                      RuleDecisionLog[]
 
-  lead            Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  messages        Message[]
-  orders          Order[]
-  claimLogs       ClaimLog[]
-  internalNotes   InternalNote[]
-  claimedBy       User?     @relation("ClaimedConversations", fields: [claimedById], references: [id])
-
-  @@index([companyId, lifecycleStatus])
-  @@index([companyId, claimedById])
-  @@index([companyId, status])
   @@index([deletedAt])
   @@index([leadId])
   @@index([createdAt])
+  @@index([archivedAt])
+  @@index([assignedToId])
+  @@index([claimExpiresAt])
+  @@index([claimedById])
+  @@index([companyId, updatedAt])
+  @@index([leadId, companyId, channel])
+  @@index([leadId, lifecycleStatus])
+  @@index([lifecycleStatus])
+  @@index([priorityScore])
+  @@index([sentimentScore])
+  @@index([status])
 }
 
 model Message {
@@ -365,6 +379,8 @@ model Message {
   senderName        String?
   senderId          String?
   isRead            Boolean       @default(false)
+  deliveryError     String?
+  clientMessageId   String?
   Company           Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversation      Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -501,14 +517,21 @@ model ConversationalRule {
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
   groupId         String?
+  hourRange       Json?
+  dateRange       Json?
+  ruleType        Int                     @default(1)
   company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   group           RuleGroup?              @relation(fields: [groupId], references: [id])
   logs            ConversationalRuleLog[]
+  RuleDecisionLog RuleDecisionLog[]
 
   @@index([companyId])
   @@index([companyId, isEnabled])
   @@index([triggerKeywords])
   @@index([groupId])
+  @@index([companyId, ruleType])
+  @@index([dateRange], type: Gin)
+  @@index([hourRange], type: Gin)
 }
 
 model ConversationalRuleLog {
@@ -531,6 +554,28 @@ model ConversationalRuleLog {
   @@index([ruleId])
   @@index([createdAt])
   @@index([status])
+}
+
+model RuleDecisionLog {
+  id                 String              @id @default(uuid())
+  companyId          String
+  conversationId     String?
+  messageText        String
+  topScore           Float?
+  secondScore        Float?
+  gap                Float?
+  pathTaken          String
+  matchedRuleId      String?
+  createdAt          DateTime            @default(now())
+  blockedReason      String?
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Conversation       Conversation?       @relation(fields: [conversationId], references: [id], onUpdate: NoAction)
+  ConversationalRule ConversationalRule? @relation(fields: [matchedRuleId], references: [id], onUpdate: NoAction)
+
+  @@index([companyId])
+  @@index([companyId, pathTaken])
+  @@index([matchedRuleId])
+  @@index([createdAt])
 }
 
 model AgentFeedPost {
@@ -588,6 +633,23 @@ model MerchantFile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model KnowledgeChunk {
+  id         String                 @id @default(uuid())
+  companyId  String
+  sourceType KnowledgeSourceType
+  sourceId   String?
+  content    String
+  embedding  Unsupported("vector")?
+  isActive   Boolean                @default(true)
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  company    Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, sourceType, sourceId])
+  @@index([companyId])
+  @@index([companyId, isActive])
 }
 
 model NotificationTemplate {
@@ -713,7 +775,7 @@ model ClaimLog {
   action         String
   createdAt      DateTime     @default(now())
   Company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([conversationId])
@@ -730,7 +792,7 @@ model InternalNote {
   mentionedIds   Json?
   createdAt      DateTime     @default(now())
   User           User?        @relation(fields: [authorId], references: [id])
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([conversationId])
@@ -740,6 +802,13 @@ model socket_io_attachments {
   id         BigInt    @unique @default(autoincrement())
   created_at DateTime? @default(now()) @db.Timestamptz(6)
   payload    Bytes?
+}
+
+enum KnowledgeSourceType {
+  RULE
+  PRODUCT
+  POLICY
+  MANUAL
 }
 
 enum MessageSender {

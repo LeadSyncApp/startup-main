@@ -11,6 +11,7 @@ import { prisma } from "../../lib/prisma";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { ruleGeneratorService } from "../../services/automation/ruleGenerator.service";
 import { conversationalAutoReplyService } from "../../services/automation/conversationalAutoReply.service";
+import { embedRuleToKnowledgeChunk } from "../../services/knowledge/ruleEmbedding.service";
 
 const router = Router();
 
@@ -113,6 +114,15 @@ router.post("/generate-from-prompt", authMiddleware as any, async (req: any, res
     // Invalidate cache so the new rule is picked up immediately
     conversationalAutoReplyService.invalidateCache(input.companyId);
 
+    // Embed the rule to KnowledgeChunk for RAG similarity search
+    await embedRuleToKnowledgeChunk({
+      id: savedRule.id,
+      companyId: savedRule.companyId,
+      name: savedRule.name,
+      triggerKeywords: savedRule.triggerKeywords,
+      templateBody: savedRule.templateBody,
+    });
+
     // NOTE: Frontend expects top-level 'rule' key (not nested in data.rule)
     res.json({
       success: true,
@@ -153,6 +163,15 @@ router.post("/", authMiddleware as any, async (req: any, res: any) => {
 
     // Invalidate cache
     conversationalAutoReplyService.invalidateCache(data.companyId);
+
+    // Embed the rule to KnowledgeChunk for RAG similarity search
+    await embedRuleToKnowledgeChunk({
+      id: rule.id,
+      companyId: rule.companyId,
+      name: rule.name,
+      triggerKeywords: rule.triggerKeywords,
+      templateBody: rule.templateBody,
+    });
 
     res.status(201).json({
       success: true,
@@ -275,6 +294,15 @@ router.put("/:id", authMiddleware as any, async (req: any, res: any) => {
     // Invalidate cache
     conversationalAutoReplyService.invalidateCache(existing.companyId);
 
+    // Embed the rule to KnowledgeChunk for RAG similarity search
+    await embedRuleToKnowledgeChunk({
+      id: rule.id,
+      companyId: rule.companyId,
+      name: rule.name,
+      triggerKeywords: rule.triggerKeywords,
+      templateBody: rule.templateBody,
+    });
+
     res.json({
       success: true,
       rule: rule,
@@ -310,6 +338,18 @@ router.delete("/:id", authMiddleware as any, async (req: any, res: any) => {
 
     // Invalidate cache
     conversationalAutoReplyService.invalidateCache(existing.companyId);
+
+    // Clean up KnowledgeChunk for this rule (fire-and-forget, never break the response)
+    try {
+      await prisma.$executeRaw`
+        DELETE FROM "KnowledgeChunk"
+        WHERE "companyId" = ${existing.companyId}
+          AND "sourceType" = 'RULE'::"KnowledgeSourceType"
+          AND "sourceId" = ${id}
+      `;
+    } catch (kcErr: any) {
+      console.error("[ConversationalRules] KnowledgeChunk cleanup failed:", kcErr.message);
+    }
 
     res.json({
       success: true,

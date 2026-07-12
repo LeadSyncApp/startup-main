@@ -180,83 +180,100 @@ export class AutoReplyService {
   }
 
   async processEvent(eventKey: AutoReplyEventKey, context: AutoReplyContext) {
+    const tenantPrisma = getTenantPrismaContext(context.companyId);
+
+    // 🛑 FIXED (Option A — advisory lock): Replace racy check-then-write
+    // with an atomic check-then-reserve pattern.
+    // Phase 1 — inside a short transaction: acquire lock, check, and
+    // write a PENDING log row to block concurrent duplicates.
+    // Phase 2 — outside the transaction: do the actual send, then
+    // update the row to SENT or leave as FAILED.
+    const lockKey1 = hashStringToInt4(context.companyId);
+    const lockKey2 = hashStringToInt4(`${eventKey}|${context.leadId}`);
+
+    // Phase 1: atomic check + reserve (fast — no external I/O)
+    let reserved: { id: string; rule: any } | null = null;
     try {
-      const tenantPrisma = getTenantPrismaContext(context.companyId);
-      
-      // 🛑 IDEMPOTENCY CHECK: Prevent duplicate auto-replies for the same (company, event, lead) within last 2 minutes
-      const recentLog = await tenantPrisma.autoReplyLog.findFirst({
-        where: {
-          companyId: context.companyId,
-          eventKey,
-          triggeredFor: context.leadId,
-          status: "SENT",
-          sentAt: {
-            gte: new Date(Date.now() - 2 * 60 * 1000), // last 2 minutes
-          },
-        },
-      });
-      if (recentLog) {
-        console.log(`[AutoReply] Skipping ${eventKey} for ${context.leadId} — already sent recently`);
-        return;
-      }
-      
-      const rule = await tenantPrisma.autoReplyRule.findUnique({
-        where: {
-          companyId_eventKey: {
+      reserved = await tenantPrisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(
+          "SELECT pg_advisory_xact_lock($1::int4, $2::int4)",
+          lockKey1, lockKey2
+        );
+
+        const recentLog = await tx.autoReplyLog.findFirst({
+          where: {
             companyId: context.companyId,
             eventKey,
+            triggeredFor: context.leadId,
+            sentAt: {
+              gte: new Date(Date.now() - 2 * 60 * 1000),
+            },
           },
-        },
-      });
-      if (!rule || !rule.isEnabled) return;
-
-      // 🧠 SMART DELAY: Override delay based on customer segment
-      // Uses absolute delay overrides per spec: VIP→1h, NEW→24h, CHURN_RISK→immediate
-      let effectiveDelay = rule.delayMinutes || 0;
-      if (effectiveDelay > 0 && context.customerHistory?.segment) {
-        const segmentOverrides: Record<string, number> = {
-          "VIP": 60,                // VIP → 1 hour
-          "REGULAR": rule.delayMinutes, // Regular → keep default
-          "NEW": 1440,              // NEW → 24 hours
-          "CHURN_RISK": 0,          // CHURN_RISK → immediate
-        };
-        const override = segmentOverrides[context.customerHistory.segment];
-        if (override !== undefined) {
-          effectiveDelay = override;
-          console.log(`[AutoReply] Segment-based delay override: ${context.customerHistory.segment} → ${effectiveDelay} min`);
+        });
+        if (recentLog) {
+          console.log(`[AutoReply] Skipping ${eventKey} for ${context.leadId} — already sent recently`);
+          return null; // signal: skip
         }
-      }
 
-      if (effectiveDelay > 0) {
-        const boss = pgBossService.getBoss();
-        const jobPayload = {
-          ruleId: rule.id,
-          eventKey,
-          companyId: context.companyId,
-          conversationId: context.conversationId,
-          leadId: context.leadId,
-          contact: context.contact,
-          channel: context.channel,
-          customerName: context.customerName,
-          brandName: context.brandName || undefined,
-          messageBody: rule.messageBody,
-          useAI: rule.useAI || false,
-          orderId: context.orderId,
-          customerHistory: context.customerHistory,
-        };
+        const rule = await tx.autoReplyRule.findUnique({
+          where: {
+            companyId_eventKey: { companyId: context.companyId, eventKey },
+          },
+        });
+        if (!rule || !rule.isEnabled) return null;
 
-        await boss.send(DELAYED_AUTO_REPLY_JOB_NAME, jobPayload, {
-          startAfter: effectiveDelay * 60,
+        // Reschedule case: write to delayed queue, no row needed in AutoReplyLog yet
+        let effectiveDelay = rule.delayMinutes || 0;
+        if (effectiveDelay > 0 && context.customerHistory?.segment) {
+          const segmentOverrides: Record<string, number> = {
+            "VIP": 60,
+            "REGULAR": rule.delayMinutes,
+            "NEW": 1440,
+            "CHURN_RISK": 0,
+          };
+          const override = segmentOverrides[context.customerHistory.segment];
+          if (override !== undefined) effectiveDelay = override;
+        }
+        if (effectiveDelay > 0) {
+          const boss = pgBossService.getBoss();
+          await boss.send(DELAYED_AUTO_REPLY_JOB_NAME, {
+            ruleId: rule.id,
+            eventKey,
+            companyId: context.companyId,
+            conversationId: context.conversationId,
+            leadId: context.leadId,
+            contact: context.contact,
+            channel: context.channel,
+            customerName: context.customerName,
+            brandName: context.brandName || undefined,
+            messageBody: rule.messageBody,
+            useAI: rule.useAI || false,
+            orderId: context.orderId,
+            customerHistory: context.customerHistory,
+          }, { startAfter: effectiveDelay * 60 });
+          console.log(`[AutoReply] Scheduled ${eventKey} via pg-boss in ${effectiveDelay} minutes`);
+          return null; // scheduled, no immediate send
+        }
+
+        // Reserve a row — write PENDING so concurrent callers see it
+        const pending = await tx.autoReplyLog.create({
+          data: {
+            companyId: context.companyId,
+            ruleId: rule.id,
+            eventKey,
+            triggeredFor: context.leadId,
+            recipient: context.contact,
+            channel: context.channel,
+            messageBody: "", // will fill after render
+            status: "PENDING",
+          },
         });
 
-        console.log(`[AutoReply] Scheduled ${eventKey} via pg-boss in ${effectiveDelay} minutes`);
-        return;
-      }
-
-      await this.executeDelayedAutoReply(rule, context, eventKey);
+        return { id: pending.id, rule };
+      });
     } catch (error: any) {
       console.error(`[AutoReply] Failed to process ${eventKey}:`, error.message);
-      const tenantPrisma = getTenantPrismaContext(context.companyId);
+      // Best-effort FAILED log outside the tx (fallback)
       await tenantPrisma.autoReplyLog.create({
         data: {
           companyId: context.companyId,
@@ -264,26 +281,56 @@ export class AutoReplyService {
           triggeredFor: context.leadId,
           recipient: context.contact,
           channel: context.channel,
-          messageBody: "",
+          messageBody: (context as any).renderedMessageBody || "",
           status: "FAILED",
           error: error.message,
+        },
+      }).catch(() => {});
+      return;
+    }
+
+    if (!reserved) return; // skipped or scheduled
+
+    // Phase 2: actual send (outside the lock/transaction)
+    try {
+      await this.executeDelayedAutoReply(reserved.rule, context, eventKey, reserved.id);
+    } catch (error: any) {
+      console.error(`[AutoReply] Send failed for ${eventKey}:`, error.message);
+      // Update the PENDING row to FAILED
+      await tenantPrisma.autoReplyLog.update({
+        where: { id: reserved.id },
+        data: {
+          status: "FAILED",
+          error: error.message,
+          messageBody: (context as any).renderedMessageBody || "",
         },
       }).catch(() => {});
     }
   }
 
-  public async executeDelayedAutoReply(rule: any, context: AutoReplyContext, eventKey: AutoReplyEventKey) {
+  public async executeDelayedAutoReply(
+    rule: any,
+    context: AutoReplyContext,
+    eventKey: AutoReplyEventKey,
+    reservedLogId?: string,
+  ) {
     const tenantPrisma = getTenantPrismaContext(context.companyId);
-    
+
     // 🛑 FIX: Re-check if rule is still enabled — user may have disabled it while the job was pending
     const currentRule = await tenantPrisma.autoReplyRule.findUnique({
       where: { id: rule.id, companyId: context.companyId },
     });
     if (!currentRule || !currentRule.isEnabled) {
       console.log(`[AutoReply] Skipping ${eventKey} for ${context.contact} — rule is now disabled`);
+      if (reservedLogId) {
+        await tenantPrisma.autoReplyLog.update({
+          where: { id: reservedLogId },
+          data: { status: "FAILED", error: "Rule disabled" },
+        }).catch(() => {});
+      }
       return;
     }
-    
+
     let message = rule.messageBody;
     if (rule.useAI) {
       const aiResult = await aiPersonalityService.generateMessage(
@@ -303,9 +350,37 @@ export class AutoReplyService {
       message = this.fillTemplate(rule.messageBody, context);
     }
 
-    await this.sendViaChannel(context, message);
+    // Keep final rendered text available in case any caller catches an error
+    ;(context as any).renderedMessageBody = message;
 
-    const savedMsg = await tenantPrisma.message.create({
+    // If this was a delayed job (no reservedLogId), acquire lock first
+    if (!reservedLogId) {
+      const lockKey1 = hashStringToInt4(context.companyId);
+      const lockKey2 = hashStringToInt4(`${eventKey}|${context.leadId}`);
+      const recentLog = await tenantPrisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(
+          "SELECT pg_advisory_xact_lock($1::int4, $2::int4)",
+          lockKey1, lockKey2
+        );
+        return tx.autoReplyLog.findFirst({
+          where: {
+            companyId: context.companyId,
+            eventKey,
+            triggeredFor: context.leadId,
+            sentAt: { gte: new Date(Date.now() - 2 * 60 * 1000) },
+          },
+        });
+      });
+      if (recentLog) {
+        console.log(`[AutoReply] Skipping delayed ${eventKey} for ${context.leadId} — already logged recently`);
+        return;
+      }
+    }
+
+    const dispatchResult = await this.sendViaChannel(context, message);
+
+    // Use the message row already created by outboundDispatcher.dispatch()
+    const savedMsg = dispatchResult?.message || await tenantPrisma.message.create({
       data: {
         content: message,
         sender: MessageSender.SYSTEM,
@@ -329,18 +404,29 @@ export class AutoReplyService {
       );
     }
 
-    await tenantPrisma.autoReplyLog.create({
-      data: {
-        companyId: context.companyId,
-        ruleId: rule.id,
-        eventKey,
-        triggeredFor: context.leadId,
-        recipient: context.contact,
-        channel: context.channel,
-        messageBody: message,
-        status: "SENT",
-      },
-    });
+    if (!reservedLogId) {
+      await tenantPrisma.autoReplyLog.create({
+        data: {
+          companyId: context.companyId,
+          ruleId: rule.id,
+          eventKey,
+          triggeredFor: context.leadId,
+          recipient: context.contact,
+          channel: context.channel,
+          messageBody: message,
+          status: "SENT",
+        },
+      });
+    } else {
+      await tenantPrisma.autoReplyLog.update({
+        where: { id: reservedLogId },
+        data: {
+          messageBody: message,
+          status: "SENT",
+          error: null,
+        },
+      });
+    }
 
     console.log(`[AutoReply] ${eventKey} → Sent to ${context.contact} on ${context.channel}`);
   }
@@ -352,15 +438,15 @@ export class AutoReplyService {
       .replace(/{brand}/g, context.brandName || "our store");
   }
 
-  private async sendViaChannel(context: AutoReplyContext, message: string) {
-    const tenantPrisma = getTenantPrismaContext(context.companyId);
+  private async sendViaChannel(context: AutoReplyContext, message: string): Promise<{ messageId: string; deliveryStatus: "SENT" | "FAILED"; message?: any } | null> {
     const channelType = context.channel === "TELEGRAM" ? "TELEGRAM" as const
                       : context.channel === "WHATSAPP" ? "WHATSAPP" as const
+                      : context.channel === "INSTAGRAM" ? "INSTAGRAM" as const
                       : null;
 
     if (channelType) {
       try {
-        await outboundDispatcherService.dispatch({
+        const result = await outboundDispatcherService.dispatch({
           companyId: context.companyId,
           conversationId: context.conversationId,
           to: context.contact,
@@ -368,31 +454,28 @@ export class AutoReplyService {
           content: { text: message },
           sender: "SYSTEM"
         });
-        return;
+        return result;
       } catch (err) {
         console.error(`[AutoReply] outboundDispatcher failed for ${context.channel}:`, err);
         throw err;
       }
     }
 
-    if (context.channel === "INSTAGRAM") {
-      // 🛑 FIX: Route Instagram through outboundDispatcherService for consistency
-      try {
-        await outboundDispatcherService.dispatch({
-          companyId: context.companyId,
-          conversationId: context.conversationId,
-          to: context.contact,
-          channel: "INSTAGRAM",
-          content: { text: message },
-          sender: "SYSTEM"
-        });
-        return;
-      } catch (err) {
-        console.error(`[AutoReply] outboundDispatcher failed for INSTAGRAM:`, err);
-        throw err;
-      }
-    }
+    console.warn(`[AutoReply] Unsupported channel: ${context.channel} — no message sent`);
+    return null;
   }
+}
+
+// ---------- Advisory-lock helpers ----------
+function hashStringToInt4(s: string): number {
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) {
+    const char = s.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  // Convert to unsigned 32-bit to keep it int4-safe
+  return Math.abs(hash) >>> 0;
 }
 
 export const autoReplyService = new AutoReplyService();
