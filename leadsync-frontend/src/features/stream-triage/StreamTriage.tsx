@@ -1,150 +1,172 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   X, AlertTriangle, 
   ShoppingBag, Sparkles, MessageCircle, Instagram, Globe, UserPlus
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { useSimulationStore } from "../../simulation/simulationStore";
+import { authedFetch } from "../../api/client";
+import { timeAgo } from "../../lib/timeAgo";
 
-// ... existing IndianPin map ...
-export function validateIndianPin(pin: string): { valid: boolean; state?: string; region?: string } {
-  const trimmed = (pin || "").trim();
-  if (!/^\d{6}$/.test(trimmed)) {
-    return { valid: false };
-  }
-  const firstTwo = parseInt(trimmed.substring(0, 2), 10);
-  
-  const mapping: Record<number, { state: string; region: string }> = {
-    11: { state: "Delhi", region: "North" },
-    12: { state: "Haryana", region: "North" },
-    13: { state: "Haryana", region: "North" },
-    14: { state: "Punjab", region: "North" },
-    15: { state: "Punjab", region: "North" },
-    16: { state: "Chandigarh", region: "North" },
-    17: { state: "Himachal Pradesh", region: "North" },
-    18: { state: "Jammu & Kashmir", region: "North" },
-    19: { state: "Jammu & Kashmir", region: "North" },
-    20: { state: "Uttar Pradesh", region: "North" },
-    21: { state: "Uttar Pradesh", region: "North" },
-    22: { state: "Uttar Pradesh", region: "North" },
-    23: { state: "Uttar Pradesh", region: "North" },
-    24: { state: "Uttar Pradesh", region: "North" },
-    25: { state: "Uttar Pradesh", region: "North" },
-    26: { state: "Uttar Pradesh", region: "North" },
-    27: { state: "Uttar Pradesh", region: "North" },
-    28: { state: "Uttar Pradesh & Uttarakhand", region: "North" },
-    30: { state: "Rajasthan", region: "West" },
-    31: { state: "Rajasthan", region: "West" },
-    40: { state: "Maharashtra & Goa", region: "West" },
-    41: { state: "Maharashtra", region: "West" },
-    50: { state: "Andhra Pradesh & Telangana", region: "South" },
-    60: { state: "Tamil Nadu", region: "South" },
-    70: { state: "West Bengal", region: "East" },
-    80: { state: "Bihar", region: "East" },
-  };
+// Tier types
+type Tier = "claim_now" | "follow_up" | "browsing";
 
-  const matched = mapping[firstTwo];
-  if (matched) {
-    return { valid: true, state: matched.state, region: matched.region };
-  }
-  return { valid: false };
-}
-
-export interface TicketStream {
+// Backend Lead interface extended with new fields
+export interface BackendLead {
   id: string;
-  customerName: string;
-  sourceChannel: string;
-  lastContent: string;
-  timestamp: string;
-  estimatedValue: number;
-  extractedItems: { name: string; qty: number; price: number }[];
-  addressDetails: {
-    rawInput: string;
-    landmark: string;
-    city: string;
-    state: string;
-    pincode: string;
-  };
-  aiConfidence: number;
-  intent?: string;
-  aiSummary?: string;
-  lockedBy?: string | null;
+  name: string | null;
+  contact: string | null;
+  channel: string;
+  lastActiveAt: string | null;
+  conversationId: string | null;
+  lastMessage: string;
+  intent: string | null;
+  status: string;
+  assignedTo: { id: string; firstName: string; lastName: string } | null;
+  priority: string;
+  agentAssigned: string | null;
+  pendingOrderAmount: number | null;
+  aiScore: number;
+  daysSinceActive: number;
+  hasAutoReply: boolean;
+  botRepliedAt: string | null;
 }
+
+// Get tier based on intent/pendingOrderAmount/aiScore
+function getTier(lead: BackendLead): Tier {
+  if (lead.intent === "ORDERING" || (lead.pendingOrderAmount !== null && lead.pendingOrderAmount > 0)) {
+    return "claim_now";
+  }
+  if (lead.aiScore === 65) {
+    return "follow_up";
+  }
+  return "browsing";
+}
+
+// Tier colors
+const TIER_COLORS = {
+  claim_now: {
+    border: "border-l-[#ff6b35]",
+    pill: "bg-gradient-to-r from-[#ff6b35] to-[#ff8c42]",
+    glow: "shadow-[0_0_80px_rgba(255,107,53,0.25)]",
+  },
+  follow_up: {
+    border: "border-l-[#b8860b]",
+    pill: "bg-[#b8860b]",
+    glow: "shadow-[0_0_80px_rgba(184,134,11,0.25)]",
+  },
+  browsing: {
+    border: "border-l-[#50c878]",
+    pill: "bg-[#50c878]",
+    glow: "shadow-[0_0_80px_rgba(80,200,120,0.25)]",
+  },
+};
 
 export function StreamTriage() {
-  const { conversations, assignConversation, logActivity } = useSimulationStore();
-  
-  // Filter unassigned conversations for this view
-  const streams = useMemo(() => {
-    return conversations
-      .filter(c => c.status === 'unassigned')
-      .map(conv => ({
-        id: conv.id,
-        customerName: conv.customerName,
-        sourceChannel: conv.platform.toUpperCase(),
-        lastContent: conv.lastMessage,
-        timestamp: new Date(conv.timestamp).toLocaleTimeString(),
-        estimatedValue: 0,
-        extractedItems: [] as { name: string; qty: number; price: number }[],
-        addressDetails: {
-          rawInput: '',
-          landmark: '',
-          city: '',
-          state: '',
-          pincode: ''
-        },
-        aiConfidence: 0.9,
-        intent: conv.aiIntent || 'BROWSING',
-        aiSummary: conv.aiSummary,
-        lockedBy: conv.staffName
-      }));
-  }, [conversations]);
-
-  const loading = false;
-
-  // Operational metrics tracker for Indian home-preneur
-  const [approvedCount] = useState(12); // Already triaged today
-  const [approvedRevenue] = useState(28400); // Running revenue today
-  useState(3600); // Savings from catching bad zip codes
-  const [, setCompletedList] = useState<any[]>([]);
-  const dailyTarget = 40000;
+  const [leads, setLeads] = useState<BackendLead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
 
-  const resetDeck = () => {
-    setCurrentIndex(0);
-    toast("Queue refreshed via Simulation Store", { icon: "🔄" });
-  };
-
-  const activeTicket = useMemo(() => {
-    if (currentIndex >= streams.length) return null;
-    return streams[currentIndex];
-  }, [currentIndex, streams]);
-
-  const handleClaim = async () => {
-    if (!activeTicket) return;
+  // Fetch unassigned leads
+  const fetchLeads = useCallback(async () => {
     try {
-      assignConversation(activeTicket.id, 'user_1', 'Rahul');
-      toast.success(`[Phase 2] Claimed conversation with ${activeTicket.customerName}`);
-      logActivity('Rahul', 'CLAIM_CHAT', activeTicket.customerName);
+      setLoading(true);
+      setError(null);
+      const res = await authedFetch("/api/leads?filter=unassigned");
+      if (!res.ok) throw new Error("Failed to fetch leads");
+      const data: BackendLead[] = await res.json();
+      setLeads(data);
+      setCurrentIndex(0);
     } catch (e: any) {
-       toast.error("Failed to claim ticket");
+      setError(e.message || "Failed to load leads");
+      setLeads([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLeads();
+    // Poll every 10 seconds for new leads
+    const interval = setInterval(fetchLeads, 10000);
+    return () => clearInterval(interval);
+  }, [fetchLeads]);
+
+  // Partition leads into tiers and sort by daysSinceActive descending
+  const { claimNowLeads, followUpLeads, browsingLeads } = useMemo(() => {
+    const claimNow: BackendLead[] = [];
+    const followUp: BackendLead[] = [];
+    const browsing: BackendLead[] = [];
+
+    leads.forEach(lead => {
+      const tier = getTier(lead);
+      if (tier === "claim_now") claimNow.push(lead);
+      else if (tier === "follow_up") followUp.push(lead);
+      else browsing.push(lead);
+    });
+
+    // Sort each tier by daysSinceActive descending (newest first)
+    claimNow.sort((a, b) => b.daysSinceActive - a.daysSinceActive);
+    followUp.sort((a, b) => b.daysSinceActive - a.daysSinceActive);
+    browsing.sort((a, b) => b.daysSinceActive - a.daysSinceActive);
+
+    return { claimNowLeads: claimNow, followUpLeads: followUp, browsingLeads: browsing };
+  }, [leads]);
+
+  // Active lead for left card
+  const activeLead = useMemo(() => {
+    if (selectedLeadId) {
+      return leads.find(l => l.id === selectedLeadId) || null;
+    }
+    if (currentIndex < leads.length) {
+      return leads[currentIndex];
+    }
+    return null;
+  }, [currentIndex, leads, selectedLeadId]);
+
+  // Handle claim
+  const handleClaim = async () => {
+    if (!activeLead?.conversationId) return;
+    try {
+      // BUG 1 FIX: Use claim-pending-order for orders, assign endpoint for non-orders
+      const endpoint = activeLead.pendingOrderAmount !== null && activeLead.pendingOrderAmount > 0
+        ? `/api/leads/${activeLead.id}/claim-pending-order`
+        : `/api/leads/${activeLead.id}/assign`;
+      
+      const res = await authedFetch(endpoint, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to claim");
+      }
+      toast.success(`Claimed conversation with ${activeLead.name || activeLead.contact}`);
+      // Move to next lead after claiming
+      setCurrentIndex(prev => prev + 1);
+      setSelectedLeadId(null);
+      fetchLeads();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to claim ticket");
     }
   };
 
-  const handleReject = (reason: string = "Spam / Ignored") => {
-    if (!activeTicket) return;
-
-    toast(`Ticket from ${activeTicket.customerName} marked as [${reason}]`, { icon: "✖️" });
-    setCompletedList((prev: any[]) => [
-      { id: activeTicket.id, name: activeTicket.customerName, value: 0, status: "REJECTED" },
-      ...prev
-    ]);
+  // Handle skip
+  const handleSkip = () => {
     setCurrentIndex(prev => prev + 1);
+    setSelectedLeadId(null);
   };
 
-  const revenueProgress = Math.min((approvedRevenue / dailyTarget) * 100, 100);
+  // Handle row click in queue panel
+  const handleRowClick = (leadId: string) => {
+    const lead = leads.find(l => l.id === leadId);
+    if (lead) {
+      setSelectedLeadId(leadId);
+    }
+  };
 
+  // Render channel icon
   const renderIcon = (channel: string) => {
     switch (channel.toUpperCase()) {
       case "WHATSAPP": return <MessageCircle className="h-4 w-4 shrink-0" />;
@@ -153,19 +175,33 @@ export function StreamTriage() {
     }
   };
 
+  // Render tier pill badge
+  const renderTierPill = (lead: BackendLead) => {
+    const tier = getTier(lead);
+    const label = tier === "claim_now" ? "Claim Now" : tier === "follow_up" ? "Follow Up" : "Browsing";
+    return (
+      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider font-mono text-white ${TIER_COLORS[tier].pill}`}>
+        {label}
+      </span>
+    );
+  };
+
+  // Glassmorphism styles
+  const glassStyles = "backdrop-filter backdrop-blur-[20px] bg-[rgba(22,29,45,0.75)]";
+
   if (loading) {
     return <div className="p-12 text-center text-slate-400 animate-pulse">Loading intelligence streams...</div>;
   }
 
   return (
-    <div className="p-4 bg-slate-950 rounded-3xl border border-slate-900 shadow-2xl selection:bg-cyan-500/10 text-slate-200">
+    <div className="p-4 bg-slate-950 rounded-3xl border border-slate-900 shadow-2xl text-slate-200">
       
       {/* Upper bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-900 pb-5 mb-5 gap-3">
         <div>
           <h2 className="text-xs font-black text-slate-300 uppercase tracking-widest font-mono flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-amber-500 animate-spin" style={{ animationDuration: "3s" }} />
-            Tinder-Style Order Triage
+            Intelligence Stream
           </h2>
           <p className="text-[11px] text-slate-500 mt-0.5">
              Review and claim unassigned inbound conversations in real-time.
@@ -173,18 +209,20 @@ export function StreamTriage() {
         </div>
 
         <button 
-          onClick={resetDeck} 
+          onClick={fetchLeads} 
           className="text-[10px] font-mono font-black border border-slate-800 bg-slate-900/40 hover:bg-slate-900 px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition cursor-pointer"
         >
-          Replenish Queue
+          Refresh Queue
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Two-column layout: stacks to single column under 768px, right panel below left */}
+      <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr] gap-6">
         
-        <div className="lg:col-span-2 flex flex-col justify-between space-y-4">
+        {/* LEFT - Swipe Card */}
+        <div className="flex flex-col justify-between">
           <AnimatePresence mode="wait">
-            {!activeTicket ? (
+            {!activeLead ? (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -199,7 +237,7 @@ export function StreamTriage() {
                   Excellent work! The shared inbox zero-queue rule is maintained. We will alert you when a new ticket drops.
                 </p>
                 <button
-                  onClick={resetDeck}
+                  onClick={fetchLeads}
                   className="mt-6 px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-black rounded-xl text-slate-300 transition cursor-pointer"
                 >
                   Retrieve Fresh Streams
@@ -207,114 +245,92 @@ export function StreamTriage() {
               </motion.div>
             ) : (
               <motion.div
-                key={activeTicket.id}
+                key={activeLead.id}
                 initial={{ opacity: 0, scale: 0.96, x: 20 }}
                 animate={{ opacity: 1, scale: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.95, x: -30 }}
                 transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                className="bg-slate-950 border border-slate-800/80 rounded-2xl shadow-xl overflow-hidden flex flex-col justify-between min-h-[440px] relative"
+                className={`bg-slate-950 border border-slate-800/80 rounded-2xl shadow-xl overflow-hidden flex flex-col justify-between min-h-[440px] relative ${glassStyles} ${TIER_COLORS[getTier(activeLead)].glow}`}
               >
-                {/* Visual Lock Overlay */}
-                {activeTicket.lockedBy && (
+                {/* Left border based on tier */}
+                <div className={`absolute left-0 top-0 bottom-0 w-1 ${TIER_COLORS[getTier(activeLead)].border.replace("border-l-", "bg-")}`}></div>
+
+                {/* Lock Overlay */}
+                {activeLead.status !== "OPEN" && (
                    <div className="absolute inset-0 bg-slate-950/80 z-20 flex flex-col items-center justify-center border-2 border-amber-500/50 rounded-2xl backdrop-blur-sm">
-                      <AlertTriangle className="h-10 w-10 text-amber-500 mb-3 animate-pulse" />
-                      <h4 className="text-sm font-black text-amber-400 font-mono tracking-widest uppercase mb-1">Queue Handled</h4>
-                      <p className="text-[10px] text-slate-300 uppercase font-black">Just Claimed by {activeTicket.lockedBy}</p>
-                      <button 
-                        onClick={() => setCurrentIndex(prev => prev + 1)} 
-                        className="mt-6 px-4 py-2 bg-slate-800 text-white text-[10px] font-black uppercase rounded-lg shadow cursor-pointer">
-                        Next Ticket
-                      </button>
+                       <AlertTriangle className="h-10 w-10 text-amber-500 mb-3 animate-pulse" />
+                       <h4 className="text-sm font-black text-amber-400 font-mono tracking-widest uppercase mb-1">Queue Handled</h4>
+                       <p className="text-[10px] text-slate-300 uppercase font-black">Already Assigned</p>
+                       <button 
+                         onClick={() => setCurrentIndex(prev => prev + 1)} 
+                         className="mt-6 px-4 py-2 bg-slate-800 text-white text-[10px] font-black uppercase rounded-lg shadow cursor-pointer">
+                         Next Ticket
+                       </button>
                    </div>
                 )}
 
-                {/* Active Card Title Header */}
+                {/* Card Header */}
                 <div className="p-4 border-b border-slate-900 bg-slate-900/20 flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <span className="h-6 w-6 rounded-full bg-slate-905 flex items-center justify-center text-[10px] font-black font-mono border border-slate-800 bg-slate-900 text-cyan-400">
-                      {activeTicket.id.split("-")[0].substring(0, 2).toUpperCase()}
+                      {activeLead.id.split("-")[0].substring(0, 2).toUpperCase()}
                     </span>
                     <div>
-                      <h4 className="text-[11px] font-black text-slate-200">{activeTicket.customerName}</h4>
-                      <p className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">{activeTicket.timestamp}</p>
+                      <h4 className="text-[11px] font-black text-slate-200">{activeLead.name || activeLead.contact || "Customer"}</h4>
+                      <p className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">
+                        {activeLead.lastActiveAt ? timeAgo(activeLead.lastActiveAt) : "No activity"}
+                      </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1.5">
                     <span className={`flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded border uppercase tracking-wider font-mono ${
-                      activeTicket.sourceChannel === "WHATSAPP"
+                      activeLead.channel.toUpperCase() === "WHATSAPP"
                         ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                        : activeTicket.sourceChannel === "INSTAGRAM"
+                        : activeLead.channel.toUpperCase() === "INSTAGRAM"
                         ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
                         : "bg-teal-500/10 text-teal-400 border-teal-500/20"
                     }`}>
-                      {renderIcon(activeTicket.sourceChannel)}
-                      {activeTicket.sourceChannel}
+                      {renderIcon(activeLead.channel)}
+                      {activeLead.channel}
                     </span>
 
-                    <span 
-                      className="text-[10px] flex items-center gap-1 font-black bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 rounded-md font-mono cursor-help"
-                      title={activeTicket.aiSummary || "AI Triage Intent"}
-                    >
-                      {activeTicket.intent} Intent
-                    </span>
+                    {renderTierPill(activeLead)}
                   </div>
                 </div>
 
-                {/* Main Raw Chat Bubble Preview */}
-                <div className="p-4 space-y-3 bg-slate-950 flex-1">
+                {/* Main Content */}
+                <div className="p-4 space-y-3 flex-1">
                   <div>
-                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest font-mono">Last Customer Message</span>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest font-mono">Last Customer Message</span>
+                      {activeLead.hasAutoReply && activeLead.botRepliedAt && (
+                        <span 
+                          className="text-[9px] font-mono" 
+                          style={{ color: "var(--signal)" }}
+                        >
+                          Bot replied {timeAgo(activeLead.botRepliedAt)}
+                        </span>
+                      )}
+                    </div>
                     <blockquote className="p-3 bg-slate-900/60 rounded-xl border border-slate-800/60 font-mono text-xs text-slate-350 italic mt-1 leading-relaxed relative text-left">
-                      "{activeTicket.lastContent}"
+                      "{activeLead.lastMessage || "No messages yet"}"
                     </blockquote>
                   </div>
 
-                  {/* AI Extracted Structural Entities */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                    
-                    <div className="p-3 bg-slate-900/20 border border-slate-900 rounded-xl">
-                      <span className="text-[8.5px] font-black text-slate-500 uppercase tracking-widest font-mono block mb-1">Extracted Line Items</span>
-                      <div className="space-y-1 mt-1.5">
-                        {activeTicket.extractedItems.length === 0 ? (
-                           <div className="text-[10px] text-slate-600 font-mono">No items detected</div>
-                        ) : activeTicket.extractedItems.map((item, idx) => (
-                          <div key={idx} className="flex justify-between items-center text-[11px]">
-                            <span className="font-bold text-slate-300">{item.qty}x {item.name}</span>
-                            <span className="font-mono text-cyan-400">₹{item.price * item.qty}</span>
-                          </div>
-                        ))}
-                        <div className="border-t border-slate-900 pt-1.5 flex justify-between items-center text-xs font-black text-slate-205 mt-1.5 font-mono">
-                          <span>Total AI Value</span>
-                          <span className="text-cyan-400">₹{activeTicket.estimatedValue}</span>
-                        </div>
-                      </div>
+                  {/* Amount display if pendingOrderAmount > 0 */}
+                  {activeLead.pendingOrderAmount !== null && activeLead.pendingOrderAmount > 0 && (
+                    <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800/60 text-center">
+                      <span className="text-[10px] text-slate-500 font-mono uppercase">Pending Order</span>
+                      <p className="text-4xl font-black text-cyan-400 font-mono mt-1">₹{activeLead.pendingOrderAmount.toLocaleString("en-IN")}</p>
                     </div>
-
-                    <div className="p-3 bg-slate-900/20 border border-slate-900 rounded-xl space-y-2">
-                      <span className="text-[8.5px] font-black text-slate-500 uppercase tracking-widest font-mono block">Bharat-Address parsing</span>
-                      
-                      <div className="space-y-1 text-[11px] font-mono">
-                        <div className="flex justify-between items-start">
-                          <span className="text-slate-500">Region:</span>
-                          <span className="text-slate-300 text-right">{activeTicket.addressDetails.city}, {activeTicket.addressDetails.state || "Unspecified"}</span>
-                        </div>
-                        <div className="flex justify-between items-start">
-                          <span className="text-slate-500">Pincode:</span>
-                          <span className={`font-black ${activeTicket.addressDetails.pincode ? "text-cyan-400" : "text-rose-400"}`}>
-                            {activeTicket.addressDetails.pincode || "❌ Missing"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
+                  )}
                 </div>
 
                 {/* Bottom Swipe Controls */}
                 <div className="p-4 border-t border-slate-900 bg-slate-900/40 grid grid-cols-2 gap-3">
                   <button
-                    onClick={() => handleReject("User Skip")}
+                    onClick={handleSkip}
                     className="py-3 bg-rose-955 hover:bg-rose-950 font-black uppercase tracking-widest text-[10px] text-rose-400 border border-rose-900 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-95"
                   >
                     <X className="h-4 w-4" /> Skip / Spam
@@ -322,7 +338,8 @@ export function StreamTriage() {
 
                   <button
                     onClick={handleClaim}
-                    className="py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest text-[10px] rounded-xl cursor-pointer shadow-lg shadow-indigo-600/15 transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                    disabled={!activeLead.conversationId}
+                    className="py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest text-[10px] rounded-xl cursor-pointer shadow-lg shadow-indigo-600/15 transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <UserPlus className="h-4 w-4 stroke-[3]" /> Claim Conversation
                   </button>
@@ -332,38 +349,94 @@ export function StreamTriage() {
           </AnimatePresence>
         </div>
 
-        <div className="space-y-4">
-          <div className="p-4 bg-slate-950 border border-slate-905 rounded-2xl bg-gradient-to-br from-slate-950 to-slate-900 relative overflow-hidden">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest font-mono block">Indian MSME Scoreboard</span>
-            <div className="mt-3.5 flex justify-between items-baseline">
-              <div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Today's Triage Volume</p>
-                <p className="text-2xl font-black text-emerald-400 font-mono mt-0.5">₹{approvedRevenue.toLocaleString("en-IN")}</p>
-              </div>
-
-              <div className="text-right">
-                <span className="text-[10px] bg-emerald-950 text-emerald-400 font-black px-2 py-0.5 rounded border border-emerald-800 uppercase font-mono">
-                  {approvedCount} Orders
-                </span>
-              </div>
+        {/* RIGHT - Queue Panel */}
+        <div className={`rounded-2xl ${glassStyles}`}>
+          <div className="p-4 space-y-4">
+            
+            {/* CLAIM NOW Section */}
+            <div>
+              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest font-mono mb-2">
+                CLAIM NOW ({claimNowLeads.length})
+              </h3>
+              {claimNowLeads.length === 0 ? (
+                <div className="text-[11px] text-slate-600 font-mono p-3">No conversations in this tier</div>
+              ) : (
+                claimNowLeads.map(lead => (
+                  <button
+                    key={lead.id}
+                    onClick={() => handleRowClick(lead.id)}
+                    className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-800/40 bg-transparent hover:bg-[rgba(255,255,255,0.04)] transition-all cursor-pointer text-left"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-slate-300 truncate">{lead.name || lead.contact}</p>
+                      <p className="text-[9px] text-slate-500 font-mono mt-0.5">
+                        {lead.lastActiveAt ? timeAgo(lead.lastActiveAt) : "No activity"}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono text-cyan-400 shrink-0 ml-2">
+                      ₹{lead.pendingOrderAmount?.toLocaleString("en-IN") || "0"}
+                    </span>
+                  </button>
+                ))
+              )}
             </div>
 
-            <div className="space-y-1.5 mt-4">
-              <div className="flex justify-between items-center text-[10px] font-mono">
-                <span className="text-slate-400">Daily Revenue Target</span>
-                <span className="font-bold text-slate-200">{revenueProgress.toFixed(0)}% Completed</span>
-              </div>
-              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-emerald-400 rounded-full transition-all duration-550"
-                  style={{ width: `${revenueProgress}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[9px] text-slate-500 font-mono">
-                <span>Completed: ₹{approvedRevenue.toLocaleString("en-IN")}</span>
-                <span>Target: Target: ₹{dailyTarget.toLocaleString("en-IN")}</span>
-              </div>
+            {/* FOLLOW UP Section */}
+            <div>
+              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest font-mono mb-2">
+                FOLLOW UP ({followUpLeads.length})
+              </h3>
+              {followUpLeads.length === 0 ? (
+                <div className="text-[11px] text-slate-600 font-mono p-3">No conversations in this tier</div>
+              ) : (
+                followUpLeads.map(lead => (
+                  <button
+                    key={lead.id}
+                    onClick={() => handleRowClick(lead.id)}
+                    className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-800/40 bg-transparent hover:bg-[rgba(255,255,255,0.04)] transition-all cursor-pointer text-left"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-slate-300 truncate">{lead.name || lead.contact}</p>
+                      <p className="text-[9px] text-slate-500 font-mono mt-0.5">
+                        {lead.lastActiveAt ? timeAgo(lead.lastActiveAt) : "No activity"}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500 shrink-0 ml-2">
+                      {lead.hasAutoReply ? "Acknowledged" : ""}
+                    </span>
+                  </button>
+                ))
+              )}
             </div>
+
+            {/* BROWSING Section */}
+            <div>
+              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest font-mono mb-2">
+                BROWSING ({browsingLeads.length})
+              </h3>
+              {browsingLeads.length === 0 ? (
+                <div className="text-[11px] text-slate-600 font-mono p-3">No conversations in this tier</div>
+              ) : (
+                browsingLeads.map(lead => (
+                  <button
+                    key={lead.id}
+                    onClick={() => handleRowClick(lead.id)}
+                    className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-800/40 bg-transparent hover:bg-[rgba(255,255,255,0.04)] transition-all cursor-pointer text-left"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-slate-300 truncate">{lead.name || lead.contact}</p>
+                      <p className="text-[9px] text-slate-500 font-mono mt-0.5">
+                        {lead.lastActiveAt ? timeAgo(lead.lastActiveAt) : "No activity"}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500 shrink-0 ml-2">
+                      {lead.hasAutoReply ? "Acknowledged" : ""}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+
           </div>
         </div>
 

@@ -6,7 +6,8 @@ import { safeEmitConversationUpdate, emitToAgent, emitToCompany } from "../../li
 import { validateAndSanitizeCustomFields } from "../../utils/custom-fields.validator";
 import { applyDataSharingRules } from "../../lib/sharing.engine";
 import { asyncHandler } from "../../middleware/error.middleware";
-import { ConversationStatus } from "@prisma/client";
+import { ConversationStatus, MessageSender, Channel as PrismaChannel } from "@prisma/client";
+import { outboundDispatcherService } from "../../services/outbound.dispatcher";
 
 const router = Router();
 
@@ -53,8 +54,8 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
             },
             messages: {
               orderBy: { createdAt: "desc" },
-              take: 1,
-              select: { content: true }
+              take: 10,
+              select: { content: true, sender: true, createdAt: true }
             }
           },
           orderBy: { updatedAt: "desc" },
@@ -80,9 +81,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       
       const aiScore = lead.aiPriority === "HIGH" ? 95 : lead.aiPriority === "MEDIUM" ? 65 : 30; // Dummy static score for UI until UI uses enum directly
 
-      const daysSinceActive = lead.lastActiveAt
-        ? Math.floor((Date.now() - new Date(lead.lastActiveAt).getTime()) / 86400000)
-        : 999;
+      const daysSinceActive = lead.lastActiveAt ? Math.floor((Date.now() - new Date(lead.lastActiveAt).getTime()) / 86400000) : 999;
 
       // Suggested action — ordered from highest to lowest priority
       let suggestedAction = "Monitor";
@@ -96,7 +95,26 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       else if (lead.segment === "NEW") suggestedAction = "Qualify lead";
       else if (conversation?.intent === "COMPLAINT") suggestedAction = "Resolve issue";
 
-      const agentName = conversation?.assignedTo ? `${conversation.assignedTo.firstName} ${conversation.assignedTo.lastName || ""}`.trim() : null;
+      const agentName = conversation?.claimedBy ? `${conversation.claimedBy.firstName} ${conversation.claimedBy.lastName || ""}`.trim() : null;
+
+      // Get all messages for this conversation
+      const allMessages = conversation?.messages || [];
+      
+      // Find the most recent message that is NOT from SYSTEM (true last customer message)
+      const lastCustomerMessage = allMessages.find((m: any) => m.sender !== "SYSTEM");
+      
+      // Check if most recent message overall is from SYSTEM (hasAutoReply)
+      const mostRecent = allMessages[0];
+      const hasAutoReply = mostRecent?.sender === "SYSTEM";
+      
+      // botRepliedAt: timestamp of most recent SYSTEM message if hasAutoReply is true
+      let botRepliedAt: string | null = null;
+      if (hasAutoReply) {
+        const lastSystemMessage = allMessages.find((m: any) => m.sender === "SYSTEM");
+        if (lastSystemMessage) {
+          botRepliedAt = lastSystemMessage.createdAt.toISOString();
+        }
+      }
 
       return {
         id: lead.id,
@@ -112,13 +130,13 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         segment: lead.segment,
 
         conversationId: conversation?.id || null,
-        lastMessage: conversation?.messages[0]?.content || "",
+        lastMessage: lastCustomerMessage?.content || "",
         sentimentScore: conversation?.sentimentScore || 0,
         intent: conversation?.intent || "BROWSING",
 
         // Multi-Agent Data
         status: conversation?.status || ConversationStatus.OPEN,
-        assignedTo: conversation?.assignedTo || null,
+        assignedTo: conversation?.claimedBy || null,
 
         priority,
         agentAssigned: agentName,
@@ -145,6 +163,8 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         aiScore,
         suggestedAction,
         daysSinceActive,
+        hasAutoReply,
+        botRepliedAt,
       };
     });
 
@@ -391,8 +411,8 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
         conversations: {
           select: {
             id: true,
-            assignedToId: true,
-            assignedTo: {
+            claimedById: true,
+            claimedBy: {
               select: { id: true, firstName: true, lastName: true }
             }
           },
@@ -504,6 +524,115 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
 });
 
 /* =========================================
+   POST /api/leads/:id/assign
+   General-purpose assign conversation to current agent
+   For Follow Up and Browsing tier claims
+========================================= */
+router.post("/:id/assign", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId, companyId, role } = req.user!;
+    const { id } = req.params;
+
+    // Only agents can assign conversations
+    if (!["STAFF", "MANAGER", "OWNER"].includes(role)) {
+      return res.status(403).json({ message: "Only agents can assign conversations" });
+    }
+
+    // Find the lead with its conversation
+    const lead = await (prisma.lead as any).findFirst({
+      where: { id, companyId },
+      include: {
+        conversations: {
+          select: {
+            id: true,
+            claimedById: true,
+            status: true,
+            claimedBy: {
+              select: { id: true, firstName: true, lastName: true }
+            }
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 1
+        }
+      }
+    });
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    const conversation = lead.conversations[0];
+    if (!conversation) {
+      return res.status(404).json({ message: "No conversation found for this lead" });
+    }
+
+    // Atomically update the conversation - only succeeds if still unclaimed
+    const updateResult = await prisma.conversation.updateMany({
+      where: {
+        id: conversation.id,
+        companyId,
+        claimedById: null, // lock condition: only succeed if genuinely unclaimed
+        status: { not: 'RESOLVED' } // only assign open conversations
+      },
+      data: {
+        claimedById: userId,
+        status: "ASSIGNED",
+        updatedAt: new Date()
+      }
+    });
+
+    if (updateResult.count === 0) {
+      // Check if already claimed by this agent
+      if (conversation.claimedById === userId) {
+        // Return existing lead for idempotency
+        const formattedLead = {
+          id: lead.id,
+          name: lead.name || "Customer",
+          contact: lead.contact,
+          channel: lead.channel,
+          conversationId: conversation.id,
+          status: conversation.status,
+          assignedTo: conversation.claimedBy,
+        };
+        return res.json(formattedLead);
+      }
+      return res.status(409).json({ message: "This conversation was already claimed by another agent." });
+    }
+
+    // Get agent name
+    const agent = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true }
+    });
+    const agentName = agent ? `${agent.firstName} ${agent.lastName || ""}`.trim() : "Agent";
+
+    // Emit socket events
+    safeEmitConversationUpdate(conversation, "conversation_assigned", {
+      conversationId: conversation.id,
+      assignedTo: { id: userId, name: agentName }
+    });
+    emitToCompany(companyId, "lead_updated", {
+      leadId: lead.id,
+      assignedTo: userId,
+      status: "ASSIGNED"
+    });
+
+    return res.json({
+      id: lead.id,
+      name: lead.name || "Customer",
+      contact: lead.contact,
+      channel: lead.channel,
+      conversationId: conversation.id,
+      status: "ASSIGNED",
+      assignedTo: { id: userId, firstName: agent.firstName, lastName: agent.lastName || "" }
+    });
+  } catch (error: any) {
+    console.error("Assign conversation error:", error);
+    res.status(500).json({ message: "Failed to assign conversation" });
+  }
+});
+
+/* =========================================
    DELETE /api/leads/:id
    Delete a lead (ADMIN/OWNER only)
 ========================================= */
@@ -577,20 +706,70 @@ router.post("/bulk-assign", authMiddleware, async (req: AuthRequest, res: Respon
       return res.status(400).json({ message: "Invalid IDs provided" });
     }
 
-    // Update conversations for these leads to match the assignment
-    await prisma.conversation.updateMany({
-      where: {
-        leadId: { in: ids },
-        companyId
-      },
-      data: {
-        claimedById: assignedToId,
-        status: "ASSIGNED",
-        updatedAt: new Date()
-      }
-    });
+    // Atomically update each conversation — only succeeds if still unclaimed (prevents double-claim races)
+    const claimResults = [];
+    const alreadyClaimed = [];
+    for (const leadId of ids) {
+      // Same proven pattern as pending-order claim route (leads.routes.ts ~L362-386)
+      const updateResult = await prisma.conversation.updateMany({
+        where: {
+          leadId,
+          companyId,
+          claimedById: null // lock condition: only succeed if genuinely unclaimed
+        },
+        data: {
+          claimedById: assignedToId,
+          status: "ASSIGNED",
+          updatedAt: new Date()
+        }
+      });
 
-    res.json({ message: `Successfully assigned ${ids.length} leads` });
+      if (updateResult.count === 0) {
+        alreadyClaimed.push(leadId);
+      } else {
+        claimResults.push(leadId);
+      }
+    }
+
+    if (alreadyClaimed.length > 0) {
+      return res.status(409).json({
+        message: alreadyClaimed.length === 1
+          ? "This conversation was just claimed by someone else."
+          : `${alreadyClaimed.length} conversation(s) were just claimed by someone else.`,
+        claimed: claimResults,
+        alreadyClaimed
+      });
+    }
+
+    res.json({ message: `Successfully assigned ${ids.length} leads`, assignedIds: claimResults });
+
+    // Success — return assigned list and notify the rest of the company live
+    try {
+      const assignedLeads = await (prisma.lead as any).findMany({
+        where: { id: { in: claimResults }, companyId },
+        select: { id: true, name: true, contact: true, channel: true, lastActiveAt: true },
+      });
+      const conversations = await (prisma.conversation as any).findMany({
+        where: { leadId: { in: claimResults }, companyId },
+        select: { id: true, status: true, claimedById: true },
+      });
+      emitToCompany(companyId, "lead_claimed", {
+        leadIds: claimResults,
+        assignedTo: assignedToId,
+        timestamp: new Date().toISOString(),
+        leads: assignedLeads.map((l: any) => {
+          const conv = conversations.find((c: any) => c.leadId === l.id);
+          return {
+            id: l.id, name: l.name || l.contact || "Customer", contact: l.contact,
+            channel: l.channel, lastActiveAt: l.lastActiveAt,
+            conversationId: conv?.id || null, status: conv?.status || "ASSIGNED",
+            claimedById: conv?.claimedById || assignedToId,
+          };
+        }),
+      });
+    } catch (emitErr) {
+      console.error("Failed to emit lead_claimed event:", emitErr);
+    }
   } catch (error) {
     console.error("Bulk assign error:", error);
     res.status(500).json({ message: "Failed to perform bulk assignment" });
@@ -723,6 +902,223 @@ router.post("/bulk-segment", authMiddleware, async (req: AuthRequest, res: Respo
   } catch (error) {
     console.error("Bulk segment error:", error);
     res.status(500).json({ message: "Failed to update bulk segment" });
+  }
+});
+
+/* =========================================
+   GET /api/leads/:id/messages
+   Returns full message history for a lead's conversation
+   Multi-tenant safe — verifies lead belongs to req.user's company
+
+   Conversation status can be: OPEN | ASSIGNED | RESOLVED | SNOOZED
+
+   Response schema:
+   {
+     leadId: string,
+     conversationId: string,
+     status: "OPEN" | "ASSIGNED" | "RESOLVED" | "SNOOZED",
+     messages: Array<{
+       id: string,
+       content: string,
+       sender: "CLIENT" | "AGENT" | "SYSTEM",
+       senderName: string | null,
+       platform: "WEBSITE" | "TELEGRAM" | "WHATSAPP" | "INSTAGRAM" | null,
+       messageType: string,
+       deliveryStatus: "SENT" | "FAILED" | null,
+       isRead: boolean,
+       createdAt: DateTime
+     }>
+   }
+========================================= */
+router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { companyId } = req.user!;
+
+    // 1. Find the lead with multi-tenant safety, include conversation + contact info
+    const lead = await prisma.lead.findFirst({
+      where: { id: req.params.id, companyId },
+      select: { id: true, conversations: { select: { id: true, status: true, claimedById: true }, take: 1, orderBy: { updatedAt: "desc" } } }
+    });
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    const conversation = lead.conversations[0];
+    if (!conversation) {
+      return res.status(404).json({ message: "No conversation found for this lead" });
+    }
+
+    // 2. Fetch all messages for this conversation, oldest first
+    const messages = await prisma.message.findMany({
+      where: { conversationId: conversation.id },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        content: true,
+        sender: true,
+        senderName: true,
+        platform: true,
+        messageType: true,
+        deliveryStatus: true,
+        deliveryError: true,
+        isRead: true,
+        createdAt: true,
+      },
+    });
+
+    return res.json({
+      leadId: lead.id,
+      conversationId: conversation.id,
+      status: conversation.status,
+      messages,
+    });
+  } catch (error) {
+    console.error("Fetch messages error:", error);
+    return res.status(500).json({ message: "Failed to fetch messages" });
+  }
+});
+
+/* =========================================
+   POST /api/leads/:id/reply
+   Send an agent reply to a customer conversation
+   Multi-tenant safe — verifies lead + conversation ownership
+========================================= */
+router.post("/:id/reply", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { companyId, userId } = req.user!;
+    const { id } = req.params;
+    const { content, clientMessageId } = req.body;
+
+    if (!content || typeof content !== "string" || content.trim() === "") {
+      return res.status(400).json({ message: "Message content is required" });
+    }
+
+    // 1. Find the lead with multi-tenant safety, include conversation + contact info
+    const lead = await prisma.lead.findFirst({
+      where: { id, companyId },
+      select: {
+        id: true,
+        contact: true,
+        channel: true,
+        conversations: {
+          select: { id: true, status: true, claimedById: true },
+          take: 1,
+          orderBy: { updatedAt: "desc" }
+        }
+      }
+    });
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    const conversation = lead.conversations[0];
+    if (!conversation) {
+      return res.status(404).json({ message: "No conversation found for this lead" });
+    }
+
+    // 2. Verify this agent has this conversation claimed
+    if (conversation.claimedById !== userId) {
+      return res.status(403).json({ message: "You can only reply to conversations you have claimed" });
+    }
+
+    // 3. Map Prisma Channel enum to OutboundPayload ChannelType
+    const channelMap: Record<string, "TELEGRAM" | "WHATSAPP" | "INSTAGRAM"> = {
+      TELEGRAM: "TELEGRAM",
+      WHATSAPP: "WHATSAPP",
+      INSTAGRAM: "INSTAGRAM",
+    };
+
+    const channelType = channelMap[lead.channel];
+    if (!channelType) {
+      return res.status(400).json({ message: `Unsupported channel: ${lead.channel}` });
+    }
+
+    if (!lead.contact) {
+      return res.status(400).json({ message: "Customer has no contact identifier for this channel" });
+    }
+
+    // 4a. Idempotency check: if clientMessageId provided, return existing Message row if found
+    if (clientMessageId) {
+      const existingMessage = await prisma.message.findFirst({
+        where: { conversationId: conversation.id, clientMessageId },
+        select: {
+          id: true, content: true, sender: true, senderName: true, senderId: true,
+          platform: true, messageType: true, deliveryStatus: true, deliveryError: true,
+          isRead: true, createdAt: true,
+        },
+      });
+      if (existingMessage) {
+        return res.json(existingMessage);
+      }
+    }
+
+    // 4b. Get agent name for the message
+    const agent = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true }
+    });
+    const agentName = agent ? `${agent.firstName} ${agent.lastName || ""}`.trim() : "Agent";
+
+    // 5. Dispatch the outbound message
+    let dispatchResult;
+    try {
+      dispatchResult = await outboundDispatcherService.dispatch({
+        companyId,
+        conversationId: conversation.id,
+        to: lead.contact,
+        channel: channelType,
+        content: { text: content },
+        sender: "AGENT",
+        senderName: agentName,
+        senderId: userId,
+        ...(clientMessageId ? { clientMessageId } : {}),
+      });
+    } catch (err: any) {
+      // Transport failure path: message was persisted with FAILED status
+      if (err?._deliveryStatus === "FAILED" && err?._messageId) {
+        // Persist the transport error on the Message row so it's retrievable later
+        prisma.message.update({
+          where: { id: err._messageId },
+          data: { deliveryError: err.errorMessage || null },
+        }).catch(e => console.error("Failed to persist deliveryError:", e.message));
+
+        return res.json({
+          id: err._messageId,
+          content,
+          sender: MessageSender.AGENT,
+          senderName: agentName,
+          senderId: userId,
+          platform: lead.channel as PrismaChannel,
+          messageType: "TEXT",
+          deliveryStatus: "FAILED",
+          deliveryError: err.errorMessage || null,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      // Total failure path (e.g. DB write never happened)
+      console.error("Agent reply total failure:", err);
+      return res.status(500).json({ message: err.message || "Failed to send reply" });
+    }
+
+    // 6. Return the sent message info so frontend can display it immediately
+    return res.json({
+      id: dispatchResult.messageId,
+      content,
+      sender: MessageSender.AGENT,
+      senderName: agentName,
+      senderId: userId,
+      platform: lead.channel as PrismaChannel,
+      messageType: "TEXT",
+      deliveryStatus: dispatchResult.deliveryStatus,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error("Agent reply error:", error);
+    return res.status(500).json({ message: error.message || "Failed to send reply" });
   }
 });
 
