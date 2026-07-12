@@ -65,7 +65,6 @@ const TIER_COLORS = {
 export function StreamTriage() {
   const [leads, setLeads] = useState<BackendLead[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
 
@@ -73,14 +72,13 @@ export function StreamTriage() {
   const fetchLeads = useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
       const res = await authedFetch("/api/leads?filter=unassigned");
       if (!res.ok) throw new Error("Failed to fetch leads");
       const data: BackendLead[] = await res.json();
       setLeads(data);
       setCurrentIndex(0);
     } catch (e: any) {
-      setError(e.message || "Failed to load leads");
+      toast.error(e.message || "Failed to load leads");
       setLeads([]);
     } finally {
       setLoading(false);

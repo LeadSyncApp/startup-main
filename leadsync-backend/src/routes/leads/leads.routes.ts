@@ -43,24 +43,25 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     const leads = await (prisma.lead as any).findMany({
       where: whereCondition,
       include: {
-        conversations: {
-          select: {
-            id: true,
-            updatedAt: true,
-            status: true,
-            claimedById: true,
-            claimedBy: {
-              select: { id: true, firstName: true, lastName: true }
+          conversations: {
+            select: {
+              id: true,
+              updatedAt: true,
+              status: true,
+              claimedById: true,
+              lastViewedAt: true,
+              claimedBy: {
+                select: { id: true, firstName: true, lastName: true }
+              },
+              messages: {
+                orderBy: { createdAt: "desc" },
+                take: 10,
+                select: { content: true, sender: true, createdAt: true }
+              }
             },
-            messages: {
-              orderBy: { createdAt: "desc" },
-              take: 10,
-              select: { content: true, sender: true, createdAt: true }
-            }
+            orderBy: { updatedAt: "desc" },
+            take: 50,
           },
-          orderBy: { updatedAt: "desc" },
-          take: 50,
-        },
       },
       orderBy: { lastActiveAt: "desc" },
       take: 50,
@@ -107,14 +108,19 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       const mostRecent = allMessages[0];
       const hasAutoReply = mostRecent?.sender === "SYSTEM";
       
-      // botRepliedAt: timestamp of most recent SYSTEM message if hasAutoReply is true
-      let botRepliedAt: string | null = null;
-      if (hasAutoReply) {
-        const lastSystemMessage = allMessages.find((m: any) => m.sender === "SYSTEM");
-        if (lastSystemMessage) {
-          botRepliedAt = lastSystemMessage.createdAt.toISOString();
-        }
-      }
+       // botRepliedAt: timestamp of most recent SYSTEM message if hasAutoReply is true
+       let botRepliedAt: string | null = null;
+       if (hasAutoReply) {
+         const lastSystemMessage = allMessages.find((m: any) => m.sender === "SYSTEM");
+         if (lastSystemMessage) {
+           botRepliedAt = lastSystemMessage.createdAt.toISOString();
+         }
+       }
+
+       // isUnread: true if lastActiveAt > lastViewedAt OR lastViewedAt is null
+       const isUnread = conversation?.lastViewedAt
+         ? new Date(lead.lastActiveAt) > new Date(conversation.lastViewedAt)
+         : true;
 
       return {
         id: lead.id,
@@ -159,13 +165,16 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         previousOrderCount: lead.orderCount,
         previousSpend: lead.totalSpend,
 
-        // AI Intelligence
-        aiScore,
-        suggestedAction,
-        daysSinceActive,
-        hasAutoReply,
-        botRepliedAt,
-      };
+         // AI Intelligence
+         aiScore,
+         suggestedAction,
+         daysSinceActive,
+         hasAutoReply,
+         botRepliedAt,
+
+         // 🆕 Unread indicator
+         isUnread,
+       };
     });
 
     res.json(formatted);
@@ -624,7 +633,7 @@ router.post("/:id/assign", authMiddleware, async (req: AuthRequest, res: Respons
       channel: lead.channel,
       conversationId: conversation.id,
       status: "ASSIGNED",
-      assignedTo: { id: userId, firstName: agent.firstName, lastName: agent.lastName || "" }
+      assignedTo: { id: userId, firstName: agent?.firstName || "", lastName: agent?.lastName || "" }
     });
   } catch (error: any) {
     console.error("Assign conversation error:", error);
