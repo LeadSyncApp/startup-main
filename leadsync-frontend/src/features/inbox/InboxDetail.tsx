@@ -22,6 +22,9 @@ export interface ConversationDetail {
   leadId: string;
   conversationId: string;
   status: string;
+  channel?: string;
+  mode?: "BOT" | "HUMAN";
+  resolvedBy?: string | null;
   messages: BackendMessage[];
 }
 
@@ -53,6 +56,8 @@ export function InboxDetail() {
   const clientMessageIdRef = useRef<string | null>(null);
   // Track the message content that's currently being retried (to show retry affordance)
   const [failedMessageContent, setFailedMessageContent] = useState<string | null>(null);
+  // Track conversation mode for AI/You toggle (AI = BOT mode, You = HUMAN mode)
+  const [mode, setMode] = useState<"AI" | "YOU">("AI");
 
   const fetchMessages = useCallback(async () => {
     if (!leadId) return;
@@ -82,6 +87,40 @@ export function InboxDetail() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [detail?.messages.length]);
+
+  // Sync mode state from backend
+  useEffect(() => {
+    if (!detail?.mode) return;
+    setMode(detail.mode === "HUMAN" ? "YOU" : "AI");
+  }, [detail?.mode]);
+
+  // Toggle conversation mode between AI (BOT) and You (HUMAN)
+  const handleModeToggle = async (newMode: "AI" | "YOU") => {
+    if (newMode === mode) return;
+    if (!leadId || !detail?.conversationId) return;
+    const previousMode = mode;
+    const apiMode = newMode === "AI" ? "BOT" : "HUMAN";
+
+    // Optimistic update
+    setMode(newMode);
+
+    try {
+      const res = await authedFetch(`/api/leads/${leadId}/mode`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: apiMode }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to change mode");
+      }
+      // Success - mode already updated optimistically
+    } catch (e: any) {
+      // Revert on error
+      setMode(previousMode);
+      toast.error("Could not switch mode: " + (e.message || "Unknown error"));
+    }
+  };
 
   const handleSend = async (retryMessage?: string) => {
     const textToSend = retryMessage !== undefined ? retryMessage : content.trim();
@@ -160,8 +199,9 @@ export function InboxDetail() {
 
   if (!detail) return null;
 
-  const ChannelIcon = CHANNEL_ICON[detail.status] || Globe;
-  const channelClass = CHANNEL_CLASS[detail.status] || CHANNEL_CLASS.WEBSITE;
+  // BUGFIX: Use detail.channel instead of detail.status for channel icon/class
+  const ChannelIcon = CHANNEL_ICON[detail.channel?.toUpperCase() || "WEBSITE"] || Globe;
+  const channelClass = CHANNEL_CLASS[detail.channel?.toUpperCase() || "WEBSITE"] || CHANNEL_CLASS.WEBSITE;
 
   const renderBubble = (msg: BackendMessage) => {
     const isClient = msg.sender === "CLIENT";
@@ -239,6 +279,29 @@ export function InboxDetail() {
           <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-wider font-mono ${channelClass}`}>
             <ChannelIcon className="h-3 w-3" />
             {detail.status}
+          </span>
+        </div>
+        {/* AI/You Mode Toggle Pill */}
+        <div className="flex items-center gap-1">
+          <span
+            onClick={() => handleModeToggle("AI")}
+            className={`text-[10px] font-black px-2 py-0.5 rounded-l-sm border border-r-0 cursor-pointer transition ${
+              mode === "AI"
+                ? "bg-teal-500/20 text-teal-300 border-teal-500/40"
+                : "bg-slate-800/50 text-slate-400 border-slate-700 hover:bg-slate-700"
+            }`}
+          >
+            AI
+          </span>
+          <span
+            onClick={() => handleModeToggle("YOU")}
+            className={`text-[10px] font-black px-2 py-0.5 rounded-r-sm border border-l-0 cursor-pointer transition ${
+              mode === "YOU"
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                : "bg-slate-800/50 text-slate-400 border-slate-700 hover:bg-slate-700"
+            }`}
+          >
+            You
           </span>
         </div>
       </div>
