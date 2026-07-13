@@ -8,6 +8,7 @@ import { applyDataSharingRules } from "../../lib/sharing.engine";
 import { asyncHandler } from "../../middleware/error.middleware";
 import { ConversationStatus, MessageSender, Channel as PrismaChannel } from "@prisma/client";
 import { outboundDispatcherService } from "../../services/outbound.dispatcher";
+import { escalateToHuman, resolveConversation } from "../../services";
 
 const router = Router();
 
@@ -639,6 +640,75 @@ router.post("/:id/assign", authMiddleware, async (req: AuthRequest, res: Respons
   } catch (error: any) {
     console.error("Assign conversation error:", error);
     res.status(500).json({ message: "Failed to assign conversation" });
+  }
+});
+
+/* =========================================
+   POST /api/leads/:id/mode
+   Staff-facing toggle of conversation AI/Human mode.
+   Body: { mode: "BOT" | "HUMAN", reason?: string }
+========================================= */
+router.post("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId, companyId, role } = req.user!;
+    const { id } = req.params;
+    const { mode, reason } = req.body as { mode?: string; reason?: string };
+
+    // Only agents can change conversation mode
+    if (!["STAFF", "MANAGER", "OWNER"].includes(role)) {
+      return res.status(403).json({ message: "Only agents can change conversation mode" });
+    }
+
+    // Validate mode
+    if (!mode || (mode !== "BOT" && mode !== "HUMAN")) {
+      return res.status(400).json({ message: "mode must be BOT or HUMAN" });
+    }
+
+    // Find the lead with its conversation (same shape as /assign)
+    const lead = await (prisma.lead as any).findFirst({
+      where: { id, companyId },
+      include: {
+        conversations: {
+          select: {
+            id: true,
+            claimedById: true,
+            status: true,
+            claimedBy: {
+              select: { id: true, firstName: true, lastName: true }
+            }
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 1
+        }
+      }
+    });
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    const conversation = lead.conversations[0];
+    if (!conversation) {
+      return res.status(404).json({ message: "No conversation found for this lead" });
+    }
+
+    const conversationId = conversation.id;
+
+    if (mode === "HUMAN") {
+      await escalateToHuman(
+        conversationId,
+        userId,
+        reason || "Manually switched to Human by staff"
+      );
+      return res.json({ conversationId, mode, resolvedBy: null });
+    }
+
+    // mode === "BOT"
+    await resolveConversation(conversationId, "AI");
+    return res.json({ conversationId, mode, resolvedBy: "AI" });
+  } catch (error: any) {
+    console.error("Change conversation mode error:", error);
+    res.status(500).json({ message: "Failed to change conversation mode" });
   }
 });
 

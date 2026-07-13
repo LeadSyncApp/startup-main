@@ -100,6 +100,7 @@ export async function findLeastLoadedStaff(
  */
 export async function escalateToHuman(
   conversationId: string,
+  callerId: string,
   reason: string,
   io?: SocketIOServer
 ): Promise<void> {
@@ -119,46 +120,32 @@ export async function escalateToHuman(
     return;
   }
 
-  // 3. Find least-loaded staff
-  const assignee = await findLeastLoadedStaff(conversation.companyId);
-
-  // 4. Build full name
-  const fullName = assignee
-    ? [assignee.firstName, assignee.lastName].filter(Boolean).join(" ")
-    : null;
-
-  // 5. Decide claim fields:
-  //    - If assignee found: set new claim
-  //    - If no assignee AND conversation already has claimedById: preserve existing claim
-  //    - If no assignee AND claimedById is null: clear claim fields (original spec)
-  const hadExistingClaim = !assignee && conversation.claimedById;
-  if (hadExistingClaim) {
-    console.log(
-      `[assignment] WARNING: escalateToHuman called on ${conversationId} ` +
-        `which already had claimedById=${conversation.claimedById} — ` +
-        `no online staff found, preserving existing claim instead of clearing it`
-    );
+  // 2b. If already self-assigned to this caller, nothing to do
+  if (conversation.claimedById === callerId) {
+    console.log(`[assignment] ${conversationId} already claimed by ${callerId}, skipping`);
+    return;
   }
 
+  // 3. Fetch calling user's name
+  const caller = await prisma.user.findUnique({
+    where: { id: callerId },
+    select: { firstName: true, lastName: true },
+  });
+  const fullName = caller
+    ? [caller.firstName, caller.lastName].filter(Boolean).join(" ")
+    : null;
+
+  // 4. Self-assign to the calling staff member unconditionally
   const updateData: Prisma.ConversationUncheckedUpdateInput = {
     mode: ConversationMode.HUMAN,
     status: ConversationStatus.ASSIGNED,
     needsStaffReason: reason,
+    claimedById: callerId,
+    claimedByName: fullName,
+    claimedAt: new Date(),
+    claimExpiresAt: null,
     updatedAt: new Date(),
   };
-  if (assignee) {
-    updateData.claimedById = assignee.id;
-    updateData.claimedByName = fullName;
-    updateData.claimedAt = new Date();
-    updateData.claimExpiresAt = null;
-  } else if (!conversation.claimedById) {
-    // No assignee and no prior claim — clear all four
-    updateData.claimedById = null;
-    updateData.claimedByName = null;
-    updateData.claimedAt = null;
-    updateData.claimExpiresAt = null;
-  }
-  // else: no assignee but prior claim exists — preserve all four by omitting them
 
   const updated = await prisma.conversation.update({
     where: { id: conversationId },
@@ -172,7 +159,7 @@ export async function escalateToHuman(
     },
   });
 
-  // 6. Emit socket event
+  // 5. Emit socket event
   const eventPayload = {
     conversationId: updated.id,
     reason,
@@ -184,7 +171,7 @@ export async function escalateToHuman(
   safeEmitConversationUpdate(updated, "conversation.escalated", eventPayload);
 
   console.log(
-    `[assignment] escalated ${conversationId} → ${fullName ?? "unassigned"} (reason: ${reason})`
+    `[assignment] ${conversationId} self-assigned to ${fullName ?? "unassigned"} (reason: ${reason})`
   );
 }
 
@@ -199,6 +186,7 @@ export async function escalateToHuman(
  */
 export async function resolveConversation(
   conversationId: string,
+  resolvedBy: string,
   io?: SocketIOServer
 ): Promise<void> {
   // 1. Fetch conversation
@@ -223,6 +211,7 @@ export async function resolveConversation(
       claimExpiresAt: null,
       lastClaimHeartbeat: null,
       needsStaffReason: null,
+      resolvedBy,
       updatedAt: new Date(),
     },
     select: {
@@ -236,7 +225,8 @@ export async function resolveConversation(
   safeEmitConversationUpdate(updated, "conversation.resolved", {
     conversationId: updated.id,
     companyId: updated.companyId,
+    resolvedBy,
   });
 
-  console.log(`[assignment] resolved ${conversationId} → back to BOT`);
+  console.log(`[assignment] resolved ${conversationId} → back to BOT (resolvedBy: ${resolvedBy})`);
 }
