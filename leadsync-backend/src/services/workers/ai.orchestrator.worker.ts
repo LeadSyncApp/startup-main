@@ -438,16 +438,11 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
         await tx.lead.update({ where: { id: lead.id }, data: { aiPriority: priority === "URGENT" ? "HIGH" : priority === "HIGH" ? "MEDIUM" : "LOW" } });
 
-        // If escalation is needed, set mode + reason + assignment atomically
-        // HARD-LOCK vs NOTIFY-ONLY classification:
-        // - order_confirm (isHardLockEscalation=true): Sets mode=HUMAN, permanently silences AI
-        // - manual_request/complaint/support (isHardLockEscalation=false): Only sets needsStaffReason, AI continues
+        // If escalation is needed, set reason + assignment atomically
+        // All escalations (order_confirm, manual_request, complaint, support) only set needsStaffReason
+        // - mode stays BOT unless staff explicitly changes it
         const convoUpdateData: any = { updatedAt: new Date() };
         if (escalationReason) {
-          // Only set mode=HUMAN for hard-lock escalations (order/billing)
-          if (isHardLockEscalation) {
-            convoUpdateData.mode = "HUMAN";
-          }
           convoUpdateData.needsStaffReason = escalationReason;
 
           // Try to find and assign the least-loaded staff member
