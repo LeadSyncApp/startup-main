@@ -101,17 +101,17 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       // Get all messages for this conversation
       const allMessages = conversation?.messages || [];
       
-      // Find the most recent message that is NOT from SYSTEM (true last customer message)
-      const lastCustomerMessage = allMessages.find((m: any) => m.sender !== "SYSTEM");
-      
-      // Check if most recent message overall is from SYSTEM (hasAutoReply)
-      const mostRecent = allMessages[0];
-      const hasAutoReply = mostRecent?.sender === "SYSTEM";
+       // Find the most recent message that is NOT from SYSTEM (true last customer message)
+       const lastCustomerMessage = allMessages.find((m: any) => m.sender !== "SYSTEM" && m.sender !== "BOT");
+       
+       // Check if most recent message overall is from SYSTEM (hasAutoReply)
+       const mostRecent = allMessages[0];
+       const hasAutoReply = mostRecent?.sender === "SYSTEM" || mostRecent?.sender === "BOT";
       
        // botRepliedAt: timestamp of most recent SYSTEM message if hasAutoReply is true
        let botRepliedAt: string | null = null;
        if (hasAutoReply) {
-         const lastSystemMessage = allMessages.find((m: any) => m.sender === "SYSTEM");
+         const lastSystemMessage = allMessages.find((m: any) => m.sender === "SYSTEM" || m.sender === "BOT");
          if (lastSystemMessage) {
            botRepliedAt = lastSystemMessage.createdAt.toISOString();
          }
@@ -137,6 +137,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 
         conversationId: conversation?.id || null,
         lastMessage: lastCustomerMessage?.content || "",
+        lastMessageSender: mostRecent?.sender || null,
         sentimentScore: conversation?.sentimentScore || 0,
         intent: conversation?.intent || "BROWSING",
 
