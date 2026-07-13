@@ -425,8 +425,37 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
 
     // ============================================================
 
-    await Promise.all([
-      outboundDispatcherService.sendMessageFrame(frame.channel as any, frame.externalChatId, conversation.id, { bodyText: replyText, interactivePayload: tool_call ? JSON.parse(JSON.stringify(tool_call)) : null }, "BOT"),
+    // 🛡️ PRE-SEND GUARD: re-fetch conversation.mode fresh from the database.
+    // The mode gate at the top of the BOT path (≈line 219) used a value loaded
+    // earlier in the pipeline (and the mid-pipeline reload selects only id/
+    // companyId/claimedById, NOT mode). If staff toggled this conversation to
+    // HUMAN between that gate and now, we must NOT dispatch the already-
+    // drafted AI reply to the customer. Abort silently (log only, no throw)
+    // and persist no message row for the aborted AI reply.
+    // CRITICAL: The customer message persistence and conversation updates below
+    // ALWAYS run — the guard only conditionally skips the outbound sendMessageFrame.
+    const preSendConv = await (prisma.conversation as any).findUnique({
+      where: { id: conversation.id },
+      select: { mode: true },
+    });
+    const modeIsBot = !!preSendConv && (preSendConv as any).mode === "BOT";
+
+    // Build the promises array - customer message persistence ALWAYS runs
+    const promisesToRun: Promise<any>[] = [];
+
+    // Add the outbound dispatcher ONLY if mode is still BOT
+    if (modeIsBot) {
+      promisesToRun.push(
+        outboundDispatcherService.sendMessageFrame(frame.channel as any, frame.externalChatId, conversation.id, { bodyText: replyText, interactivePayload: tool_call ? JSON.parse(JSON.stringify(tool_call)) : null }, "BOT")
+      );
+    } else {
+      console.log(
+        `🛡️ [Orchestrator] Conversation ${conversation.id} mode is "${(preSendConv as any)?.mode}" at send time — aborting AI reply dispatch (no message persisted).`
+      );
+    }
+
+    // Customer message persistence and conversation updates ALWAYS run
+    promisesToRun.push(
       ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
         const clientMsg = await tx.message.create({
           data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
@@ -460,7 +489,9 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
           data: convoUpdateData,
         });
       })
-    ]);
+    );
+
+    await Promise.all(promisesToRun);
 
     // If escalation was triggered, emit events outside the lock
     if (escalationReason) {
