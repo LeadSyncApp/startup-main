@@ -183,33 +183,8 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       lead = localLead;
     });
 
-    // 🔌 SHORT-CIRCUIT: Platform-native commands should not trigger AI/rules/escalation.
-    // Let triggerLeadWelcome still fire for lead creation, but skip processing.
-    // This prevents Telegram commands like /start from falsely triggering order_confirm escalation.
-    if (frame.isPlatformCommand) {
-      console.log(`[Orchestrator] Ignoring platform-native command: ${frame.rawPayload?.message?.text || "unknown"}`);
-      // For EXISTING leads, send a brief "Welcome back!" reply to avoid silence.
-      // (New leads already get triggerLeadWelcome in the !localConversation branch above.)
-      const isExistingLead = existingLead !== null;
-      if (isExistingLead) {
-        await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
-          // Persist the platform command as CLIENT message for context
-          await tx.message.create({
-            data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
-          });
-        });
-        // Send welcome-back reply via outbound dispatcher (handles its own transaction + SYSTEM message)
-        await outboundDispatcherService.dispatch({
-          companyId,
-          conversationId: conversation.id,
-          to: lead.contact,
-          channel: channel === Channel.TELEGRAM ? "TELEGRAM" : "WHATSAPP",
-          content: { text: "Welcome back! How can I help you today?" },
-          sender: "SYSTEM"
-        });
-      }
-      return { skipped: true, reason: "PLATFORM_NATIVE_COMMAND" };
-    }
+    // Note: Platform-native command handling was removed — no StandardMessageFrame
+    // construction site ever populated isPlatformCommand/rawPayload.
 
     const processingText = frame.isCallback ? (frame.callbackData || "") : frame.text;
 
