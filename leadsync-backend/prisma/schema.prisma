@@ -326,6 +326,7 @@ model Conversation {
   status                               ConversationStatus  @default(OPEN)
   summary                              String?
   claimedById                          String?
+  resolvedBy                           String?
   claimExpiresAt                       DateTime?
   lastClaimHeartbeat                   DateTime?
   lastViewedAt                         DateTime?
