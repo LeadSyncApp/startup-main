@@ -1017,7 +1017,7 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
     // 1. Find the lead with multi-tenant safety, include conversation + contact info
     const lead = await prisma.lead.findFirst({
       where: { id: req.params.id, companyId },
-      select: { id: true, conversations: { select: { id: true, status: true, claimedById: true }, take: 1, orderBy: { updatedAt: "desc" } } }
+      select: { id: true, channel: true, conversations: { select: { id: true, status: true, claimedById: true, mode: true, resolvedBy: true }, take: 1, orderBy: { updatedAt: "desc" } } }
     });
 
     if (!lead) {
@@ -1051,6 +1051,9 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
       leadId: lead.id,
       conversationId: conversation.id,
       status: conversation.status,
+      mode: conversation.mode,
+      resolvedBy: conversation.resolvedBy,
+      channel: lead.channel,
       messages,
     });
   } catch (error) {
