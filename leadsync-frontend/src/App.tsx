@@ -3,21 +3,27 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Zap, MessageSquare, ShoppingBag, Store } from "lucide-react";
 import { useNavigate, useLocation, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./features/auth-tenancy/AuthContext";
-import { Toaster } from "react-hot-toast";
+import { Toaster, toast } from "react-hot-toast";
 import { MasterDashboardLayout, TabID } from "./components/layouts/MasterDashboardLayout";
 import { OnboardingWizard } from "./components/onboarding/OnboardingWizard";
 import { SignInForm } from "./components/auth/SignInForm";
 import { SimulationController } from "./simulation/SimulationController";
+import { connectSocket, disconnectSocket, onNotification } from "./lib/socketClient";
+import { useNotificationStore } from "./features/notifications/useNotificationStore";
 
 import { AutoRepliesPage } from "./features/configurations/AutoRepliesPage";
 import { CustomerList } from "./features/audience-crm/CustomerList";
 import { BroadcastEngine } from "./features/broadcast/BroadcastEngine";
 import { OrderFulfillmentBoard } from "./features/orders/OrderFulfillmentBoard";
+import { StreamTriage } from "./features/stream-triage/StreamTriage";
+import InboxList from "./features/inbox/InboxList";
+import InboxDetail from "./features/inbox/InboxDetail";
+import { InventoryPage } from "./features/inventory/InventoryPage";
 import { DailyCollectionStats } from "./features/dashboard/DailyCollectionStats";
 import { DailyPulseAdaptiveWidget } from "./features/dashboard/DailyPulseAdaptiveWidget";
 import { ConfigurationsPage } from "./features/configurations/ConfigurationsPage";
 import { AcceptInvitePage } from "./features/team/AcceptInvitePage";
-import { activityToast as toast } from "./features/activity-ledger/useActivityStore";
+import { activityToast as activityToast } from "./features/activity-ledger/useActivityStore";
 import { IntelligentButton } from "./components/IntelligentButton";
 import { Card, CardHeader } from "./components/ui";
 import { GuidedTour } from "./components/tour/GuidedTour";
@@ -26,7 +32,7 @@ import { Users, Plus, Mail, X } from "lucide-react";
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, login, logout, isPendingOnboarding, pendingToken, completeOnboarding } = useAuth();
+  const { user, token, login, logout, isPendingOnboarding, pendingToken, completeOnboarding } = useAuth();
 
   // Onboarding state
   const [firstName, setFirstName] = useState("Rahul");
@@ -56,6 +62,13 @@ export default function App() {
 
   // Active tab state - now using new TabID values
   const [activeTab, setActiveTab] = useState<TabID>("shop");
+
+  const handleTabChange = (tabId: TabID) => {
+    setActiveTab(tabId);
+    if (window.location.pathname !== "/") {
+      navigate("/");
+    }
+  };
 
   // Auth-based route guard
   const lastHandledPathRef = useRef<string | null>(null);
@@ -95,6 +108,73 @@ export default function App() {
     }
   }, [user, activeTab]);
 
+  // Initialize Socket.IO connection + notification store when user is authenticated
+  useEffect(() => {
+    if (user && user.companyId) {
+      // Set up socket notification listener before connecting
+      onNotification((notification) => {
+        useNotificationStore.getState().addOne(notification);
+        // Show animated toast for new live notification
+        toast((t) => (
+          <motion.div
+            initial={{ opacity: 0, x: 50, y: -20 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            exit={{ opacity: 0, x: 50, y: -20 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="flex items-start gap-3 p-4 rounded-xl shadow-2xl border cursor-pointer max-w-sm"
+            style={{
+              backgroundColor: "var(--app-surface)",
+              borderColor: "var(--app-border)",
+            }}
+            onClick={() => {
+              useNotificationStore.getState().addOne(notification);
+              toast.dismiss(t.id);
+            }}
+          >
+            <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 text-sm"
+                 style={{ backgroundColor: "rgba(212, 168, 67, 0.15)", color: "var(--brand-saffron)" }}>
+              🔔
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-wider mb-0.5"
+                 style={{ color: "var(--brand-saffron)" }}>
+                New Notification
+              </p>
+              <p className="text-sm font-bold leading-tight" style={{ color: "var(--app-text)" }}>
+                {notification.title}
+              </p>
+              <p className="text-xs mt-0.5 line-clamp-2" style={{ color: "var(--app-text-muted)" }}>
+                {notification.body}
+              </p>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); toast.dismiss(t.id); }}
+              className="shrink-0 p-1 rounded-lg hover:bg-app-bg-soft"
+              style={{ color: "var(--app-text-muted)" }}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </motion.div>
+        ), {
+          duration: 5000,
+          position: "top-right",
+          style: { background: "transparent", boxShadow: "none", padding: 0, margin: 0 },
+        });
+      });
+
+      // Connect socket (emits register_user, starts heartbeats)
+      // Passes the auth token via handshake for JWT verification
+      connectSocket(user.id, user.companyId, token ?? "", user.name || user.firstName);
+
+      // Fetch initial notification history
+      useNotificationStore.getState().fetch();
+    }
+
+    return () => {
+      disconnectSocket();
+    };
+  }, [user?.id, user?.companyId]);
+
   const handleGoogleOnboardingComplete = async (data: any) => {
     try {
       setBusinessScale(data.businessScale);
@@ -115,8 +195,8 @@ export default function App() {
       const meData = await meRes.json();
       completeOnboarding(meData.user, meData.company);
       setMockCompany(data.companyName || mockCompany);
-      toast.success(`Workspace ready for ${mockCompany}!`);
-    } catch (err: any) { toast.error(err.message); }
+      activityToast.success(`Workspace ready for ${mockCompany}!`);
+    } catch (err: any) { activityToast.error(err.message); }
   };
 
   const handleOnboardingComplete = async (data: any) => {
@@ -137,8 +217,8 @@ export default function App() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Registration failed");
       login(result.user, result.company, result.token || "mock_access_jwt_token_leadsync_secure");
-      toast.success(`System ready for ${mockCompany}!`);
-    } catch (err: any) { toast.error(err.message); }
+      activityToast.success(`System ready for ${mockCompany}!`);
+    } catch (err: any) { activityToast.error(err.message); }
   };
 
   const isGoogleOnboarding = isPendingOnboarding && !!pendingToken;
@@ -156,38 +236,38 @@ export default function App() {
 
       {/* Quick actions grid for new users */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" data-tour="quick-actions">
-        <Card hover padding="md" className="text-center">
-          <div className="h-10 w-10 rounded-xl bg-brand-saffron-soft text-brand-saffron flex items-center justify-center mx-auto mb-3">
+        <Card hover padding="md" className="text-center !bg-[linear-gradient(155deg,#B79AEA_0%,#6B4FC7_100%)] !border-[rgba(155,127,224,0.35)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
+          <div className="h-10 w-10 rounded-xl bg-white/25 text-white flex items-center justify-center mx-auto mb-3">
             <MessageSquare className="h-5 w-5" />
           </div>
-          <h3 className="font-semibold text-sm" style={{ color: 'var(--app-text)' }}>Reply to Messages</h3>
-          <p className="text-xs mt-1" style={{ color: 'var(--app-text-muted)' }}>Chat with customers</p>
+          <h3 className="font-semibold text-sm" style={{ color: '#FFFFFF' }}>Reply to Messages</h3>
+          <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.82)' }}>Chat with customers</p>
         </Card>
-        <Card hover padding="md" className="text-center">
-          <div className="h-10 w-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center mx-auto mb-3">
+        <Card hover padding="md" className="text-center !bg-[linear-gradient(155deg,#6FF0BE_0%,#0F9E6B_100%)] !border-[rgba(57,230,160,0.35)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
+          <div className="h-10 w-10 rounded-xl bg-white/25 text-[#04331F] flex items-center justify-center mx-auto mb-3">
             <ShoppingBag className="h-5 w-5" />
           </div>
-          <h3 className="font-semibold text-sm" style={{ color: 'var(--app-text)' }}>View Orders</h3>
-          <p className="text-xs mt-1" style={{ color: 'var(--app-text-muted)' }}>Track & fulfill</p>
+          <h3 className="font-semibold text-sm" style={{ color: '#04331F' }}>View Orders</h3>
+          <p className="text-xs mt-1" style={{ color: '#0B4A31' }}>Track & fulfill</p>
         </Card>
-        <Card hover padding="md" className="text-center">
-          <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-3">
+        <Card hover padding="md" className="text-center !bg-[linear-gradient(155deg,#8FB8F5_0%,#3D6FD9_100%)] !border-[rgba(99,132,255,0.35)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
+          <div className="h-10 w-10 rounded-xl bg-white/25 text-white flex items-center justify-center mx-auto mb-3">
             <Users className="h-5 w-5" />
           </div>
-          <h3 className="font-semibold text-sm" style={{ color: 'var(--app-text)' }}>Customers</h3>
-          <p className="text-xs mt-1" style={{ color: 'var(--app-text-muted)' }}>View your list</p>
+          <h3 className="font-semibold text-sm" style={{ color: '#FFFFFF' }}>Customers</h3>
+          <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.82)' }}>View your list</p>
         </Card>
-        <Card hover padding="md" className="text-center">
-          <div className="h-10 w-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-3">
+        <Card hover padding="md" className="text-center !bg-[linear-gradient(155deg,#E3B06B_0%,#C4923F_100%)] !border-[rgba(196,146,63,0.35)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
+          <div className="h-10 w-10 rounded-xl bg-white/25 text-[#2E1E08] flex items-center justify-center mx-auto mb-3">
             <Zap className="h-5 w-5" />
           </div>
-          <h3 className="font-semibold text-sm" style={{ color: 'var(--app-text)' }}>Broadcast</h3>
-          <p className="text-xs mt-1" style={{ color: 'var(--app-text-muted)' }}>Send offers</p>
+          <h3 className="font-semibold text-sm" style={{ color: '#2E1E08' }}>Broadcast</h3>
+          <p className="text-xs mt-1" style={{ color: '#4A3410' }}>Send offers</p>
         </Card>
       </div>
 
       {/* Today's Pulse */}
-      <Card padding="lg" data-tour="todays-activity">
+      <Card padding="lg" data-tour="todays-activity" className="!bg-[var(--tile-bg)] !border-[var(--tile-border)] backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
         <CardHeader
           title="Today's Activity"
           subtitle="Real-time updates from your shop"
@@ -200,7 +280,7 @@ export default function App() {
                   className="w-full bg-app-bg-soft rounded-lg group-hover:bg-brand-saffron-soft transition-all"
                   style={{ height: `${h}%` }}
                 />
-                <span className="text-2xs" style={{ color: 'var(--app-text-muted)' }}>{i+9}:05</span>
+                <span className="text-2xs" style={{ color: 'rgba(255,255,255,0.6)' }}>{i+9}:05</span>
               </div>
             ))}
           </div>
@@ -208,20 +288,20 @@ export default function App() {
       </Card>
 
       {/* Migration / Getting Started Card */}
-      <Card padding="lg" data-tour="getting-started">
+      <Card padding="lg" data-tour="getting-started" className="!bg-[var(--tile-bg)] !border-[var(--tile-border)] backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
         <div className="flex items-start gap-4">
           <div className="h-12 w-12 rounded-xl bg-brand-navy text-white flex items-center justify-center shrink-0">
             <Store className="h-6 w-6" />
           </div>
           <div className="flex-1">
-            <h3 className="font-bold text-base" style={{ color: 'var(--app-text)' }}>
+            <h3 className="font-bold text-base" style={{ color: 'var(--sidebar-text)' }}>
               {currentWorkflow === "PAPER" 
                 ? "Start your digital journey" 
                 : currentWorkflow === "SPREADSHEET" 
                   ? "Import your spreadsheet" 
                   : "Connect your current system"}
             </h3>
-            <p className="text-sm mt-1" style={{ color: 'var(--app-text-muted)' }}>
+            <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.6)' }}>
               {currentWorkflow === "PAPER" 
                 ? "Move from pen and paper to digital. Log your first customer today."
                 : currentWorkflow === "SPREADSHEET" 
@@ -232,7 +312,7 @@ export default function App() {
           <IntelligentButton
             onAsyncClick={async () => {
               await new Promise(resolve => setTimeout(resolve, 800));
-              toast.success("Getting started guide opened!");
+              activityToast.success("Getting started guide opened!");
               return true;
             }}
             successText="Done!"
@@ -267,17 +347,17 @@ export default function App() {
               if (!newMemberEmail.includes("@")) {
                 setInputError(true); setShouldShake(true);
                 setTimeout(() => setShouldShake(false), 650);
-                toast.error("Please enter a valid email.");
+                activityToast.error("Please enter a valid email.");
                 return false;
               }
               if (invitedMembers.includes(newMemberEmail)) {
                 setInputError(true); setShouldShake(true);
                 setTimeout(() => setShouldShake(false), 650);
-                toast.error("Already invited!");
+                activityToast.error("Already invited!");
                 return false;
               }
               setInvitedMembers([...invitedMembers, newMemberEmail]);
-              toast.success(`Invite sent to ${newMemberEmail}!`);
+              activityToast.success(`Invite sent to ${newMemberEmail}!`);
               setNewMemberEmail("");
               return true;
             }}
@@ -345,7 +425,7 @@ export default function App() {
           user ? (
             <MasterDashboardLayout
               activeTab={activeTab}
-              setActiveTab={setActiveTab}
+              setActiveTab={handleTabChange}
               userRole={user.role}
               merchantName={mockCompany}
               onLogout={logout}
@@ -356,9 +436,12 @@ export default function App() {
                   {activeTab === 'shop' && renderShopHome()}
                   {activeTab === 'messages' && (
                     <motion.div key="messages" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="messages-panel">
-                      <div className="flex items-center justify-center h-[640px] text-slate-400">
-                        <p className="text-sm font-medium">Messages module removed.</p>
-                      </div>
+                      <StreamTriage />
+                    </motion.div>
+                  )}
+                  {activeTab === 'inbox' && (
+                    <motion.div key="inbox" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="inbox-panel">
+                      <InboxList />
                     </motion.div>
                   )}
                   {activeTab === 'automation' && (
@@ -386,8 +469,28 @@ export default function App() {
                       <ConfigurationsPage />
                     </motion.div>
                   )}
+                  {activeTab === 'inventory' && (
+                    <motion.div key="inventory" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="inventory-page">
+                      <InventoryPage companyId={user?.companyId} />
+                    </motion.div>
+                  )}
                 </AnimatePresence>
               </div>
+            </MasterDashboardLayout>
+          ) : (
+            <Navigate to="/onboarding" replace />
+          )
+        } />
+        <Route path="/inbox/:leadId" element={
+          user ? (
+            <MasterDashboardLayout
+              activeTab={activeTab}
+              setActiveTab={handleTabChange}
+              userRole={user.role}
+              merchantName={mockCompany}
+              onLogout={logout}
+            >
+              <InboxDetail />
             </MasterDashboardLayout>
           ) : (
             <Navigate to="/onboarding" replace />

@@ -228,7 +228,7 @@ export function InboxDetail() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
+    <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
         <button onClick={() => navigate("/inbox")} className="p-2 rounded-xl hover:bg-slate-900 border border-slate-800 transition cursor-pointer">
