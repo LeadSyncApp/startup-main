@@ -10,8 +10,8 @@ export class OutboundDispatcher {
    * Dispatches an outbound message to the correct channel adapter dynamically,
    * and records the delivery status ('SENT' or 'FAILED') atomically back to the message table.
    */
-  public async dispatch(payload: OutboundPayload): Promise<void> {
-    const { companyId, conversationId, to, channel, content, sender } = payload;
+  public async dispatch(payload: OutboundPayload): Promise<{ messageId: string; deliveryStatus: "SENT" | "FAILED"; message?: any }> {
+    const { companyId, conversationId, to, channel, content, sender, clientMessageId } = payload;
 
     // 1. Strict Input Verification
     if (!companyId || typeof companyId !== "string" || companyId.trim() === "") {
@@ -58,19 +58,32 @@ export class OutboundDispatcher {
     const senderName = sender || "SYSTEM";
 
     // 4. Perform Atomic Database Ledger Entries inside a Transaction
+    let createdMessageId: string;
+    let createdMessage: any = null;
     try {
-      await prisma.$transaction(async (tx) => {
+const messageSender = payload.sender === "AGENT" ? MessageSender.AGENT 
+  : payload.sender === "BOT" ? MessageSender.BOT 
+  : MessageSender.SYSTEM;
+      const result = await prisma.$transaction(async (tx) => {
         // Create the message with the exact delivery status 'SENT' or 'FAILED'
+        const messageData: any = {
+          companyId,
+          conversationId,
+          content: content.text,
+          sender: messageSender,
+          senderName: payload.senderName || senderName,
+          senderId: payload.senderId,
+          platform: platformMap[channel],
+          deliveryStatus,
+          ...(transportError?.message && { deliveryError: transportError.message }),
+        };
+        // Persist clientMessageId for idempotency if provided
+        if (clientMessageId) {
+          messageData.clientMessageId = clientMessageId;
+        }
+
         const newMessage = await tx.message.create({
-          data: {
-            companyId,
-            conversationId,
-            content: content.text,
-            sender: MessageSender.SYSTEM,
-            senderName,
-            platform: platformMap[channel],
-            deliveryStatus,
-          }
+          data: messageData,
         });
 
         // Update the Conversation summary & timestamp
@@ -81,8 +94,11 @@ export class OutboundDispatcher {
           }
         });
 
-        console.log(`📊 [OutboundDispatcher] Atomic ledger transaction completed for Message "${newMessage.id}". DeliveryStatus=${deliveryStatus}`);
+        console.log(`📊 [OutboundDispatcher] Atomic ledger transaction completed for Message "${newMessage.id}". DeliveryStatus=${deliveryStatus}${clientMessageId ? ` clientMessageId=${clientMessageId}` : ''}`);
+        return newMessage;
       });
+      createdMessageId = result.id;
+      createdMessage = result;
     } catch (dbError: any) {
       const dbMsg = dbError instanceof Error ? dbError.message : String(dbError);
       console.error(`❌ [OutboundDispatcher] Database transaction failed while recording message: ${dbMsg}`);
@@ -91,22 +107,29 @@ export class OutboundDispatcher {
 
     // If there was a transport delivery error, we propagate it after completing the ledger entry
     if (transportError) {
-      throw transportError;
+      const dispatchError = new Error(transportError.message);
+      (dispatchError as any)._deliveryStatus = deliveryStatus;
+      (dispatchError as any)._messageId = createdMessageId;
+      (dispatchError as any)._clientMessageId = clientMessageId;
+      throw dispatchError;
     }
+
+    return { messageId: createdMessageId, deliveryStatus, message: createdMessage };
   }
 
-  public async sendMessageFrame(channel: ChannelType, externalChatId: string, conversationId: string, payload: { bodyText: string; interactivePayload: any }) {
+  public async sendMessageFrame(channel: ChannelType, externalChatId: string, conversationId: string, payload: { bodyText: string; interactivePayload: any }, sender?: "BOT" | "SYSTEM") {
       const context = getTenantContext();
       if (!context) throw new Error("OutboundDispatcher: No tenant context");
       
-      await this.dispatch({
+      const result = await this.dispatch({
           companyId: context.companyId,
           conversationId,
           to: externalChatId,
           channel: channel,
           content: { text: payload.bodyText },
-          sender: "SYSTEM"
+          sender: sender || "SYSTEM"
       });
+      return result;
   }
 
   public async dispatchAction(validatedIntent: string, aiTurnResult: any) {

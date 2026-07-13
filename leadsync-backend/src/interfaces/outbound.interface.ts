@@ -11,7 +11,10 @@ export interface OutboundPayload {
   to: string; // Recipient contact or chat identifier
   channel: ChannelType;
   content: MessageContent;
-  sender?: "AGENT" | "SYSTEM";
+  sender?: "AGENT" | "SYSTEM" | "BOT";
+  senderName?: string; // Display name of the sender (e.g. agent's name)
+  senderId?: string; // User ID of the sender (e.g. agent's user id)
+  clientMessageId?: string; // Client-generated idempotency key (reused on retry)
 }
 
 /**

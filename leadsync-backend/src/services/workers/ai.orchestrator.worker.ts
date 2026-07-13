@@ -5,6 +5,7 @@ import { ConcurrencyLock } from "../../utils/concurrencyLock";
 import { outboundDispatcherService } from "../outbound.dispatcher";
 import { Channel, MessageSender, ConversationStatus } from "@prisma/client";
 import { generateShopReply } from "../ai/ai.service";
+import { retrieveProductChunks, RetrievedChunk } from "../knowledge/knowledgeRetriever.service";
 import { StandardMessageFrame } from "../../interfaces/messaging.interface";
 import { tenantContextStorage, TenantContext } from "../context/tenantContext.provider";
 import { safeEmitConversationUpdate, emitToConversation, emitToCompanyAdmin, emitToCompany, emitToAgent, getIO } from "../../lib/socket";
@@ -13,7 +14,7 @@ import { conversationalAutoReplyService } from "../automation/conversationalAuto
 import { detectLanguage } from "../ai/languageDetection.service";
 import { ChannelType } from "../../interfaces/outbound.interface";
 import { reapGhostsForCompany } from "../infrastructure/ghostReaper.service";
-import { assignmentService } from "../assignment.service";
+import { findLeastLoadedStaff } from "../assignment.service";
 
 export function evaluateTenantPriorityRules(aiOutput: any, rules: TenantContext["priorityRules"]): string {
   if (!rules || rules.length === 0) {
@@ -182,49 +183,32 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       lead = localLead;
     });
 
-    const startHour = companyContext.businessStartHour ?? 0;
-    const endHour = companyContext.businessEndHour ?? 24;
-    const customOooMessage = companyContext.customOooMessage || "Hello! Our human team is currently offline...";
-    const targetTimezone = activeContext.timezone;
-    const currentHour = parseInt(new Intl.DateTimeFormat(undefined, { timeZone: targetTimezone, hour: "numeric", hour12: false }).format(new Date()), 10);
-    const isOutOfOffice = startHour <= endHour ? (currentHour < startHour || currentHour >= endHour) : (currentHour < startHour && currentHour >= endHour);
-
-    if (isOutOfOffice) {
-      console.log(`🌙 [OrchestratorWorker] Out of Office hours detected for Company ${companyId}.`);
-      await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
-        let clientMsg = await tx.message.findFirst({
-          where: { conversationId: conversation.id },
-          orderBy: { createdAt: 'desc' },
-          take: 1
-        });
-        if (!clientMsg) {
+    // 🔌 SHORT-CIRCUIT: Platform-native commands should not trigger AI/rules/escalation.
+    // Let triggerLeadWelcome still fire for lead creation, but skip processing.
+    // This prevents Telegram commands like /start from falsely triggering order_confirm escalation.
+    if (frame.isPlatformCommand) {
+      console.log(`[Orchestrator] Ignoring platform-native command: ${frame.rawPayload?.message?.text || "unknown"}`);
+      // For EXISTING leads, send a brief "Welcome back!" reply to avoid silence.
+      // (New leads already get triggerLeadWelcome in the !localConversation branch above.)
+      const isExistingLead = existingLead !== null;
+      if (isExistingLead) {
+        await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
+          // Persist the platform command as CLIENT message for context
           await tx.message.create({
             data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
           });
-        }
-        await tx.lead.update({ where: { id: lead.id }, data: { lastActiveAt: new Date() } });
-        const updatedConvo = await tx.conversation.update({
-          where: { id: conversation.id },
-          data: { status: ConversationStatus.OPEN, updatedAt: new Date() },
-          include: { claimedBy: { select: { id: true, firstName: true, lastName: true } } }
         });
-        await outboundDispatcherService.dispatch({ companyId, conversationId: conversation.id, to: lead.contact, channel: channel === Channel.TELEGRAM ? "TELEGRAM" : "WHATSAPP", content: { text: customOooMessage }, sender: "SYSTEM" });
-        await tx.message.create({ data: { companyId, conversationId: conversation.id, content: customOooMessage, sender: MessageSender.SYSTEM } });
-
-        // Re-load latest assignment state and companyId before emitting.
-        // This prevents stale in-memory `conversation` snapshots from causing socket routing to fall back to company/shared rooms.
-        const freshConvo = await tx.conversation.findUnique({
-          where: { id: conversation.id },
-          select: { id: true, companyId: true, claimedById: true }
+        // Send welcome-back reply via outbound dispatcher (handles its own transaction + SYSTEM message)
+        await outboundDispatcherService.dispatch({
+          companyId,
+          conversationId: conversation.id,
+          to: lead.contact,
+          channel: channel === Channel.TELEGRAM ? "TELEGRAM" : "WHATSAPP",
+          content: { text: "Welcome back! How can I help you today?" },
+          sender: "SYSTEM"
         });
-
-        if (freshConvo) {
-          safeEmitConversationUpdate({ ...freshConvo, ...updatedConvo }, "conversation_added", { ...updatedConvo, ...freshConvo });
-        } else {
-          safeEmitConversationUpdate(updatedConvo, "conversation_added", updatedConvo);
-        }
-      });
-      return;
+      }
+      return { skipped: true, reason: "PLATFORM_NATIVE_COMMAND" };
     }
 
     const processingText = frame.isCallback ? (frame.callbackData || "") : frame.text;
@@ -327,7 +311,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         if (ruleResult.matched && ruleResult.responseAlreadySent) {
           console.log(`[Orchestrator] ✅ Rule matched: "${ruleResult.ruleName}" — AI reply skipped, rule response sent.`);
           ruleMatched = true;
-          
+
           // Still log the customer message and update conversation state
           // But DON'T send a second AI reply — the rule already handled it
           await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
@@ -348,7 +332,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
               data: { updatedAt: new Date() }
             });
           });
-          
+
           safeEmitConversationUpdate(conversation, "conversation_updated", {
             conversationId: conversation.id,
             lastContent: ruleResult.response || "[Rule auto-replied]",
@@ -368,12 +352,23 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       ? (await detectLanguage(processingText, process.env.SARVAM_API_KEY)).language
       : "en";
 
-    const aiTurnResult = await generateShopReply({ 
-      tenant_id: companyId, 
-      user_message: processingText, 
-      session_state: (conversation as any)?.sessionState || {}, 
-      retrieved_items: currentInventory, 
-      menu_snapshot: config?.botStructuredMenu,
+    // Retrieve product chunks for RAG grounding if processing text exists
+    let menuSnapshotForAi = config?.botStructuredMenu;
+    if (processingText) {
+      const matchingProducts = await retrieveProductChunks(companyId, processingText, 10);
+      console.log("[DEBUG] matchingProducts length:", matchingProducts.length);
+      if (matchingProducts.length > 0) {
+        menuSnapshotForAi = "Available products:\n" + matchingProducts.map((p) => `- ${p.content}`).join("\n");
+      }
+      console.log("[DEBUG] menuSnapshotForAi:", menuSnapshotForAi?.substring(0, 200));
+    }
+
+    const aiTurnResult = await generateShopReply({
+      tenant_id: companyId,
+      user_message: processingText,
+      session_state: (conversation as any)?.sessionState || {},
+      retrieved_items: currentInventory,
+      menu_snapshot: menuSnapshotForAi,
       detected_language: detectedLanguage,
       activeRules: rulesAsContext,
     });
@@ -381,7 +376,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     const sessionStateObj: any = (conversation as any)?.sessionState || {};
     const cartItemsCount = sessionStateObj.cart?.items?.length || 0;
     const orderTotal = sessionStateObj.cart?.items?.reduce((sum: number, item: any) => sum + ((item.price || 0) * (item.quantity || 0)), 0) || 0;
-    const priorityInput = { extracted_order_total: (aiTurnResult as any).extracted_order_total ?? orderTotal, extracted_items_count: (aiTurnResult as any).extracted_items_count ?? cartItemsCount };
+    const priorityInput = { extracted_order_total: (aiTurnResult?.extracted_order?.total_amount ?? orderTotal), extracted_items_count: (aiTurnResult?.extracted_order?.items?.length ?? cartItemsCount) };
     const priority = evaluateTenantPriorityRules(priorityInput, activeContext.priorityRules);
     const { replyText, detected_meta, tool_call, thread_summary, suggested_human_response, intent_type: rawIntentType } = aiTurnResult;
     const intent_type = rawIntentType as string;
@@ -398,11 +393,11 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     // 4. Sentiment is very negative
     const needsHumanEscalation =
       intent_type === "HUMAN_HANDOFF" ||
-      (suggested_human_response && suggested_human_response.length > 10) ||
       intent_type === "Support" ||
       (detected_meta?.sentiment === "NEGATIVE" && resolvedScore < 0);
 
     let escalationReason: string | null = null;
+    let isHardLockEscalation = false; // true for order_confirm (billing reasons)
 
     if (needsHumanEscalation) {
       if (intent_type === "HUMAN_HANDOFF") {
@@ -418,39 +413,41 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
 
     // Check for order confirmation (reuse existing order-intent detection)
     // The AI signals order confirmation via tool_call or extracted_order data
+    // Only consider it confirmed if items were actually extracted
     const isOrderConfirmed =
       tool_call ||
-      (aiTurnResult as any).extracted_order ||
-      (aiTurnResult as any).extracted_order_total;
+      (aiTurnResult?.extracted_order?.items?.length > 0);
 
     if (isOrderConfirmed) {
       escalationReason = "order_confirm";
+      isHardLockEscalation = true; // Billing/order reasons = HARD-LOCK
     }
 
     // ============================================================
 
     await Promise.all([
-      outboundDispatcherService.sendMessageFrame(frame.channel as any, frame.externalChatId, conversation.id, { bodyText: replyText, interactivePayload: tool_call ? JSON.parse(JSON.stringify(tool_call)) : null }),
+      outboundDispatcherService.sendMessageFrame(frame.channel as any, frame.externalChatId, conversation.id, { bodyText: replyText, interactivePayload: tool_call ? JSON.parse(JSON.stringify(tool_call)) : null }, "BOT"),
       ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
-        let clientMsg = await tx.message.findFirst({
-          where: { conversationId: conversation.id },
-          orderBy: { createdAt: 'desc' },
-          take: 1
+        const clientMsg = await tx.message.create({
+          data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
         });
-        if (!clientMsg) {
-          clientMsg = await tx.message.create({ data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT } });
-          emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
-        }
+        emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
         await tx.lead.update({ where: { id: lead.id }, data: { aiPriority: priority === "URGENT" ? "HIGH" : priority === "HIGH" ? "MEDIUM" : "LOW" } });
 
         // If escalation is needed, set mode + reason + assignment atomically
+        // HARD-LOCK vs NOTIFY-ONLY classification:
+        // - order_confirm (isHardLockEscalation=true): Sets mode=HUMAN, permanently silences AI
+        // - manual_request/complaint/support (isHardLockEscalation=false): Only sets needsStaffReason, AI continues
         const convoUpdateData: any = { updatedAt: new Date() };
         if (escalationReason) {
-          convoUpdateData.mode = "HUMAN";
+          // Only set mode=HUMAN for hard-lock escalations (order/billing)
+          if (isHardLockEscalation) {
+            convoUpdateData.mode = "HUMAN";
+          }
           convoUpdateData.needsStaffReason = escalationReason;
 
           // Try to find and assign the least-loaded staff member
-          const staff = await assignmentService.findLeastLoadedStaff(companyId);
+          const staff = await findLeastLoadedStaff(companyId);
           if (staff) {
             convoUpdateData.claimedById = staff.id;
             convoUpdateData.claimedByName = `${staff.firstName} ${staff.lastName || ""}`.trim();

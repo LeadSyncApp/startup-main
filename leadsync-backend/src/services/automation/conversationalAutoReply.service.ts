@@ -453,7 +453,7 @@ export class ConversationalAutoReplyService {
         to: context.contact,
         channel: context.channel,
         content: { text: response },
-        sender: "AGENT",
+        sender: "BOT",
       });
     } catch (err: any) {
       console.error(`[ConversationalAutoReply] Failed to send response: ${err instanceof Error ? err.message : JSON.stringify(err)}`);

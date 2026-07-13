@@ -815,6 +815,7 @@ enum MessageSender {
   CLIENT
   AGENT
   SYSTEM
+  BOT
 }
 
 enum InvitationStatus {
