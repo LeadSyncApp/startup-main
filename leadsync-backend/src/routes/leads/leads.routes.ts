@@ -136,7 +136,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         segment: lead.segment,
 
         conversationId: conversation?.id || null,
-        lastMessage: lastCustomerMessage?.content || "",
+        lastMessage: mostRecent?.content || "",
         lastMessageSender: mostRecent?.sender || null,
         sentimentScore: conversation?.sentimentScore || 0,
         intent: conversation?.intent || "BROWSING",

@@ -20,6 +20,7 @@ export interface BackendLead {
   // 🆕 New fields
   pendingOrderAmount: number | null;
   isUnread: boolean;
+  lastMessageSender: "CLIENT" | "AGENT" | "SYSTEM" | "BOT" | null;
 }
 
 const CHANNEL_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -150,7 +151,15 @@ export function InboxList() {
                  </div>
                  <span className="text-[10px] text-[var(--ticket-text)] font-mono shrink-0 opacity-70">{relativeTime(lead.lastActiveAt)}</span>
                </div>
-               <p className="text-xs text-[var(--ticket-text)] truncate mt-0.5 opacity-80">{preview}</p>
+                <p className="text-xs text-[var(--ticket-text)] truncate mt-0.5 opacity-80 flex items-center gap-1.5">
+                  {lead.lastMessageSender === "BOT" && (
+                    <span className="shrink-0 text-[10px] font-black px-2 py-1 rounded-full bg-teal-600/90 text-white uppercase tracking-wider">AI</span>
+                  )}
+                  {lead.lastMessageSender === "AGENT" && (
+                    <span className="shrink-0 text-[10px] font-black px-2 py-1 rounded-full bg-brand-navy text-white uppercase tracking-wider">You</span>
+                  )}
+                  <span className="truncate">{preview}</span>
+                </p>
                <div className="flex items-center gap-2 mt-2">
                  <span className={`flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider font-mono ${channelClass}`}>
                    <ChannelIcon className="h-3 w-3" />

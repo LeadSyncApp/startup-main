@@ -195,7 +195,7 @@ export function InboxDetail() {
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[10px] font-black uppercase tracking-widest opacity-70">{senderLabel}</span>
             {isBot && (
-              <span className="text-[9px] font-black text-teal-300/80 border border-teal-400/40 rounded px-1">Bot</span>
+              <span className="text-[9px] font-black text-teal-300/80 border border-teal-400/40 rounded px-1">AI</span>
             )}
             {isFailed && (
               <span className="flex items-center gap-1 text-[10px] font-black text-rose-400">
