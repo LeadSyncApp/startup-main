@@ -9,6 +9,7 @@ import { asyncHandler } from "../../middleware/error.middleware";
 import { ConversationStatus, MessageSender, Channel as PrismaChannel } from "@prisma/client";
 import { outboundDispatcherService } from "../../services/outbound.dispatcher";
 import { escalateToHuman, resolveConversation } from "../../services";
+import { generateReplySuggestion } from "../../services/ai/ai.service";
 
 const router = Router();
 
@@ -709,6 +710,40 @@ router.post("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response)
   } catch (error: any) {
     console.error("Change conversation mode error:", error);
     res.status(500).json({ message: "Failed to change conversation mode" });
+  }
+});
+
+/* =========================================
+   POST /api/leads/:id/ai-suggest
+   Generate AI reply suggestion for staff
+   Multi-tenant safe — verifies lead belongs to req.user's company
+========================================= */
+router.post("/:id/ai-suggest", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId, companyId, role } = req.user!;
+    const { id } = req.params;
+
+    // Only agents can generate AI suggestions
+    if (!["STAFF", "MANAGER", "OWNER"].includes(role)) {
+      return res.status(403).json({ message: "Only agents can generate AI suggestions" });
+    }
+
+    // Validate leadId belongs to req.user.companyId (tenant-scoping)
+    const lead = await (prisma.lead as any).findFirst({
+      where: { id, companyId },
+    });
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // Call generateReplySuggestion
+    const result = await generateReplySuggestion(id, companyId);
+
+    return res.json({ suggestion: result.suggestion, rationale: result.rationale });
+  } catch (error: any) {
+    console.error("Generate AI suggestion error:", error);
+    return res.status(500).json({ message: "Failed to generate suggestion" });
   }
 });
 
