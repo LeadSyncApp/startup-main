@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { getTenantContext } from "../context/tenantContext.provider";
 import { prisma } from "../../lib/prisma";
+import { retrieveProductChunks, RetrievedChunk } from "../knowledge/knowledgeRetriever.service";
 
 // Ensure environment variables are loaded
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
@@ -768,5 +769,147 @@ Return ONLY a JSON object matching this structure:
   } catch (err) {
     console.error("❌ AI Triage failed (Groq):", err);
     return { intent: "Support", summary: "Conversation started" };
+  }
+}
+
+/**
+ * AI-powered reply suggestion generator.
+ * Fetches recent conversation context, product knowledge, and order history
+ * to generate a contextual suggestion for staff to use when replying.
+ */
+export async function generateReplySuggestion(
+  leadId: string,
+  companyId: string
+): Promise<{ suggestion: string; rationale: string }> {
+  try {
+    // 1. Fetch the lead with its conversation
+    const lead = await prisma.lead.findFirst({
+      where: { id: leadId, companyId },
+      select: {
+        id: true,
+        name: true,
+        channel: true,
+        conversations: {
+          select: {
+            id: true,
+            messages: {
+              orderBy: { createdAt: "desc" },
+              take: 10,
+              select: { content: true, sender: true },
+            },
+          },
+          take: 1,
+          orderBy: { updatedAt: "desc" },
+        },
+      },
+    });
+
+    if (!lead || !lead.conversations?.[0]) {
+      throw new Error("Lead or conversation not found");
+    }
+
+    const conversation = lead.conversations[0];
+    const messages = conversation.messages || [];
+
+    // 2. Get the latest customer message for product context
+    const latestCustomerMessage = messages
+      .filter((m: any) => m.sender === "CLIENT")
+      .map((m: any) => m.content)
+      .join("\n");
+
+    // 3. Retrieve product chunks for context (scoped to company)
+    let productContext = "";
+    if (latestCustomerMessage) {
+      const productChunks = await retrieveProductChunks(companyId, latestCustomerMessage, 5);
+      productContext = productChunks
+        .map((chunk: RetrievedChunk) => chunk.content)
+        .join("\n\n");
+    }
+
+    // 4. Fetch past orders for this lead (last 5, not deleted, not bot-created)
+    const pastOrders = await (prisma.order as any).findMany({
+      where: {
+        leadId,
+        companyId,
+        isDeleted: false,
+        status: { notIn: ["BOT_CREATED_ORDER", "REJECTED", "CANCELLED"] },
+      },
+      include: {
+        orderItems: { select: { name: true, quantity: true, price: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    });
+
+    const orderHistoryText = pastOrders
+      .map((order: any) => {
+        const items = order.orderItems
+          .map((i: any) => `${i.name} x${i.quantity} @ ₹${i.price}`)
+          .join(", ");
+        return `Order #${order.id.slice(0, 8)}: ${items} (Total: ₹${order.amount})`;
+      })
+      .join("\n");
+
+    // 5. Build chat history for context
+    const recentMessages = messages
+      .slice(-5)
+      .map((m: any) => `${m.sender}: ${m.content}`)
+      .join("\n");
+
+    // 6. Call Groq for suggestion
+    const groq = getGroq();
+    const prompt = `
+# ROLE
+You are an elite Indian eCommerce customer success AI assistant.
+
+# OBJECTIVE
+Analyze the conversation and context, then return ONLY valid JSON with a ready-to-send reply suggestion and a brief rationale.
+
+# CONTEXT
+Recent Messages:
+${recentMessages}
+
+${productContext ? `Product Catalog Matches:\n${productContext}\n` : ""}
+${orderHistoryText ? `Past Orders:\n${orderHistoryText}\n` : ""}
+
+# RULES
+1. The "rationale" field: ONE short sentence explaining what the customer wants.
+2. The "suggestion" field: A natural, helpful, localized reply (Hinglish OK, max 25 words).
+3. If customer is asking about pricing/products: mention relevant products/prices.
+4. If customer has order history: reference their past purchases.
+5. If unclear: ask a clarifying question politely.
+
+# OUTPUT
+Return ONLY a JSON object (no markdown):
+{ "suggestion": "reply text here", "rationale": "what customer wants" }
+`.trim();
+
+    const result = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama-3.3-70b-versatile",
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+    });
+
+    const text = result.choices[0]?.message?.content?.trim() || "{}";
+    const parsed = JSON.parse(text);
+
+    // Validate JSON structure
+    if (
+      !parsed.suggestion ||
+      typeof parsed.suggestion !== "string" ||
+      !parsed.rationale ||
+      typeof parsed.rationale !== "string"
+    ) {
+      throw new Error("Invalid JSON response from AI model");
+    }
+
+    return {
+      suggestion: parsed.suggestion,
+      rationale: parsed.rationale,
+    };
+  } catch (err: any) {
+    console.error("❌ generateReplySuggestion failed:", err);
+    throw new Error("Failed to generate reply suggestion");
   }
 }
