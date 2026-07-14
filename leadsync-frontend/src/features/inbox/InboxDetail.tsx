@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe } from "lucide-react";
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
+import AiSuggestionPanel from "./AiSuggestionPanel";
 
 // ── Types ──
 export interface BackendMessage {
@@ -330,6 +331,14 @@ export function InboxDetail() {
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* AI Suggestion Panel - shown only when AI tab is active */}
+      {mode === "AI" && leadId && (
+        <AiSuggestionPanel
+          leadId={leadId}
+          onUseAndEdit={(suggestion) => setContent(suggestion)}
+        />
+      )}
 
       {/* Network error banner */}
       {networkError && !failedMessageContent && (
