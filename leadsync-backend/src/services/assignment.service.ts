@@ -114,15 +114,12 @@ export async function escalateToHuman(
     throw new Error(`Conversation ${conversationId} not found`);
   }
 
-  // 2. If already in HUMAN mode, skip
-  if (conversation.mode === ConversationMode.HUMAN) {
-    console.log(`[assignment] ${conversationId} already in HUMAN mode, skipping`);
-    return;
-  }
-
-  // 2b. If already self-assigned to this caller, nothing to do
-  if (conversation.claimedById === callerId) {
-    console.log(`[assignment] ${conversationId} already claimed by ${callerId}, skipping`);
+  // 2. If already in HUMAN mode AND already claimed by this same caller,
+  // nothing to do — otherwise proceed to (re-)escalate, since mode is the
+  // source of truth, not claimedById alone (a conversation can have a
+  // stale claimedById left over from a prior claim while mode is BOT).
+  if (conversation.mode === ConversationMode.HUMAN && conversation.claimedById === callerId) {
+    console.log(`[assignment] ${conversationId} already HUMAN and claimed by ${callerId}, skipping`);
     return;
   }
 
