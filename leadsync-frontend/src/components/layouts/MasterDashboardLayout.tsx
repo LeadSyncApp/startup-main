@@ -13,14 +13,16 @@ import {
   Menu,
   X,
   Sun,
-  Moon
+  Moon,
+  Inbox,
+  Package
 } from 'lucide-react';
 import { useActivityStore } from '../../features/activity-ledger/useActivityStore';
 import { ActivityFeedDrawer } from '../../features/activity-ledger/ActivityFeedDrawer';
 import { useTheme } from '../../features/theme/ThemeContext';
 
 export type UserRole = 'OWNER' | 'MANAGER' | 'STAFF';
-export type TabID = 'shop' | 'messages' | 'customers' | 'broadcast' | 'orders' | 'automation' | 'settings';
+export type TabID = 'shop' | 'messages' | 'inbox' | 'customers' | 'broadcast' | 'orders' | 'automation' | 'inventory' | 'settings';
 
 export interface TabItem {
   id: TabID;
@@ -33,10 +35,12 @@ export interface TabItem {
 const tabConfig: TabItem[] = [
   { id: 'shop', label: 'My Shop', icon: Home, allowedRoles: ['OWNER', 'MANAGER'] },
   { id: 'messages', label: 'Messages', icon: MessageSquare, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], badge: '3' },
+  { id: 'inbox', label: 'Inbox', icon: Inbox, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], badge: '3' },
   { id: 'customers', label: 'Customers', icon: Users, allowedRoles: ['OWNER', 'MANAGER'] },
   { id: 'broadcast', label: 'Broadcast', icon: Zap, allowedRoles: ['OWNER', 'MANAGER'] },
   { id: 'orders', label: 'Orders', icon: ShoppingBag, allowedRoles: ['OWNER', 'MANAGER'] },
   { id: 'automation', label: 'Automation', icon: MessageSquare, allowedRoles: ['OWNER', 'MANAGER'] },
+  { id: 'inventory', label: 'Inventory', icon: Package, allowedRoles: ['OWNER', 'MANAGER'] },
   { id: 'settings', label: 'Settings', icon: Settings, allowedRoles: ['OWNER', 'MANAGER'] },
 ];
 
@@ -69,23 +73,32 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
   const isConnected = gatewayStatus === 'STABLE' || gatewayStatus === 'SYNCED';
 
   return (
-    <div className="flex h-screen bg-app-bg overflow-hidden">
+    <>
+      {/* Ambient Blob Layer */}
+      <div className="fixed inset-0 z-0 pointer-events-none" style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
+        <div className="absolute rounded-[50%] opacity-[var(--blob-opacity)]" style={{ width: '500px', height: '500px', background: 'var(--brass)', filter: 'blur(90px)', top: '-10%', left: '-5%' }} />
+        <div className="absolute rounded-[50%] opacity-[var(--blob-opacity)]" style={{ width: '500px', height: '500px', background: 'var(--orchid)', filter: 'blur(90px)', top: '-8%', right: '-5%' }} />
+        <div className="absolute rounded-[50%] opacity-[var(--blob-opacity)]" style={{ width: '500px', height: '500px', background: 'var(--signal)', filter: 'blur(90px)', bottom: '-10%', left: '50%', transform: 'translateX(-50%)' }} />
+      </div>
+    <div className="flex h-screen bg-transparent overflow-hidden relative z-[1]">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 flex-shrink-0 bg-app-surface border-r border-app-border">
+<aside className="hidden md:flex flex-col w-64 flex-shrink-0 bg-[image:var(--sidebar-bg)] border-r border-app-border">
         {/* Brand Header */}
         <div className="p-5 border-b border-app-border">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-brand-navy flex items-center justify-center text-white shrink-0">
+            <div className="h-9 w-9 rounded-lg bg-[linear-gradient(135deg,#E3B06B,#C4923F)] flex items-center justify-center text-white shrink-0">
               <Store className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-sm font-bold text-app-text truncate">{merchantName}</h1>
+              <h1 className="text-sm font-bold text-app-text-muted truncate" style={{fontFamily: "'Fraunces', serif"}}>{merchantName}</h1>
               <p className="text-xs text-app-text-muted capitalize">{displayRole}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-app-border">
-            <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-xs text-app-text-muted font-medium">{isConnected ? 'Connected' : 'Disconnected'}</span>
+            <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className={`text-xs font-medium uppercase tracking-wide ${isConnected ? 'text-green-500' : 'text-app-text-muted'}`}>
+              {isConnected ? 'LIVE — CONNECTED' : 'Disconnected'}
+            </span>
           </div>
         </div>
 
@@ -100,7 +113,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
                 onClick={() => setActiveTab(tab.id)}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
                   isActive 
-                    ? 'bg-brand-saffron-soft text-brand-navy' 
+                    ? 'bg-[linear-gradient(120deg,rgba(196,146,63,0.16),transparent)] text-white border-l-2 border-transparent relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[2px] before:bg-[linear-gradient(180deg,#E3B06B,#9B7FE0)]' 
                     : 'text-app-text-muted hover:bg-app-bg-soft hover:text-app-text'
                 }`}
               >
@@ -249,5 +262,6 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
       {/* Activity Drawer */}
       <ActivityFeedDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
     </div>
+    </>
   );
 };
