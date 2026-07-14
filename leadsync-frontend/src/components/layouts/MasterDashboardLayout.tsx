@@ -89,14 +89,14 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
             <div className="h-9 w-9 rounded-lg bg-[linear-gradient(135deg,#E3B06B,#C4923F)] flex items-center justify-center text-white shrink-0">
               <Store className="h-5 w-5" />
             </div>
-            <div className="min-w-0">
-              <h1 className="text-sm font-bold text-app-text-muted truncate" style={{fontFamily: "'Fraunces', serif"}}>{merchantName}</h1>
-              <p className="text-xs text-app-text-muted capitalize">{displayRole}</p>
+              <div className="min-w-0">
+               <h1 className="text-sm font-bold text-[var(--sidebar-text-muted)] truncate" style={{fontFamily: "'Fraunces', serif"}}>{merchantName}</h1>
+               <p className="text-xs text-[var(--sidebar-text-muted)] capitalize">{displayRole}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-app-border">
             <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-            <span className={`text-xs font-medium uppercase tracking-wide ${isConnected ? 'text-green-500' : 'text-app-text-muted'}`}>
+            <span className={`text-xs font-medium uppercase tracking-wide ${isConnected ? 'text-green-500' : 'text-[var(--sidebar-text-muted)]'}`}>
               {isConnected ? 'LIVE — CONNECTED' : 'Disconnected'}
             </span>
           </div>
@@ -114,11 +114,11 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
                   isActive 
                     ? 'bg-[linear-gradient(120deg,rgba(196,146,63,0.16),transparent)] text-white border-l-2 border-transparent relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[2px] before:bg-[linear-gradient(180deg,#E3B06B,#9B7FE0)]' 
-                    : 'text-app-text-muted hover:bg-app-bg-soft hover:text-app-text'
+                    : 'text-[var(--sidebar-text-muted)] hover:bg-app-bg-soft hover:text-[var(--sidebar-text)]'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={`h-5 w-5 ${isActive ? 'text-brand-saffron' : 'text-app-text-muted'}`} />
+                  <Icon className={`h-5 w-5 ${isActive ? 'text-brand-saffron' : 'text-[var(--sidebar-text-muted)]'}`} />
                   <span>{tab.label}</span>
                 </div>
                 {tab.badge && (
@@ -135,7 +135,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
         <div className="p-3 border-t border-app-border space-y-1">
           <button
             onClick={toggleTheme}
-            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-app-text-muted hover:text-brand-saffron hover:bg-brand-saffron-soft transition-all cursor-pointer"
+            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--sidebar-text-muted)] hover:text-brand-saffron hover:bg-brand-saffron-soft transition-all cursor-pointer"
           >
             {theme === 'light' ? (
               <Moon className="h-4 w-4" />
@@ -147,7 +147,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
           {onLogout && (
             <button
               onClick={onLogout}
-              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-app-text-muted hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer"
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--sidebar-text-muted)] hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer"
             >
               <LogOut className="h-4 w-4" />
               Log Out

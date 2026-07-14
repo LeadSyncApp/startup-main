@@ -6,12 +6,13 @@
 
 /* LeadSync Design System — Warm, Professional, Indian SME-focused */
 @layer base {
-  :root {
+:root {
     color-scheme: light;
-    
+    --blob-opacity: 0.5;
+
     /* Font stack */
-    --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-    --font-display: "Plus Jakarta Sans", "Inter", sans-serif;
+    --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    --font-display: "Fraunces", "IBM Plex Sans", serif;
     --font-mono: "JetBrains Mono", monospace;
 
     /* Brand Colors — Trust & Prosperity */
@@ -54,11 +55,30 @@
     --app-shadow-soft: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     --app-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
     --app-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+
+    /* Sidebar text colors — same in both themes */
+    --sidebar-text: #F1EFE8;
+    --sidebar-text-muted: #9AA3B2;
+
+    /* Theme-specific tokens */
+    --sidebar-bg: linear-gradient(165deg, #0B1220 0%, #16213F 55%, #201A3A 100%);
+    --tile-bg: rgba(11,18,32,0.72);
+    --tile-border: rgba(196,146,63,0.35);
+    --ticket-bg: rgba(22,29,45,0.92);
+    --ticket-text: #F1EFE8;
+    --ticket-text-secondary: #8A93A0;
+    --ticket-border: rgba(255,255,255,0.10);
+    --brass: #C4923F;
+    --brass-light: #E3B06B;
+    --orchid: #9B7FE0;
+    --signal: #39E6A0;
+    --brick: #D9584C;
   }
 
   /* Dark mode — warm & rich, not harsh gray */
   [data-theme="dark"] {
     color-scheme: dark;
+    --blob-opacity: 0.6;
 
     /* Brand colors stay similar but adjust for dark bg */
     --brand-navy: #2D5A8A;
@@ -100,6 +120,15 @@
     --app-shadow-soft: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
     --app-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
     --app-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+
+    /* Sidebar text colors — same in both themes */
+    --sidebar-text: #F1EFE8;
+    --sidebar-text-muted: #9AA3B2;
+
+    /* Theme-specific tokens */
+    --sidebar-bg: linear-gradient(165deg, #0B1220 0%, #16213F 55%, #201A3A 100%);
+    --tile-bg: rgba(11,18,32,0.72);
+    --tile-border: rgba(196,146,63,0.35);
   }
 
   body {
@@ -137,10 +166,10 @@
   /* Primary Buttons */
   .btn-primary {
     @apply inline-flex items-center justify-center rounded-xl px-5 py-2.5 font-semibold text-white shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
-    background-color: var(--brand-navy);
+    background: linear-gradient(135deg, var(--brass) 0%, #B8925E 45%, var(--orchid) 100%);
   }
   .btn-primary:hover:not(:disabled) {
-    background-color: var(--brand-navy-light);
+    background: linear-gradient(135deg, #B8863A 0%, #A87D50 45%, #8B6FCC 100%);
   }
 
   .btn-secondary {
