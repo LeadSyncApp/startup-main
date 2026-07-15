@@ -202,6 +202,7 @@ export async function resolveConversation(
     data: {
       mode: ConversationMode.BOT,
       status: ConversationStatus.RESOLVED,
+      lifecycleStatus: "archived",
       claimedById: null,
       claimedByName: null,
       claimedAt: null,
