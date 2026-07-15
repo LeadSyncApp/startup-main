@@ -44,7 +44,7 @@ export const applyDataSharingRules = async (userId: string, companyId: string, r
   return {
     OR: [
       { isPrivate: false },
-      { ownerId: { in: allowedUserIds } }
+      { conversations: { some: { claimedById: { in: allowedUserIds } } } }
     ]
   };
 };
