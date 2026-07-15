@@ -72,9 +72,10 @@ export function StreamTriage() {
   const fetchLeads = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await authedFetch("/api/leads?filter=unassigned");
+      const res = await authedFetch("/api/leads?filter=unclaimed");
       if (!res.ok) throw new Error("Failed to fetch leads");
-      const data: BackendLead[] = await res.json();
+      const json = await res.json();
+      const data: BackendLead[] = json.data;
       setLeads(data);
       setCurrentIndex(0);
     } catch (e: any) {

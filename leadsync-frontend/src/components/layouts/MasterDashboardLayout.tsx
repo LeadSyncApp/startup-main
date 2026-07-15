@@ -34,8 +34,8 @@ export interface TabItem {
 
 const tabConfig: TabItem[] = [
   { id: 'shop', label: 'My Shop', icon: Home, allowedRoles: ['OWNER', 'MANAGER'] },
-  { id: 'messages', label: 'Messages', icon: MessageSquare, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], badge: '3' },
-  { id: 'inbox', label: 'Inbox', icon: Inbox, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], badge: '3' },
+  { id: 'messages', label: 'My Conversations', icon: MessageSquare, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], badge: '3' },
+  { id: 'inbox', label: 'Unclaimed', icon: Inbox, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], badge: '3' },
   { id: 'customers', label: 'Customers', icon: Users, allowedRoles: ['OWNER', 'MANAGER'] },
   { id: 'broadcast', label: 'Broadcast', icon: Zap, allowedRoles: ['OWNER', 'MANAGER'] },
   { id: 'orders', label: 'Orders', icon: ShoppingBag, allowedRoles: ['OWNER', 'MANAGER'] },

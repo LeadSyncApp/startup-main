@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap, MessageSquare, ShoppingBag, Store } from "lucide-react";
-import { useNavigate, useLocation, Routes, Route, Navigate } from "react-router-dom";
+import { useNavigate, useLocation, useParams, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./features/auth-tenancy/AuthContext";
 import { Toaster, toast } from "react-hot-toast";
 import { MasterDashboardLayout, TabID } from "./components/layouts/MasterDashboardLayout";
@@ -16,8 +16,7 @@ import { CustomerList } from "./features/audience-crm/CustomerList";
 import { BroadcastEngine } from "./features/broadcast/BroadcastEngine";
 import { OrderFulfillmentBoard } from "./features/orders/OrderFulfillmentBoard";
 import { StreamTriage } from "./features/stream-triage/StreamTriage";
-import InboxList from "./features/inbox/InboxList";
-import InboxDetail from "./features/inbox/InboxDetail";
+import InboxSplitView from "./features/inbox/InboxSplitView";
 import { InventoryPage } from "./features/inventory/InventoryPage";
 import { DailyCollectionStats } from "./features/dashboard/DailyCollectionStats";
 import { DailyPulseAdaptiveWidget } from "./features/dashboard/DailyPulseAdaptiveWidget";
@@ -28,6 +27,14 @@ import { IntelligentButton } from "./components/IntelligentButton";
 import { Card, CardHeader } from "./components/ui";
 import { GuidedTour } from "./components/tour/GuidedTour";
 import { Users, Plus, Mail, X } from "lucide-react";
+
+// NOTE FOR REVIEW: InboxSplitWithParam reads the :leadId URL param and passes it
+// as initialLeadId to InboxSplitView. This preserves deep-link / notification
+// behavior for /inbox/:leadId routes while rendering inside the split view.
+function InboxSplitWithParam() {
+  const { leadId } = useParams<{ leadId: string }>();
+  return <InboxSplitView initialLeadId={leadId} />;
+}
 
 export default function App() {
   const navigate = useNavigate();
@@ -441,7 +448,7 @@ export default function App() {
                   )}
                   {activeTab === 'inbox' && (
                     <motion.div key="inbox" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="inbox-panel">
-                      <InboxList />
+                      <InboxSplitView />
                     </motion.div>
                   )}
                   {activeTab === 'automation' && (
@@ -490,7 +497,7 @@ export default function App() {
               merchantName={mockCompany}
               onLogout={logout}
             >
-              <InboxDetail />
+              <InboxSplitWithParam />
             </MasterDashboardLayout>
           ) : (
             <Navigate to="/onboarding" replace />

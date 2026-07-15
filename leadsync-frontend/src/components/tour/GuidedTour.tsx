@@ -48,6 +48,7 @@ const pageTourSteps: Record<TabID, TourStep[]> = {
       targetSelector: '[data-tour="messages-panel"]',
     },
   ],
+  inbox: [],
   customers: [
     {
       title: 'Customer List',
@@ -80,6 +81,7 @@ const pageTourSteps: Record<TabID, TourStep[]> = {
       targetSelector: '[data-tour="automation-builder"]',
     },
   ],
+  inventory: [],
   settings: [
     {
       title: 'Shop Settings',

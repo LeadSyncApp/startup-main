@@ -4,13 +4,15 @@ import { authedFetch } from "../../api/client";
 interface AiSuggestionPanelProps {
   leadId: string;
   onUseAndEdit: (suggestion: string) => void;
+  latestMessageId?: string;
 }
 
-export function AiSuggestionPanel({ leadId, onUseAndEdit }: AiSuggestionPanelProps) {
+export function AiSuggestionPanel({ leadId, onUseAndEdit, latestMessageId }: AiSuggestionPanelProps) {
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [rationale, setRationale] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [suggestionForMessageId, setSuggestionForMessageId] = useState<string | null>(null);
 
   const generateSuggestion = async () => {
     if (!leadId) return;
@@ -30,6 +32,7 @@ export function AiSuggestionPanel({ leadId, onUseAndEdit }: AiSuggestionPanelPro
       const data = await res.json();
       setSuggestion(data.suggestion);
       setRationale(data.rationale);
+      setSuggestionForMessageId(latestMessageId ?? null);
     } catch (e: any) {
       setError(e.message || "Something went wrong");
     } finally {
@@ -83,6 +86,11 @@ export function AiSuggestionPanel({ leadId, onUseAndEdit }: AiSuggestionPanelPro
 
       {suggestion && (
         <div className="space-y-2">
+          {suggestion && latestMessageId && latestMessageId !== suggestionForMessageId && (
+            <p className="text-[10px] text-amber-400/80 italic font-mono">
+              New message — this suggestion may be outdated
+            </p>
+          )}
           {rationale && (
             <p className="text-[10px] text-slate-500 italic font-mono">
               {rationale}

@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+
+// NOTE FOR REVIEW: InboxDetail accepts optional leadId and showBackButton props.
+// When rendered from InboxSplitView, leadId is passed directly and back button is hidden.
+// When used standalone (route /inbox/:leadId), leadId comes from useParams and back button shows.
+interface InboxDetailProps {
+  leadId?: string;
+  showBackButton?: boolean;
+}
 import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe, Menu } from "lucide-react";
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
@@ -46,9 +54,10 @@ const STATUS_VARIANT: Record<string, "success" | "warning" | "error" | "info" | 
   SNOOZED: "info",
 };
 
-export function InboxDetail() {
-  const { leadId } = useParams<{ leadId: string }>();
+export function InboxDetail({ leadId: propLeadId, showBackButton = true }: InboxDetailProps = {}) {
+  const { leadId: paramLeadId } = useParams<{ leadId: string }>();
   const navigate = useNavigate();
+  const leadId = propLeadId || paramLeadId;
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -67,6 +76,7 @@ export function InboxDetail() {
   const [history, setHistory] = useState<{ totalConversations: number; conversations: Array<{ id: string; status: string; claimedByName: string | null; resolvedBy: string | null; createdAt: string; updatedAt: string }> } | null>(null);
   const [_historyExpanded, setHistoryExpanded] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [panelTab, setPanelTab] = useState<"details" | "ai">("details");
 
   const fetchMessages = useCallback(async () => {
     if (!leadId) return;
@@ -116,8 +126,18 @@ export function InboxDetail() {
 
   // Auto-open panel when switching to YOU mode
   useEffect(() => {
-    if (mode === "YOU") setPanelOpen(true);
+    if (mode === "YOU") {
+      setPanelOpen(true);
+      setPanelTab("details");
+    }
   }, [mode]);
+
+  // Transition: if AI suggestion tab is open and user switches back to AI/Bot mode, go to details tab
+  useEffect(() => {
+    if (mode === "AI" && panelTab === "ai") {
+      setPanelTab("details");
+    }
+  }, [mode, panelTab]);
 
   // Resolve conversation (Done button)
   const handleResolve = async () => {
@@ -260,8 +280,8 @@ export function InboxDetail() {
 
     if (isSystem) {
       return (
-        <div key={msg.id} className="flex justify-center py-2">
-          <div className="px-4 py-2 rounded-2xl border border-slate-800 bg-slate-900/60 text-[11px] text-slate-400 font-mono max-w-[85%] text-center">
+        <div key={msg.id} className="flex justify-center py-0.5">
+          <div className="px-3 py-1.5 rounded-2xl border border-slate-800 bg-slate-900/60 text-[11px] text-slate-400 font-mono max-w-[85%] text-center">
             {msg.content}
           </div>
         </div>
@@ -269,8 +289,8 @@ export function InboxDetail() {
     }
 
     return (
-      <div key={msg.id} className={`flex ${isClient ? "justify-start" : "justify-end"} py-2`}>
-        <div className={`max-w-[75%] px-4 py-3 rounded-2xl border ${
+      <div key={msg.id} className={`flex ${isClient ? "justify-start" : "justify-end"} py-0.5`}>
+        <div className={`max-w-[75%] px-3 py-1.5 rounded-2xl border ${
           isFailed
             ? "bg-rose-500/10 border-rose-500/30 text-rose-200"
             : isClient
@@ -279,7 +299,7 @@ export function InboxDetail() {
             ? "bg-teal-600/90 border-teal-500/70 text-white"
             : "bg-brand-navy border-brand-navy/80 text-white"
         }`}>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-1 mb-0">
             <span className="text-[10px] font-black uppercase tracking-widest opacity-70">{senderLabel}</span>
             {isBot && (
               <span className="text-[9px] font-black text-teal-300/80 border border-teal-400/40 rounded px-1">AI</span>
@@ -299,9 +319,9 @@ export function InboxDetail() {
           </div>
           <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
           {msg.deliveryError && (
-            <p className="text-[10px] font-mono text-rose-400/70 mt-1 italic">{msg.deliveryError}</p>
+            <p className="text-[10px] font-mono text-rose-400/70 mt-0 italic">{msg.deliveryError}</p>
           )}
-          <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center justify-between mt-0">
             <span className="text-[9px] opacity-50 font-mono">
               {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </span>
@@ -322,13 +342,15 @@ export function InboxDetail() {
   };
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
+    <div className="flex h-screen w-full overflow-hidden">
       <div className={`flex flex-col h-full transition-all duration-200 ${mode === "YOU" ? "w-[calc(100%-340px)]" : "w-full"}`}>
       {/* Header */}
       <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
-        <button onClick={() => navigate("/inbox")} className="p-2 rounded-xl hover:bg-slate-900 border border-slate-800 transition cursor-pointer">
-          <ArrowLeft className="h-4 w-4 text-app-text-muted" />
-        </button>
+        {showBackButton && (
+          <button onClick={() => navigate("/inbox")} className="p-2 rounded-xl hover:bg-slate-900 border border-slate-800 transition cursor-pointer">
+            <ArrowLeft className="h-4 w-4 text-app-text-muted" />
+          </button>
+        )}
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-black text-app-text truncate">{customerDisplayName}</h2>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -390,7 +412,7 @@ export function InboxDetail() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto py-4 space-y-2">
+      <div className="flex-1 overflow-y-auto py-4 gap-1 flex flex-col">
         {detail.messages.length === 0 && (
           <div className="text-center text-xs text-slate-500 py-8">No messages yet. Say hello!</div>
         )}
@@ -422,7 +444,7 @@ export function InboxDetail() {
       )}
 
       {/* Input */}
-      <div className="pt-4 border-t border-slate-800">
+      <div className="pt-2 border-t border-slate-800">
         <div className="flex gap-2">
           <input
             value={content}
@@ -447,43 +469,98 @@ export function InboxDetail() {
 
       {panelOpen && leadId && (
         <div className="w-[340px] shrink-0 border-l border-slate-800 h-full overflow-y-auto">
-          {history && (
-            <div className="border-b border-slate-800">
-              <div className="px-4 py-2 text-[11px] text-amber-300/80 font-mono font-black uppercase tracking-wider">
-                Customer Details
-              </div>
-              <div className="px-4 pb-3 space-y-1">
-                {history.totalConversations === 0 ? (
-                  <div className="text-[10px] text-slate-500 font-mono italic">
-                    No past conversations
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-[10px] text-slate-500 font-mono mb-1">
-                      {history.totalConversations} past conversation{history.totalConversations !== 1 ? 's' : ''}
+          {/* Panel tabs */}
+          <div className="flex border-b border-slate-800">
+            <button
+              onClick={() => setPanelTab("details")}
+              className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                panelTab === "details"
+                  ? "bg-slate-800 text-slate-200 border-b-2 border-brand-saffron"
+                  : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              Customer Details
+            </button>
+            <button
+              onClick={() => setPanelTab("ai")}
+              className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                panelTab === "ai"
+                  ? "bg-slate-800 text-slate-200 border-b-2 border-brand-saffron"
+                  : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              AI Suggestion
+            </button>
+          </div>
+
+          {/* Details tab content */}
+          {panelTab === "details" && (
+            <div className="p-4">
+              {history && (
+                <div className="space-y-3">
+                  {history.totalConversations === 0 ? (
+                    <div className="text-[10px] text-slate-500 font-mono italic">
+                      No past conversations
                     </div>
-                    {history.totalConversations > 1 && history.conversations.slice(1).map((c) => (
-                      <div key={c.id} className="text-[10px] text-slate-400 font-mono flex items-center gap-2 flex-wrap">
-                        <Badge variant={c.claimedByName ? 'success' : 'warning'}>
-                          {c.claimedByName || 'unclaimed'}
-                        </Badge>
-                        <Badge variant={c.resolvedBy ? 'success' : c.status === 'RESOLVED' ? 'success' : 'info'}>
-                          {c.resolvedBy ? `resolved by ${c.resolvedBy}` : c.status}
-                        </Badge>
-                        <span>{new Date(c.createdAt).toLocaleDateString()}</span>
+                  ) : (
+                    <>
+                      <div className="text-[10px] text-slate-500 font-mono">
+                        {history.totalConversations} past conversation{history.totalConversations !== 1 ? 's' : ''}
                       </div>
-                    ))}
-                  </>
-                )}
-              </div>
+                       {history.conversations.map((c) => {
+                         // Guard against raw UUIDs or empty values in staff name fields
+                         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                         const rawName = c.claimedByName || c.resolvedBy || null;
+                         const displayName = (rawName && uuidRegex.test(rawName.trim()))
+                           ? "System"
+                           : rawName || "Unassigned Staff";
+
+                         // Use updatedAt for precise claim/resolution timestamp
+                         const actionTime = new Date(c.updatedAt);
+                         const formattedTime = actionTime.toLocaleDateString("en-US", {
+                           month: "short",
+                           day: "numeric",
+                           year: "numeric",
+                         });
+                         const timeString = actionTime.toLocaleTimeString("en-US", {
+                           hour: "2-digit",
+                           minute: "2-digit",
+                         });
+
+                         return (
+                           <div key={c.id} className="text-[11px] text-slate-300 font-mono flex items-center justify-between gap-2">
+                             <span className="font-bold text-slate-200 truncate">
+                               {displayName}
+                             </span>
+                             <span className="text-slate-500 shrink-0">
+                               {formattedTime} at {timeString}
+                             </span>
+                           </div>
+                         );
+                       })}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
-          {mode === "YOU" && (
-            <AiSuggestionPanel
-              leadId={leadId}
-              onUseAndEdit={(suggestion) => setContent(suggestion)}
-              latestMessageId={detail?.messages[detail.messages.length - 1]?.id}
-            />
+
+          {/* AI Suggestion tab content - only in Human Mode */}
+          {panelTab === "ai" && mode === "YOU" && (
+            <div className="p-3">
+              <AiSuggestionPanel
+                leadId={leadId}
+                onUseAndEdit={(suggestion) => setContent(suggestion)}
+                latestMessageId={detail?.messages[detail.messages.length - 1]?.id}
+              />
+            </div>
+          )}
+          {panelTab === "ai" && mode === "AI" && (
+            <div className="p-4 text-center">
+              <p className="text-[10px] text-slate-500 font-mono">
+                Switch to Human Mode to use AI suggestions
+              </p>
+            </div>
           )}
         </div>
       )}
