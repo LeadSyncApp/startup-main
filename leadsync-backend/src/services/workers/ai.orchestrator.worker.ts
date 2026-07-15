@@ -8,13 +8,12 @@ import { generateShopReply } from "../ai/ai.service";
 import { retrieveProductChunks, RetrievedChunk } from "../knowledge/knowledgeRetriever.service";
 import { StandardMessageFrame } from "../../interfaces/messaging.interface";
 import { tenantContextStorage, TenantContext } from "../context/tenantContext.provider";
-import { safeEmitConversationUpdate, emitToConversation, emitToCompanyAdmin, emitToCompany, emitToAgent, getIO } from "../../lib/socket";
+import { safeEmitConversationUpdate, emitToConversation, getIO } from "../../lib/socket";
 import { triggerLeadWelcome } from "../automation/autoReplyEventListeners";
 import { conversationalAutoReplyService } from "../automation/conversationalAutoReply.service";
 import { detectLanguage } from "../ai/languageDetection.service";
 import { ChannelType } from "../../interfaces/outbound.interface";
 import { reapGhostsForCompany } from "../infrastructure/ghostReaper.service";
-import { findLeastLoadedStaff } from "../assignment.service";
 
 export function evaluateTenantPriorityRules(aiOutput: any, rules: TenantContext["priorityRules"]): string {
   if (!rules || rules.length === 0) {
@@ -193,21 +192,14 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     // and emit realtime updates, but we do NOT run rule matching or LLM reply.
     if ((conversation as any).mode !== "BOT") {
       await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
-        let clientMsg = await tx.message.findFirst({
-          where: { conversationId: conversation.id },
-          orderBy: { createdAt: 'desc' },
-          take: 1
+        const clientMsg = await tx.message.create({
+          data: {
+            companyId,
+            conversationId: conversation.id,
+            content: text,
+            sender: MessageSender.CLIENT,
+          },
         });
-        if (!clientMsg) {
-          clientMsg = await tx.message.create({
-            data: {
-              companyId,
-              conversationId: conversation.id,
-              content: text,
-              sender: MessageSender.CLIENT,
-            },
-          });
-        }
         await tx.lead.update({ where: { id: lead.id }, data: { lastActiveAt: new Date() } });
         await tx.conversation.update({
           where: { id: conversation.id },
@@ -290,17 +282,10 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
           // Still log the customer message and update conversation state
           // But DON'T send a second AI reply — the rule already handled it
           await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
-            let clientMsg = await tx.message.findFirst({
-              where: { conversationId: conversation.id },
-              orderBy: { createdAt: 'desc' },
-              take: 1
+            const clientMsg = await tx.message.create({
+              data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
             });
-            if (!clientMsg) {
-              clientMsg = await tx.message.create({
-                data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
-              });
-              emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
-            }
+            emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
             await tx.lead.update({ where: { id: lead.id }, data: { lastActiveAt: new Date() } });
             await tx.conversation.update({
               where: { id: conversation.id },
@@ -358,48 +343,6 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     const sentimentScoreMap: Record<string, number> = { "POSITIVE": 1, "NEUTRAL": 0, "NEGATIVE": -1 };
     const resolvedScore = sentimentScoreMap[detected_meta?.sentiment] ?? 0;
 
-    // ============================================================
-    // 🔔 ESCALATION TRIGGERS — before sending AI reply
-    // ============================================================
-    // Check if the AI classified this as needing human handoff:
-    // 1. intent_type === "HUMAN_HANDOFF" (fallback/parse failure)
-    // 2. suggested_human_response is meaningful (non-empty string)
-    // 3. intent_type hints at complaint/refund/order_confirm
-    // 4. Sentiment is very negative
-    const needsHumanEscalation =
-      intent_type === "HUMAN_HANDOFF" ||
-      intent_type === "Support" ||
-      (detected_meta?.sentiment === "NEGATIVE" && resolvedScore < 0);
-
-    let escalationReason: string | null = null;
-    let isHardLockEscalation = false; // true for order_confirm (billing reasons)
-
-    if (needsHumanEscalation) {
-      if (intent_type === "HUMAN_HANDOFF") {
-        escalationReason = "manual_request";
-      } else if (intent_type === "Support") {
-        escalationReason = "complaint";
-      } else if (detected_meta?.sentiment === "NEGATIVE") {
-        escalationReason = "complaint";
-      } else {
-        escalationReason = "manual_request";
-      }
-    }
-
-    // Check for order confirmation (reuse existing order-intent detection)
-    // The AI signals order confirmation via tool_call or extracted_order data
-    // Only consider it confirmed if items were actually extracted
-    const isOrderConfirmed =
-      tool_call ||
-      (aiTurnResult?.extracted_order?.items?.length > 0);
-
-    if (isOrderConfirmed) {
-      escalationReason = "order_confirm";
-      isHardLockEscalation = true; // Billing/order reasons = HARD-LOCK
-    }
-
-    // ============================================================
-
     // 🛡️ PRE-SEND GUARD: re-fetch conversation.mode fresh from the database.
     // The mode gate at the top of the BOT path (≈line 219) used a value loaded
     // earlier in the pipeline (and the mid-pipeline reload selects only id/
@@ -438,74 +381,14 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
         await tx.lead.update({ where: { id: lead.id }, data: { aiPriority: priority === "URGENT" ? "HIGH" : priority === "HIGH" ? "MEDIUM" : "LOW" } });
 
-        // If escalation is needed, set reason + assignment atomically
-        // All escalations (order_confirm, manual_request, complaint, support) only set needsStaffReason
-        // - mode stays BOT unless staff explicitly changes it
-        const convoUpdateData: any = { updatedAt: new Date() };
-        if (escalationReason) {
-          convoUpdateData.needsStaffReason = escalationReason;
-
-          // Try to find and assign the least-loaded staff member
-          const staff = await findLeastLoadedStaff(companyId);
-          if (staff) {
-            convoUpdateData.claimedById = staff.id;
-            convoUpdateData.claimedByName = `${staff.firstName} ${staff.lastName || ""}`.trim();
-            convoUpdateData.claimedAt = new Date();
-          }
-        }
-
         await tx.conversation.update({
           where: { id: conversation.id },
-          data: convoUpdateData,
+          data: { updatedAt: new Date() },
         });
       })
     );
 
     await Promise.all(promisesToRun);
-
-    // If escalation was triggered, emit events outside the lock
-    if (escalationReason) {
-      const escalatedConvo = await (prisma.conversation as any).findUnique({
-        where: { id: conversation.id },
-        include: {
-          lead: { select: { id: true, name: true, contact: true, channel: true } },
-          claimedBy: { select: { id: true, firstName: true, lastName: true } },
-        },
-      });
-
-      const eventPayload: any = {
-        conversationId: escalatedConvo.id,
-        companyId: escalatedConvo.companyId,
-        leadId: escalatedConvo.leadId,
-        lead: escalatedConvo.lead,
-        mode: escalatedConvo.mode,
-        status: escalatedConvo.status,
-        needsStaffReason: escalatedConvo.needsStaffReason,
-        assignedTo: escalatedConvo.claimedBy
-          ? { id: escalatedConvo.claimedBy.id, name: escalatedConvo.claimedByName }
-          : null,
-        escalatedAt: new Date().toISOString(),
-        reason: escalationReason,
-      };
-
-      if (escalatedConvo.claimedBy) {
-        safeEmitConversationUpdate(escalatedConvo, "conversation.escalated", eventPayload);
-        emitToAgent(escalatedConvo.claimedBy.id, "conversation.escalated", eventPayload);
-      } else {
-        // No staff available — broadcast to company admin room
-        emitToCompanyAdmin(escalatedConvo.companyId, "conversation.escalated", eventPayload);
-        emitToCompany(escalatedConvo.companyId, "conversation.escalated", {
-          ...eventPayload,
-          _note: "UNASSIGNED — No online staff available. Manual claim required.",
-        });
-      }
-
-      console.log(
-        `[Orchestrator] Conversation ${conversation.id} escalated to HUMAN` +
-        `${escalatedConvo.claimedBy ? `, assigned to ${escalatedConvo.claimedBy.firstName}` : " (UNASSIGNED)"}` +
-        `. Reason: ${escalationReason}`
-      );
-    }
 
     safeEmitConversationUpdate(conversation, "conversation_updated", { conversationId: conversation.id, lastContent: replyText, updatedAt: new Date().toISOString() });
     return aiTurnResult;
