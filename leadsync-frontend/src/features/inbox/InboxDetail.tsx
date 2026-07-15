@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 // NOTE FOR REVIEW: InboxDetail accepts optional leadId and showBackButton props.
@@ -74,7 +74,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   const [showResolveConfirm, setShowResolveConfirm] = useState(false);
   // Customer history banner
   const [history, setHistory] = useState<{ totalConversations: number; conversations: Array<{ id: string; status: string; claimedByName: string | null; resolvedBy: string | null; createdAt: string; updatedAt: string }> } | null>(null);
-  const [_historyExpanded, setHistoryExpanded] = useState(false);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<"details" | "ai">("details");
 
@@ -111,7 +111,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   useEffect(() => {
     if (!leadId) return;
     setHistory(null);
-    setHistoryExpanded(false);
+    setExpandedHistoryId(null);
     authedFetch(`/api/leads/${leadId}/history`)
       .then((res) => res.ok ? res.json() : null)
       .then((data) => setHistory(data))
@@ -342,8 +342,8 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden">
-      <div className={`flex flex-col h-full transition-all duration-200 ${mode === "YOU" ? "w-[calc(100%-340px)]" : "w-full"}`}>
+    <div className="flex h-full w-full min-h-0 overflow-hidden">
+      <div className={`flex flex-col h-full min-h-0 transition-all duration-200 ${mode === "YOU" ? "w-[calc(100%-340px)]" : "w-full"}`}>
       {/* Header */}
       <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
         {showBackButton && (
@@ -507,37 +507,75 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
                       <div className="text-[10px] text-slate-500 font-mono">
                         {history.totalConversations} past conversation{history.totalConversations !== 1 ? 's' : ''}
                       </div>
-                       {history.conversations.map((c) => {
-                         // Guard against raw UUIDs or empty values in staff name fields
-                         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-                         const rawName = c.claimedByName || c.resolvedBy || null;
-                         const displayName = (rawName && uuidRegex.test(rawName.trim()))
-                           ? "System"
-                           : rawName || "Unassigned Staff";
+                      <table className="w-full text-[11px] border border-slate-800 rounded-lg overflow-hidden">
+                        <thead>
+                          <tr className="bg-slate-900/60 text-slate-400 text-left">
+                            <th className="px-2 py-1.5 font-bold">Staff</th>
+                            <th className="px-2 py-1.5 font-bold">Status</th>
+                            <th className="px-2 py-1.5 font-bold text-right">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {history.conversations.map((c) => {
+                            // Guard against raw UUIDs or empty values in staff name fields
+                            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                            const rawName = c.claimedByName || c.resolvedBy || null;
+                            const displayName = (rawName && uuidRegex.test(rawName.trim()))
+                              ? "System"
+                              : rawName || "Unassigned Staff";
+                            const isOpen = expandedHistoryId === c.id;
+                            // Use updatedAt for precise claim/resolution timestamp
+                            const actionTime = new Date(c.updatedAt);
+                            const formattedTime = actionTime.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            });
+                            const timeString = actionTime.toLocaleTimeString("en-US", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            });
+                            // createdAt = when this session was started
+                            const createdTime = new Date(c.createdAt);
+                            const createdDate = createdTime.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            });
+                            const createdTimeStr = createdTime.toLocaleTimeString("en-US", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            });
 
-                         // Use updatedAt for precise claim/resolution timestamp
-                         const actionTime = new Date(c.updatedAt);
-                         const formattedTime = actionTime.toLocaleDateString("en-US", {
-                           month: "short",
-                           day: "numeric",
-                           year: "numeric",
-                         });
-                         const timeString = actionTime.toLocaleTimeString("en-US", {
-                           hour: "2-digit",
-                           minute: "2-digit",
-                         });
-
-                         return (
-                           <div key={c.id} className="text-[11px] text-slate-300 font-mono flex items-center justify-between gap-2">
-                             <span className="font-bold text-slate-200 truncate">
-                               {displayName}
-                             </span>
-                             <span className="text-slate-500 shrink-0">
-                               {formattedTime} at {timeString}
-                             </span>
-                           </div>
-                         );
-                       })}
+                            return (
+                              <Fragment key={c.id}>
+                                <tr
+                                  className="border-t border-slate-800 cursor-pointer hover:bg-slate-800/40"
+                                  onClick={() => setExpandedHistoryId(isOpen ? null : c.id)}
+                                >
+                                  <td className="px-2 py-1.5 font-bold text-slate-200 truncate max-w-[120px]">{displayName}</td>
+                                  <td className="px-2 py-1.5">
+                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+                                      c.status === "RESOLVED" ? "bg-emerald-500/20 text-emerald-300"
+                                      : c.status === "ASSIGNED" ? "bg-amber-500/20 text-amber-300"
+                                      : "bg-slate-700/60 text-slate-300"
+                                    }`}>{c.status}</span>
+                                  </td>
+                                  <td className="px-2 py-1.5 text-slate-500 text-right whitespace-nowrap">{formattedTime}</td>
+                                </tr>
+                                {isOpen && (
+                                  <tr className="border-t border-slate-800 bg-slate-900/40">
+                                    <td colSpan={3} className="px-3 py-2 text-[10px] text-slate-400 font-mono space-y-0.5">
+                                      <div>Claimed / Updated: <span className="text-slate-300">{formattedTime} at {timeString}</span></div>
+                                      <div>Conversation started: <span className="text-slate-300">{createdDate} at {createdTimeStr}</span></div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </>
                   )}
                 </div>

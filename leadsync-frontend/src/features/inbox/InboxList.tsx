@@ -100,13 +100,16 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
       if (!res.ok) throw new Error("Failed to fetch inbox");
       const json: LeadsResponse = await res.json();
 
-      // Strict separation: hard-filter by status to prevent any leakage
+      // Strict separation: trust backend filter as single source of truth.
+      // Backend 'resolved' filter uses a raw SQL subquery to match only leads
+      // whose MOST-RECENT conversation is RESOLVED. The client-side guard is
+      // kept only for defensive consistency, referencing RESOLVED only.
       const statusFiltered = json.data.filter((lead) => {
         if (filter === "chats") {
-          return lead.status !== "RESOLVED" && lead.status !== "COMPLETED";
+          return lead.status !== "RESOLVED";
         }
         if (filter === "completed") {
-          return lead.status === "RESOLVED" || lead.status === "COMPLETED";
+          return lead.status === "RESOLVED";
         }
         return true;
       });

@@ -437,7 +437,7 @@ export default function App() {
               merchantName={mockCompany}
               onLogout={logout}
             >
-              <div className="w-full">
+              <div className="w-full h-full min-h-0 flex flex-col">
                 <GuidedTour activeTab={activeTab} />
                 <AnimatePresence mode="wait">
                   {activeTab === 'shop' && renderShopHome()}
@@ -447,7 +447,7 @@ export default function App() {
                     </motion.div>
                   )}
                   {activeTab === 'inbox' && (
-                    <motion.div key="inbox" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="inbox-panel">
+                    <motion.div key="inbox" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="inbox-panel" className="flex-1 min-h-0">
                       <InboxSplitView />
                     </motion.div>
                   )}
