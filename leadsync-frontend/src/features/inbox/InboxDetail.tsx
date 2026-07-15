@@ -4,6 +4,7 @@ import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Inst
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
 import AiSuggestionPanel from "./AiSuggestionPanel";
+import { Badge } from "../../components/ui/Badge";
 
 // ── Types ──
 export interface BackendMessage {
@@ -26,6 +27,8 @@ export interface ConversationDetail {
   channel?: string;
   mode?: "BOT" | "HUMAN";
   resolvedBy?: string | null;
+  customerName?: string | null;
+  customerContact?: string | null;
   messages: BackendMessage[];
 }
 
@@ -36,11 +39,11 @@ const CHANNEL_ICON: Record<string, React.ComponentType<{ className?: string }>> 
   WEBSITE: Globe,
 };
 
-const CHANNEL_CLASS: Record<string, string> = {
-  TELEGRAM: "bg-sky-500/10 text-sky-400 border-sky-500/20",
-  WHATSAPP: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  INSTAGRAM: "bg-rose-500/10 text-rose-400 border-rose-500/20",
-  WEBSITE: "bg-slate-500/10 text-slate-400 border-slate-500/20",
+const STATUS_VARIANT: Record<string, "success" | "warning" | "error" | "info" | "neutral"> = {
+  OPEN: "neutral",
+  ASSIGNED: "warning",
+  RESOLVED: "success",
+  SNOOZED: "info",
 };
 
 export function InboxDetail() {
@@ -244,7 +247,8 @@ export function InboxDetail() {
 
   // BUGFIX: Use detail.channel instead of detail.status for channel icon/class
   const ChannelIcon = CHANNEL_ICON[detail.channel?.toUpperCase() || "WEBSITE"] || Globe;
-  const channelClass = CHANNEL_CLASS[detail.channel?.toUpperCase() || "WEBSITE"] || CHANNEL_CLASS.WEBSITE;
+  const customerDisplayName = detail.customerName || detail.customerContact || "Customer";
+  const customerPhone = detail.customerContact || null;
 
   const renderBubble = (msg: BackendMessage) => {
     const isClient = msg.sender === "CLIENT";
@@ -285,6 +289,13 @@ export function InboxDetail() {
                 <AlertTriangle className="h-3 w-3" /> Failed
               </span>
             )}
+            {/* Delivery status indicator for non-failed messages */}
+            {!isFailed && !isSystem && (
+              <span className="text-[9px] font-mono opacity-50 ml-auto">
+                {msg.deliveryStatus === "SENT" && (msg.isRead ? "✓✓ Read" : "✓ Sent")}
+                {msg.deliveryStatus === "PENDING" && "⏳ Pending"}
+              </span>
+            )}
           </div>
           <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
           {msg.deliveryError && (
@@ -318,12 +329,20 @@ export function InboxDetail() {
         <button onClick={() => navigate("/inbox")} className="p-2 rounded-xl hover:bg-slate-900 border border-slate-800 transition cursor-pointer">
           <ArrowLeft className="h-4 w-4 text-app-text-muted" />
         </button>
-        <div className="flex-1">
-          <h2 className="text-sm font-black text-app-text">Conversation</h2>
-          <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-wider font-mono ${channelClass}`}>
-            <ChannelIcon className="h-3 w-3" />
-            {detail.status}
-          </span>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-sm font-black text-app-text truncate">{customerDisplayName}</h2>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {customerPhone && customerPhone !== customerDisplayName && (
+              <span className="text-[10px] text-slate-400 font-mono">{customerPhone}</span>
+            )}
+            <Badge variant="neutral" className="flex items-center gap-1">
+              <ChannelIcon className="h-3 w-3" />
+              {detail.channel}
+            </Badge>
+            <Badge variant={STATUS_VARIANT[detail.status?.toUpperCase()] || "neutral"}>
+              {detail.status}
+            </Badge>
+          </div>
         </div>
         {/* Done button - only show in YOU mode */}
         {mode === "YOU" && (
@@ -428,21 +447,34 @@ export function InboxDetail() {
 
       {panelOpen && leadId && (
         <div className="w-[340px] shrink-0 border-l border-slate-800 h-full overflow-y-auto">
-          {history && history.totalConversations > 1 && (
+          {history && (
             <div className="border-b border-slate-800">
               <div className="px-4 py-2 text-[11px] text-amber-300/80 font-mono font-black uppercase tracking-wider">
                 Customer Details
               </div>
               <div className="px-4 pb-3 space-y-1">
-                <div className="text-[10px] text-slate-500 font-mono mb-1">
-                  {history.totalConversations} past conversations
-                </div>
-                {history.conversations.slice(1).map((c) => (
-                  <div key={c.id} className="text-[10px] text-slate-400 font-mono flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full ${c.status === "RESOLVED" ? "bg-emerald-500/60" : "bg-slate-500/60"}`} />
-                    <span>{c.claimedByName || "unclaimed"} · {c.resolvedBy ? `resolved by ${c.resolvedBy}` : c.status} · {new Date(c.createdAt).toLocaleDateString()}</span>
+                {history.totalConversations === 0 ? (
+                  <div className="text-[10px] text-slate-500 font-mono italic">
+                    No past conversations
                   </div>
-                ))}
+                ) : (
+                  <>
+                    <div className="text-[10px] text-slate-500 font-mono mb-1">
+                      {history.totalConversations} past conversation{history.totalConversations !== 1 ? 's' : ''}
+                    </div>
+                    {history.totalConversations > 1 && history.conversations.slice(1).map((c) => (
+                      <div key={c.id} className="text-[10px] text-slate-400 font-mono flex items-center gap-2 flex-wrap">
+                        <Badge variant={c.claimedByName ? 'success' : 'warning'}>
+                          {c.claimedByName || 'unclaimed'}
+                        </Badge>
+                        <Badge variant={c.resolvedBy ? 'success' : c.status === 'RESOLVED' ? 'success' : 'info'}>
+                          {c.resolvedBy ? `resolved by ${c.resolvedBy}` : c.status}
+                        </Badge>
+                        <span>{new Date(c.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
           )}

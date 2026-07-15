@@ -15,7 +15,10 @@ const router = Router();
 
 /**
  * GET /api/leads
- * Support filtering: ?filter=me | ?filter=unassigned
+ * Support filtering: ?filter=unclaimed | ?filter=mine | ?filter=all | ?filter=resolved
+ * Support search: ?search=<term> (matches lead name/contact)
+ * Support pagination: ?page=1&limit=50
+ * Returns: { data: [...], meta: { total, page, limit, hasMore } }
  */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -29,17 +32,48 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     const sharingConditions = await applyDataSharingRules(req.user.userId, companyId, req.user.role);
 
     // 🔍 Filter Logic for Shared Inbox
-    const filter = req.query.filter as string; // 'me', 'unassigned'
+    const filter = req.query.filter as string; // 'unclaimed', 'mine', 'all', 'resolved'
+    const search = req.query.search as string;
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 50));
+    const skip = (page - 1) * limit;
+
     const whereCondition: any = { companyId, ...sharingConditions };
 
     // We filter Leads based on their conversations
-    if (filter === 'me') {
+    if (filter === 'mine' || filter === 'me') {
       // Only leads where I am assigned to at least one conversation
       whereCondition.conversations = { some: { claimedById: req.user.userId } };
-    } else if (filter === 'unassigned') {
+    } else if (filter === 'unclaimed' || filter === 'unassigned') {
       // Only leads with unassigned open conversations
       whereCondition.conversations = { some: { claimedById: null, status: { not: 'RESOLVED' } } };
+    } else if (filter === 'resolved') {
+      // Only leads with resolved conversations
+      whereCondition.conversations = { some: { status: 'RESOLVED' } };
     }
+    // 'all' or no filter: no conversation-level filtering
+
+    // Search by lead name or contact - combines with data-sharing rules via AND
+    if (search) {
+      const searchOR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { contact: { contains: search, mode: 'insensitive' } },
+      ];
+      if (whereCondition.OR) {
+        // Combine existing sharing-rule OR with search OR via AND
+        // This ensures BOTH restrictions apply (not either/or)
+        whereCondition.AND = [
+          { OR: whereCondition.OR },
+          { OR: searchOR },
+        ];
+        delete whereCondition.OR;
+      } else {
+        whereCondition.OR = searchOR;
+      }
+    }
+
+    // Count total matching leads
+    const total = await (prisma.lead as any).count({ where: whereCondition });
 
     // Forceful cast to bypass stale types (IDE context lag)
     const leads = await (prisma.lead as any).findMany({
@@ -66,7 +100,8 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
           },
       },
       orderBy: { lastActiveAt: "desc" },
-      take: 50,
+      skip,
+      take: limit,
     });
 
     const formatted = leads.map((lead: any) => {
@@ -109,7 +144,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
        // Check if most recent message overall is from SYSTEM (hasAutoReply)
        const mostRecent = allMessages[0];
        const hasAutoReply = mostRecent?.sender === "SYSTEM" || mostRecent?.sender === "BOT";
-      
+       
        // botRepliedAt: timestamp of most recent SYSTEM message if hasAutoReply is true
        let botRepliedAt: string | null = null;
        if (hasAutoReply) {
@@ -180,7 +215,15 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
        };
     });
 
-    res.json(formatted);
+    res.json({
+      data: formatted,
+      meta: {
+        total,
+        page,
+        limit,
+        hasMore: skip + limit < total,
+      },
+    });
   } catch (error) {
     console.error("Fetch leads error:", error);
     res.status(500).json({ message: "Failed to fetch leads" });
@@ -783,8 +826,12 @@ router.post("/:id/resolve", authMiddleware, async (req: AuthRequest, res: Respon
       return res.status(404).json({ message: "No conversation found for this lead" });
     }
 
-    // resolvedBy = agent display name (stored in req.user.name during auth)
-    const resolvedBy = req.user!.name || userId;
+    // resolvedBy = agent display name (firstName + lastName)
+    const resolvingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true }
+    });
+    const resolvedBy = resolvingUser ? `${resolvingUser.firstName} ${resolvingUser.lastName || ""}`.trim() : userId;
 
     await resolveConversation(conversation.id, resolvedBy);
 
@@ -1104,7 +1151,7 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
     // 1. Find the lead with multi-tenant safety, include conversation + contact info
     const lead = await prisma.lead.findFirst({
       where: { id: req.params.id, companyId },
-      select: { id: true, channel: true, conversations: { select: { id: true, status: true, claimedById: true, mode: true, resolvedBy: true }, take: 1, orderBy: { updatedAt: "desc" } } }
+      select: { id: true, name: true, contact: true, channel: true, conversations: { select: { id: true, status: true, claimedById: true, mode: true, resolvedBy: true }, take: 1, orderBy: { updatedAt: "desc" } } }
     });
 
     if (!lead) {
@@ -1141,6 +1188,8 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
       mode: conversation.mode,
       resolvedBy: conversation.resolvedBy,
       channel: lead.channel,
+      customerName: lead.name,
+      customerContact: lead.contact,
       messages,
     });
   } catch (error) {
