@@ -48,8 +48,22 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       // Only leads with unassigned open conversations
       whereCondition.conversations = { some: { claimedById: null, status: { not: 'RESOLVED' } } };
     } else if (filter === 'resolved') {
-      // Only leads with resolved conversations
-      whereCondition.conversations = { some: { status: 'RESOLVED' } };
+      // Fix: Only match leads whose MOST RECENT conversation (by updatedAt) has status RESOLVED.
+      // Using raw SQL subquery because Prisma does not support ordering in relation filter conditions
+      // (conversations: { some: { status: 'RESOLVED' } } matches ANY resolved conversation, not just
+      // the most recent one — causing leads with old resolved + newer non-resolved to wrongly appear).
+      const resolvedLeadIds = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT l.id FROM "Lead" l
+         WHERE l."companyId" = $1
+         AND 'RESOLVED' = (
+           SELECT c.status FROM "Conversation" c
+           WHERE c."leadId" = l.id
+           ORDER BY c."updatedAt" DESC
+           LIMIT 1
+         )`,
+        companyId
+      );
+      whereCondition.id = { in: resolvedLeadIds.map(r => r.id) };
     }
     // 'all' or no filter: no conversation-level filtering
 
