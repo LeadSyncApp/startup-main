@@ -6,7 +6,7 @@ import { safeEmitConversationUpdate, emitToAgent, emitToCompany } from "../../li
 import { validateAndSanitizeCustomFields } from "../../utils/custom-fields.validator";
 import { applyDataSharingRules } from "../../lib/sharing.engine";
 import { asyncHandler } from "../../middleware/error.middleware";
-import { ConversationStatus, MessageSender, Channel as PrismaChannel } from "@prisma/client";
+import { ConversationStatus, ConversationMode, MessageSender, Channel as PrismaChannel } from "@prisma/client";
 import { outboundDispatcherService } from "../../services/outbound.dispatcher";
 import { escalateToHuman, resolveConversation } from "../../services";
 import { generateReplySuggestion } from "../../services/ai/ai.service";
@@ -338,12 +338,12 @@ router.get("/audience", authMiddleware, async (req: AuthRequest, res: Response) 
 router.patch("/:id", authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
   const { companyId, role, userId } = req.user!;
   const { id } = req.params;
-  const { segment, name, priority, customFields, isPrivate, ownerId } = req.body;
+  const { segment, name, priority, customFields, isPrivate } = req.body;
 
   // 🔍 Security Check: Is this record accessible using Data Sharing Rules?
   const sharingConditions = await applyDataSharingRules(userId, companyId, role);
   
-  const lead = await (prisma.lead as any).findFirst({ 
+  const lead = await (prisma.lead as any).findFirst({
     where: { 
       id, 
       companyId,
@@ -358,8 +358,6 @@ router.patch("/:id", authMiddleware, asyncHandler(async (req: AuthRequest, res: 
   if (segment !== undefined) updateData.segment = segment;
   if (name !== undefined) updateData.name = name;
   if (isPrivate !== undefined) updateData.isPrivate = isPrivate;
-  if (ownerId !== undefined) updateData.ownerId = ownerId;
-
   if (customFields !== undefined) {
     const sanitized = await validateAndSanitizeCustomFields(companyId, "LEAD", customFields);
     // Overwrite/merge custom fields dynamically
@@ -704,9 +702,12 @@ router.post("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response)
       return res.json({ conversationId, mode, resolvedBy: null });
     }
 
-    // mode === "BOT"
-    await resolveConversation(conversationId, "AI");
-    return res.json({ conversationId, mode, resolvedBy: "AI" });
+    // mode === "BOT" — switch AI back on WITHOUT resolving the conversation
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { mode: ConversationMode.BOT },
+    });
+    return res.json({ conversationId, mode, resolvedBy: null });
   } catch (error: any) {
     console.error("Change conversation mode error:", error);
     res.status(500).json({ message: "Failed to change conversation mode" });
@@ -744,6 +745,57 @@ router.post("/:id/ai-suggest", authMiddleware, async (req: AuthRequest, res: Res
   } catch (error: any) {
     console.error("Generate AI suggestion error:", error);
     return res.status(500).json({ message: "Failed to generate suggestion" });
+  }
+});
+
+/* =========================================
+   POST /api/leads/:id/resolve
+   Explicitly resolve a conversation (staff "Done" action).
+   Does NOT fire on AI/You mode toggle.
+========================================= */
+router.post("/:id/resolve", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId, companyId, role } = req.user!;
+    const { id } = req.params;
+
+    // Only agents can resolve conversations
+    if (!["STAFF", "MANAGER", "OWNER"].includes(role)) {
+      return res.status(403).json({ message: "Only agents can resolve conversations" });
+    }
+
+    const lead = await (prisma.lead as any).findFirst({
+      where: { id, companyId },
+      select: {
+        conversations: {
+          select: { id: true, status: true },
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    const conversation = lead.conversations[0];
+    if (!conversation) {
+      return res.status(404).json({ message: "No conversation found for this lead" });
+    }
+
+    // resolvedBy = agent display name (stored in req.user.name during auth)
+    const resolvedBy = req.user!.name || userId;
+
+    await resolveConversation(conversation.id, resolvedBy);
+
+    return res.json({
+      id: conversation.id,
+      status: "RESOLVED",
+      resolvedBy,
+    });
+  } catch (error: any) {
+    console.error("Resolve conversation error:", error);
+    res.status(500).json({ message: "Failed to resolve conversation" });
   }
 });
 
@@ -1237,6 +1289,49 @@ router.post("/:id/reply", authMiddleware, async (req: AuthRequest, res: Response
   } catch (error: any) {
     console.error("Agent reply error:", error);
     return res.status(500).json({ message: error.message || "Failed to send reply" });
+  }
+});
+
+/* =========================================
+   GET /api/leads/:id/history
+   Returns customer conversation history for context
+   Multi-tenant safe — verifies lead belongs to req.user's company
+========================================= */
+router.get("/:id/history", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { companyId } = req.user!;
+    const { id } = req.params;
+
+    // Verify lead exists and belongs to this company
+    const lead = await prisma.lead.findFirst({
+      where: { id, companyId },
+      select: { id: true },
+    });
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    const conversations = await prisma.conversation.findMany({
+      where: { leadId: id, companyId },
+      select: {
+        id: true,
+        status: true,
+        claimedByName: true,
+        resolvedBy: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return res.json({
+      totalConversations: conversations.length,
+      conversations,
+    });
+  } catch (error) {
+    console.error("Fetch lead history error:", error);
+    return res.status(500).json({ message: "Failed to fetch lead history" });
   }
 });
 
