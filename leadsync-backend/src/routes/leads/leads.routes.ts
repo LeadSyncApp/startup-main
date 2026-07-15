@@ -841,11 +841,12 @@ router.post("/:id/resolve", authMiddleware, async (req: AuthRequest, res: Respon
     }
 
     // resolvedBy = agent display name (firstName + lastName)
+    // Fallback string kept in sync with scripts/backfill_conversation_activity.mjs
     const resolvingUser = await prisma.user.findUnique({
       where: { id: userId },
       select: { firstName: true, lastName: true }
     });
-    const resolvedBy = resolvingUser ? `${resolvingUser.firstName} ${resolvingUser.lastName || ""}`.trim() : userId;
+    const resolvedBy = resolvingUser ? `${resolvingUser.firstName} ${resolvingUser.lastName || ""}`.trim() : "Deleted User";
 
     await resolveConversation(conversation.id, resolvedBy);
 
