@@ -851,8 +851,10 @@ export async function generateReplySuggestion(
       .join("\n");
 
     // 5. Build chat history for context
+    // messages are fetched desc (newest-first); take the newest 5, then reverse to chronological order.
     const recentMessages = messages
-      .slice(-5)
+      .slice(0, 5)
+      .reverse()
       .map((m: any) => `${m.sender}: ${m.content}`)
       .join("\n");
 
