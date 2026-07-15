@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe } from "lucide-react";
+import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe, Menu } from "lucide-react";
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
 import AiSuggestionPanel from "./AiSuggestionPanel";
@@ -59,6 +59,11 @@ export function InboxDetail() {
   const [failedMessageContent, setFailedMessageContent] = useState<string | null>(null);
   // Track conversation mode for AI/You toggle (AI = BOT mode, You = HUMAN mode)
   const [mode, setMode] = useState<"AI" | "YOU">("AI");
+  const [showResolveConfirm, setShowResolveConfirm] = useState(false);
+  // Customer history banner
+  const [history, setHistory] = useState<{ totalConversations: number; conversations: Array<{ id: string; status: string; claimedByName: string | null; resolvedBy: string | null; createdAt: string; updatedAt: string }> } | null>(null);
+  const [_historyExpanded, setHistoryExpanded] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const fetchMessages = useCallback(async () => {
     if (!leadId) return;
@@ -89,11 +94,48 @@ export function InboxDetail() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [detail?.messages.length]);
 
+  // Fetch customer history on lead change
+  useEffect(() => {
+    if (!leadId) return;
+    setHistory(null);
+    setHistoryExpanded(false);
+    authedFetch(`/api/leads/${leadId}/history`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => setHistory(data))
+      .catch(() => {});
+  }, [leadId]);
+
   // Sync mode state from backend
   useEffect(() => {
     if (!detail?.mode) return;
     setMode(detail.mode === "HUMAN" ? "YOU" : "AI");
   }, [detail?.mode]);
+
+  // Auto-open panel when switching to YOU mode
+  useEffect(() => {
+    if (mode === "YOU") setPanelOpen(true);
+  }, [mode]);
+
+  // Resolve conversation (Done button)
+  const handleResolve = async () => {
+    if (!leadId || !detail?.conversationId) return;
+    
+    try {
+      const res = await authedFetch(`/api/leads/${leadId}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to resolve conversation");
+      }
+      toast.success("Conversation resolved");
+      setShowResolveConfirm(false);
+      fetchMessages(); // Refresh to get updated status
+    } catch (e: any) {
+      toast.error("Could not resolve: " + (e.message || "Unknown error"));
+    }
+  };
 
   // Toggle conversation mode between AI (BOT) and You (HUMAN)
   const handleModeToggle = async (newMode: "AI" | "YOU") => {
@@ -269,7 +311,8 @@ export function InboxDetail() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full w-full overflow-hidden">
+      <div className={`flex flex-col h-full transition-all duration-200 ${mode === "YOU" ? "w-[calc(100%-340px)]" : "w-full"}`}>
       {/* Header */}
       <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
         <button onClick={() => navigate("/inbox")} className="p-2 rounded-xl hover:bg-slate-900 border border-slate-800 transition cursor-pointer">
@@ -282,6 +325,15 @@ export function InboxDetail() {
             {detail.status}
           </span>
         </div>
+        {/* Done button - only show in YOU mode */}
+        {mode === "YOU" && (
+          <button
+            onClick={() => setShowResolveConfirm(true)}
+            className="px-2 py-0.5 text-[10px] font-black rounded border border-emerald-500/40 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition cursor-pointer"
+          >
+            Done
+          </button>
+        )}
         {/* AI/You Mode Toggle Pill */}
         <div className="flex items-center gap-1">
           <span
@@ -305,6 +357,17 @@ export function InboxDetail() {
             You
           </span>
         </div>
+        {/* Panel toggle button */}
+        <button
+          onClick={() => setPanelOpen(!panelOpen)}
+          className={`p-1.5 rounded-lg border transition cursor-pointer ${
+            panelOpen
+              ? "bg-slate-700 border-slate-600 text-app-text"
+              : "bg-slate-800/50 border-slate-700 text-app-text-muted hover:bg-slate-700"
+          }`}
+        >
+          <Menu className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Messages */}
@@ -331,14 +394,6 @@ export function InboxDetail() {
         )}
         <div ref={messagesEndRef} />
       </div>
-
-      {/* AI Suggestion Panel - shown only when AI tab is active */}
-      {mode === "AI" && leadId && (
-        <AiSuggestionPanel
-          leadId={leadId}
-          onUseAndEdit={(suggestion) => setContent(suggestion)}
-        />
-      )}
 
       {/* Network error banner */}
       {networkError && !failedMessageContent && (
@@ -369,6 +424,63 @@ export function InboxDetail() {
           </button>
         </div>
       </div>
+      </div>
+
+      {panelOpen && leadId && (
+        <div className="w-[340px] shrink-0 border-l border-slate-800 h-full overflow-y-auto">
+          {history && history.totalConversations > 1 && (
+            <div className="border-b border-slate-800">
+              <div className="px-4 py-2 text-[11px] text-amber-300/80 font-mono font-black uppercase tracking-wider">
+                Customer Details
+              </div>
+              <div className="px-4 pb-3 space-y-1">
+                <div className="text-[10px] text-slate-500 font-mono mb-1">
+                  {history.totalConversations} past conversations
+                </div>
+                {history.conversations.slice(1).map((c) => (
+                  <div key={c.id} className="text-[10px] text-slate-400 font-mono flex items-center gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full ${c.status === "RESOLVED" ? "bg-emerald-500/60" : "bg-slate-500/60"}`} />
+                    <span>{c.claimedByName || "unclaimed"} · {c.resolvedBy ? `resolved by ${c.resolvedBy}` : c.status} · {new Date(c.createdAt).toLocaleDateString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {mode === "YOU" && (
+            <AiSuggestionPanel
+              leadId={leadId}
+              onUseAndEdit={(suggestion) => setContent(suggestion)}
+              latestMessageId={detail?.messages[detail.messages.length - 1]?.id}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Resolve Confirmation Modal */}
+      {showResolveConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 max-w-sm w-full mx-4">
+            <h3 className="text-sm font-black text-app-text mb-2">Mark conversation as resolved?</h3>
+            <p className="text-xs text-slate-400 mb-4">
+              This will mark the conversation as resolved. The customer will be moved to the resolved list.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowResolveConfirm(false)}
+                className="px-3 py-1.5 text-xs font-black text-slate-400 border border-slate-700 rounded hover:bg-slate-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResolve}
+                className="px-3 py-1.5 text-xs font-black text-emerald-300 border border-emerald-500/40 rounded bg-emerald-500/20 hover:bg-emerald-500/30 transition cursor-pointer"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
