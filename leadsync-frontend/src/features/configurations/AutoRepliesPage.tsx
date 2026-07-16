@@ -5,7 +5,7 @@ import {
   Trash2, Plus, Edit3, Clock, Save, Globe
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { authedFetch, generateSmartRules, listSmartRules, updateSmartRule, deleteSmartRule, createRuleGroup, listRuleGroups, deleteRuleGroup, testInstruction, generateExample } from "../../api/client";
+import { authedFetch, generateSmartRules, listSmartRules, updateSmartRule, deleteSmartRule, createRuleGroup, listRuleGroups, deleteRuleGroup, testInstruction, generateExample, createSmartRule } from "../../api/client";
 
 /* ──────────────────────────────────────────────────────────────
    Types
@@ -98,6 +98,11 @@ export function AutoRepliesPage() {
   const [editBrandVoice, setEditBrandVoice] = useState<"formal" | "casual" | "friendly" | "salesy">("friendly");
   const [editLanguage, setEditLanguage] = useState<"en" | "hi" | "ta" | "te" | "bn">("en");
   const [saving, setSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
+
+  // Preview-before-confirm state
+  const [previewRule, setPreviewRule] = useState<any>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   // Fetch on mount
   useEffect(() => {
@@ -125,12 +130,15 @@ export function AutoRepliesPage() {
       toast.error("Please type an instruction");
       return;
     }
+    if (!isValidInstructionInput(instructionInput)) {
+      toast.error("Please write a full sentence describing the instruction");
+      return;
+    }
     try {
       const data = await generateSmartRules(instructionInput, selectedGroupId || undefined);
       if (data.rule) {
-        await fetchInstructions(selectedGroupId || undefined);
-        setInstructionInput("");
-        toast.success("Instruction saved! 🧠");
+        setPreviewRule({ ...data.rule, _groupSource: selectedGroupId || undefined });
+        setShowPreviewModal(true);
       } else {
         toast.error("Could not create instruction. Try again.");
       }
@@ -424,6 +432,10 @@ export function AutoRepliesPage() {
       toast.error("Please describe your automation flow");
       return;
     }
+    if (!isValidInstructionInput(flowDescription)) {
+      toast.error("Please write a full sentence describing the instruction");
+      return;
+    }
     if (!selectedGroupId) {
       toast.error("No flow selected. Please create a flow first.");
       return;
@@ -431,17 +443,58 @@ export function AutoRepliesPage() {
     try {
       const data = await generateSmartRules(flowDescription, selectedGroupId);
       if (data.rule) {
-        await fetchInstructions(selectedGroupId);
-        setShowDescriptionPrompt(false);
-        setIsFirstTimeSetup(false);
-        setFlowDescription("");
-        toast.success("✨ Flow generated successfully! Instructions created.");
+        setPreviewRule({ ...data.rule, _groupSource: selectedGroupId });
+        setShowPreviewModal(true);
       } else {
         toast.error("Could not generate instructions. Try again.");
       }
     } catch {
       toast.error("Failed to generate flow. Check your AI API key.");
     }
+  };
+
+  // ── Input Validation Helpers ──
+
+  const isValidInstructionInput = (text: string): boolean => {
+    // Frontend only blocks empty/whitespace input.
+    // Quality validation is now handled by the backend's AI-output confidence checks.
+    return text.trim().length > 0;
+  };
+
+  // ── Confirm Save (Preview → Persist) ──
+
+  const confirmSavePreview = async () => {
+    if (!previewRule) return;
+    const { needsReview, clarificationHint, _groupSource, ...ruleFields } = previewRule;
+    try {
+      setSaving(true);
+      const payload = {
+        ...ruleFields,
+        groupId: _groupSource || selectedGroupId || null,
+        isEnabled: !previewRule.needsReview,
+        sourcePrompt: previewRule.sourcePrompt || "",
+      };
+      const result = await createSmartRule(payload);
+      if (result.rule) {
+        setShowPreviewModal(false);
+        setPreviewRule(null);
+        if (instructionInput) setInstructionInput("");
+        if (flowDescription) { setFlowDescription(""); setShowDescriptionPrompt(false); setIsFirstTimeSetup(false); }
+        await fetchInstructions(selectedGroupId || _groupSource || undefined);
+        toast.success("✨ Instruction saved!");
+      } else {
+        toast.error("Could not save instruction. Try again.");
+      }
+    } catch {
+      toast.error("Failed to save instruction");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const discardPreview = () => {
+    setShowPreviewModal(false);
+    setPreviewRule(null);
   };
 
   // ── Navigation ──
@@ -700,10 +753,24 @@ export function AutoRepliesPage() {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white shadow-lg shrink-0">
                 <Brain className="w-5 h-5" />
               </div>
-              <div>
-                <h2 className="font-black text-slate-800 text-lg">🧠 Your Instructions</h2>
-                <p className="text-xs text-slate-500">The bot follows these rules automatically</p>
-              </div>
+            <div className="flex-1">
+              <h2 className="font-black text-slate-800 text-lg">🧠 Your Instructions</h2>
+              <p className="text-xs text-slate-500">The bot follows these rules automatically</p>
+            </div>
+            <div className="flex items-center bg-slate-100 rounded-xl p-0.5 shrink-0">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'list' ? 'bg-white border border-slate-200 text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                List
+              </button>
+              <button
+                onClick={() => setViewMode('gallery')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'gallery' ? 'bg-white border border-slate-200 text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                Gallery
+              </button>
+            </div>
             </div>
 
             <div className="flex gap-2">
@@ -725,8 +792,9 @@ export function AutoRepliesPage() {
               </button>
             </div>
 
-            {/* Instruction timeline - center-aligned alternating layout */}
-            {instructions.length === 0 ? (
+            {viewMode === 'list' ? (
+              <>
+              {instructions.length === 0 ? (
               <div className="text-center py-8 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
                 <div className="text-2xl mb-2">🧠</div>
                 <p className="text-xs text-slate-400 font-medium">
@@ -734,156 +802,193 @@ export function AutoRepliesPage() {
                 </p>
               </div>
             ) : (
-              <div className="tl-container">
+              <div className="flex flex-col gap-4">
                 {instructions.map((inst) => (
-                  <div key={inst.id} className="tl-pair">
-                    <div className="tl-node">
-                      <div className="tl-card-left">
-                        <div className={`bg-white rounded-2xl border-2 p-4 transition-all ${inst.isEnabled ? 'border-slate-200' : 'border-slate-100 opacity-60'}`}>
-                          <div className="text-[9px] font-black uppercase tracking-[0.1em] px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 inline-block mb-2.5">
-                            Instruction
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${inst.isEnabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-500'}`}>
-                              <Brain className="w-4 h-4" />
+                  <div key={inst.id} className={`bg-white rounded-2xl border-2 p-5 transition-all ${inst.isEnabled ? 'border-purple-200 shadow-sm' : 'border-slate-100 opacity-70'}`}>
+                    
+                    {/* Header: Instruction info + Toggle/Delete */}
+                    <div className="flex items-start justify-between mb-4 pb-4 border-b border-slate-100">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${inst.isEnabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="text-[10px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                              Instruction
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-slate-800">
-                                {inst.sourcePrompt || inst.name || "Instruction"}
-                              </p>
-                              {inst.triggerKeywords && inst.triggerKeywords.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {inst.triggerKeywords.slice(0, 3).map((kw: string, i: number) => (
-                                    <span key={i} className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-medium">{kw}</span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 mt-2 ml-11">
-                            <button
-                              onClick={() => toggleInstruction(inst.id, inst.isEnabled)}
-                              className={`relative w-9 h-5 rounded-full transition-all cursor-pointer ${inst.isEnabled ? "bg-slate-900" : "bg-slate-300"}`}
-                            >
-                              <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${inst.isEnabled ? "translate-x-4" : ""}`} />
-                            </button>
-                            <span className={`text-[10px] font-bold ${inst.isEnabled ? 'text-green-700' : 'text-slate-400'}`}>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${inst.isEnabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                               {inst.isEnabled ? 'Active' : 'Disabled'}
                             </span>
-                            <button
-                              onClick={() => deleteInstruction(inst.id)}
-                              className="ml-auto p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-all cursor-pointer"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
                           </div>
+                          <p className="text-base font-bold text-slate-800 leading-snug">
+                            {inst.sourcePrompt || inst.name || "Instruction"}
+                          </p>
+                          {inst.triggerKeywords && inst.triggerKeywords.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {inst.triggerKeywords.slice(0, 5).map((kw: string, i: number) => (
+                                <span key={i} className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 py-0.5 rounded font-medium">{kw}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div className={`tl-dot ${inst.isEnabled ? 'trigger' : 'disabled'}`}>📝</div>
+                      
+                      <div className="flex items-center gap-3 shrink-0 ml-4">
+                        <button
+                          onClick={() => toggleInstruction(inst.id, inst.isEnabled)}
+                          className={`relative w-11 h-6 rounded-full transition-all cursor-pointer ${inst.isEnabled ? "bg-green-500" : "bg-slate-300"}`}
+                        >
+                          <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${inst.isEnabled ? "translate-x-5" : ""}`} />
+                        </button>
+                        <button
+                          onClick={() => deleteInstruction(inst.id)}
+                          className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="tl-connector">
-                      <span className="tl-connector-arrow">▼ Action</span>
-                    </div>
-
-                    <div className="tl-node">
-                      <div className="tl-card-right">
-                        <div className={`bg-white rounded-2xl border-2 p-4 transition-all ${inst.isEnabled ? 'border-purple-300 bg-purple-50/40' : 'border-slate-100 bg-slate-50/30 opacity-60'}`}>
-                          <div className="text-[9px] font-black uppercase tracking-[0.1em] px-2.5 py-1 rounded-md bg-purple-100 text-purple-700 inline-block mb-2.5">
-                            Result
-                          </div>
-
-                          {/* Example Conversation */}
-                          {(() => {
-                            const state = testStates[inst.id];
-                            if (!state?.exampleLoaded) {
-                              return (
-                                <div className="mb-3 p-3 bg-blue-50 rounded-xl border border-blue-200">
-                                  <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-2">💡 Example Conversation</div>
-                                  <div className="text-center py-2">
-                                    <RefreshCw className="w-4 h-4 animate-spin text-blue-600 mx-auto" />
-                                  </div>
-                                </div>
-                              );
-                            }
+                    {/* Body: Example and Test */}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {/* Left Side: Example Conversation */}
+                      <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
+                        {(() => {
+                          const state = testStates[inst.id];
+                          if (!state?.exampleLoaded) {
                             return (
-                              <div className="mb-3 p-3 bg-blue-50 rounded-xl border border-blue-200">
-                                <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-2">💡 Example Conversation</div>
-                                <div className="space-y-2">
-                                  <div className="flex items-start gap-2">
-                                    <div className="w-5 h-5 rounded-full bg-slate-300 flex items-center justify-center text-[10px] shrink-0">👤</div>
-                                    <div className="bg-white rounded-lg px-2.5 py-1.5 border border-slate-200 text-[11px] text-slate-700 flex-1">
-                                      {state.customerExample}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-start gap-2">
-                                    <div className="w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center text-[10px] shrink-0 text-white">🤖</div>
-                                    <div className="bg-purple-600 text-white rounded-lg px-2.5 py-1.5 border border-purple-700 text-[11px] flex-1">
-                                      {state.botExample}
-                                    </div>
-                                  </div>
+                              <div>
+                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                  <Sparkles className="w-3 h-3" />
+                                  Example Conversation
+                                </div>
+                                <div className="text-center py-4">
+                                  <RefreshCw className="w-4 h-4 animate-spin text-slate-400 mx-auto" />
                                 </div>
                               </div>
                             );
-                          })()}
-
-                          {/* Interactive Test Box */}
-                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-                            <div className="text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-2">🧪 Test with Your Inputs</div>
-                            <p className="text-[10px] text-slate-500 mb-2">Type a message in any language to test how the bot responds</p>
-                            
-                            <div className="space-y-2">
-                              <textarea
-                                value={testStates[inst.id]?.input || ''}
-                                onChange={(e) => updateTestInput(inst.id, e.target.value)}
-                                placeholder="Type a test message... e.g. 'Hola, ¿cuánto cuesta?'"
-                                rows={2}
-                                className="w-full bg-white border-2 border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-purple-400 transition-all resize-none font-medium"
-                              />
-                              <button
-                                onClick={() => handleTestInstruction(inst.id, inst.sourcePrompt || inst.name || '')}
-                                disabled={!testStates[inst.id]?.input?.trim() || testStates[inst.id]?.testing}
-                                className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
-                              >
-                                {testStates[inst.id]?.testing ? (
-                                  <>
-                                    <RefreshCw className="w-3 h-3 animate-spin" />
-                                    Testing...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Sparkles className="w-3 h-3" />
-                                    Test Response
-                                  </>
-                                )}
-                              </button>
-                              
-                              {/* Test Result */}
-                              {testStates[inst.id]?.result && (
-                                <div className="mt-2 space-y-2">
-                                  <div className="flex items-start gap-2">
-                                    <div className="w-5 h-5 rounded-full bg-slate-300 flex items-center justify-center text-[10px] shrink-0">👤</div>
-                                    <div className="bg-white rounded-lg px-2.5 py-1.5 border border-slate-200 text-[11px] text-slate-700 flex-1">
-                                      {testStates[inst.id].input}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-start gap-2">
-                                    <div className="w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center text-[10px] shrink-0 text-white">🤖</div>
-                                    <div className="bg-purple-600 text-white rounded-lg px-2.5 py-1.5 border border-purple-700 text-[11px] flex-1">
-                                      {testStates[inst.id].result}
-                                    </div>
+                          }
+                          return (
+                            <div>
+                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                <Sparkles className="w-3 h-3" />
+                                Example Conversation
+                              </div>
+                              <div className="space-y-3">
+                                <div className="flex items-start gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs shrink-0">👤</div>
+                                  <div className="bg-white rounded-xl px-3 py-2 border border-slate-200 text-xs text-slate-700 shadow-sm flex-1">
+                                    {state.customerExample}
                                   </div>
                                 </div>
-                              )}
+                                <div className="flex items-start gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs shrink-0 text-white">🤖</div>
+                                  <div className="bg-purple-600 text-white rounded-xl px-3 py-2 shadow-sm text-xs flex-1">
+                                    {state.botExample}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
-                          </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Right Side: Interactive Test Box */}
+                      <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <div className="text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                          <Zap className="w-3 h-3" />
+                          Test With Your Inputs
+                        </div>
+                        <p className="text-[10px] text-slate-500 mb-3">See how the bot responds to custom messages</p>
+                        
+                        <div className="space-y-2">
+                          <textarea
+                            value={testStates[inst.id]?.input || ''}
+                            onChange={(e) => updateTestInput(inst.id, e.target.value)}
+                            placeholder="Type a message... e.g. 'Hello'"
+                            rows={2}
+                            className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-purple-400 transition-all resize-none font-medium"
+                          />
+                          <button
+                            onClick={() => handleTestInstruction(inst.id, inst.sourcePrompt || inst.name || '')}
+                            disabled={!testStates[inst.id]?.input?.trim() || testStates[inst.id]?.testing}
+                            className="w-full px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            {testStates[inst.id]?.testing ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                Testing...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                Run Test
+                              </>
+                            )}
+                          </button>
+                          
+                          {/* Test Result */}
+                          {testStates[inst.id]?.result && (
+                            <div className="mt-3 pt-3 border-t border-slate-200 space-y-3">
+                              <div className="flex items-start gap-2">
+                                <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs shrink-0">👤</div>
+                                <div className="bg-white rounded-xl px-3 py-2 border border-slate-200 text-xs text-slate-700 shadow-sm flex-1">
+                                  {testStates[inst.id].input}
+                                </div>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs shrink-0 text-white">🤖</div>
+                                <div className="bg-purple-600 text-white rounded-xl px-3 py-2 shadow-sm text-xs flex-1">
+                                  {testStates[inst.id].result}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div className={`tl-dot ${inst.isEnabled ? 'action' : 'disabled'}`}>⚡</div>
                     </div>
                   </div>
                 ))}
               </div>
+            )}
+              </>
+            ) : (
+              <>
+              {instructions.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                  <div className="text-2xl mb-2">🧠</div>
+                  <p className="text-xs text-slate-400 font-medium">
+                    No instructions yet. Type one above to tell the bot how to behave.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4">
+                  {instructions.map((inst) => (
+                    <div
+                      key={inst.id}
+                      onClick={() => setViewMode('list')}
+                      className="bg-white rounded-2xl border-2 p-3 hover:border-purple-300 transition-all cursor-pointer"
+                    >
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${inst.isEnabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>
+                        <Brain className="w-4 h-4" />
+                      </div>
+                      <p className="text-xs font-bold text-slate-800 truncate">
+                        {inst.sourcePrompt || inst.name || "Instruction"}
+                      </p>
+                      <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded mt-1.5 ${inst.isEnabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>
+                        {inst.isEnabled ? 'Active' : 'Disabled'}
+                      </span>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        {inst.triggerKeywords?.length || 0} keywords
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              </>
             )}
           </div>
         </>
@@ -1316,6 +1421,97 @@ export function AutoRepliesPage() {
                 <div className="flex gap-3 justify-end mt-4">
                   <button onClick={() => setShowCreateModal(false)} className="px-5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl font-bold text-xs transition-all border border-slate-200 cursor-pointer">Cancel</button>
                   <button onClick={handleCreateFlow} disabled={!createFlowName.trim()} className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs transition-all disabled:opacity-50 cursor-pointer">Next →</button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {showPreviewModal && previewRule && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={discardPreview}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl"
+                onClick={e => e.stopPropagation()}
+              >
+                <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-500" />
+                  Preview Generated Instruction
+                </h3>
+                <p className="text-xs text-slate-400 font-medium mt-1 mb-5">
+                  Review the instruction before saving
+                </p>
+
+                {previewRule.needsReview && (
+                  <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-700">
+                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                    <span>Needs Review — {previewRule.clarificationHint || "AI was unsure about your input. Please review carefully before activating."}</span>
+                  </div>
+                )}
+
+                {/* Rule name */}
+                <div className="mb-4">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Rule Name</label>
+                  <p className="text-sm font-bold text-slate-800">{previewRule.name}</p>
+                </div>
+
+                {/* Trigger keywords */}
+                <div className="mb-4">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Trigger Keywords</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(previewRule.triggerKeywords || []).map((kw: string, i: number) => (
+                      <span key={i} className="text-[11px] bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-lg font-semibold">{kw}</span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Template body */}
+                <div className="mb-4">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Bot Response</label>
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 text-sm text-slate-700 leading-relaxed">
+                    {previewRule.templateBody}
+                  </div>
+                </div>
+
+                {/* Metadata chips */}
+                <div className="flex flex-wrap gap-2 mb-6">
+                  <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full capitalize">
+                    {previewRule.triggerType?.replace(/_/g, " ").toLowerCase()}
+                  </span>
+                  <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full capitalize">
+                    {previewRule.brandVoice}
+                  </span>
+                  <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full uppercase">
+                    {previewRule.targetLanguage}
+                  </span>
+                </div>
+
+                <div className="flex gap-3 justify-end border-t border-slate-100 pt-4">
+                  <button
+                    onClick={discardPreview}
+                    className="px-5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl font-bold text-xs transition-all border border-slate-200 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmSavePreview}
+                    disabled={saving}
+                    className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl font-bold text-xs transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2 shadow-lg shadow-purple-500/20"
+                  >
+                    {saving ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    )}
+                    {previewRule.needsReview ? "Save as Draft" : "Confirm & Activate"}
+                  </button>
                 </div>
               </motion.div>
             </motion.div>
