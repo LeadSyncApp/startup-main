@@ -29,12 +29,24 @@ export function InventoryPage({ companyId }: InventoryPageProps) {
   };
 
   const handleBack = () => {
-    setStep("intake");
+    setStep("list");
   };
 
   const handleAddNew = () => {
     setProducts([]);
     setStep("intake");
+  };
+
+  const handleSelectProduct = (product: { brand: string | null; product_type: string; colors: string[]; sizes: string[]; price_inr: number | null }) => {
+    setProducts([{
+      brand: product.brand,
+      product_type: product.product_type,
+      colors: product.colors,
+      sizes: product.sizes,
+      price_inr: product.price_inr,
+      raw_source_fragment: `${product.brand ? product.brand + " " : ""}${product.product_type}`,
+    }]);
+    setStep("confirm");
   };
 
   return (
@@ -50,6 +62,7 @@ export function InventoryPage({ companyId }: InventoryPageProps) {
             <InventoryListScreen
               companyId={companyId}
               onAddNew={handleAddNew}
+              onSelectProduct={handleSelectProduct}
             />
           </motion.div>
         )}

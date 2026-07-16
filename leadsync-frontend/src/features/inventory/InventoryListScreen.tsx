@@ -28,9 +28,10 @@ interface InventoryListResponse {
 interface InventoryListScreenProps {
   companyId?: string;
   onAddNew: () => void;
+  onSelectProduct?: (product: SavedProduct) => void;
 }
 
-export function InventoryListScreen({ companyId, onAddNew }: InventoryListScreenProps) {
+export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: InventoryListScreenProps) {
   const [products, setProducts] = useState<SavedProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +147,7 @@ export function InventoryListScreen({ companyId, onAddNew }: InventoryListScreen
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 whileHover={{ scale: 1.01 }}
+                onClick={() => onSelectProduct?.(product)}
                 className="p-4 rounded-xl border transition-all cursor-pointer"
                 style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}
               >
