@@ -1385,13 +1385,24 @@ router.get("/:id/history", authMiddleware, async (req: AuthRequest, res: Respons
         resolvedBy: true,
         createdAt: true,
         updatedAt: true,
+        activities: {
+          select: { type: true, actorName: true },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
       },
       orderBy: { createdAt: "desc" },
     });
 
+    // Prefer the corrected ConversationActivity name over the legacy Conversation field
+    const conversationsWithFixedNames = conversations.map((c) => ({
+      ...c,
+      resolvedBy: c.activities[0]?.actorName || c.resolvedBy,
+    }));
+
     return res.json({
-      totalConversations: conversations.length,
-      conversations,
+      totalConversations: conversationsWithFixedNames.length,
+      conversations: conversationsWithFixedNames,
     });
   } catch (error) {
     console.error("Fetch lead history error:", error);
