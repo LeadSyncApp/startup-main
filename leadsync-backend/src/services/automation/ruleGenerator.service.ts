@@ -8,6 +8,10 @@
 
 import { prisma } from "../../lib/prisma";
 
+// Minimum character length for the AI-generated templateBody (response text).
+// Initial estimate — tune post-launch based on observed AI output quality.
+const MIN_TEMPLATE_LENGTH = 15;
+
 export interface RuleGenerationInput {
   prompt: string;                    // Plain-text prompt from the shop owner
   companyId: string;
@@ -30,6 +34,8 @@ export interface GeneratedRuleData {
     language?: string[];
   } | null;
   sourcePrompt: string;
+  needsReview: boolean;
+  clarificationHint?: string;
 }
 
 export class RuleGeneratorService {
@@ -65,7 +71,7 @@ export class RuleGeneratorService {
             content: userPrompt,
           },
         ],
-        max_tokens: 500,
+        max_tokens: 700,
         temperature: 0.3, // Lower temperature for structured output
         response_format: { type: "json_object" },
       }),
@@ -90,21 +96,71 @@ export class RuleGeneratorService {
       throw new Error(`Failed to parse AI response as JSON: ${err.message}. Raw: ${content.substring(0, 200)}`);
     }
 
-    // Validate required fields
+    // Read AI's self-reported confidence
+    const confidence: string = parsed.confidence || "clear";
+    const clarificationHint: string =
+      parsed.clarificationHint && typeof parsed.clarificationHint === "string"
+        ? parsed.clarificationHint.trim()
+        : "";
+
+    // ------------------------------------------------------------------
+    // Structured validation — independent fallback even when AI reports "clear"
+    // ------------------------------------------------------------------
+
+    // 1. triggerKeywords must be a non-empty array with at least one real keyword
     if (!parsed.triggerKeywords || !Array.isArray(parsed.triggerKeywords) || parsed.triggerKeywords.length === 0) {
-      throw new Error("AI response missing required 'triggerKeywords' array");
+      throw new Error(
+        clarificationHint || "AI could not extract any trigger keywords from your input. Please write a clearer instruction."
+      );
+    }
+    const validKeywords = parsed.triggerKeywords.filter((k: any) => typeof k === "string" && k.trim().length > 0);
+    if (validKeywords.length === 0) {
+      throw new Error(
+        clarificationHint || "AI response contained only empty trigger keywords. Try rephrasing your instruction."
+      );
     }
 
+    // 2. name must be non-empty
+    const cleanName = parsed.name && typeof parsed.name === "string" ? parsed.name.trim() : "";
+    if (!cleanName) {
+      throw new Error("AI response missing required 'name' field");
+    }
+
+    // 3. templateBody must be long enough to be useful
+    const cleanTemplate = parsed.templateBody && typeof parsed.templateBody === "string" ? parsed.templateBody.trim() : "";
+    if (cleanTemplate.length < MIN_TEMPLATE_LENGTH) {
+      throw new Error(
+        clarificationHint || `Generated response template is too short (${cleanTemplate.length} chars). Please provide more detail in your instruction.`
+      );
+    }
+
+    // 4. Reject verbatim echo of the prompt
+    if (cleanTemplate.toLowerCase() === input.prompt.trim().toLowerCase()) {
+      throw new Error("The AI echoed your input back verbatim instead of generating a response. Please rephrase your instruction.");
+    }
+
+    // 5. If the AI itself says the input is unintelligible, reject
+    if (confidence === "unintelligible") {
+      throw new Error(
+        clarificationHint || "We couldn't understand your instruction. Please describe what behavior you want the bot to have."
+      );
+    }
+
+    // 6. Determine needsReview — true when AI is unsure
+    const needsReview = confidence === "vague";
+
     const generated: GeneratedRuleData = {
-      name: parsed.name || `Rule: ${parsed.triggerKeywords?.slice(0, 2).join(", ") || "auto-generated"}`,
-      triggerKeywords: parsed.triggerKeywords,
+      name: cleanName,
+      triggerKeywords: validKeywords,
       triggerType: parsed.triggerType || "KEYWORD",
-      templateBody: parsed.templateBody || "",
+      templateBody: cleanTemplate,
       useAI: parsed.useAI !== undefined ? parsed.useAI : false,
       brandVoice: parsed.brandVoice || "friendly",
       targetLanguage: parsed.targetLanguage || "auto",
       conditions: parsed.conditions || null,
       sourcePrompt: input.prompt,
+      needsReview,
+      clarificationHint: needsReview ? clarificationHint : undefined,
     };
 
     return generated;
@@ -132,7 +188,9 @@ OUTPUT FORMAT - Return ONLY valid JSON with these fields:
     "segment": ["NEW", "REGULAR", "VIP", "CHURN_RISK"],
     "timeRange": { "start": 8, "end": 22 },
     "language": ["en", "hi"]
-  }
+  },
+  "confidence": "clear" | "vague" | "unintelligible",
+  "clarificationHint": "Only provide a hint string if confidence is vague or unintelligible, explaining what was unclear. Leave as empty string if confidence is clear."
 }
 
 RULES:
@@ -142,7 +200,9 @@ RULES:
 4. Include Indian language keyword variants (Hindi, Tamil, Telugu, etc.) based on context
 5. If the prompt mentions timing or segments, reflect in conditions
 6. If the prompt is about a special offer/discount, set brandVoice to "salesy"
-7. Keep templateBody under 200 characters`;
+7. Keep templateBody under 200 characters
+8. confidence must be "clear" if you fully understood the instruction and can generate meaningful keywords and template; "vague" if parts are unclear but you can still produce a partial rule; "unintelligible" if the input is gibberish, random characters, or nonsensical
+9. When confidence is "vague" or "unintelligible", populate clarificationHint with a specific question about what the user meant (e.g. "I couldn't understand your request. Please describe what behavior you want the bot to have.")`;
   }
 
   /**

@@ -30,7 +30,7 @@ const generateFromPromptSchema = z.object({
 
 const createRuleSchema = z.object({
   companyId: z.string().uuid(),
-  groupId: z.string().uuid().optional(),
+  groupId: z.string().uuid().nullable().optional(),
   name: z.string().min(1).max(100),
   isEnabled: z.boolean().default(true),
   triggerKeywords: z.array(z.string()).min(1, "At least one keyword required"),
@@ -39,7 +39,7 @@ const createRuleSchema = z.object({
     segment: z.array(z.string()).optional(),
     timeRange: z.object({ start: z.number(), end: z.number() }).optional(),
     language: z.array(z.string()).optional(),
-  }).optional(),
+  }).nullable().optional(),
   templateBody: z.string().default(""),
   useAI: z.boolean().default(false),
   brandVoice: z.string().default("friendly"),
@@ -84,7 +84,7 @@ router.post("/generate-from-prompt", authMiddleware as any, async (req: any, res
       return res.status(404).json({ error: "Company not found" });
     }
 
-    // Generate rule via AI
+    // Generate rule via AI (returns generated+validated rule, NOT saved yet)
     const generated = await ruleGeneratorService.generateFromPrompt({
       prompt: input.prompt,
       companyId: input.companyId,
@@ -93,40 +93,11 @@ router.post("/generate-from-prompt", authMiddleware as any, async (req: any, res
       productCatalog: products.map((p) => p.name),
     });
 
-    // Persist the generated rule to the database, optionally scoped to a group
-    const savedRule = await prisma.conversationalRule.create({
-      data: {
-        companyId: input.companyId,
-        groupId: input.groupId || null,
-        name: generated.name,
-        isEnabled: true,
-        triggerKeywords: generated.triggerKeywords,
-        triggerType: generated.triggerType,
-        conditions: generated.conditions || undefined,
-        templateBody: generated.templateBody,
-        useAI: generated.useAI,
-        brandVoice: generated.brandVoice,
-        targetLanguage: generated.targetLanguage,
-        sourcePrompt: input.prompt,
-      },
-    });
-
-    // Invalidate cache so the new rule is picked up immediately
-    conversationalAutoReplyService.invalidateCache(input.companyId);
-
-    // Embed the rule to KnowledgeChunk for RAG similarity search
-    await embedRuleToKnowledgeChunk({
-      id: savedRule.id,
-      companyId: savedRule.companyId,
-      name: savedRule.name,
-      triggerKeywords: savedRule.triggerKeywords,
-      templateBody: savedRule.templateBody,
-    });
-
-    // NOTE: Frontend expects top-level 'rule' key (not nested in data.rule)
+    // Return the generated rule to the frontend for preview.
+    // The frontend will call POST / (manual create) to persist on user confirmation.
     res.json({
       success: true,
-      rule: savedRule,
+      rule: generated,
     });
   } catch (err: any) {
     console.error("[ConversationalRules] generate-from-prompt error:", err);
@@ -142,7 +113,14 @@ router.post("/generate-from-prompt", authMiddleware as any, async (req: any, res
  */
 router.post("/", authMiddleware as any, async (req: any, res: any) => {
   try {
-    const data = createRuleSchema.parse(req.body);
+    const validated = createRuleSchema.parse(req.body);
+
+    // Normalize nullable optional fields so Prisma doesn't choke on null
+    const data = {
+      ...validated,
+      groupId: validated.groupId ?? undefined,
+      conditions: validated.conditions ?? undefined,
+    };
 
     const rule = await prisma.conversationalRule.create({
       data: {
@@ -151,11 +129,12 @@ router.post("/", authMiddleware as any, async (req: any, res: any) => {
         isEnabled: data.isEnabled,
         triggerKeywords: data.triggerKeywords,
         triggerType: data.triggerType,
-        conditions: data.conditions || undefined,
+        conditions: data.conditions,
         templateBody: data.templateBody,
         useAI: data.useAI,
         brandVoice: data.brandVoice,
         targetLanguage: data.targetLanguage,
+        groupId: data.groupId,
         sourcePrompt: data.sourcePrompt,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
       },
