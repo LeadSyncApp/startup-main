@@ -1381,6 +1381,7 @@ router.get("/:id/history", authMiddleware, async (req: AuthRequest, res: Respons
       select: {
         id: true,
         status: true,
+        claimedById: true,
         claimedByName: true,
         resolvedBy: true,
         createdAt: true,
@@ -1395,10 +1396,25 @@ router.get("/:id/history", authMiddleware, async (req: AuthRequest, res: Respons
     });
 
     // Prefer the corrected ConversationActivity name over the legacy Conversation field
-    const conversationsWithFixedNames = conversations.map((c) => ({
-      ...c,
-      resolvedBy: c.activities[0]?.actorName || c.resolvedBy,
-    }));
+    const conversationsWithFixedNames = await Promise.all(
+      conversations.map(async (c) => {
+        let claimedByName = c.claimedByName;
+        if (!claimedByName && c.claimedById) {
+          const claimer = await prisma.user.findUnique({
+            where: { id: c.claimedById },
+            select: { firstName: true, lastName: true },
+          });
+          claimedByName = claimer
+            ? `${claimer.firstName || ""} ${claimer.lastName || ""}`.trim()
+            : "Deleted User";
+        }
+        return {
+          ...c,
+          claimedByName,
+          resolvedBy: c.activities[0]?.actorName || c.resolvedBy,
+        };
+      })
+    );
 
     return res.json({
       totalConversations: conversationsWithFixedNames.length,
