@@ -232,7 +232,7 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setFilter(tab.key)}
+            onClick={() => { setLeads([]); setFilter(tab.key); }}
             className={`px-3 py-1 text-xs font-black rounded-t transition cursor-pointer ${
               filter === tab.key
                 ? "bg-slate-800 text-slate-200 border-b-2 border-brand-saffron"
@@ -256,7 +256,7 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
         </div>
       ) : (
         <>
-          <div className="space-y-1">
+          <div className="space-y-2 px-2 pb-2">
             {leads.map((lead) => {
               const ChannelIcon = CHANNEL_ICON[lead.channel.toUpperCase()] || Globe;
               const displayName = lead.name || lead.contact || "Customer";
@@ -273,7 +273,7 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
                       navigate(`/inbox/${lead.id}`);
                     }
                   }}
-                  className={`w-full flex items-center gap-4 p-2 rounded-2xl border bg-[var(--ticket-bg)] text-[var(--ticket-text)] border-[var(--ticket-border)] hover:brightness-110 transition-all text-left cursor-pointer group ${
+                  className={`w-full flex items-center gap-4 p-3 rounded-2xl border bg-[var(--ticket-bg)] text-[var(--ticket-text)] border-[var(--ticket-border)] hover:brightness-110 transition-all text-left cursor-pointer group ${
                     selectedLeadId === lead.id ? "ring-2 ring-[var(--brand-saffron)]" : ""
                   }`}
                 >
@@ -335,8 +335,8 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
             })}
           </div>
 
-          {/* Load more button */}
-          {meta.hasMore && (
+          {/* Load more button or end message */}
+          {meta.hasMore ? (
             <div className="flex justify-center pt-2">
               <button
                 onClick={handleLoadMore}
@@ -350,7 +350,11 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
                 )}
               </button>
             </div>
-          )}
+          ) : leads.length > 0 ? (
+            <div className="py-8 text-center">
+              <span className="text-[10px] font-bold text-slate-500/70 uppercase tracking-widest font-mono">End of conversations</span>
+            </div>
+          ) : null}
         </>
       )}
     </div>
