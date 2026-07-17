@@ -9,6 +9,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { authMiddleware } from "../../middleware/auth.middleware";
+import { conversationalAutoReplyService } from "../../services/automation/conversationalAutoReply.service";
 
 const router = Router();
 
@@ -26,6 +27,7 @@ const createGroupSchema = z.object({
 const updateGroupSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().optional(),
+  isEnabled: z.boolean().optional(),
 });
 
 // ==========================================
@@ -153,11 +155,18 @@ router.put("/:id", authMiddleware as any, async (req: any, res: any) => {
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
     if (data.description !== undefined) updateData.description = data.description;
+    if (data.isEnabled !== undefined) updateData.isEnabled = data.isEnabled;
 
     const group = await prisma.ruleGroup.update({
       where: { id },
       data: updateData,
     });
+
+    // Invalidate the active-rules cache so the cascading disable takes effect
+    // immediately for the bot (don't follow rules of a disabled flow).
+    if (data.isEnabled !== undefined) {
+      conversationalAutoReplyService.invalidateCache(existing.companyId);
+    }
 
     res.json({
       success: true,

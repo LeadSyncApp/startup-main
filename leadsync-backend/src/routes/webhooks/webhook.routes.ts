@@ -6,6 +6,7 @@ import { emitToConversation, safeEmitConversationUpdate } from "../../lib/socket
 import { queueProvider } from "../../services/infrastructure/queue-provider/queue-provider.factory";
 import instagramRoutes from "./instagram.routes";
 import { orderWorkflowService } from "../../services/workflow/orderWorkflow.service";
+import { PDF_JOB_NAME } from "../../services/infrastructure/pgboss/jobs/pdf.job";
 
 
 const router = Router();
@@ -64,7 +65,7 @@ router.post("/razorpay", async (req: Request, res: Response) => {
                 if (order) {
                     // Find conversation via lead (Order no longer has direct conversation relation)
                     const conv = order.leadId ? await prisma.conversation.findFirst({
-                        where: { leadId: order.leadId, lifecycleStatus: 'active' }
+                        where: { leadId: order.leadId, lifecycleStatus: 'active', companyId: order.companyId }
                     }) : null;
                     const conversationId = conv?.id;
 
@@ -78,7 +79,7 @@ router.post("/razorpay", async (req: Request, res: Response) => {
 
                     // 2️⃣ Generate Invoice
                     const paymentId = paymentLink.payment_id || paymentLink.id;
-                    await queueProvider.enqueue("generatePdf", { orderId, paymentRef: paymentId });
+                    await queueProvider.enqueue(PDF_JOB_NAME, { orderId, paymentRef: paymentId });
 
                     // 3️⃣ 🆕 CRM INTELLIGENCE: Update Lead Stats
                     if (order.leadId) {
@@ -102,7 +103,8 @@ router.post("/razorpay", async (req: Request, res: Response) => {
                         data: {
                             content: sysMsgText,
                             sender: MessageSender.SYSTEM,
-                            conversationId
+                            conversationId,
+                            companyId: order.companyId
                         }
                     }) : null;
 

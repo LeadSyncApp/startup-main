@@ -246,7 +246,7 @@ export interface ShopReplyRequest {
   tenant_id: string;
   user_message: string;
   session_state: any;
-  retrieved_items: any[];
+  retrieved_items?: any[];
   menu_snapshot: any;
   shop_policies?: string;
   order_history?: any[];
@@ -596,7 +596,7 @@ export async function restructureMenu(companyId: string, shopDescription: string
       include: { botConfiguration: true }
     });
 
-    const businessType = company?.botBusinessType || "Retail";
+    const businessType = company?.businessType || "Retail";
     const localizedHeuristics = company?.botConfiguration ? (company.botConfiguration as any).localizedHeuristics : "Standard layout";
 
     const prompt = `

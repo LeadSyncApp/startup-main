@@ -27,7 +27,8 @@ export interface RetrievedChunk {
 export async function retrieveSimilarChunks(
   companyId: string,
   messageText: string,
-  topN: number = 5
+  topN: number = 5,
+  sourceType?: string
 ): Promise<RetrievedChunk[]> {
   try {
     // Step 1: Embed the message text to get its 384-dim vector
@@ -39,20 +40,39 @@ export async function retrieveSimilarChunks(
     // Step 2: Query KnowledgeChunk using pgvector's cosine distance operator
     // pgvector's <=> operator returns cosine distance (0 = identical, 2 = opposite for normalized vectors)
     // We compute similarity as (1 - distance) so scores read intuitively (1.0 = perfect match, 0 = unrelated)
-    const rows = await prisma.$queryRaw<
-      { sourceId: string | null; sourceType: string; content: string; distance: number }[]
-    >`
-      SELECT
-        "sourceId",
-        "sourceType",
-        "content",
-        ("embedding" <=> ${embeddingLiteral}::vector(384)) as distance
-      FROM "KnowledgeChunk"
-      WHERE "companyId" = ${companyId}
-        AND "isActive" = true
-      ORDER BY distance ASC
-      LIMIT ${topN}
-    `;
+    let rows;
+    if (sourceType) {
+      rows = await prisma.$queryRaw<
+        { sourceId: string | null; sourceType: string; content: string; distance: number }[]
+      >`
+        SELECT
+          "sourceId",
+          "sourceType",
+          "content",
+          ("embedding" <=> ${embeddingLiteral}::vector(384)) as distance
+        FROM "KnowledgeChunk"
+        WHERE "companyId" = ${companyId}
+          AND "isActive" = true
+          AND "sourceType" = ${sourceType}::"KnowledgeSourceType"
+        ORDER BY distance ASC
+        LIMIT ${topN}
+      `;
+    } else {
+      rows = await prisma.$queryRaw<
+        { sourceId: string | null; sourceType: string; content: string; distance: number }[]
+      >`
+        SELECT
+          "sourceId",
+          "sourceType",
+          "content",
+          ("embedding" <=> ${embeddingLiteral}::vector(384)) as distance
+        FROM "KnowledgeChunk"
+        WHERE "companyId" = ${companyId}
+          AND "isActive" = true
+        ORDER BY distance ASC
+        LIMIT ${topN}
+      `;
+    }
 
     // Step 3: Convert distance to similarity and sort descending
     const results: RetrievedChunk[] = rows
@@ -82,8 +102,5 @@ export async function retrieveProductChunks(
   messageText: string,
   topN: number = 10
 ): Promise<RetrievedChunk[]> {
-  // Get more chunks and filter to PRODUCT type
-  // This allows broad queries to see multiple products
-  const allChunks = await retrieveSimilarChunks(companyId, messageText, topN);
-  return allChunks.filter(chunk => chunk.sourceType === "PRODUCT");
+  return retrieveSimilarChunks(companyId, messageText, topN, "PRODUCT");
 }

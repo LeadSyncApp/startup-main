@@ -5,7 +5,7 @@ import {
   Trash2, Plus, Edit3, Clock, Save, Globe
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { authedFetch, generateSmartRules, listSmartRules, updateSmartRule, deleteSmartRule, createRuleGroup, listRuleGroups, deleteRuleGroup, testInstruction, generateExample, createSmartRule } from "../../api/client";
+import { authedFetch, generateSmartRules, listSmartRules, updateSmartRule, deleteSmartRule, createRuleGroup, listRuleGroups, deleteRuleGroup, updateRuleGroup, testInstruction, generateExample, createSmartRule } from "../../api/client";
 
 /* ──────────────────────────────────────────────────────────────
    Types
@@ -133,11 +133,9 @@ export function AutoRepliesPage() {
     if (!isValidInstructionInput(instructionInput)) {
       toast.error("Please write a full sentence describing the instruction");
       return;
-    }
-    try {
-      const data = await generateSmartRules(instructionInput, selectedGroupId || undefined);
-      if (data.rule) {
-        setPreviewRule({ ...data.rule, _groupSource: selectedGroupId || undefined });
+    }    try {
+      const data = await generateSmartRules(instructionInput, selectedGroupId || undefined);      if (data.rule) {
+        const _groupSource = selectedGroupId || undefined;        setPreviewRule({ ...data.rule, _groupSource });
         setShowPreviewModal(true);
       } else {
         toast.error("Could not create instruction. Try again.");
@@ -168,6 +166,17 @@ export function AutoRepliesPage() {
       toast.success(currentEnabled ? "Instruction disabled" : "Instruction enabled");
     } catch {
       toast.error("Failed to update instruction");
+    }
+  };
+
+  const toggleFlow = async (groupId: string, currentEnabled: boolean) => {
+    try {
+      const data = await updateRuleGroup(groupId, { isEnabled: !currentEnabled });
+      const updated = data?.group || { id: groupId, isEnabled: !currentEnabled };
+      setRuleGroups(prev => prev.map(g => g.id === groupId ? { ...g, isEnabled: updated.isEnabled } : g));
+      toast.success(currentEnabled ? "Flow disabled" : "Flow enabled");
+    } catch {
+      toast.error("Failed to update flow");
     }
   };
 
@@ -439,11 +448,8 @@ export function AutoRepliesPage() {
     if (!selectedGroupId) {
       toast.error("No flow selected. Please create a flow first.");
       return;
-    }
-    try {
-      const data = await generateSmartRules(flowDescription, selectedGroupId);
-      if (data.rule) {
-        setPreviewRule({ ...data.rule, _groupSource: selectedGroupId });
+    }    try {
+      const data = await generateSmartRules(flowDescription, selectedGroupId);      if (data.rule) {        setPreviewRule({ ...data.rule, _groupSource: selectedGroupId });
         setShowPreviewModal(true);
       } else {
         toast.error("Could not generate instructions. Try again.");
@@ -466,11 +472,21 @@ export function AutoRepliesPage() {
   const confirmSavePreview = async () => {
     if (!previewRule) return;
     const { needsReview, clarificationHint, _groupSource, ...ruleFields } = previewRule;
+    // The currently-open flow (selectedGroupId) is the source of truth.
+    // Fall back to the preview's origin (_groupSource) only if no flow is open.
+    // Never save with a null groupId — that would create a stray orphan instruction
+    // that the UI presents as a fake "flow" (the root cause of instructions
+    // appearing under the wrong flow).
+    const targetGroupId = selectedGroupId || _groupSource || null;
+    if (!targetGroupId) {
+      toast.error("Please open a flow first, then add your instruction.");
+      return;
+    }
     try {
       setSaving(true);
       const payload = {
         ...ruleFields,
-        groupId: _groupSource || selectedGroupId || null,
+        groupId: targetGroupId,
         isEnabled: !previewRule.needsReview,
         sourcePrompt: previewRule.sourcePrompt || "",
       };
@@ -480,7 +496,7 @@ export function AutoRepliesPage() {
         setPreviewRule(null);
         if (instructionInput) setInstructionInput("");
         if (flowDescription) { setFlowDescription(""); setShowDescriptionPrompt(false); setIsFirstTimeSetup(false); }
-        await fetchInstructions(selectedGroupId || _groupSource || undefined);
+        await fetchInstructions(targetGroupId);
         toast.success("✨ Instruction saved!");
       } else {
         toast.error("Could not save instruction. Try again.");
@@ -499,14 +515,14 @@ export function AutoRepliesPage() {
 
   // ── Navigation ──
 
-  const navigateTo = (view: ViewType) => {
-    setShowDescriptionPrompt(false);
+  const navigateTo = (view: ViewType) => {    setShowDescriptionPrompt(false);
     setCurrentView(view);
     if (view !== "events-detail") {
       setEditingRuleId(null);
     }
     if (view === "ai-list") {
       fetchInstructions();
+      fetchRuleGroups();
     }
   };
 
@@ -541,12 +557,13 @@ export function AutoRepliesPage() {
           </div>
         )}
 
-        {ruleGroups.map((group) => (
+        {ruleGroups.map((group) => {
+          const _flowEnabled = group.isEnabled !== false;
+          return (
           <div
             key={group.id}
             className="bg-white rounded-2xl border-2 border-slate-200 p-4 flex items-center gap-4 hover:border-purple-300 transition-all cursor-pointer"
-            onClick={() => {
-              setSelectedGroupId(group.id);
+            onClick={() => {              setSelectedGroupId(group.id);
               setSelectedAiProfile({ name: `✨ ${group.name}`, desc: "Describe what you want the bot to do" });
               setShowDescriptionPrompt(false);
               setCurrentView("ai-detail");
@@ -563,12 +580,25 @@ export function AutoRepliesPage() {
                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider bg-slate-100 text-slate-500">
                   {group._count?.rules || 0} rules
                 </span>
+                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${_flowEnabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                  {_flowEnabled ? "Active" : "Disabled"}
+                </span>
               </div>
               <p className="text-xs text-slate-400 mt-1 truncate">{group.description || "Automation flow"}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0 text-xs text-slate-400 font-medium">
               <span>✨ {group._count?.rules || 0} instructions</span>
             </div>
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                await toggleFlow(group.id, _flowEnabled);
+              }}
+              className={`relative w-11 h-6 rounded-full transition-all cursor-pointer shrink-0 ${_flowEnabled ? "bg-green-500" : "bg-slate-300"}`}
+              title={_flowEnabled ? "Flow is active — click to disable" : "Flow is disabled — click to enable"}
+            >
+              <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${_flowEnabled ? "translate-x-5" : ""}`} />
+            </button>
             <button
               onClick={async (e) => {
                 e.stopPropagation();
@@ -587,14 +617,29 @@ export function AutoRepliesPage() {
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
-        ))}
+          );
+        })}
+
+        {!instructionsLoading && instructions.filter((inst: any) => !inst.groupId).length > 0 && (
+          <div className="pt-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 px-1">
+              Ungrouped Instructions
+            </p>
+            <p className="text-[11px] text-slate-400 mb-2 px-1">
+              These aren't in any flow yet. Open a flow above, then re-add them so they're used in conversations.
+            </p>
+          </div>
+        )}
 
         {!instructionsLoading && instructions.filter((inst: any) => !inst.groupId).map((inst) => (
           <div
             key={inst.id}
-            className="bg-white rounded-2xl border-2 border-slate-200 p-4 flex items-center gap-4 hover:border-purple-300 transition-all cursor-pointer"
+            className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-4 flex items-center gap-4 hover:border-slate-300 transition-all cursor-pointer"
             onClick={() => {
-              setSelectedGroupId(inst.groupId || null);
+              // IMPORTANT: do NOT null selectedGroupId here. Orphan instructions have an
+              // empty groupId, and setting selectedGroupId to null would make any new
+              // instruction added in this view become a stray orphan (the original bug).
+              // We preserve the currently-selected flow so the Add input still targets it.
               setSelectedAiProfile({
                 name: inst.sourcePrompt || inst.name || "AI Instruction",
                 desc: "Manage your instruction rules"
@@ -660,12 +705,38 @@ export function AutoRepliesPage() {
       </button>
 
       <div className="space-y-2">
-        <h1 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
-          {selectedAiProfile?.name || "AI Instructions"}
-        </h1>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
+            {selectedAiProfile?.name || "AI Instructions"}
+          </h1>
+          {selectedGroupId && (() => {
+            const _group = ruleGroups.find((g: any) => g.id === selectedGroupId);
+            if (!_group) return null;
+            const _enabled = _group.isEnabled !== false;
+            return (
+              <button
+                onClick={() => toggleFlow(selectedGroupId as string, _enabled)}
+                className={`relative w-12 h-7 rounded-full transition-all cursor-pointer shrink-0 mt-1 ${_enabled ? "bg-green-500" : "bg-slate-300"}`}
+                title={_enabled ? "Flow is active — click to disable" : "Flow is disabled — click to enable"}
+              >
+                <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-sm transition-all ${_enabled ? "translate-x-5" : ""}`} />
+              </button>
+            );
+          })()}
+        </div>
         <p className="font-medium text-base leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
           {selectedAiProfile?.desc || "Manage your instruction rules"}
         </p>
+        {selectedGroupId && (() => {
+          const _group = ruleGroups.find((g: any) => g.id === selectedGroupId);
+          if (!_group) return null;
+          const _enabled = _group.isEnabled !== false;
+          return (
+            <span className={`inline-block mt-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${_enabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+              {_enabled ? "Active" : "Disabled"}
+            </span>
+          );
+        })()}
       </div>
 
       {isFirstTimeSetup ? (
@@ -803,13 +874,19 @@ export function AutoRepliesPage() {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                {instructions.map((inst) => (
-                  <div key={inst.id} className={`bg-white rounded-2xl border-2 p-5 transition-all ${inst.isEnabled ? 'border-purple-200 shadow-sm' : 'border-slate-100 opacity-70'}`}>
+                {(() => {
+                  const _flowEnabled = !selectedGroupId || (ruleGroups.find((g: any) => g.id === selectedGroupId)?.isEnabled !== false);
+                  return instructions.map((inst) => {
+                  // Effective state: a rule is only active if BOTH the flow and the
+                  // rule itself are enabled. The flow-level toggle overrides the rule toggle.
+                  const _effectiveActive = inst.isEnabled && _flowEnabled;
+                  return (
+                  <div key={inst.id} className={`bg-white rounded-2xl border-2 p-5 transition-all ${_effectiveActive ? 'border-purple-200 shadow-sm' : 'border-slate-100 opacity-70'}`}>
                     
                     {/* Header: Instruction info + Toggle/Delete */}
                     <div className="flex items-start justify-between mb-4 pb-4 border-b border-slate-100">
                       <div className="flex items-start gap-3 flex-1 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${inst.isEnabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${_effectiveActive ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>
                           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
@@ -819,9 +896,14 @@ export function AutoRepliesPage() {
                             <div className="text-[10px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded bg-slate-100 text-slate-600">
                               Instruction
                             </div>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${inst.isEnabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                              {inst.isEnabled ? 'Active' : 'Disabled'}
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${_effectiveActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                              {_effectiveActive ? 'Active' : 'Disabled'}
                             </span>
+                            {!_flowEnabled && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-700" title="This flow is disabled, so this instruction is not followed">
+                                Flow off
+                              </span>
+                            )}
                           </div>
                           <p className="text-base font-bold text-slate-800 leading-snug">
                             {inst.sourcePrompt || inst.name || "Instruction"}
@@ -951,7 +1033,9 @@ export function AutoRepliesPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                });
+              })()}
               </div>
             )}
               </>
@@ -966,26 +1050,32 @@ export function AutoRepliesPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4">
-                  {instructions.map((inst) => (
+                  {(() => {
+                    const _flowEnabled = !selectedGroupId || (ruleGroups.find((g: any) => g.id === selectedGroupId)?.isEnabled !== false);
+                    return instructions.map((inst) => {
+                    const _effectiveActive = inst.isEnabled && _flowEnabled;
+                    return (
                     <div
                       key={inst.id}
                       onClick={() => setViewMode('list')}
                       className="bg-white rounded-2xl border-2 p-3 hover:border-purple-300 transition-all cursor-pointer"
                     >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${inst.isEnabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${_effectiveActive ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>
                         <Brain className="w-4 h-4" />
                       </div>
                       <p className="text-xs font-bold text-slate-800 truncate">
                         {inst.sourcePrompt || inst.name || "Instruction"}
                       </p>
-                      <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded mt-1.5 ${inst.isEnabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>
-                        {inst.isEnabled ? 'Active' : 'Disabled'}
+                      <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded mt-1.5 ${_effectiveActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>
+                        {_effectiveActive ? 'Active' : 'Disabled'}
                       </span>
                       <p className="text-[10px] text-slate-400 mt-1">
                         {inst.triggerKeywords?.length || 0} keywords
                       </p>
                     </div>
-                  ))}
+                    );
+                    });
+                  })()}
                 </div>
               )}
               </>

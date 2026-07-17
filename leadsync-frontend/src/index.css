@@ -6,129 +6,138 @@
 
 /* LeadSync Design System — Warm, Professional, Indian SME-focused */
 @layer base {
-:root {
+  :root {
     color-scheme: light;
-    --blob-opacity: 0.5;
+    --blob-opacity: 0.15;
 
     /* Font stack */
     --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
     --font-display: "Fraunces", "IBM Plex Sans", serif;
     --font-mono: "JetBrains Mono", monospace;
 
-    /* Brand Colors — Trust & Prosperity */
-    --brand-navy: #1E3A5F;
-    --brand-navy-light: #2D4A7A;
-    --brand-saffron: #D4A843;
-    --brand-saffron-light: #E8C96A;
-    --brand-saffron-soft: #FFF8E7;
+    /* Primary Brand Palette - Light Mode */
+    --brand-navy: #D36B46;
+    --brand-navy-light: #E48F71;
+    --brand-saffron: #D36B46;       /* Terracotta accent */
+    --brand-saffron-light: #E48F71;
+    --brand-saffron-soft: rgba(211, 107, 70, 0.08);
 
-    /* Surface colors */
-    --app-bg: #F8FAFC;
-    --app-bg-soft: #F1F5F9;
-    --app-surface: #FFFFFF;
-    --app-surface-alt: #F8FAFC;
-    --app-text: #1E293B;
-    --text-primary: #1E293B;
-    --text-secondary: #475569;
-    --app-text-muted: #94A3B8;
-    --app-border: #E2E8F0;
-    --app-border-strong: #CBD5E1;
+    /* Surface & Background tokens */
+    --app-bg: #faf7f2;              /* Warm cream off-white */
+    --app-bg-soft: #f3ede2;
+    --app-surface: #efe8dc;         /* Warm cream/white surface (visibly darker than background) */
+    --app-surface-alt: #e5dccb;
+    --app-text: #1B2421;            /* Deep spruce green text */
+    --text-primary: #1B2421;
+    --text-secondary: #3A4B46;
+    --app-text-muted: #5E706B;
+    --app-border: #d8dedb;
+    --app-border-strong: #c3cdc8;
 
     /* Status colors */
-    --app-primary: #1E3A5F;
-    --app-primary-strong: #162D4A;
-    --app-primary-soft: rgba(30, 58, 95, 0.08);
-    --success-green: #16A34A;
-    --warning-amber: #F59E0B;
-    --danger-red: #DC2626;
-    --info-blue: #0284C7;
+    --app-primary: #D36B46;
+    --app-primary-strong: #b9502b;
+    --app-primary-soft: rgba(211, 107, 70, 0.06);
+    --success-green: #86C232;       /* Pistachio green - success/money states only */
+    --warning-amber: #D36B46;       /* Map warning to terracotta to avoid gold */
+    --danger-red: #a63232;
+    --info-blue: #3A4B46;           /* Non-blue neutral */
 
     /* Input & scroll */
-    --app-input-bg: #FFFFFF;
-    --app-input-placeholder: #94A3B8;
-    --app-scroll-track: #F1F5F9;
-    --app-scroll-thumb: #CBD5E1;
-    --app-scroll-thumb-hover: #94A3B8;
-    --app-backdrop: rgba(30, 41, 59, 0.5);
+    --app-input-bg: #fcfaf7;
+    --app-input-placeholder: #5E706B;
+    --app-scroll-track: #efe8dc;
+    --app-scroll-thumb: #c3cdc8;
+    --app-scroll-thumb-hover: #5E706B;
+    --app-backdrop: rgba(27, 36, 33, 0.15);
 
     /* Shadows */
-    --app-shadow-soft: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --app-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
-    --app-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+    --app-shadow-soft: 0 1px 2px 0 rgba(27, 36, 33, 0.05);
+    --app-shadow-md: 0 4px 6px -1px rgba(27, 36, 33, 0.05), 0 2px 4px -1px rgba(27, 36, 33, 0.03);
+    --app-shadow-lg: 0 10px 15px -3px rgba(27, 36, 33, 0.05), 0 4px 6px -2px rgba(27, 36, 33, 0.03);
 
-    /* Sidebar text colors — same in both themes */
-    --sidebar-text: #F1EFE8;
-    --sidebar-text-muted: #9AA3B2;
+    /* Sidebar text colors */
+    --sidebar-text: #1B2421;
+    --sidebar-text-muted: #3A4B46;
 
     /* Theme-specific tokens */
-    --sidebar-bg: linear-gradient(165deg, #0B1220 0%, #16213F 55%, #201A3A 100%);
-    --tile-bg: rgba(11,18,32,0.72);
-    --tile-border: rgba(196,146,63,0.35);
-    --ticket-bg: rgba(22,29,45,0.92);
-    --ticket-text: #F1EFE8;
-    --ticket-text-secondary: #8A93A0;
-    --ticket-border: rgba(255,255,255,0.10);
-    --brass: #C4923F;
-    --brass-light: #E3B06B;
-    --orchid: #9B7FE0;
-    --signal: #39E6A0;
-    --brick: #D9584C;
+    --sidebar-bg: transparent;
+    --tile-bg: #efe8dc;
+    --tile-border: #d8dedb;
+    --ticket-bg: #efe8dc;
+    --ticket-text: #1B2421;
+    --ticket-text-secondary: #3A4B46;
+    --ticket-border: #d8dedb;
+    --brass: #D36B46;
+    --brass-light: #E48F71;
+    --orchid: #D36B46;
+    --signal: #86C232;
+    --brick: #a63232;
   }
 
-  /* Dark mode — warm & rich, not harsh gray */
+  /* Dark mode — Deep spruce green base */
   [data-theme="dark"] {
     color-scheme: dark;
-    --blob-opacity: 0.6;
+    --blob-opacity: 0.25;
 
-    /* Brand colors stay similar but adjust for dark bg */
-    --brand-navy: #2D5A8A;
-    --brand-navy-light: #3A6FA5;
-    --brand-saffron: #D4A843;
-    --brand-saffron-light: #E8C96A;
-    --brand-saffron-soft: rgba(212, 168, 67, 0.15);
+    /* Primary Brand Palette - Dark Mode */
+    --brand-navy: #D36B46;
+    --brand-navy-light: #E48F71;
+    --brand-saffron: #D36B46;       /* Terracotta accent */
+    --brand-saffron-light: #E48F71;
+    --brand-saffron-soft: rgba(211, 107, 70, 0.12);
 
-    /* Surface colors — deep warm charcoal */
-    --app-bg: #0F172A;
-    --app-bg-soft: #1E293B;
-    --app-surface: #1E293B;
-    --app-surface-alt: #334155;
-    --app-text: #F1F5F9;
-    --text-primary: #F1F5F9;
-    --text-secondary: #CBD5E1;
-    --app-text-muted: #64748B;
-    --app-border: #334155;
-    --app-border-strong: #475569;
+    /* Surface & Background tokens */
+    --app-bg: #1B2421;              /* Deep spruce green */
+    --app-bg-soft: #141b19;
+    --app-surface: #2E3D38;         /* Slightly lighter spruce green tone than background */
+    --app-surface-alt: #384A44;
+    --app-text: #F4F9F4;            /* Warm off-white/cream text */
+    --text-primary: #F4F9F4;
+    --text-secondary: #C4D1C4;
+    --app-text-muted: #8FA68F;
+    --app-border: rgba(244, 249, 244, 0.15);      /* Low opacity cream/off-white */
+    --app-border-strong: rgba(244, 249, 244, 0.25);
 
-    /* Status colors — slightly brighter for contrast */
-    --app-primary: #2D5A8A;
-    --app-primary-strong: #3A6FA5;
-    --app-primary-soft: rgba(45, 90, 138, 0.2);
-    --success-green: #22C55E;
-    --warning-amber: #FBBF24;
-    --danger-red: #EF4444;
-    --info-blue: #38BDF8;
+    /* Status colors */
+    --app-primary: #D36B46;
+    --app-primary-strong: #E48F71;
+    --app-primary-soft: rgba(211, 107, 70, 0.12);
+    --success-green: #86C232;       /* Pistachio green */
+    --warning-amber: #D36B46;       /* Avoid gold/orange */
+    --danger-red: #e05e5e;
+    --info-blue: #8FA68F;
 
     /* Input & scroll */
-    --app-input-bg: #1E293B;
-    --app-input-placeholder: #64748B;
-    --app-scroll-track: #1E293B;
-    --app-scroll-thumb: #475569;
-    --app-scroll-thumb-hover: #64748B;
-    --app-backdrop: rgba(0, 0, 0, 0.7);
+    --app-input-bg: #2E3D38;
+    --app-input-placeholder: #5E706B;
+    --app-scroll-track: #1B2421;
+    --app-scroll-thumb: rgba(244, 249, 244, 0.15);
+    --app-scroll-thumb-hover: rgba(244, 249, 244, 0.25);
+    --app-backdrop: rgba(0, 0, 0, 0.5);
 
-    /* Shadows — deeper for dark mode */
+    /* Shadows */
     --app-shadow-soft: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
     --app-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
     --app-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
 
-    /* Sidebar text colors — same in both themes */
-    --sidebar-text: #F1EFE8;
-    --sidebar-text-muted: #9AA3B2;
+    /* Sidebar text colors */
+    --sidebar-text: #F4F9F4;
+    --sidebar-text-muted: #C4D1C4;
 
     /* Theme-specific tokens */
-    --sidebar-bg: linear-gradient(165deg, #0B1220 0%, #16213F 55%, #201A3A 100%);
-    --tile-bg: rgba(11,18,32,0.72);
-    --tile-border: rgba(196,146,63,0.35);
+    --sidebar-bg: transparent;
+    --tile-bg: #2E3D38;
+    --tile-border: rgba(244, 249, 244, 0.15);
+    --ticket-bg: #2E3D38;
+    --ticket-text: #F4F9F4;
+    --ticket-text-secondary: #C4D1C4;
+    --ticket-border: rgba(244, 249, 244, 0.15);
+    --brass: #D36B46;
+    --brass-light: #E48F71;
+    --orchid: #D36B46;
+    --signal: #86C232;
+    --brick: #e05e5e;
   }
 
   body {
@@ -165,11 +174,12 @@
 @layer components {
   /* Primary Buttons */
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-xl px-5 py-2.5 font-semibold text-white shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
-    background: linear-gradient(135deg, var(--brass) 0%, #B8925E 45%, var(--orchid) 100%);
+    @apply inline-flex items-center justify-center rounded-xl px-5 py-2.5 font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    background-color: var(--brand-saffron);
+    color: var(--app-bg);
   }
   .btn-primary:hover:not(:disabled) {
-    background: linear-gradient(135deg, #B8863A 0%, #A87D50 45%, #8B6FCC 100%);
+    background-color: var(--brand-saffron-light);
   }
 
   .btn-secondary {
@@ -180,9 +190,9 @@
   }
 
   .btn-saffron {
-    @apply inline-flex items-center justify-center rounded-xl px-5 py-2.5 font-semibold text-white shadow-sm transition-all duration-200 disabled:opacity-50;
+    @apply inline-flex items-center justify-center rounded-xl px-5 py-2.5 font-semibold shadow-sm transition-all duration-200 disabled:opacity-50;
     background-color: var(--brand-saffron);
-    color: #1E293B;
+    color: var(--app-bg);
   }
   .btn-saffron:hover:not(:disabled) {
     background-color: var(--brand-saffron-light);
@@ -190,19 +200,31 @@
 
   /* Card */
   .card {
-    @apply rounded-xl border shadow-sm;
+    @apply rounded-xl border shadow-sm backdrop-blur-md;
     border-color: var(--app-border);
-    background-color: var(--app-surface);
+    background: linear-gradient(135deg, rgba(239, 232, 220, 0.7) 0%, rgba(239, 232, 220, 0.45) 100%);
+    box-shadow: var(--app-shadow-soft), inset 0 1px 0 0 rgba(255, 255, 255, 0.3);
+  }
+  [data-theme="dark"] .card {
+    background: linear-gradient(135deg, rgba(46, 61, 56, 0.75) 0%, rgba(46, 61, 56, 0.45) 100%);
+    box-shadow: var(--app-shadow-soft), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
   }
 
   .card-hover {
-    @apply rounded-xl border shadow-sm transition-all duration-200;
+    @apply rounded-xl border shadow-sm backdrop-blur-md;
     border-color: var(--app-border);
-    background-color: var(--app-surface);
+    background: linear-gradient(135deg, rgba(239, 232, 220, 0.7) 0%, rgba(239, 232, 220, 0.45) 100%);
+    box-shadow: var(--app-shadow-soft), inset 0 1px 0 0 rgba(255, 255, 255, 0.3);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  [data-theme="dark"] .card-hover {
+    background: linear-gradient(135deg, rgba(46, 61, 56, 0.75) 0%, rgba(46, 61, 56, 0.45) 100%);
+    box-shadow: var(--app-shadow-soft), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
   }
   .card-hover:hover {
-    box-shadow: var(--app-shadow-md);
-    border-color: var(--app-border-strong);
+    transform: translateY(-2px);
+    border-color: var(--brand-saffron);
+    box-shadow: var(--app-shadow-md), 0 0 16px rgba(211, 107, 70, 0.18);
   }
 
   /* Badges */
@@ -211,23 +233,23 @@
   }
   .badge-success {
     @apply badge;
-    background-color: rgba(22, 163, 74, 0.12);
-    color: rgb(22, 163, 74);
+    background-color: rgba(95, 133, 117, 0.12);
+    color: var(--success-green);
   }
   .badge-warning {
     @apply badge;
-    background-color: rgba(245, 158, 11, 0.12);
-    color: rgb(180, 120, 0);
+    background-color: rgba(200, 90, 50, 0.12);
+    color: var(--brand-saffron);
   }
   .badge-error {
     @apply badge;
-    background-color: rgba(220, 38, 38, 0.12);
-    color: rgb(220, 38, 38);
+    background-color: rgba(166, 50, 50, 0.12);
+    color: var(--danger-red);
   }
   .badge-info {
     @apply badge;
-    background-color: rgba(2, 132, 199, 0.12);
-    color: rgb(2, 132, 199);
+    background-color: rgba(92, 72, 60, 0.12);
+    color: var(--text-secondary);
   }
 
   /* Input */
@@ -303,6 +325,54 @@
   .animate-fade-in {
     animation: fadeIn 0.25s ease-out;
   }
+
+  /* Reusable micro-interactions & animations */
+  .btn-interactive,
+  .btn-primary,
+  .btn-secondary,
+  .btn-saffron,
+  .icon-interactive {
+    transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .btn-interactive:hover:not(:disabled),
+  .btn-primary:hover:not(:disabled),
+  .btn-secondary:hover:not(:disabled),
+  .btn-saffron:hover:not(:disabled),
+  .icon-interactive:hover {
+    transform: scale(1.02);
+  }
+
+  .btn-interactive:active:not(:disabled),
+  .btn-primary:active:not(:disabled),
+  .btn-secondary:active:not(:disabled),
+  .btn-saffron:active:not(:disabled),
+  .icon-interactive:active {
+    transform: scale(0.96);
+  }
+
+  /* Live dot breathing status pulse */
+  .pulse-live {
+    position: relative;
+  }
+  .pulse-live::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 9999px;
+    border: 1.5px solid var(--success-green);
+    animation: pulseLiveGlow 2s infinite ease-in-out;
+  }
+
+  /* Ambient glow drift */
+  .ambient-glow {
+    animation: ambientShift 9s infinite ease-in-out;
+  }
+
+  /* Page transition wrapper */
+  .fade-in-page {
+    animation: fadeInPage 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
 }
 
 @keyframes slideUp {
@@ -313,4 +383,41 @@
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes pulseLiveGlow {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}
+
+@keyframes ambientShift {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+    opacity: calc(var(--blob-opacity) * 0.85);
+  }
+  50% {
+    transform: translate(25px, 20px) scale(1.08);
+    opacity: calc(var(--blob-opacity) * 1.15);
+  }
+}
+
+@keyframes fadeInPage {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

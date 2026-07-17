@@ -11,19 +11,16 @@ export default function InboxSplitView({ initialLeadId = null }: InboxSplitViewP
 
   return (
     <div className="flex h-full w-full min-h-0 overflow-hidden">
-      {/* Left column: fixed 380px, scrollable, full-height border */}
-      <div
-        className="flex-shrink-0 min-h-0 overflow-y-auto border-r border-slate-800 h-full"
-        style={{ width: "380px" }}
-      >
+      {/* Left column: fixed 320px, scrollable, full-height border */}
+      <div className="w-[320px] shrink-0 min-h-0 overflow-y-auto border-r border-slate-800 h-full bg-app-surface">
         <InboxList
           selectedLeadId={selectedLeadId}
           onSelectLead={(leadId: string) => setSelectedLeadId(leadId)}
         />
       </div>
 
-      {/* Right column: fills remaining width */}
-      <div className="flex-1 min-h-0 overflow-hidden h-full">
+      {/* Right column: fills remaining width, min 480px */}
+      <div className="flex-1 min-w-[480px] min-h-0 overflow-hidden h-full">
         {selectedLeadId ? (
           <InboxDetail leadId={selectedLeadId} showBackButton={false} />
         ) : (

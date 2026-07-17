@@ -129,6 +129,19 @@ export async function deleteRuleGroup(id: string) {
 }
 
 /**
+ * Update a rule group (e.g. toggle isEnabled / rename)
+ */
+export async function updateRuleGroup(id: string, data: any) {
+  const res = await authedFetch(`/api/automation/rule-groups/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update rule group");
+  return res.json();
+}
+
+/**
  * Authenticated fetch — reads JWT from localStorage and sends Authorization header.
  * Use this in places that need the same token handling as axios apiClient.
  */
@@ -202,10 +215,11 @@ export async function generateSmartRules(prompt: string, groupId?: string) {
  */
 export async function createSmartRule(data: any) {
   const companyId = getCompanyId();
+  const body = JSON.stringify({ ...data, companyId });
   const res = await authedFetch("/api/automation/conversational-rules", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...data, companyId }),
+    body,
   });
   if (!res.ok) throw new Error("Failed to create rule");
   return res.json();
@@ -301,3 +315,4 @@ export async function generateExample(instruction: string) {
   if (!res.ok) throw new Error("Failed to generate example");
   return res.json();
 }
+

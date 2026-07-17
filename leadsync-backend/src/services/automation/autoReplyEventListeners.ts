@@ -20,7 +20,7 @@ export function setupAutoReplyEventListeners() {
 
       // Find conversation via lead (Order no longer has direct conversation relation)
       const conv = order.leadId ? await prisma.conversation.findFirst({
-        where: { leadId: order.leadId, lifecycleStatus: 'active' }
+        where: { leadId: order.leadId, lifecycleStatus: 'active', companyId }
       }) : null;
       if (!conv) return;
 
@@ -70,7 +70,7 @@ export function setupAutoReplyEventListeners() {
 
       // Find conversation via lead (Order no longer has direct conversation relation)
       const conv = order.leadId ? await prisma.conversation.findFirst({
-        where: { leadId: order.leadId, lifecycleStatus: 'active' }
+        where: { leadId: order.leadId, lifecycleStatus: 'active', companyId }
       }) : null;
       if (!conv) return;
 

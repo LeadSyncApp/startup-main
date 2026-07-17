@@ -8,10 +8,11 @@ interface InboxDetailProps {
   leadId?: string;
   showBackButton?: boolean;
 }
-import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe, Menu } from "lucide-react";
+import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe, Menu, Plus } from "lucide-react";
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
 import AiSuggestionPanel from "./AiSuggestionPanel";
+import { ProductPickerModal } from "./ProductPickerModal";
 import { Badge } from "../../components/ui/Badge";
 
 // ── Types ──
@@ -77,6 +78,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<"details" | "ai">("details");
+  const [showProductPicker, setShowProductPicker] = useState(false);
 
   const fetchMessages = useCallback(async () => {
     if (!leadId) return;
@@ -276,7 +278,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
     const isBot = msg.sender === "BOT";
     const isSystem = msg.sender === "SYSTEM";
     const isFailed = msg.deliveryStatus === "FAILED";
-    const senderLabel = msg.senderName || (isBot ? "Auto-reply" : isAgent ? "Agent" : isClient ? "Customer" : "System");
+    const senderLabel = msg.senderName || (isBot ? "Auto-reply" : isAgent ? "Agent" : isClient ? customerDisplayName : "System");
 
     if (isSystem) {
       return (
@@ -289,8 +291,8 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
     }
 
     return (
-      <div key={msg.id} className={`flex ${isClient ? "justify-start" : "justify-end"} py-0.5`}>
-        <div className={`max-w-[75%] px-3 py-1.5 rounded-2xl border ${
+      <div key={msg.id} className={`flex ${isClient ? "justify-start" : "justify-end"} py-1`}>
+        <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl border ${
           isFailed
             ? "bg-rose-500/10 border-rose-500/30 text-rose-200"
             : isClient
@@ -309,15 +311,15 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
                 <AlertTriangle className="h-3 w-3" /> Failed
               </span>
             )}
-            {/* Delivery status indicator for non-failed messages */}
-            {!isFailed && !isSystem && (
+            {/* Delivery status indicator — outgoing only (BOT/AGENT). CUSTOMER (CLIENT) messages never show a tick. */}
+            {!isFailed && !isSystem && (isBot || isAgent) && (
               <span className="text-[9px] font-mono opacity-50 ml-auto">
                 {msg.deliveryStatus === "SENT" && (msg.isRead ? "✓✓ Read" : "✓ Sent")}
                 {msg.deliveryStatus === "PENDING" && "⏳ Pending"}
               </span>
             )}
           </div>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
+          <p className="text-sm leading-[1.6] whitespace-pre-wrap break-words mt-1 mb-1 text-slate-100">{msg.content}</p>
           {msg.deliveryError && (
             <p className="text-[10px] font-mono text-rose-400/70 mt-0 italic">{msg.deliveryError}</p>
           )}
@@ -343,16 +345,16 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
 
   return (
     <div className="flex h-full w-full min-h-0 overflow-hidden">
-      <div className={`flex flex-col h-full min-h-0 transition-all duration-200 ${mode === "YOU" ? "w-[calc(100%-340px)]" : "w-full"}`}>
+      <div className="flex-1 flex flex-col h-full min-h-0 transition-all duration-200">
       {/* Header */}
-      <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
+      <div className="flex items-center gap-4 px-4 py-4 border-b border-slate-800 bg-app-surface">
         {showBackButton && (
           <button onClick={() => navigate("/inbox")} className="p-2 rounded-xl hover:bg-slate-900 border border-slate-800 transition cursor-pointer">
             <ArrowLeft className="h-4 w-4 text-app-text-muted" />
           </button>
         )}
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-black text-app-text truncate">{customerDisplayName}</h2>
+          <h2 className="text-base font-black text-app-text truncate">{customerDisplayName}</h2>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {customerPhone && customerPhone !== customerDisplayName && (
               <span className="text-[10px] text-slate-400 font-mono">{customerPhone}</span>
@@ -445,7 +447,14 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
 
       {/* Input */}
       <div className="pt-2 border-t border-slate-800">
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => setShowProductPicker(true)}
+            className="p-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 transition cursor-pointer shrink-0"
+            title="Add product"
+          >
+            <Plus className="h-4 w-4 text-slate-300" />
+          </button>
           <input
             value={content}
             onChange={(e) => setContent(e.target.value)}
@@ -465,10 +474,21 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
           </button>
         </div>
       </div>
+
+      {/* Product Picker Modal */}
+      {showProductPicker && (
+        <ProductPickerModal
+          onClose={() => setShowProductPicker(false)}
+          onProductSelected={(message) => {
+            setContent(prev => prev ? `${prev}\n${message}` : message);
+            setShowProductPicker(false);
+          }}
+        />
+      )}
       </div>
 
       {panelOpen && leadId && (
-        <div className="w-[340px] shrink-0 border-l border-slate-800 h-full overflow-y-auto">
+        <div className="w-[320px] shrink-0 border-l border-slate-800 h-full overflow-y-auto bg-app-surface">
           {/* Panel tabs */}
           <div className="flex border-b border-slate-800">
             <button
@@ -550,18 +570,18 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
                             return (
                               <Fragment key={c.id}>
                                 <tr
-                                  className="border-t border-slate-800 cursor-pointer hover:bg-slate-800/40"
+                                  className="h-11 border-t border-slate-800 cursor-pointer hover:bg-slate-800/60 transition-colors"
                                   onClick={() => setExpandedHistoryId(isOpen ? null : c.id)}
                                 >
-                                  <td className="px-2 py-1.5 font-bold text-slate-200 truncate max-w-[120px]">{displayName}</td>
-                                  <td className="px-2 py-1.5">
+                                  <td className="px-3 py-2 font-bold text-slate-200 truncate max-w-[120px]">{displayName}</td>
+                                  <td className="px-3 py-2">
                                     <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
                                       c.status === "RESOLVED" ? "bg-emerald-500/20 text-emerald-300"
                                       : c.status === "ASSIGNED" ? "bg-amber-500/20 text-amber-300"
                                       : "bg-slate-700/60 text-slate-300"
                                     }`}>{c.status}</span>
                                   </td>
-                                  <td className="px-2 py-1.5 text-slate-500 text-right whitespace-nowrap">{formattedTime}</td>
+                                  <td className="px-3 py-2 text-slate-500 text-right whitespace-nowrap">{formattedTime}</td>
                                 </tr>
                                 {isOpen && (
                                   <tr className="border-t border-slate-800 bg-slate-900/40">

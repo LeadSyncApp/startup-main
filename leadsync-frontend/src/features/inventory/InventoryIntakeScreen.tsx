@@ -7,13 +7,26 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Package, Edit3, CheckCircle, AlertCircle } from "lucide-react";
 
+export interface ProductVariantData {
+  attribute_name: string;
+  attribute_value: string;
+  price_override: number | null;
+  stock: number | null;
+}
+
 export interface ProductData {
   brand: string | null;
   product_type: string;
-  colors: string[];
-  sizes: string[];
+  variants: ProductVariantData[];
+  attribute_name: string | null;
+  description: string | null;
   price_inr: number | null;
   raw_source_fragment: string;
+  isAvailable?: boolean;
+  sku?: string;
+  colors?: string[];
+  sizes?: string[];
+  hasVariants?: boolean;
 }
 
 interface IntakeResponse {
@@ -54,10 +67,18 @@ export function InventoryIntakeScreen({ companyId, onProceedToConfirm }: Invento
       }
 
       const result: IntakeResponse = await response.json();
-      setParseResult(result);
+
+      // Map parsed products to include hasVariants flag
+      const mappedProducts = result.products.map(p => ({
+        ...p,
+        hasVariants: p.variants && p.variants.length > 0,
+      }));
+
+      const mappedResult = { ...result, products: mappedProducts };
+      setParseResult(mappedResult);
       
-      if (result.products.length > 0) {
-        onProceedToConfirm(result.products);
+      if (mappedResult.products.length > 0) {
+        onProceedToConfirm(mappedResult.products);
       }
     } catch (err: any) {
       console.error("Parse API failed:", err.message);
@@ -82,12 +103,12 @@ export function InventoryIntakeScreen({ companyId, onProceedToConfirm }: Invento
       <div className="space-y-4">
         <label className="block">
           <span className="text-sm font-medium" style={{ color: 'var(--app-text)' }}>
-            Product Description (Free Text)
+            Product / Service Description (Free Text)
           </span>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Enter your product descriptions here... e.g., 'Otto full hand shirt black white navy M L XL 899 rupees'"
+            placeholder={"Describe your products or services...\nExamples:\n• \"Otto full hand shirt black white navy M L XL 899 rupees\"\n• \"Haircut 30min 500rs, Haircut 60min 800rs\"\n• \"Consultation call 15min free, 30min 500\"\n• \"Pizza margherita small 200, medium 350, large 500\""}
             className="mt-2 w-full h-32 px-4 py-3 rounded-xl border focus:ring-2 focus:ring-brand-saffron focus:border-transparent transition-all"
             style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
           />
@@ -147,11 +168,12 @@ export function InventoryIntakeScreen({ companyId, onProceedToConfirm }: Invento
                         {product.product_type}
                       </h3>
                       <div className="flex flex-wrap gap-2 text-sm" style={{ color: 'var(--app-text-muted)' }}>
-                        {product.colors.length > 0 && (
-                          <span>Colors: {product.colors.join(", ")}</span>
+                        {product.description && <span>{product.description}</span>}
+                        {product.variants && product.variants.length > 0 && (
+                          <span>{product.attribute_name}: {product.variants.map(v => v.attribute_value).join(", ")}</span>
                         )}
-                        {product.sizes.length > 0 && (
-                          <span>Sizes: {product.sizes.join(", ")}</span>
+                        {(!product.variants || product.variants.length === 0) && (
+                          <span>No variants</span>
                         )}
                       </div>
                       {product.price_inr !== null && (

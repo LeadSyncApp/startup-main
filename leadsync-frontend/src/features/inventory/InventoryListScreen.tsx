@@ -1,5 +1,6 @@
 /**
  * Inventory List Screen - Shows saved products with option to add new
+ * Business-agnostic: displays variants generically
  */
 
 import { useState, useEffect } from "react";
@@ -7,14 +8,23 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Package, Plus, ShoppingBag, RefreshCw, ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
+interface ProductVariant {
+  id: string;
+  attributeValue: string;
+  price: number;
+  stock: number | null;
+}
+
 interface SavedProduct {
   id: string;
-  sourceId: string | null;
-  brand: string | null;
-  product_type: string;
-  colors: string[];
-  sizes: string[];
-  price_inr: number | null;
+  name: string;
+  description: string | null;
+  category: string | null;
+  basePrice: number;
+  imageUrl: string | null;
+  hasVariants: boolean;
+  variantAttributeName: string | null;
+  variants: ProductVariant[];
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -152,29 +162,51 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
                 style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}
               >
                 <div className="flex items-start justify-between">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium text-base" style={{ color: 'var(--app-text)' }}>
-                        {product.brand && <span className="text-brand-saffron">{product.brand}</span>}
-                        {product.brand && " "}
-                        {product.product_type}
-                      </h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-base" style={{ color: 'var(--app-text)' }}>
+                          {product.name}
+                        </h3>
+                        {product.description && (
+                          <span className="text-xs px-2 py-0.5 rounded-full border" style={{ borderColor: 'var(--app-border)', color: 'var(--app-text-muted)' }}>
+                            {product.description}
+                          </span>
+                        )}
+                      {product.hasVariants && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand-saffron/20 text-brand-saffron">
+                          {product.variants.length} variants
+                        </span>
+                      )}
                     </div>
                     
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm" style={{ color: 'var(--app-text-muted)' }}>
-                      {product.colors.length > 0 && (
-                        <span>Colors: {product.colors.join(", ")}</span>
-                      )}
-                      {product.sizes.length > 0 && (
-                        <span>Sizes: {product.sizes.join(", ")}</span>
-                      )}
-                    </div>
-                    
-                    {product.price_inr !== null && (
-                      <p className="text-lg font-bold" style={{ color: 'var(--brand-saffron)' }}>
-                        ₹{product.price_inr}
-                      </p>
+                    {/* Show variants generically */}
+                    {product.hasVariants && product.variantAttributeName && product.variants.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {product.variants.map((v) => (
+                          <span
+                            key={v.id}
+                            className="text-xs px-2 py-0.5 rounded-full border"
+                            style={{ borderColor: 'var(--app-border)', color: 'var(--app-text-muted)' }}
+                          >
+                            {v.attributeValue}
+                            {v.price !== product.basePrice && (
+                              <span className="ml-1 font-medium" style={{ color: 'var(--brand-saffron)' }}>
+                                ₹{v.price}
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
                     )}
+                    
+                    <p className="text-lg font-bold" style={{ color: 'var(--brand-saffron)' }}>
+                      ₹{product.basePrice}
+                      {!product.hasVariants && product.variants.length === 0 && (
+                        <span className="text-xs font-normal ml-2" style={{ color: 'var(--app-text-muted)' }}>
+                          base price
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-app-text-muted" />
                 </div>

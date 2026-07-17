@@ -12,12 +12,14 @@
   },
   "dependencies": {
     "@headlessui/react": "^1.7.17",
+    "@tanstack/react-virtual": "^3.14.6",
     "axios": "^1.18.0",
     "date-fns": "^3.0.0",
     "framer-motion": "^10.12.16",
     "lucide-react": "^0.454.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-hot-toast": "^2.6.0",
     "react-router-dom": "^6.28.0",
     "recharts": "^2.6.2",
     "socket.io-client": "^4.8.3",
@@ -31,6 +33,7 @@
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
+    "puppeteer-core": "^25.3.0",
     "tailwindcss": "^3.4.15",
     "typescript": "~5.6.2"
   }

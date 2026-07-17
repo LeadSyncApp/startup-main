@@ -31,7 +31,7 @@ export function ConnectionsHub() {
     if (company) {
       setTelegramConnected(!!company.telegramConnected);
       setTelegramBotUsername(company.telegramBotUsername || "");
-      setWhatsAppConnected(!!company.botBusinessType);
+      setWhatsAppConnected(!!company.businessType);
     }
   }, [company?.id]);
 

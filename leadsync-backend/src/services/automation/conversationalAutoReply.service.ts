@@ -191,7 +191,7 @@ export class ConversationalAutoReplyService {
     const eligibleRuleIds = eligibleRules.map(r => r.id);
 
     // Get similar chunks (rules are embedded as KnowledgeChunks with sourceType='RULE')
-    const chunks = await retrieveSimilarChunks(companyId, messageText, 2);
+    const chunks = await retrieveSimilarChunks(companyId, messageText, 2, "RULE");
     
     // Filter chunks to only those matching eligible rules
     const eligibleChunks = chunks.filter(chunk => eligibleRuleIds.includes(chunk.sourceId));
@@ -255,7 +255,7 @@ export class ConversationalAutoReplyService {
     }
 
     // Get ALL chunks first (both eligible and ineligible rules) for proper blockedReason analysis
-    const allChunks = await retrieveSimilarChunks(companyId, messageText, 10);
+    const allChunks = await retrieveSimilarChunks(companyId, messageText, 10, "RULE");
     
     // Find the best-scoring rule overall (regardless of eligibility)
     if (allChunks.length > 0) {
@@ -507,9 +507,21 @@ export class ConversationalAutoReplyService {
       where: {
         companyId,
         isEnabled: true,
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gte: new Date() } },
+        AND: [
+          {
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gte: new Date() } },
+            ],
+          },
+          {
+            // Cascading disable: a rule is only active if its flow (RuleGroup)
+            // is enabled. Rules with no flow (orphans) are unaffected.
+            OR: [
+              { groupId: null },
+              { group: { isEnabled: true } },
+            ],
+          },
         ],
       },
       select: {

@@ -279,11 +279,11 @@ router.post("/test-instruction", authMiddleware as any, async (req: any, res: an
     // Get company info for context
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { name: true, botBusinessType: true },
+      select: { name: true, businessType: true },
     });
 
     const brandName = company?.name || "our store";
-    const businessType = company?.botBusinessType || "Retail";
+    const businessType = company?.businessType || "Retail";
 
     // Use Groq to generate a response based on the instruction
     const groq = getGroq();
@@ -341,11 +341,11 @@ router.post("/generate-example", authMiddleware as any, async (req: any, res: an
     // Get company info for context
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { name: true, botBusinessType: true },
+      select: { name: true, businessType: true },
     });
 
     const brandName = company?.name || "our store";
-    const businessType = company?.botBusinessType || "Retail";
+    const businessType = company?.businessType || "Retail";
 
     // Use Groq to generate an example conversation
     const groq = getGroq();

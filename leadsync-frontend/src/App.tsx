@@ -49,7 +49,7 @@ export default function App() {
   const [phone, setPhone] = useState("9876543210");
   const [password, setPassword] = useState("");
   const [, setBusinessScale] = useState<"HOME" | "SME">("HOME");
-  const [, setBusinessType] = useState("Retailer");
+  const [businessType, setBusinessType] = useState("Retailer");
   const [dailyRevenueTarget, setDailyRevenueTarget] = useState("5000");
   const [, setTrackInventory] = useState(true);
   const [, setChannelVerified] = useState({ telegram: false, whatsapp: false });
@@ -234,8 +234,10 @@ export default function App() {
   const renderShopHome = () => (
     <motion.div
       key="shop-tab"
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.2, ease: "easeInOut" }}
       className="space-y-6"
     >
       {/* Daily Stats */}
@@ -243,33 +245,33 @@ export default function App() {
 
       {/* Quick actions grid for new users */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" data-tour="quick-actions">
-        <Card hover padding="md" className="text-center !bg-[linear-gradient(155deg,#B79AEA_0%,#6B4FC7_100%)] !border-[rgba(155,127,224,0.35)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
-          <div className="h-10 w-10 rounded-xl bg-white/25 text-white flex items-center justify-center mx-auto mb-3">
+        <Card hover padding="md" className="text-center !bg-[var(--app-surface)] !border-[var(--app-border)] hover:!border-[var(--brand-saffron)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[rgba(200,90,50,0.08)] transition-all duration-200 cursor-pointer">
+          <div className="h-10 w-10 rounded-xl bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)] flex items-center justify-center mx-auto mb-3">
             <MessageSquare className="h-5 w-5" />
           </div>
-          <h3 className="font-semibold text-sm" style={{ color: '#FFFFFF' }}>Reply to Messages</h3>
-          <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.82)' }}>Chat with customers</p>
+          <h3 className="font-semibold text-sm text-[var(--text-primary)]">Reply to Messages</h3>
+          <p className="text-xs mt-1 text-[var(--text-secondary)]">Chat with customers</p>
         </Card>
-        <Card hover padding="md" className="text-center !bg-[linear-gradient(155deg,#6FF0BE_0%,#0F9E6B_100%)] !border-[rgba(57,230,160,0.35)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
-          <div className="h-10 w-10 rounded-xl bg-white/25 text-[#04331F] flex items-center justify-center mx-auto mb-3">
+        <Card hover padding="md" className="text-center !bg-[var(--app-surface)] !border-[var(--app-border)] hover:!border-[var(--brand-saffron)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[rgba(200,90,50,0.08)] transition-all duration-200 cursor-pointer">
+          <div className="h-10 w-10 rounded-xl bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)] flex items-center justify-center mx-auto mb-3">
             <ShoppingBag className="h-5 w-5" />
           </div>
-          <h3 className="font-semibold text-sm" style={{ color: '#04331F' }}>View Orders</h3>
-          <p className="text-xs mt-1" style={{ color: '#0B4A31' }}>Track & fulfill</p>
+          <h3 className="font-semibold text-sm text-[var(--text-primary)]">View Orders</h3>
+          <p className="text-xs mt-1 text-[var(--text-secondary)]">Track & fulfill</p>
         </Card>
-        <Card hover padding="md" className="text-center !bg-[linear-gradient(155deg,#8FB8F5_0%,#3D6FD9_100%)] !border-[rgba(99,132,255,0.35)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
-          <div className="h-10 w-10 rounded-xl bg-white/25 text-white flex items-center justify-center mx-auto mb-3">
+        <Card hover padding="md" className="text-center !bg-[var(--app-surface)] !border-[var(--app-border)] hover:!border-[var(--brand-saffron)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[rgba(200,90,50,0.08)] transition-all duration-200 cursor-pointer">
+          <div className="h-10 w-10 rounded-xl bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)] flex items-center justify-center mx-auto mb-3">
             <Users className="h-5 w-5" />
           </div>
-          <h3 className="font-semibold text-sm" style={{ color: '#FFFFFF' }}>Customers</h3>
-          <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.82)' }}>View your list</p>
+          <h3 className="font-semibold text-sm text-[var(--text-primary)]">Customers</h3>
+          <p className="text-xs mt-1 text-[var(--text-secondary)]">View your list</p>
         </Card>
-        <Card hover padding="md" className="text-center !bg-[linear-gradient(155deg,#E3B06B_0%,#C4923F_100%)] !border-[rgba(196,146,63,0.35)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
-          <div className="h-10 w-10 rounded-xl bg-white/25 text-[#2E1E08] flex items-center justify-center mx-auto mb-3">
+        <Card hover padding="md" className="text-center !bg-[var(--app-surface)] !border-[var(--app-border)] hover:!border-[var(--brand-saffron)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[rgba(200,90,50,0.08)] transition-all duration-200 cursor-pointer">
+          <div className="h-10 w-10 rounded-xl bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)] flex items-center justify-center mx-auto mb-3">
             <Zap className="h-5 w-5" />
           </div>
-          <h3 className="font-semibold text-sm" style={{ color: '#2E1E08' }}>Broadcast</h3>
-          <p className="text-xs mt-1" style={{ color: '#4A3410' }}>Send offers</p>
+          <h3 className="font-semibold text-sm text-[var(--text-primary)]">Broadcast</h3>
+          <p className="text-xs mt-1 text-[var(--text-secondary)]">Send offers</p>
         </Card>
       </div>
 
@@ -284,10 +286,10 @@ export default function App() {
             {[40, 70, 45, 90, 65, 80, 50, 40].map((h, i) => (
               <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
                 <div
-                  className="w-full bg-app-bg-soft rounded-lg group-hover:bg-brand-saffron-soft transition-all"
+                  className="w-full bg-[var(--app-bg-soft)] rounded-lg group-hover:bg-[var(--brand-saffron-soft)] transition-all"
                   style={{ height: `${h}%` }}
                 />
-                <span className="text-2xs" style={{ color: 'rgba(255,255,255,0.6)' }}>{i+9}:05</span>
+                <span className="text-2xs" style={{ color: 'var(--text-secondary)' }}>{i+9}:05</span>
               </div>
             ))}
           </div>
@@ -297,7 +299,7 @@ export default function App() {
       {/* Migration / Getting Started Card */}
       <Card padding="lg" data-tour="getting-started" className="!bg-[var(--tile-bg)] !border-[var(--tile-border)] backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
         <div className="flex items-start gap-4">
-          <div className="h-12 w-12 rounded-xl bg-brand-navy text-white flex items-center justify-center shrink-0">
+          <div className="h-12 w-12 rounded-xl bg-[var(--brand-saffron)] text-[var(--app-bg)] flex items-center justify-center shrink-0">
             <Store className="h-6 w-6" />
           </div>
           <div className="flex-1">
@@ -442,43 +444,44 @@ export default function App() {
                 <AnimatePresence mode="wait">
                   {activeTab === 'shop' && renderShopHome()}
                   {activeTab === 'messages' && (
-                    <motion.div key="messages" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="messages-panel">
+                    <motion.div key="messages" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="messages-panel">
                       <StreamTriage />
                     </motion.div>
                   )}
                   {activeTab === 'inbox' && (
-                    <motion.div key="inbox" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="inbox-panel" className="flex-1 min-h-0">
+                    <motion.div key="inbox" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="inbox-panel" className="flex-1 min-h-0">
                       <InboxSplitView />
                     </motion.div>
                   )}
                   {activeTab === 'automation' && (
-                    <motion.div key="automation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="automation-builder">
+                    <motion.div key="automation" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="automation-builder">
                       <AutoRepliesPage />
                     </motion.div>
                   )}
+
                   {activeTab === 'customers' && (
-                    <motion.div key="customers" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="customers-list">
+                    <motion.div key="customers" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="customers-list">
                       <CustomerList />
                     </motion.div>
                   )}
                   {activeTab === 'broadcast' && (
-                    <motion.div key="broadcast" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="broadcast-engine">
+                    <motion.div key="broadcast" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="broadcast-engine">
                       <BroadcastEngine />
                     </motion.div>
                   )}
                   {activeTab === 'orders' && (
-                    <motion.div key="orders" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="orders-board">
+                    <motion.div key="orders" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="orders-board">
                       <OrderFulfillmentBoard />
                     </motion.div>
                   )}
                   {activeTab === 'settings' && (
-                    <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="settings-page">
+                    <motion.div key="settings" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="settings-page">
                       <ConfigurationsPage />
                     </motion.div>
                   )}
                   {activeTab === 'inventory' && (
-                    <motion.div key="inventory" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-tour="inventory-page">
-                      <InventoryPage companyId={user?.companyId} />
+                    <motion.div key="inventory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="inventory-page">
+                      <InventoryPage companyId={user?.companyId} businessType={businessType} />
                     </motion.div>
                   )}
                 </AnimatePresence>

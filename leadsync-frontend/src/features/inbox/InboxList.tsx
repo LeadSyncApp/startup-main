@@ -273,7 +273,7 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
                       navigate(`/inbox/${lead.id}`);
                     }
                   }}
-                  className={`w-full flex items-center gap-4 p-3 rounded-2xl border bg-[var(--ticket-bg)] text-[var(--ticket-text)] border-[var(--ticket-border)] hover:brightness-110 transition-all text-left cursor-pointer group ${
+                  className={`w-full flex items-center gap-4 p-4 rounded-2xl border bg-[var(--ticket-bg)] text-[var(--ticket-text)] border-[var(--ticket-border)] hover:brightness-110 transition-all text-left cursor-pointer group ${
                     selectedLeadId === lead.id ? "ring-2 ring-[var(--brand-saffron)]" : ""
                   }`}
                 >

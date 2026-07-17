@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { 
   MessageSquare, 
@@ -20,6 +20,10 @@ import {
 import { useActivityStore } from '../../features/activity-ledger/useActivityStore';
 import { ActivityFeedDrawer } from '../../features/activity-ledger/ActivityFeedDrawer';
 import { useTheme } from '../../features/theme/ThemeContext';
+import { useAuth } from '../../features/auth-tenancy/AuthContext';
+import { authedFetch } from '../../api/client';
+import { getSocket } from '../../lib/socketClient';
+import { NotificationBell } from '../../features/notifications/NotificationPanel';
 
 export type UserRole = 'OWNER' | 'MANAGER' | 'STAFF';
 export type TabID = 'shop' | 'messages' | 'inbox' | 'customers' | 'broadcast' | 'orders' | 'automation' | 'inventory' | 'settings';
@@ -34,8 +38,8 @@ export interface TabItem {
 
 const tabConfig: TabItem[] = [
   { id: 'shop', label: 'My Shop', icon: Home, allowedRoles: ['OWNER', 'MANAGER'] },
-  { id: 'messages', label: 'My Conversations', icon: MessageSquare, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], badge: '3' },
-  { id: 'inbox', label: 'Unclaimed', icon: Inbox, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], badge: '3' },
+  { id: 'messages', label: 'New Customers', icon: MessageSquare, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'] },
+  { id: 'inbox', label: 'My Chats', icon: Inbox, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'] },
   { id: 'customers', label: 'Customers', icon: Users, allowedRoles: ['OWNER', 'MANAGER'] },
   { id: 'broadcast', label: 'Broadcast', icon: Zap, allowedRoles: ['OWNER', 'MANAGER'] },
   { id: 'orders', label: 'Orders', icon: ShoppingBag, allowedRoles: ['OWNER', 'MANAGER'] },
@@ -65,40 +69,128 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const { gatewayStatus, events } = useActivityStore();
   const { theme, toggleTheme } = useTheme();
+  const { companyId } = useAuth();
   const unreadCount = events.filter(e => !e.read).length;
 
-  const allowedTabs = tabConfig.filter(tab => tab.allowedRoles.includes(userRole));
+  // Real badge counts — reuse the same endpoints that power InboxList
+  // (filter=mine) and StreamTriage (filter=unclaimed). No new backend needed.
+  const [myConversations, setMyConversations] = useState(0);
+  const [unclaimedLeads, setUnclaimedLeads] = useState(0);
+
+  const refreshBadgeCounts = useCallback(async () => {
+    if (!companyId) return;
+    try {
+      const results = await Promise.all([
+        authedFetch('/api/leads?filter=mine&limit=1'),
+        authedFetch('/api/leads?filter=unclaimed&limit=1'),
+      ]);
+      const [mineRes, unclaimedRes] = results;
+      if (mineRes.ok) {
+        const json = await mineRes.json();
+        // Active conversations = non-resolved leads assigned to this user.
+        const active = (json.data || []).filter(
+          (l: { status: string }) => l.status !== 'RESOLVED'
+        );
+        setMyConversations(active.length);
+      }
+      if (unclaimedRes.ok) {
+        const json = await unclaimedRes.json();
+        setUnclaimedLeads(json.meta?.total ?? (json.data || []).length);
+      }
+    } catch {
+      // Keep counts at 0 on failure; badges simply don't show.
+    }
+  }, [companyId]);
+
+  // Initial fetch on mount; re-fetch if companyId changes
+  useEffect(() => {
+    refreshBadgeCounts();
+  }, [refreshBadgeCounts]);
+
+  // Live badge updates via socket events — debounced to batch rapid-fire events
+  const badgeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleBadgeRefresh = useCallback(() => {
+    if (badgeRefreshTimer.current) clearTimeout(badgeRefreshTimer.current);
+    badgeRefreshTimer.current = setTimeout(refreshBadgeCounts, 400);
+  }, [refreshBadgeCounts]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handler = () => scheduleBadgeRefresh();
+
+    socket.on("conversation:new", handler);
+    socket.on("conversation_updated", handler);
+    socket.on("conversation.resolved", handler);
+    socket.on("lead_updated", handler);
+
+    return () => {
+      socket.off("conversation:new", handler);
+      socket.off("conversation_updated", handler);
+      socket.off("conversation.resolved", handler);
+      socket.off("lead_updated", handler);
+      if (badgeRefreshTimer.current) clearTimeout(badgeRefreshTimer.current);
+    };
+  }, [scheduleBadgeRefresh]);
+
+  // Map dynamic counts onto ONLY the two tabs that should ever show a badge.
+  // Other tabs keep their original (absent) badge property, exactly as before.
+  const badgeFor: Partial<Record<string, number>> = {
+    messages: myConversations > 0 ? myConversations : undefined,
+    inbox: unclaimedLeads > 0 ? unclaimedLeads : undefined,
+  };
+
+  const allowedTabs = tabConfig
+    .filter(tab => tab.allowedRoles.includes(userRole))
+    .map(tab =>
+      tab.id in badgeFor
+        ? { ...tab, badge: badgeFor[tab.id] }
+        : tab
+    );
+
   const displayRole = userRole === 'STAFF' ? 'Staff' : userRole === 'MANAGER' ? 'Manager' : 'Owner';
 
   const isConnected = gatewayStatus === 'STABLE' || gatewayStatus === 'SYNCED';
 
   return (
     <>
-      {/* Ambient Blob Layer */}
+      {/* Ambient Glow Layer - Soft glow from top-left across the visual surface */}
       <div className="fixed inset-0 z-0 pointer-events-none" style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-        <div className="absolute rounded-[50%] opacity-[var(--blob-opacity)]" style={{ width: '500px', height: '500px', background: 'var(--brass)', filter: 'blur(90px)', top: '-10%', left: '-5%' }} />
-        <div className="absolute rounded-[50%] opacity-[var(--blob-opacity)]" style={{ width: '500px', height: '500px', background: 'var(--orchid)', filter: 'blur(90px)', top: '-8%', right: '-5%' }} />
-        <div className="absolute rounded-[50%] opacity-[var(--blob-opacity)]" style={{ width: '500px', height: '500px', background: 'var(--signal)', filter: 'blur(90px)', bottom: '-10%', left: '50%', transform: 'translateX(-50%)' }} />
+        <div 
+          className="absolute rounded-full opacity-[var(--blob-opacity)] ambient-glow" 
+          style={{ 
+            width: '800px', 
+            height: '800px', 
+            background: 'radial-gradient(circle, var(--brand-saffron) 0%, transparent 70%)', 
+            filter: 'blur(80px)', 
+            top: '-200px', 
+            left: '-200px' 
+          }} 
+        />
       </div>
-    <div className="flex h-screen bg-transparent overflow-hidden relative z-[1]">
+    <div className="flex h-[100dvh] bg-[var(--app-bg)] overflow-hidden relative z-[1]">
       {/* Desktop Sidebar */}
-<aside className="hidden md:flex flex-col w-64 flex-shrink-0 bg-[image:var(--sidebar-bg)] border-r border-app-border">
+      <aside className="hidden md:flex flex-col h-full w-64 flex-shrink-0 bg-transparent border-r border-[var(--app-border)]">
         {/* Brand Header */}
-        <div className="p-5 border-b border-app-border">
+        <div className="p-5 border-b border-[var(--app-border)]">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-[linear-gradient(135deg,#E3B06B,#C4923F)] flex items-center justify-center text-white shrink-0">
+            <div className="h-9 w-9 rounded-lg bg-[var(--brand-saffron)] flex items-center justify-center text-[var(--app-bg)] shrink-0 btn-interactive">
               <Store className="h-5 w-5" />
             </div>
               <div className="min-w-0">
-               <h1 className="text-sm font-bold text-[var(--sidebar-text-muted)] truncate" style={{fontFamily: "'Fraunces', serif"}}>{merchantName}</h1>
-               <p className="text-xs text-[var(--sidebar-text-muted)] capitalize">{displayRole}</p>
+               <h1 className="text-sm font-bold text-[var(--text-primary)] truncate" style={{fontFamily: "'Fraunces', serif"}}>{merchantName}</h1>
+               <p className="text-xs text-[var(--text-secondary)] capitalize">{displayRole}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-app-border">
-            <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-            <span className={`text-xs font-medium uppercase tracking-wide ${isConnected ? 'text-green-500' : 'text-[var(--sidebar-text-muted)]'}`}>
+          <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-[var(--app-border)]">
+            <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-[var(--success-green)] pulse-live' : 'bg-[var(--danger-red)]'}`} />
+            <span className={`text-xs font-semibold uppercase tracking-wide ${isConnected ? 'text-[var(--success-green)]' : 'text-[var(--text-secondary)]'}`}>
               {isConnected ? 'LIVE — CONNECTED' : 'Disconnected'}
             </span>
+            <div className="ml-auto">
+              <NotificationBell />
+            </div>
           </div>
         </div>
 
@@ -111,18 +203,18 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer btn-interactive ${
                   isActive 
-                    ? 'bg-[linear-gradient(120deg,rgba(196,146,63,0.16),transparent)] text-white border-l-2 border-transparent relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[2px] before:bg-[linear-gradient(180deg,#E3B06B,#9B7FE0)]' 
-                    : 'text-[var(--sidebar-text-muted)] hover:bg-app-bg-soft hover:text-[var(--sidebar-text)]'
+                    ? 'bg-[var(--brand-saffron-soft)] text-[var(--text-primary)] border-l-2 border-transparent relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[2px] before:bg-[var(--brand-saffron)]' 
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--app-bg-soft)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={`h-5 w-5 ${isActive ? 'text-brand-saffron' : 'text-[var(--sidebar-text-muted)]'}`} />
+                  <Icon className={`h-5 w-5 ${isActive ? 'text-[var(--brand-saffron)]' : 'text-[var(--text-secondary)]'}`} />
                   <span>{tab.label}</span>
                 </div>
                 {tab.badge && (
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-brand-saffron-soft text-brand-saffron">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)]">
                     {tab.badge}
                   </span>
                 )}
@@ -132,10 +224,10 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
         </nav>
 
         {/* Theme Toggle + Logout */}
-        <div className="p-3 border-t border-app-border space-y-1">
+        <div className="p-3 border-t border-[var(--app-border)] space-y-1">
           <button
             onClick={toggleTheme}
-            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--sidebar-text-muted)] hover:text-brand-saffron hover:bg-brand-saffron-soft transition-all cursor-pointer"
+            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--sidebar-text-muted)] hover:text-[var(--brand-saffron)] hover:bg-[var(--brand-saffron-soft)] transition-all cursor-pointer btn-interactive"
           >
             {theme === 'light' ? (
               <Moon className="h-4 w-4" />
@@ -147,7 +239,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
           {onLogout && (
             <button
               onClick={onLogout}
-              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--sidebar-text-muted)] hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer"
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--sidebar-text-muted)] hover:text-[var(--danger-red)] hover:bg-[var(--app-bg-soft)] transition-all cursor-pointer btn-interactive"
             >
               <LogOut className="h-4 w-4" />
               Log Out
@@ -155,45 +247,45 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
           )}
         </div>
       </aside>
-
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-app-surface border-b border-app-border flex items-center justify-between px-4 z-30">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-[var(--app-surface)] border-b border-[var(--app-border)] flex items-center justify-between px-4 z-30">
         <button
           onClick={() => setMobileSidebarOpen(true)}
-          className="p-2 rounded-lg hover:bg-app-bg-soft text-app-text-muted cursor-pointer"
+          className="p-2 rounded-lg hover:bg-[var(--app-bg-soft)] text-[var(--app-text-muted)] cursor-pointer"
         >
           <Menu className="h-5 w-5" />
         </button>
         <div className="flex items-center gap-2">
-          <Store className="h-5 w-5 text-brand-navy" />
-          <span className="font-bold text-app-text text-sm">{merchantName}</span>
+          <Store className="h-5 w-5 text-[var(--brand-saffron)]" />
+          <span className="font-bold text-[var(--app-text)] text-sm">{merchantName}</span>
         </div>
         <button
           onClick={() => setIsDrawerOpen(true)}
-          className="p-2 rounded-lg hover:bg-app-bg-soft text-app-text-muted relative cursor-pointer"
+          className="p-2 rounded-lg hover:bg-[var(--app-bg-soft)] text-[var(--app-text-muted)] relative cursor-pointer"
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-brand-saffron text-white text-2xs font-bold flex items-center justify-center">
+            <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-[var(--brand-saffron)] text-[var(--app-bg)] text-2xs font-bold flex items-center justify-center">
               {unreadCount}
             </span>
           )}
         </button>
+        <NotificationBell />
       </div>
 
       {/* Mobile Sidebar Drawer */}
       {mobileSidebarOpen && (
         <div className="md:hidden fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setMobileSidebarOpen(false)} />
           <motion.div
             initial={{ x: -300 }}
             animate={{ x: 0 }}
-            className="relative w-72 h-full bg-app-surface shadow-xl"
+            className="relative w-72 h-full bg-[var(--app-surface)] shadow-xl"
           >
-            <div className="p-5 border-b border-app-border flex items-center justify-between">
-              <span className="font-bold text-app-text">Menu</span>
+            <div className="p-5 border-b border-[var(--app-border)] flex items-center justify-between">
+              <span className="font-bold text-[var(--app-text)]">Menu</span>
               <button onClick={() => setMobileSidebarOpen(false)} className="p-1 cursor-pointer">
-                <X className="h-5 w-5 text-app-text-muted" />
+                <X className="h-5 w-5 text-[var(--app-text-muted)]" />
               </button>
             </div>
             <nav className="p-3 space-y-1">
@@ -205,18 +297,18 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
                     key={tab.id}
                     onClick={() => { setActiveTab(tab.id); setMobileSidebarOpen(false); }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
-                      isActive ? 'bg-brand-saffron-soft text-brand-navy' : 'text-app-text-muted hover:bg-app-bg-soft'
+                      isActive ? 'bg-[var(--brand-saffron-soft)] text-[var(--text-primary)]' : 'text-[var(--app-text-muted)] hover:bg-[var(--app-bg-soft)]'
                     }`}
                   >
-                    <Icon className={`h-5 w-5 ${isActive ? 'text-brand-saffron' : 'text-app-text-muted'}`} />
+                    <Icon className={`h-5 w-5 ${isActive ? 'text-[var(--brand-saffron)]' : 'text-[var(--app-text-muted)]'}`} />
                     {tab.label}
                   </button>
                 );
               })}
             </nav>
             {onLogout && (
-              <div className="p-3 border-t border-app-border">
-                <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-app-text-muted hover:text-red-600 cursor-pointer">
+              <div className="p-3 border-t border-[var(--app-border)]">
+                <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-[var(--app-text-muted)] hover:text-[var(--danger-red)] cursor-pointer">
                   <LogOut className="h-4 w-4" /> Log Out
                 </button>
               </div>
@@ -226,7 +318,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
       )}
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-app-surface border-t border-app-border flex justify-around items-center z-30 px-2">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[var(--app-surface)] border-t border-[var(--app-border)] flex justify-around items-center z-30 px-2">
         {allowedTabs.slice(0, 5).map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -237,14 +329,14 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
               className="flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer"
             >
               <div className="relative">
-                <Icon className={`h-5 w-5 ${isActive ? 'text-brand-navy' : 'text-app-text-muted'}`} />
+                <Icon className={`h-5 w-5 ${isActive ? 'text-[var(--brand-saffron)]' : 'text-[var(--app-text-muted)]'}`} />
                 {tab.badge && (
-                  <span className="absolute -top-1.5 -right-2 text-2xs font-bold w-4 h-4 rounded-full bg-brand-saffron text-white flex items-center justify-center">
+                  <span className="absolute -top-1.5 -right-2 text-2xs font-bold w-4 h-4 rounded-full bg-[var(--brand-saffron)] text-[var(--app-bg)] flex items-center justify-center">
                     {tab.badge}
                   </span>
                 )}
               </div>
-              <span className={`text-2xs mt-1 font-medium ${isActive ? 'text-brand-navy' : 'text-app-text-muted'}`}>
+              <span className={`text-2xs mt-1 font-medium ${isActive ? 'text-[var(--brand-saffron)]' : 'text-[var(--app-text-muted)]'}`}>
                 {tab.label}
               </span>
             </button>
@@ -253,8 +345,8 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 h-full overflow-y-auto pt-14 md:pt-0 pb-16 md:pb-0">
-        <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+      <main className={`flex-1 h-full overflow-y-auto pt-14 md:pt-0 pb-16 md:pb-0 ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex flex-col' : ''}`}>
+        <div className={`p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex-1 flex flex-col min-h-0' : ''}`}>
           {children}
         </div>
       </main>

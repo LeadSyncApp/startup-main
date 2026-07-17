@@ -66,12 +66,11 @@ const testRuleSchema = z.object({
 router.post("/generate-from-prompt", authMiddleware as any, async (req: any, res: any) => {
   try {
     const input = generateFromPromptSchema.parse(req.body);
-
     // Fetch company + products for context
     const [company, products] = await Promise.all([
       prisma.company.findUnique({
         where: { id: input.companyId },
-        select: { name: true, botBusinessType: true },
+        select: { name: true, businessType: true },
       }),
       prisma.product.findMany({
         where: { companyId: input.companyId, isActive: true },
@@ -88,7 +87,7 @@ router.post("/generate-from-prompt", authMiddleware as any, async (req: any, res
     const generated = await ruleGeneratorService.generateFromPrompt({
       prompt: input.prompt,
       companyId: input.companyId,
-      businessType: input.businessType || company.botBusinessType || undefined,
+      businessType: input.businessType || company.businessType || undefined,
       businessName: input.businessName || company.name || undefined,
       productCatalog: products.map((p) => p.name),
     });
@@ -114,14 +113,12 @@ router.post("/generate-from-prompt", authMiddleware as any, async (req: any, res
 router.post("/", authMiddleware as any, async (req: any, res: any) => {
   try {
     const validated = createRuleSchema.parse(req.body);
-
     // Normalize nullable optional fields so Prisma doesn't choke on null
     const data = {
       ...validated,
       groupId: validated.groupId ?? undefined,
       conditions: validated.conditions ?? undefined,
     };
-
     const rule = await prisma.conversationalRule.create({
       data: {
         companyId: data.companyId,

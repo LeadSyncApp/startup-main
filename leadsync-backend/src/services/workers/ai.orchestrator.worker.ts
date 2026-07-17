@@ -42,12 +42,11 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     throw new Error("Multi-Tenant Security Exception: Missing active tenant binding.");
   }
 
-  const [companyContext, currentInventory, existingLead] = await Promise.all([
+  const [companyContext, existingLead] = await Promise.all([
     prisma.company.findUnique({
       where: { id: companyId },
       include: { botConfiguration: true }
     }),
-    prisma.product.findMany({ where: { companyId, isActive: true } }),
     prisma.lead.findFirst({
       where: { companyId, contact: frame.externalChatId.trim(), channel: frame.channel },
       include: {
@@ -236,9 +235,20 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       where: {
         companyId,
         isEnabled: true,
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gte: new Date() } },
+        AND: [
+          {
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gte: new Date() } },
+            ],
+          },
+          {
+            // Cascading disable: skip rules whose flow (RuleGroup) is disabled.
+            OR: [
+              { groupId: null },
+              { group: { isEnabled: true } },
+            ],
+          },
         ],
       },
       select: {
@@ -327,7 +337,6 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       tenant_id: companyId,
       user_message: processingText,
       session_state: (conversation as any)?.sessionState || {},
-      retrieved_items: currentInventory,
       menu_snapshot: menuSnapshotForAi,
       detected_language: detectedLanguage,
       activeRules: rulesAsContext,

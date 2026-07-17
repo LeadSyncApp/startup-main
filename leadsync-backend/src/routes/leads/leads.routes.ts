@@ -14,6 +14,60 @@ import { generateReplySuggestion } from "../../services/ai/ai.service";
 const router = Router();
 
 /**
+ * Resolve the cached product match for a conversation into the shape the
+ * StreamTriage frontend expects ({ name, variant, stock, thumbnailUrl } | null).
+ *
+ * The match itself is computed once (gap-based confidence) and cached on the
+ * Conversation. Here we only re-fetch the LIVE stock count from the Inventory
+ * table so the displayed number is never stale. Returns null when there is no
+ * confident cached match.
+ */
+async function resolveMatchedProduct(conversation: any, companyId: string): Promise<{
+  name: string;
+  variant: string;
+  stock: number;
+  thumbnailUrl: string;
+} | null> {
+  const cached = conversation?.matchedProduct as
+    | { productId?: string; name?: string; variant?: string; thumbnailUrl?: string }
+    | null
+    | undefined;
+
+  if (!cached || !cached.productId) return null;
+
+  try {
+    const product = await prisma.inventoryProduct.findFirst({
+      where: { id: cached.productId, companyId, isActive: true },
+      select: {
+        name: true,
+        imageUrl: true,
+        variants: {
+          where: { isActive: true },
+          select: { attributeValue: true, stock: true },
+        },
+      },
+    });
+
+    if (!product) return null;
+
+    const stock = (product.variants || []).reduce(
+      (sum: number, v: any) => sum + (v.stock ?? 0),
+      0
+    );
+
+    return {
+      name: cached.name || product.name,
+      variant: cached.variant || "",
+      stock,
+      thumbnailUrl: cached.thumbnailUrl || product.imageUrl || "",
+    };
+  } catch (err: any) {
+    console.error("[leads] Failed to resolve matched product:", err?.message);
+    return null;
+  }
+}
+
+/**
  * GET /api/leads
  * Support filtering: ?filter=unclaimed | ?filter=mine | ?filter=all | ?filter=resolved
  * Support search: ?search=<term> (matches lead name/contact)
@@ -45,8 +99,8 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       // Only leads where I am assigned to at least one conversation
       whereCondition.conversations = { some: { claimedById: req.user.userId } };
     } else if (filter === 'unclaimed' || filter === 'unassigned') {
-      // Only leads with unassigned open conversations
-      whereCondition.conversations = { some: { claimedById: null, status: { not: 'RESOLVED' } } };
+      // Only leads with unassigned and open conversations
+      whereCondition.conversations = { some: { claimedById: null, status: 'OPEN' } };
     } else if (filter === 'resolved') {
       // Fix: Only match leads whose MOST RECENT conversation (by updatedAt) has status RESOLVED.
       // Using raw SQL subquery because Prisma does not support ordering in relation filter conditions
@@ -100,6 +154,8 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
               status: true,
               claimedById: true,
               lastViewedAt: true,
+              matchedProduct: true,
+              matchedProductAt: true,
               claimedBy: {
                 select: { id: true, firstName: true, lastName: true }
               },
@@ -118,7 +174,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       take: limit,
     });
 
-    const formatted = leads.map((lead: any) => {
+    const formatted = await Promise.all(leads.map(async (lead: any) => {
       const conversation = lead.conversations[0];
 
       // Read-ahead mapped directly from DB (O(1))
@@ -130,10 +186,14 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       } else if (lead.aiPriority === "LOW") {
         priority = "LOW";
       }
-      
-      const aiScore = lead.aiPriority === "HIGH" ? 95 : lead.aiPriority === "MEDIUM" ? 65 : 30; // Dummy static score for UI until UI uses enum directly
 
       const daysSinceActive = lead.lastActiveAt ? Math.floor((Date.now() - new Date(lead.lastActiveAt).getTime()) / 86400000) : 999;
+
+      // Real AI score computed from CRM formula (same as crm.service.ts recalculateLeadCRM)
+      const recencyScore = Math.max(0, 30 - daysSinceActive) / 30 * 30;
+      const spendScore = Math.min((lead.totalSpend || 0) / 500, 30);
+      const orderScore = Math.min((lead.orderCount || 0) * 5, 20);
+      const aiScore = Math.round(recencyScore + spendScore + orderScore);
 
       // Suggested action — ordered from highest to lowest priority
       let suggestedAction = "Monitor";
@@ -224,10 +284,26 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
          hasAutoReply,
          botRepliedAt,
 
-         // 🆕 Unread indicator
-         isUnread,
-       };
-    });
+          // 🆕 Unread indicator
+          isUnread,
+
+          // Stream Triage fields
+          pastOrders: lead.orderCount || 0,
+          lifetimeValue: lead.totalSpend || 0,
+          reasoning: (() => {
+            if (lead.pendingOrderAmount && lead.pendingOrderAmount > 0) return `Customer has a pending order of ₹${lead.pendingOrderAmount} — high conversion priority.`;
+            if (conversation?.intent === "ORDERING") return "Customer expressed intent to place an order — strong buy signal.";
+            if (conversation?.intent === "SUPPORT") return "Customer needs assistance — resolving quickly builds trust.";
+            if (conversation?.intent === "COMPLAINT") return "Customer raised a complaint — needs immediate attention.";
+            if (lead.segment === "VIP") return "VIP customer — prioritize for retention and personalized service.";
+            if (lead.segment === "CHURN_RISK") return "Customer at risk of churning — proactive win-back recommended.";
+            if (lead.orderCount > 0) return "Returning customer — maintain relationship and explore upsell.";
+            return "New conversation — monitor for engagement signals.";
+          })(),
+          matchedProduct: await resolveMatchedProduct(conversation, companyId),
+          dropOffMinutes: null, // Drop-off prediction not yet implemented
+        };
+    }));
 
     res.json({
       data: formatted,
@@ -806,10 +882,64 @@ router.post("/:id/ai-suggest", authMiddleware, async (req: AuthRequest, res: Res
 });
 
 /* =========================================
+   POST /api/leads/:id/skip
+   Mark conversation as skipped/spam — resolves the conversation
+   and removes it from the unclaimed queue.
+======================================== */
+router.post("/:id/skip", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId, companyId, role } = req.user!;
+    const { id } = req.params;
+
+    if (!["STAFF", "MANAGER", "OWNER"].includes(role)) {
+      return res.status(403).json({ message: "Only agents can skip conversations" });
+    }
+
+    const lead = await (prisma.lead as any).findFirst({
+      where: { id, companyId },
+      select: {
+        conversations: {
+          select: { id: true, status: true },
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    const conversation = lead.conversations[0];
+    if (!conversation) {
+      return res.status(404).json({ message: "No conversation found for this lead" });
+    }
+
+    const resolvingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true }
+    });
+    const resolvedBy = resolvingUser ? `${resolvingUser.firstName} ${resolvingUser.lastName || ""}`.trim() : "Deleted User";
+
+    await resolveConversation(conversation.id, resolvedBy);
+
+    return res.json({
+      id: conversation.id,
+      status: "RESOLVED",
+      resolvedBy,
+      reason: "skipped",
+    });
+  } catch (error: any) {
+    console.error("Skip conversation error:", error);
+    return res.status(500).json({ message: "Failed to skip conversation" });
+  }
+});
+
+/* =========================================
    POST /api/leads/:id/resolve
    Explicitly resolve a conversation (staff "Done" action).
    Does NOT fire on AI/You mode toggle.
-========================================= */
+======================================== */
 router.post("/:id/resolve", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { userId, companyId, role } = req.user!;

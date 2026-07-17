@@ -4,6 +4,7 @@ import { Channel, MessageSender } from '@prisma/client'
 import { queueProvider } from '../../services/infrastructure/queue-provider/queue-provider.factory'
 import { autoReplyService } from '../../services/automation/autoReply.service'
 import { triggerLeadWelcome } from '../../services/automation/autoReplyEventListeners'
+import { PDF_JOB_NAME } from '../../services/infrastructure/pgboss/jobs/pdf.job'
 
 const router = Router()
 
@@ -118,10 +119,10 @@ router.get('/orders/:id', async (req, res) => {
 router.get('/mock-payment/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { orderWorkflowService } = await import("../../services/workflow/orderWorkflow.service.js");
+    const { orderWorkflowService } = require("../../services/workflow/orderWorkflow.service");
     // Queue PDF generation
     // MessageSender enum removed from schema
-    const { emitToConversation } = await import("../../lib/socket.js");
+    const { emitToConversation } = require("../../lib/socket");
     const order = await prisma.order.findUnique({
       where: { id },
       include: { lead: true }
@@ -131,43 +132,49 @@ router.get('/mock-payment/:id', async (req, res) => {
       return res.status(404).send("Order not found");
     }
 
-    // 1. Mark as PAID
-    await orderWorkflowService.transitionStatus(
-      order.companyId,
-      id,
-      "PAID" as any,
-      { id: "SYSTEM", name: "Mock Payment Simulator", role: "SYSTEM" }
-    );
+    const { resolveTenantContext, tenantContextStorage } = require("../../services/context/tenantContext.provider");
+    const tenantContext = await resolveTenantContext(order.companyId);
 
-    // 2. Generate Invoice asynchronously
-    await queueProvider.enqueue("generatePdf", { orderId: id, paymentRef: "MOCK_PAY_" + Date.now() });
+    await tenantContextStorage.run(tenantContext, async () => {
+      // 1. Mark as PAID
+      await orderWorkflowService.transitionStatus(
+        order.companyId,
+        id,
+        "PAID" as any,
+        { id: "SYSTEM", name: "Mock Payment Simulator", role: "SYSTEM" }
+      );
 
-    // 3. Update Lead Stats
-    const { recalculateLeadCRM } = await import("../../services/integrations/crm.service.js");
-    if (order.leadId) {
-      await recalculateLeadCRM(order.leadId, order.companyId);
-    }
+      // 2. Generate Invoice asynchronously
+      await queueProvider.enqueue(PDF_JOB_NAME, { orderId: id, paymentRef: "MOCK_PAY_" + Date.now() });
 
-    // 4. Confirmation Message
-    let content = "✅ [MOCK] Payment Received successfully! Your order is now being processed. An invoice will be generated shortly.";
-
-    // Find conversation via lead (Order no longer has direct conversation relation)
-    const conv = order.leadId ? await prisma.conversation.findFirst({
-      where: { leadId: order.leadId, lifecycleStatus: 'active' }
-    }) : null;
-    const conversationId = conv?.id;
-
-    const sysMsg = conversationId ? await prisma.message.create({
-      data: {
-        content: content,
-        sender: MessageSender.SYSTEM,
-        conversationId
+      // 3. Update Lead Stats
+      const { recalculateLeadCRM } = require("../../services/integrations/crm.service");
+      if (order.leadId) {
+        await recalculateLeadCRM(order.leadId, order.companyId);
       }
-    }) : null;
 
-    if (sysMsg && conversationId) {
-      emitToConversation(conversationId, "new_message", sysMsg);
-    }
+      // 4. Confirmation Message
+      let content = "✅ [MOCK] Payment Received successfully! Your order is now being processed. An invoice will be generated shortly.";
+
+      // Find conversation via lead (Order no longer has direct conversation relation)
+      const conv = order.leadId ? await prisma.conversation.findFirst({
+        where: { leadId: order.leadId, lifecycleStatus: 'active', companyId: order.companyId }
+      }) : null;
+      const conversationId = conv?.id;
+
+      const sysMsg = conversationId ? await prisma.message.create({
+        data: {
+          content: content,
+          sender: MessageSender.SYSTEM,
+          conversationId,
+          companyId: order.companyId
+        }
+      }) : null;
+
+      if (sysMsg && conversationId) {
+        emitToConversation(conversationId, "new_message", sysMsg);
+      }
+    });
 
     res.send(`
             <div style="font-family: sans-serif; text-align: center; padding: 50px;">

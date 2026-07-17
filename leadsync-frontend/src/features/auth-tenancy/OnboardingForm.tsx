@@ -50,7 +50,7 @@ export function OnboardingForm() {
       name: businessName,
       currencyCode,
       currencySymbol,
-      botBusinessType: businessType,
+      businessType: businessType as "RETAIL" | "RESTAURANT" | "SERVICES",
       gstin: isGstValid ? gstin.toUpperCase() : undefined,
     });
 

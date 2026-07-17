@@ -213,6 +213,10 @@ export const createTenantRepository = (companyId: string, tx?: any) => {
       create: (args: any) =>
         db.orderLog.create({
           ...args,
+          data: {
+            ...args?.data,
+            companyId,
+          },
         }),
     },
 

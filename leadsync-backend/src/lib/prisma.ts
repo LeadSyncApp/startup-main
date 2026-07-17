@@ -38,7 +38,9 @@ if (process.env.NODE_ENV !== "production") {
  */
 const GLOBAL_SYSTEM_TABLES = [
   "company",
-  "idempotency"
+  "idempotency",
+  "inventoryvariant",
+  "postalpincodeindex"
 ];
 
 const tenantModels = [
@@ -68,7 +70,15 @@ function applyTenantScopingRecursively(
   if (isRoot) {
     if ("where" in obj) {
       if (!obj.where) obj.where = {};
-      obj.where.companyId = tenantId;
+      // If a composite key (companyId_name, companyId_eventKey, etc.) already
+      // constrains companyId, skip adding the redundant top-level companyId.
+      // This prevents breaking findUnique which only accepts unique-constraint fields.
+      const hasCompositeCompanyId = Object.values(obj.where).some(
+        (v: any) => v && typeof v === 'object' && !Array.isArray(v) && typeof v.companyId === 'string'
+      );
+      if (!hasCompositeCompanyId) {
+        obj.where.companyId = tenantId;
+      }
     } else if (["findMany", "findUnique", "findFirst", "update", "delete", "updateMany", "deleteMany", "count", "aggregate", "groupBy"].includes(operation)) {
       obj.where = { companyId: tenantId };
     }
@@ -108,7 +118,8 @@ function applyTenantScopingRecursively(
             if (subKey.startsWith('_')) continue;
 
             // Singular relations (1:1 or N:1) do not support 'where' in include/select
-            const singularRelations = ['lead', 'company', 'assignedTo', 'processedBy', 'parent', 'customer', 'conversation', 'user', 'invoice'];
+            // Also includes relation names whose models lack companyId (e.g. variants → InventoryVariant)
+            const singularRelations = ['lead', 'company', 'assignedTo', 'processedBy', 'parent', 'customer', 'conversation', 'user', 'invoice', 'variants'];
             const isSingular = singularRelations.includes(subKey.toLowerCase());
             
             // Include/select payloads start a new "root" context for the joined relation
@@ -177,6 +188,19 @@ export const prisma = basePrisma.$extends({
         const tenantId = 
           (args as any)?.companyId || 
           (args as any)?.where?.companyId || 
+          // Check composite/nested unique keys (companyId_name, companyId_eventKey, etc.)
+          (() => {
+            const where = (args as any)?.where;
+            if (where && typeof where === 'object') {
+              for (const key of Object.keys(where)) {
+                const val = where[key];
+                if (val && typeof val === 'object' && typeof val.companyId === 'string') {
+                  return val.companyId;
+                }
+              }
+            }
+            return undefined;
+          })() ||
           (args as any)?.data?.companyId ||
           (Array.isArray((args as any)?.data) ? (args as any)?.data[0]?.companyId : undefined);
 
@@ -187,7 +211,7 @@ export const prisma = basePrisma.$extends({
 
         const isBypass =
           isAuthBypass ||
-          ["findMany", "createMany", "deleteMany", "updateMany"].includes(operation) ||
+          ["findMany", "createMany", "deleteMany", "updateMany", "count"].includes(operation) ||
           (args as any)?.where?.id !== undefined ||
           (args as any)?.where?.email !== undefined ||
           (args as any)?.where?.conversationId !== undefined ||

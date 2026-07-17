@@ -43,16 +43,15 @@ export interface CartItem {
     price: number;
     quantity: number;
     subtotal: number;
-    color?: string | null;
-    size?: string | null;
+    variant?: string | null;
+    variantName?: string | null;
 }
 
 export interface SessionState {
     last_category: string | null;
     last_item_names: string[];
     preferences: {
-        color: string | null;
-        size: string | null;
+        variant_preference: string | null;
         budget_max: number | null;
         purpose: string | null;
     };
@@ -72,8 +71,7 @@ export function getSession(tenant_id: string, chat_id: string): SessionState {
             last_category: null,
             last_item_names: [],
             preferences: {
-                color: null,
-                size: null,
+                variant_preference: null,
                 budget_max: null,
                 purpose: null,
             },
@@ -154,8 +152,7 @@ export function validateStateUpdates(raw: any, baseState: SessionState): Session
     if (raw.preferences && typeof raw.preferences === 'object') {
         const p = raw.preferences;
         safeState.preferences = {
-            color: typeof p.color === 'string' ? p.color : safeBase.preferences.color,
-            size: typeof p.size === 'string' ? p.size : safeBase.preferences.size,
+            variant_preference: typeof p.variant_preference === 'string' ? p.variant_preference : safeBase.preferences.variant_preference,
             budget_max: typeof p.budget_max === 'number' ? p.budget_max : safeBase.preferences.budget_max,
             purpose: typeof p.purpose === 'string' ? p.purpose : safeBase.preferences.purpose,
         };
@@ -174,8 +171,8 @@ export function validateStateUpdates(raw: any, baseState: SessionState): Session
                     price: item.price,
                     quantity: item.quantity,
                     subtotal: typeof item.subtotal === 'number' ? item.subtotal : subtotal,
-                    color: typeof item.color === 'string' ? item.color : null,
-                    size: typeof item.size === 'string' ? item.size : null
+                    variant: typeof item.variant === 'string' ? item.variant : null,
+                    variantName: typeof item.variantName === 'string' ? item.variantName : null
                 });
                 calculatedTotal += subtotal;
             }
@@ -195,8 +192,7 @@ export function createFreshSessionState(): SessionState {
         last_category: null,
         last_item_names: [],
         preferences: {
-            color: null,
-            size: null,
+            variant_preference: null,
             budget_max: null,
             purpose: null,
         },

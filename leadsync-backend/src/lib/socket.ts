@@ -172,7 +172,7 @@ export const initializeClusteredSockets = initSocket;
 export const getIO = () => io;
 
 export const emitToCompany = (companyId: string, event: string, data: any) => {
-    if (io) io.to(companyId).emit(event, data);
+    if (io) io.to(`company:${companyId}`).emit(event, data);
 };
 
 export const emitToCompanyAdmin = (companyId: string, event: string, data: any) => {

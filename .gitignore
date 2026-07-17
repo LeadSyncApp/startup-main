@@ -32,3 +32,12 @@ selfassign_*.txt
 _stage_check.txt
 diff_output.txt
 *.tsbuildinfo
+
+# Scratch and test patterns
+check-*.cjs
+check-*.js
+test-*.mjs
+stream-triage-screenshot.png
+current message page.jpg
+current-state.png
+tsconfig.tsbuildinfo

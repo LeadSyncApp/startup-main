@@ -94,7 +94,7 @@ export class OrderWorkflowService {
                     data: {
                         status: newStatus,
                         version: nextVersion,
-                        processedById: actor.id,
+                        processedById: (actor.id === 'SYSTEM' || actor.role === 'SYSTEM') ? null : actor.id,
                         completedAt: ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'SHIPPED'].includes(newStatus)
                             ? new Date()
                             : (oldStatus === OrderStatus.BOT_CREATED_ORDER ? null : order.completedAt),
@@ -206,14 +206,14 @@ export class OrderWorkflowService {
      */
     private validateTransition(current: OrderStatus, next: OrderStatus, role: string) {
         const validTransitions: Record<string, OrderStatus[]> = {
-            [OrderStatus.PENDING]: [OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED],
-            [OrderStatus.PROCESSING]: [OrderStatus.READY, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+            [OrderStatus.PENDING]: [OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.PAID],
+            [OrderStatus.PROCESSING]: [OrderStatus.READY, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.PAID],
 
             // Legacy support mapping to avoid breaking existing orders in other states
-            [OrderStatus.BOT_CREATED_ORDER]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED],
-            [OrderStatus.USER_CONFIRMED_PENDING_AGENT]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED],
-            [OrderStatus.NEW]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED],
-            [OrderStatus.CONFIRMED]: [OrderStatus.READY, OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+            [OrderStatus.BOT_CREATED_ORDER]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.PAID],
+            [OrderStatus.USER_CONFIRMED_PENDING_AGENT]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.PAID],
+            [OrderStatus.NEW]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.PAID],
+            [OrderStatus.CONFIRMED]: [OrderStatus.READY, OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.PAID],
             [OrderStatus.PAID]: [OrderStatus.READY, OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
             [OrderStatus.PREPARING]: [OrderStatus.READY, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
             [OrderStatus.READY]: [OrderStatus.SHIPPED, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
@@ -223,8 +223,8 @@ export class OrderWorkflowService {
 
         const allowed = validTransitions[current] || [];
         if (!allowed.includes(next)) {
-            // Owner/Admin overrides as final safeguard
-            if (role === 'OWNER' || role === 'ADMIN') return true;
+            // Owner/Admin/System overrides as final safeguard
+            if (role === 'OWNER' || role === 'ADMIN' || role === 'SYSTEM') return true;
             throw new Error(`Invalid transition from ${current} to ${next}`);
         }
     }

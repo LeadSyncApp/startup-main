@@ -14,6 +14,15 @@ import { getMerchantMetricsDashboard } from "../../controllers/dashboard.control
 
 const router = Router();
 
+// Remap a free-text business type (from dashboard settings) to the typed enum.
+function remapBusinessType(value: string | undefined): "RETAIL" | "RESTAURANT" | "SERVICES" | undefined {
+  if (!value) return undefined;
+  if (value === "Bakery & Food" || value === "Café & Food Outlet" || value === "F&B Outlet") return "RESTAURANT";
+  if (value === "Client Agency" || value === "Service / Clinic") return "SERVICES";
+  if (value === "RETAIL" || value === "RESTAURANT" || value === "SERVICES") return value;
+  return "RETAIL";
+}
+
 // Add the fast controller for the new rollup dashboard pattern
 router.get("/metrics", authMiddleware, getMerchantMetricsDashboard as any);
 
@@ -39,7 +48,7 @@ async function formatCompanyResponse(company: any) {
     telegramConnected: company.telegramConnected,
     instagramConnected: company.instagramConnected,
     instagramPageId: company.instagramPageId,
-    botBusinessType: company.botBusinessType,
+    businessType: company.businessType,
     botWelcomeMessage: company.botWelcomeMessage,
     botStructuredMenu: structuredMenu || null,
     botMenu: company.botConfiguration?.botMenu || null,
@@ -240,7 +249,7 @@ router.patch(
       const updatedCompany = await prisma.company.update({
         where: { id: req.user.companyId },
         data: {
-          botBusinessType,
+          businessType: remapBusinessType(botBusinessType),
           botWelcomeMessage,
         },
         include: {
@@ -345,7 +354,7 @@ router.patch(
       await prisma.company.update({
         where: { id: companyId },
         data: {
-          botBusinessType,
+          businessType: remapBusinessType(botBusinessType),
           botWelcomeMessage,
         }
       });
@@ -412,7 +421,7 @@ router.patch(
         const updated = await tx.company.update({
           where: { id: companyId },
           data: {
-            botBusinessType,
+            businessType: remapBusinessType(botBusinessType),
             botWelcomeMessage,
             botConfiguration: {
               upsert: {
@@ -481,7 +490,7 @@ router.patch(
           const finalUpdated = await tx.company.update({
             where: { id: companyId },
             data: {
-              botBusinessType,
+              businessType: remapBusinessType(botBusinessType),
               botWelcomeMessage,
               botConfiguration: {
                 upsert: {
@@ -507,7 +516,7 @@ router.patch(
         // Handle case where structuredMenu is null/empty but business types might have changed
         return await tx.company.update({
             where: { id: companyId },
-            data: { botBusinessType, botWelcomeMessage },
+            data: { businessType: remapBusinessType(botBusinessType), botWelcomeMessage },
             include: { botConfiguration: true }
         });
       });

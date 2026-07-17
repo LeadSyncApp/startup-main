@@ -616,13 +616,23 @@ router.put("/complete-google-onboarding", authMiddleware as any, async (req: any
     // Map businessScale to the database enum
     const dbScale = businessScale === "HOME" ? "HOME_GROWN" : "SME_RETAIL";
 
+    // Map the wizard's free-text vertical label to the typed BusinessType enum.
+    const dbBusinessType =
+      businessType === "Bakery & Food" ||
+      businessType === "Café & Food Outlet" ||
+      businessType === "F&B Outlet"
+        ? "RESTAURANT"
+        : businessType === "Client Agency" || businessType === "Service / Clinic"
+        ? "SERVICES"
+        : "RETAIL";
+
     // Update company with wizard data
     const updatedCompany = await prisma.company.update({
       where: { id: user.companyId },
       data: {
         name: companyName,
         scale: dbScale as any,
-        botBusinessType: businessType,
+        businessType: dbBusinessType as any,
       },
     });
 
@@ -633,7 +643,7 @@ router.put("/complete-google-onboarding", authMiddleware as any, async (req: any
         name: updatedCompany.name,
         companyCode: updatedCompany.companyCode,
         scale: updatedCompany.scale,
-        botBusinessType: updatedCompany.botBusinessType,
+        businessType: updatedCompany.businessType,
       },
     });
   } catch (err) {

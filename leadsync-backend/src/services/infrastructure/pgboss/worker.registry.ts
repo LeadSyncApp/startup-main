@@ -7,6 +7,7 @@ import { pgBossService } from './pgboss.service';
 import { getTenantPrismaContext, prisma } from '../../../lib/prisma';
 import { EMAIL_JOB_NAME } from './jobs/email.job';
 import { PDF_JOB_NAME } from './jobs/pdf.job';
+import { invoiceService } from '../../integrations/invoice.service';
 import { AUTOMATION_JOB_NAME } from './jobs/automation.job';
 import {
   CLEANUP_IDEMPOTENCY_JOB_NAME,
@@ -17,7 +18,7 @@ import {
 import { PROCESS_AI_TASK_JOB_NAME } from './jobs/ai.job';
 import { DELAYED_AUTO_REPLY_JOB_NAME } from './jobs/delayedAutoReply.job';
 import { executeDelayedAutomation } from '../../workflow/automation.service';
-import { tenantContextStorage } from '../../context/tenantContext.provider';
+import { tenantContextStorage, resolveTenantContext } from '../../context/tenantContext.provider';
 import { outboundDispatcherService } from '../../outbound.dispatcher';
 import { autoReplyService } from '../../automation/autoReply.service';
 import { LEAD_FOLLOWUP_JOB_NAME } from './jobs/leadFollowUp.job';
@@ -80,24 +81,45 @@ export class WorkerRegistry {
     // 2. Generate PDF Worker
     await boss.work(PDF_JOB_NAME, { batchSize: 1 }, async (jobs: Array<{ id: string; name: string; data: any }>) => {
       for (const job of jobs) {
-        const { companyId, orderId } = job.data;
-        const tenantDb = getTenantPrismaContext(companyId);
+        const { orderId, paymentRef } = job.data;
         
         console.log(`[PgBoss] Processing ${PDF_JOB_NAME}. JobID: ${job.id}, OrderID: ${orderId}`);
         
-        await tenantDb.$transaction(async (tx) => {
-          // Mock PDF binary generation
-          const mockPdfBuffer = Buffer.from('mock-pdf-content');
-          console.log(`[PDF] Generated PDF for Order ${orderId} (${mockPdfBuffer.length} bytes)`);
-
-          // Update Order fulfillment status
-          await tx.order.update({
-            where: { id: orderId },
-            data: { status: 'COMPLETED' }
+        try {
+          // Fetch order to retrieve the companyId (bypasses tenant check because it queries by ID)
+          const order = await prisma.order.findUnique({
+            where: { id: orderId }
           });
-          
-          console.log(`[PDF] Order ${orderId} marked as COMPLETED`);
-        });
+
+          if (!order) {
+            throw new Error(`Order ${orderId} not found`);
+          }
+
+          // Resolve tenant context for the company
+          const tenantContext = await resolveTenantContext(order.companyId);
+
+          // Wrap invoice generation and order status updates inside the resolved tenant context scope
+          await tenantContextStorage.run(tenantContext, async () => {
+            // Call the real invoice generation service
+            const invoice = await invoiceService.ensureInvoiceForPaidOrder(orderId, paymentRef);
+
+            if (!invoice || !invoice.pdfUrl) {
+              throw new Error(`Invoice generation did not complete successfully or is missing PDF URL for Order ${orderId}`);
+            }
+
+            // Update Order fulfillment status under the resolved company tenant context
+            const tenantDb = getTenantPrismaContext(invoice.companyId);
+            await tenantDb.order.update({
+              where: { id: orderId },
+              data: { status: 'COMPLETED' }
+            });
+            
+            console.log(`[PDF] Invoice successfully generated for Order ${orderId}. Order marked as COMPLETED.`);
+          });
+        } catch (error: any) {
+          console.error(`❌ [PgBoss] Error processing ${PDF_JOB_NAME} for Order ${orderId}:`, error);
+          throw error; // Rethrow so pg-boss retries the job
+        }
       }
     });
 

@@ -1,5 +1,6 @@
 /**
  * Inventory Page - Product listing, intake, and confirmation screens
+ * Business-agnostic orchestrator for inventory management
  */
 
 import { useState } from "react";
@@ -11,9 +12,10 @@ import { InventoryListScreen } from "./InventoryListScreen";
 
 interface InventoryPageProps {
   companyId?: string;
+  businessType?: string;
 }
 
-export function InventoryPage({ companyId }: InventoryPageProps) {
+export function InventoryPage({ companyId, businessType }: InventoryPageProps) {
   const [step, setStep] = useState<"list" | "intake" | "confirm">("list");
   const [products, setProducts] = useState<ProductData[]>([]);
 
@@ -24,7 +26,6 @@ export function InventoryPage({ companyId }: InventoryPageProps) {
 
   const handleConfirm = async (confirmedProducts: ProductData[]) => {
     console.log("Products confirmed:", confirmedProducts);
-    // Return to list view after successful confirmation
     setStep("list");
   };
 
@@ -37,14 +38,24 @@ export function InventoryPage({ companyId }: InventoryPageProps) {
     setStep("intake");
   };
 
-  const handleSelectProduct = (product: { brand: string | null; product_type: string; colors: string[]; sizes: string[]; price_inr: number | null }) => {
+  const handleSelectProduct = (product: any) => {
+    // Convert SavedProduct back to ProductData for the confirmation screen
+    const variants = (product.variants || []).map((v: any) => ({
+      attribute_name: product.variantAttributeName || "",
+      attribute_value: v.attributeValue,
+      price_override: v.price,
+      stock: v.stock,
+    }));
+
     setProducts([{
-      brand: product.brand,
-      product_type: product.product_type,
-      colors: product.colors,
-      sizes: product.sizes,
-      price_inr: product.price_inr,
-      raw_source_fragment: `${product.brand ? product.brand + " " : ""}${product.product_type}`,
+      brand: null,
+      product_type: product.name,
+      variants,
+      attribute_name: product.variantAttributeName,
+      description: product.description || null,
+      price_inr: product.basePrice,
+      raw_source_fragment: product.name,
+      hasVariants: product.hasVariants,
     }]);
     setStep("confirm");
   };
@@ -88,6 +99,7 @@ export function InventoryPage({ companyId }: InventoryPageProps) {
           >
             <InventoryConfirmationScreen
               companyId={companyId}
+              businessType={businessType}
               products={products}
               onConfirm={handleConfirm}
               onBack={handleBack}

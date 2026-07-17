@@ -18,7 +18,6 @@ model Company {
   telegramBotUsername      String?
   telegramWebhookSecret    String?                 @unique
   telegramConnected        Boolean                 @default(false)
-  botBusinessType          String?
   botWelcomeMessage        String?
   businessAddress          String?
   businessName             String?
@@ -27,6 +26,7 @@ model Company {
   instagramConnected       Boolean                 @default(false)
   instagramPageAccessToken String?
   instagramPageId          String?                 @unique
+  businessType             BusinessType?
   whatsAppSystemToken      String?
   whatsAppPhoneNumberId    String?
   invoiceCounter           Int                     @default(0)
@@ -58,6 +58,7 @@ model Company {
   customFieldDefinitions   CustomFieldDefinition[]
   invitations              Invitation[]
   invoices                 Invoice[]
+  inventoryProducts        InventoryProduct[]
   knowledgeChunks          KnowledgeChunk[]
   leads                    Lead[]
   merchantFiles            MerchantFile[]
@@ -71,6 +72,7 @@ model Company {
   ruleDecisionLogs         RuleDecisionLog[]
   ruleGroups               RuleGroup[]
   users                    User[]
+  conversationActivities ConversationActivity[]
 }
 
 model User {
@@ -116,6 +118,11 @@ model User {
   @@index([authProvider])
   @@index([googleId])
   @@index([companyId, onboardingStatus])
+
+  activitiesAsActor    ConversationActivity[] @relation("Activity_actor")
+  activitiesAsFromUser ConversationActivity[] @relation("Activity_fromUser")
+  activitiesAsToUser   ConversationActivity[] @relation("Activity_toUser")
+  resolvedConversations Conversation[] @relation("Conversation_resolvedByUser")
 }
 
 model Lead {
@@ -185,6 +192,43 @@ model Product {
 
   @@unique([companyId, sku])
   @@index([companyId])
+}
+
+model InventoryProduct {
+  id                    String              @id @default(uuid())
+  companyId             String
+  name                  String
+  description           String?
+  category              String?
+  basePrice             Float
+  imageUrl              String?
+  hasVariants           Boolean             @default(false)
+  variantAttributeName String?
+  isAvailable           Boolean             @default(true)
+  isActive              Boolean             @default(true)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  variants              InventoryVariant[]
+  company               Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([companyId, isActive])
+}
+
+model InventoryVariant {
+  id             String           @id @default(uuid())
+  productId      String
+  attributeValue String
+  price          Float
+  stock          Int?
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  product        InventoryProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, attributeValue])
+  @@index([productId])
 }
 
 model Order {
@@ -326,7 +370,8 @@ model Conversation {
   status                               ConversationStatus  @default(OPEN)
   summary                              String?
   claimedById                          String?
-  resolvedBy                           String?
+  resolvedById                       String?
+  resolvedBy                         String?
   claimExpiresAt                       DateTime?
   lastClaimHeartbeat                   DateTime?
   lastViewedAt                         DateTime?
@@ -335,6 +380,8 @@ model Conversation {
   archivedAt                           DateTime?
   resolutionNote                       String?
   isReturningCustomer                  Boolean             @default(false)
+  matchedProduct                       Json?
+  matchedProductAt                     DateTime?
   claimedAt                            DateTime?
   needsStaffReason                     String?
   claimedByName                        String?
@@ -343,12 +390,14 @@ model Conversation {
   claimLogs                            ClaimLog[]
   User_Conversation_assignedToIdToUser User?               @relation("Conversation_assignedToIdToUser", fields: [assignedToId], references: [id])
   claimedBy                            User?               @relation("ClaimedConversations", fields: [claimedById], references: [id])
+  resolvedByUser                       User?               @relation("Conversation_resolvedByUser", fields: [resolvedById], references: [id])
   company                              Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   lead                                 Lead?               @relation(fields: [leadId], references: [id])
   internalNotes                        InternalNote[]
   messages                             Message[]
   orders                               Order[]
   RuleDecisionLog                      RuleDecisionLog[]
+  activities                           ConversationActivity[]
 
   @@index([deletedAt])
   @@index([leadId])
@@ -489,6 +538,7 @@ model RuleGroup {
   name        String
   description String?
   type        String               @default("AI_INSTRUCTION")
+  isEnabled   Boolean               @default(true)
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
   rules       ConversationalRule[]
@@ -805,6 +855,43 @@ model socket_io_attachments {
   payload    Bytes?
 }
 
+model FlowCanvas {
+  id          String     @id @default(uuid())
+  companyId   String
+  ruleGroupId String
+  name        String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  nodes       FlowNode[]
+  edges       FlowEdge[]
+
+  @@index([companyId])
+  @@index([ruleGroupId])
+}
+
+model FlowNode {
+  id            String     @id @default(uuid())
+  flowCanvasId  String
+  instructionId String?
+  type          String     // "instruction" | "trigger" | "condition" | "action"
+  positionX     Float
+  positionY     Float
+  data          Json       // flexible payload: label, config, etc.
+  flowCanvas    FlowCanvas @relation(fields: [flowCanvasId], references: [id], onDelete: Cascade)
+
+  @@index([flowCanvasId])
+}
+
+model FlowEdge {
+  id           String     @id @default(uuid())
+  flowCanvasId String
+  sourceNodeId String
+  targetNodeId String
+  flowCanvas   FlowCanvas @relation(fields: [flowCanvasId], references: [id], onDelete: Cascade)
+
+  @@index([flowCanvasId])
+}
+
 enum KnowledgeSourceType {
   RULE
   PRODUCT
@@ -842,6 +929,12 @@ enum Channel {
 enum BusinessScale {
   HOME_GROWN
   SME_RETAIL
+}
+
+enum BusinessType {
+  RETAIL
+  RESTAURANT
+  SERVICES
 }
 
 enum Role {
@@ -934,6 +1027,34 @@ enum ConversationStatus {
   ASSIGNED
   RESOLVED
   SNOOZED
+}
+
+enum ConversationActivityType {
+  ASSIGNED
+  TRANSFERRED
+  RESOLVED
+  REOPENED
+}
+
+model ConversationActivity {
+  id             String                 @id @default(uuid())
+  conversationId String
+  companyId      String
+  type           ConversationActivityType
+  actorId        String?
+  actorName      String
+  fromUserId     String?
+  toUserId       String?
+  createdAt      DateTime               @default(now())
+  conversation    Conversation           @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actor           User?                  @relation("Activity_actor", fields: [actorId], references: [id])
+  fromUser        User?                  @relation("Activity_fromUser", fields: [fromUserId], references: [id])
+  toUser          User?                  @relation("Activity_toUser", fields: [toUserId], references: [id])
+
+  @@index([companyId])
+  @@index([conversationId])
+  @@index([actorId])
 }
 
 enum PendingOrderState {
