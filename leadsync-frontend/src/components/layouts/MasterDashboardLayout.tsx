@@ -22,7 +22,7 @@ import { ActivityFeedDrawer } from '../../features/activity-ledger/ActivityFeedD
 import { useTheme } from '../../features/theme/ThemeContext';
 import { useAuth } from '../../features/auth-tenancy/AuthContext';
 import { authedFetch } from '../../api/client';
-import { getSocket } from '../../lib/socketClient';
+import { onEvent } from '../../lib/socketClient';
 import { NotificationBell } from '../../features/notifications/NotificationPanel';
 
 export type UserRole = 'OWNER' | 'MANAGER' | 'STAFF';
@@ -75,32 +75,43 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
   // Real badge counts — reuse the same endpoints that power InboxList
   // (filter=mine) and StreamTriage (filter=unclaimed). No new backend needed.
   const [myConversations, setMyConversations] = useState(0);
-  const [unclaimedLeads, setUnclaimedLeads] = useState(0);
+  // Set of lead ids that currently have unread messages (server-authoritative base).
+  const [unreadLeadIds, setUnreadLeadIds] = useState<Set<string>>(new Set());
+  // The conversation currently open in the inbox detail pane (set instantly via
+  // the conversation:open event). A chat that is open is being viewed live, so it
+  // must never count toward the unread total — same rule as the chat row badge.
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null);
 
   const refreshBadgeCounts = useCallback(async () => {
     if (!companyId) return;
     try {
-      const results = await Promise.all([
-        authedFetch('/api/leads?filter=mine&limit=1'),
-        authedFetch('/api/leads?filter=unclaimed&limit=1'),
-      ]);
-      const [mineRes, unclaimedRes] = results;
+      const mineRes = await authedFetch('/api/leads?filter=mine&limit=50');
       if (mineRes.ok) {
         const json = await mineRes.json();
-        // Active conversations = non-resolved leads assigned to this user.
         const active = (json.data || []).filter(
           (l: { status: string }) => l.status !== 'RESOLVED'
         );
+        // Active conversations = non-resolved leads assigned to this user.
         setMyConversations(active.length);
-      }
-      if (unclaimedRes.ok) {
-        const json = await unclaimedRes.json();
-        setUnclaimedLeads(json.meta?.total ?? (json.data || []).length);
+        // Unread chats = active chats that actually have unread messages.
+        // Use unreadCount (>0) as the single source of truth so the sidebar
+        // stays consistent with the per-chat badge in the chat list.
+        setUnreadLeadIds(
+          new Set(active.filter((l: { id: string; unreadCount?: number }) => (l.unreadCount ?? 0) > 0).map((l: { id: string }) => l.id))
+        );
       }
     } catch {
       // Keep counts at 0 on failure; badges simply don't show.
     }
   }, [companyId]);
+
+  // Count of unread chats, with the currently-open conversation excluded so it
+  // never shows as unread while the user is viewing it live. Updates instantly
+  // whenever openLeadId changes (no server round-trip).
+  const myUnreadChats = Math.max(
+    0,
+    unreadLeadIds.size - (openLeadId && unreadLeadIds.has(openLeadId) ? 1 : 0)
+  );
 
   // Initial fetch on mount; re-fetch if companyId changes
   useEffect(() => {
@@ -115,21 +126,28 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
   }, [refreshBadgeCounts]);
 
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
-
     const handler = () => scheduleBadgeRefresh();
 
-    socket.on("conversation:new", handler);
-    socket.on("conversation_updated", handler);
-    socket.on("conversation.resolved", handler);
-    socket.on("lead_updated", handler);
+    const unsub1 = onEvent("conversation:new", handler);
+    const unsub2 = onEvent("conversation_updated", handler);
+    const unsub3 = onEvent("conversation.resolved", handler);
+    const unsub4 = onEvent("lead_updated", handler);
+
+    // Track which conversation is currently open (broadcast by InboxSplitView).
+    // The open chat is excluded from the unread count on the SAME tick it opens,
+    // so the sidebar badge behaves exactly like the chat-row badge — no fetch.
+    const handleOpen = (e: Event) => {
+      const leadId = (e as CustomEvent<{ leadId: string | null }>).detail?.leadId ?? null;
+      setOpenLeadId(leadId);
+    };
+    window.addEventListener("conversation:open", handleOpen);
 
     return () => {
-      socket.off("conversation:new", handler);
-      socket.off("conversation_updated", handler);
-      socket.off("conversation.resolved", handler);
-      socket.off("lead_updated", handler);
+      unsub1();
+      unsub2();
+      unsub3();
+      unsub4();
+      window.removeEventListener("conversation:open", handleOpen);
       if (badgeRefreshTimer.current) clearTimeout(badgeRefreshTimer.current);
     };
   }, [scheduleBadgeRefresh]);
@@ -138,7 +156,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
   // Other tabs keep their original (absent) badge property, exactly as before.
   const badgeFor: Partial<Record<string, number>> = {
     messages: myConversations > 0 ? myConversations : undefined,
-    inbox: unclaimedLeads > 0 ? unclaimedLeads : undefined,
+    inbox: myUnreadChats > 0 ? myUnreadChats : undefined,
   };
 
   const allowedTabs = tabConfig
@@ -345,8 +363,8 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
       </nav>
 
       {/* Main Content */}
-      <main className={`flex-1 h-full overflow-y-auto pt-14 md:pt-0 pb-16 md:pb-0 ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex flex-col' : ''}`}>
-        <div className={`p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex-1 flex flex-col min-h-0' : ''}`}>
+      <main className={`flex-1 h-full overflow-y-auto pt-14 md:pt-0 pb-16 md:pb-0 ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex flex-col min-h-0' : ''}`}>
+        <div className={`w-full ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex-1 min-h-0' : 'p-4 md:p-6 lg:p-8 max-w-7xl mx-auto'}`}>
           {children}
         </div>
       </main>

@@ -8,11 +8,12 @@ interface InboxDetailProps {
   leadId?: string;
   showBackButton?: boolean;
 }
-import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe, Menu, Plus } from "lucide-react";
+import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe, Menu, Plus, CreditCard } from "lucide-react";
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
 import AiSuggestionPanel from "./AiSuggestionPanel";
 import { ProductPickerModal } from "./ProductPickerModal";
+import { PaymentRequestModal } from "./PaymentRequestModal";
 import { Badge } from "../../components/ui/Badge";
 
 // ── Types ──
@@ -66,6 +67,9 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   const [networkError, setNetworkError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Tracks the last known message count so we can mark the conversation read
+  // whenever a NEW message arrives while it's open (keeps unread at 0 live).
+  const lastMsgCountRef = useRef<number>(0);
   // Idempotency key: stored as ref so it persists across retries within the same send attempt
   const clientMessageIdRef = useRef<string | null>(null);
   // Track the message content that's currently being retried (to show retry affordance)
@@ -79,6 +83,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<"details" | "ai">("details");
   const [showProductPicker, setShowProductPicker] = useState(false);
+  const [showPaymentRequest, setShowPaymentRequest] = useState(false);
 
   const fetchMessages = useCallback(async () => {
     if (!leadId) return;
@@ -88,6 +93,18 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
       const data: ConversationDetail = await res.json();
       setDetail(data);
       setNetworkError(null);
+
+      // While this conversation is open and live, any newly-arrived message is
+      // being read in real time — keep lastViewedAt current so the server-side
+      // unread count stays 0. The moment the user switches/closes, this poll
+      // stops and new messages afterwards correctly count as unread again.
+      const newCount = data.messages?.length ?? 0;
+      if (newCount > lastMsgCountRef.current) {
+        lastMsgCountRef.current = newCount;
+        authedFetch(`/api/leads/${leadId}/read`, { method: "POST" }).catch(() => {});
+      } else {
+        lastMsgCountRef.current = newCount;
+      }
     } catch (e: any) {
       setNetworkError(e.message || "Failed to load messages");
     } finally {
@@ -95,14 +112,30 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
     }
   }, [leadId]);
 
+  // Mark the conversation as read when it is opened (once per lead view).
+  // The UI clears optimistically + instantly via the conversation:read event,
+  // BEFORE the API call — the backend request happens silently in the background
+  // and the socket re-sync just keeps state authoritative afterwards.
+  const markAsRead = useCallback(() => {
+    if (!leadId) return;
+    // Instant local update: clear the badge + sidebar count right now.
+    window.dispatchEvent(new CustomEvent("conversation:read", { detail: { leadId } }));
+    // Fire-and-forget the backend call (don't await — must not block the UI).
+    authedFetch(`/api/leads/${leadId}/read`, { method: "POST" }).catch(() => {
+      // Non-fatal: unread state will reconcile on next list refresh.
+    });
+  }, [leadId]);
+
   // Initial fetch + polling
   useEffect(() => {
+    lastMsgCountRef.current = 0; // reset baseline so the first fetch marks read
     fetchMessages();
+    markAsRead();
     pollIntervalRef.current = setInterval(fetchMessages, 6000);
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [fetchMessages]);
+  }, [fetchMessages, markAsRead]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -245,7 +278,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
     }
   };
 
-  if (loading) {
+   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
         <Loader2 className="h-6 w-6 animate-spin text-brand-saffron" />
@@ -257,8 +290,8 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   if (networkError && !detail) {
     return (
       <div className="p-6 text-center">
-        <p className="text-sm text-rose-400 font-mono">{networkError}</p>
-        <button onClick={fetchMessages} className="mt-4 px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-black rounded-xl text-slate-300 transition cursor-pointer">
+        <p className="text-sm text-rose-500 dark:text-rose-400 font-mono">{networkError}</p>
+        <button onClick={fetchMessages} className="mt-4 px-4 py-2 bg-[var(--app-surface-alt)] border border-[var(--app-border)] hover:bg-[var(--app-bg-soft)] text-xs font-black rounded-xl text-[var(--app-text)] transition cursor-pointer">
           Retry
         </button>
       </div>
@@ -347,7 +380,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
     <div className="flex h-full w-full min-h-0 overflow-hidden">
       <div className="flex-1 flex flex-col h-full min-h-0 transition-all duration-200">
       {/* Header */}
-      <div className="flex items-center gap-4 px-4 py-4 border-b border-slate-800 bg-app-surface">
+      <div className="flex items-center gap-4 px-4 py-4 border-b border-[var(--app-border)] bg-app-surface">
         {showBackButton && (
           <button onClick={() => navigate("/inbox")} className="p-2 rounded-xl hover:bg-slate-900 border border-slate-800 transition cursor-pointer">
             <ArrowLeft className="h-4 w-4 text-app-text-muted" />
@@ -372,7 +405,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
         {mode === "YOU" && (
           <button
             onClick={() => setShowResolveConfirm(true)}
-            className="px-2 py-0.5 text-[10px] font-black rounded border border-emerald-500/40 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition cursor-pointer"
+            className="px-2 py-0.5 text-[10px] font-black rounded border border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/25 transition cursor-pointer"
           >
             Done
           </button>
@@ -381,20 +414,20 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
         <div className="flex items-center gap-1">
           <span
             onClick={() => handleModeToggle("AI")}
-            className={`text-[10px] font-black px-2 py-0.5 rounded-l-sm border border-r-0 cursor-pointer transition ${
+            className={`text-[10px] font-black px-2.5 py-1 rounded-l-md border cursor-pointer transition ${
               mode === "AI"
-                ? "bg-teal-500/20 text-teal-300 border-teal-500/40"
-                : "bg-slate-800/50 text-slate-400 border-slate-700 hover:bg-slate-700"
+                ? "bg-[var(--brand-saffron)] text-[var(--app-bg)] border-[var(--brand-saffron)]"
+                : "bg-[var(--app-surface-alt)] text-[var(--app-text-muted)] border-[var(--app-border)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-soft)]"
             }`}
           >
             AI
           </span>
           <span
             onClick={() => handleModeToggle("YOU")}
-            className={`text-[10px] font-black px-2 py-0.5 rounded-r-sm border border-l-0 cursor-pointer transition ${
+            className={`text-[10px] font-black px-2.5 py-1 rounded-r-md border cursor-pointer transition ${
               mode === "YOU"
-                ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                : "bg-slate-800/50 text-slate-400 border-slate-700 hover:bg-slate-700"
+                ? "bg-[var(--brand-saffron)] text-[var(--app-bg)] border-[var(--brand-saffron)]"
+                : "bg-[var(--app-surface-alt)] text-[var(--app-text-muted)] border-[var(--app-border)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-soft)]"
             }`}
           >
             You
@@ -405,8 +438,8 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
           onClick={() => setPanelOpen(!panelOpen)}
           className={`p-1.5 rounded-lg border transition cursor-pointer ${
             panelOpen
-              ? "bg-slate-700 border-slate-600 text-app-text"
-              : "bg-slate-800/50 border-slate-700 text-app-text-muted hover:bg-slate-700"
+              ? "bg-[var(--app-surface-alt)] border-[var(--app-border-strong)] text-[var(--app-text)]"
+              : "bg-[var(--app-surface-alt)] border-[var(--app-border)] text-[var(--app-text-muted)] hover:bg-[var(--app-bg-soft)]"
           }`}
         >
           <Menu className="h-4 w-4" />
@@ -414,9 +447,9 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto py-4 gap-1 flex flex-col">
+      <div className="flex-1 overflow-y-auto py-4 px-4 gap-1 flex flex-col">
         {detail.messages.length === 0 && (
-          <div className="text-center text-xs text-slate-500 py-8">No messages yet. Say hello!</div>
+          <div className="text-center text-xs text-[var(--app-text-muted)] py-8">No messages yet. Say hello!</div>
         )}
         {detail.messages.map(renderBubble)}
         {/* Retry bar at bottom for current failed send */}
@@ -446,14 +479,21 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
       )}
 
       {/* Input */}
-      <div className="pt-2 border-t border-slate-800">
+      <div className="p-3 border-t border-[var(--app-border)]">
         <div className="flex gap-2 items-center">
           <button
             onClick={() => setShowProductPicker(true)}
-            className="p-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 transition cursor-pointer shrink-0"
+            className="p-2 rounded-xl bg-[var(--app-surface-alt)] border border-[var(--app-border)] hover:bg-[var(--app-bg-soft)] transition cursor-pointer shrink-0"
             title="Add product"
           >
-            <Plus className="h-4 w-4 text-slate-300" />
+            <Plus className="h-4 w-4 text-[var(--app-text-muted)]" />
+          </button>
+          <button
+            onClick={() => setShowPaymentRequest(true)}
+            className="p-2 rounded-xl bg-[var(--app-surface-alt)] border border-[var(--app-border)] hover:bg-[var(--app-bg-soft)] transition cursor-pointer shrink-0"
+            title="Request Payment"
+          >
+            <CreditCard className="h-4 w-4 text-[var(--app-text-muted)]" />
           </button>
           <input
             value={content}
@@ -485,18 +525,30 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
           }}
         />
       )}
+
+      {/* Payment Request Modal */}
+      {showPaymentRequest && (
+        <PaymentRequestModal
+          conversationId={detail.conversationId}
+          onClose={() => setShowPaymentRequest(false)}
+          onPaymentGenerated={(message) => {
+            setContent(prev => prev ? `${prev}\n${message}` : message);
+            setShowPaymentRequest(false);
+          }}
+        />
+      )}
       </div>
 
       {panelOpen && leadId && (
-        <div className="w-[320px] shrink-0 border-l border-slate-800 h-full overflow-y-auto bg-app-surface">
+        <div className="w-[320px] shrink-0 border-l border-[var(--app-border)] h-full overflow-y-auto bg-app-surface">
           {/* Panel tabs */}
-          <div className="flex border-b border-slate-800">
+          <div className="flex border-b border-[var(--app-border)]">
             <button
               onClick={() => setPanelTab("details")}
               className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
                 panelTab === "details"
-                  ? "bg-slate-800 text-slate-200 border-b-2 border-brand-saffron"
-                  : "text-slate-500 hover:text-slate-300"
+                  ? "bg-[var(--app-surface-alt)] text-[var(--app-text)] border-b-2 border-brand-saffron"
+                  : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
               }`}
             >
               Customer Details
@@ -505,8 +557,8 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
               onClick={() => setPanelTab("ai")}
               className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
                 panelTab === "ai"
-                  ? "bg-slate-800 text-slate-200 border-b-2 border-brand-saffron"
-                  : "text-slate-500 hover:text-slate-300"
+                  ? "bg-[var(--app-surface-alt)] text-[var(--app-text)] border-b-2 border-brand-saffron"
+                  : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
               }`}
             >
               AI Suggestion

@@ -4,7 +4,7 @@ import { MessageSquare, MessageCircle, Instagram, Globe, Loader2, UserPlus } fro
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
 import { useAuth } from "../auth-tenancy/AuthContext";
-import { getSocket } from "../../lib/socketClient";
+import { onEvent } from "../../lib/socketClient";
 import { Badge } from "../../components/ui/Badge";
 
 // NOTE FOR REVIEW: InboxList accepts optional selectedLeadId and onSelectLead props
@@ -32,6 +32,7 @@ export interface BackendLead {
   // 🆕 New fields
   pendingOrderAmount: number | null;
   isUnread: boolean;
+  unreadCount: number;
   lastMessageSender: "CLIENT" | "AGENT" | "SYSTEM" | "BOT" | null;
 }
 
@@ -82,7 +83,24 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
   const [filter, setFilter] = useState<FilterTab>("chats");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  // Total conversation counts per tab, always visible in the tab labels.
+  const [tabTotals, setTabTotals] = useState<Record<FilterTab, number>>({ chats: 0, completed: 0 });
   const { companyId } = useAuth();
+
+  // Fetch the total count for a given tab's backend filter (limit=1 is enough to read meta.total).
+  const fetchTabTotal = useCallback(async (tab: FilterTab) => {
+    const backendFilter = tab === "completed" ? "resolved" : "mine";
+    const params = new URLSearchParams({ filter: backendFilter, limit: "1", page: "1" });
+    if (search) params.set("search", search);
+    try {
+      const res = await authedFetch(`/api/leads?${params.toString()}`);
+      if (!res.ok) return;
+      const json: LeadsResponse = await res.json();
+      setTabTotals((prev) => ({ ...prev, [tab]: json.meta?.total ?? 0 }));
+    } catch {
+      // Leave previous total on failure.
+    }
+  }, [search]);
 
   const fetchLeads = useCallback(async (pageNum: number = 1, append: boolean = false) => {
     try {
@@ -128,27 +146,54 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
     }
   }, [filter, search]);
 
-  // Initial fetch when filter/search changes
+  // Initial fetch when filter/search changes; also refresh both tab totals.
   useEffect(() => {
     fetchLeads(1);
-  }, [fetchLeads]);
+    fetchTabTotal("chats");
+    fetchTabTotal("completed");
+  }, [fetchLeads, fetchTabTotal]);
 
   // Listen for real-time conversation resolution to remove from list immediately
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
-
     const handleResolved = (data: { conversationId: string; companyId: string }) => {
       if (data.companyId === companyId) {
         setLeads((prev) => prev.filter((lead) => lead.conversationId !== data.conversationId));
+        // A chat moved to Completed — refresh both tab totals.
+        fetchTabTotal("chats");
+        fetchTabTotal("completed");
       }
     };
 
-    socket.on("conversation.resolved", handleResolved);
-    return () => {
-      socket.off("conversation.resolved", handleResolved);
+    return onEvent("conversation.resolved", handleResolved);
+  }, [companyId, fetchTabTotal]);
+
+  // Refresh the list when a conversation is updated (e.g. marked read or new message),
+  // so per-chat unread counts + dot update in real time without a page reload.
+  useEffect(() => {
+    const handleUpdated = () => {
+      fetchLeads(meta.page || 1);
     };
-  }, [companyId]);
+
+    return onEvent("conversation_updated", handleUpdated);
+  }, [fetchLeads, meta.page]);
+
+  // Instant local clear when a conversation is opened: the detail view tells us
+  // which lead was just marked read, so we zero its unreadCount immediately
+  // (the socket re-fetch then keeps it authoritative).
+  useEffect(() => {
+    const handleRead = (e: Event) => {
+      const leadId = (e as CustomEvent<{ leadId: string }>).detail?.leadId;
+      if (!leadId) return;
+      setLeads((prev) =>
+        prev.map((lead) =>
+          lead.id === leadId ? { ...lead, unreadCount: 0, isUnread: false } : lead
+        )
+      );
+    };
+
+    window.addEventListener("conversation:read", handleRead);
+    return () => window.removeEventListener("conversation:read", handleRead);
+  }, []);
 
   const handleLoadMore = () => {
     if (!meta.hasMore || loading) return;
@@ -191,10 +236,10 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
   if (error && leads.length === 0) {
     return (
       <div className="p-6 text-center">
-        <p className="text-sm text-rose-400 font-mono">Failed to load inbox: {error}</p>
+        <p className="text-sm text-rose-500 dark:text-rose-400 font-mono">Failed to load inbox: {error}</p>
         <button
           onClick={() => fetchLeads(1)}
-          className="mt-4 px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-black rounded-xl text-slate-300 transition cursor-pointer"
+          className="mt-4 px-4 py-2 bg-[var(--app-surface-alt)] border border-[var(--app-border)] hover:bg-[var(--app-bg-soft)] text-xs font-black rounded-xl text-[var(--app-text)] transition cursor-pointer"
         >
           Retry
         </button>
@@ -202,10 +247,10 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
     );
   }
 
-  return (
-    <div className="space-y-3">
+   return (
+    <div className="flex flex-col h-full min-h-0">
       {/* Search input */}
-      <form onSubmit={handleSearchSubmit} className="flex gap-2">
+      <form onSubmit={handleSearchSubmit} className="flex gap-2 px-4 pt-4">
         <input
           type="text"
           value={searchInput}
@@ -213,14 +258,14 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
           placeholder="Search leads..."
           className="flex-1 input-field text-xs"
         />
-        <button type="submit" className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-xs font-black text-slate-300 hover:bg-slate-700 transition cursor-pointer">
+        <button type="submit" className="px-3 py-1.5 bg-[var(--app-surface-alt)] border border-[var(--app-border)] rounded text-xs font-black text-[var(--app-text)] hover:bg-[var(--app-bg-soft)] transition cursor-pointer">
           Search
         </button>
         {search && (
           <button
             type="button"
             onClick={() => { setSearch(""); setSearchInput(""); }}
-            className="px-2 py-1.5 text-xs font-black text-slate-500 hover:text-slate-300 transition cursor-pointer"
+            className="px-2 py-1.5 text-xs font-black text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition cursor-pointer"
           >
             Clear
           </button>
@@ -228,39 +273,43 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
       </form>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 border-b border-slate-800 pb-2">
+      <div className="flex gap-1 border-b border-[var(--app-border)] px-4 pb-2 mt-3">
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => { setLeads([]); setFilter(tab.key); }}
             className={`px-3 py-1 text-xs font-black rounded-t transition cursor-pointer ${
               filter === tab.key
-                ? "bg-slate-800 text-slate-200 border-b-2 border-brand-saffron"
-                : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/50"
+                ? "bg-[var(--app-surface-alt)] text-[var(--app-text)] border-b-2 border-brand-saffron"
+                : "text-[var(--app-text-muted)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-soft)]"
             }`}
           >
-            {tab.label}
+            {tab.label} ({tabTotals[tab.key]})
           </button>
         ))}
       </div>
 
       {leads.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 text-center">
-          <div className="h-12 w-12 rounded-full bg-slate-900 flex items-center justify-center mb-4">
-            <MessageSquare className="h-6 w-6 text-slate-500" />
+          <div className="h-12 w-12 rounded-full bg-[var(--app-surface-alt)] flex items-center justify-center mb-4">
+            <MessageSquare className="h-6 w-6 text-[var(--app-text-muted)]" />
           </div>
-          <h3 className="text-sm font-black text-slate-300 uppercase tracking-widest">No conversations found</h3>
-          <p className="text-xs text-slate-500 mt-2 max-w-xs">
+          <h3 className="text-sm font-black text-[var(--app-text)] uppercase tracking-widest">No conversations found</h3>
+          <p className="text-xs text-[var(--app-text-muted)] mt-2 max-w-xs">
             No conversations match the current filter.
           </p>
         </div>
       ) : (
         <>
-          <div className="space-y-2 px-2 pb-2">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 px-4 pb-4">
             {leads.map((lead) => {
-              const ChannelIcon = CHANNEL_ICON[lead.channel.toUpperCase()] || Globe;
+               const ChannelIcon = CHANNEL_ICON[lead.channel.toUpperCase()] || Globe;
               const displayName = lead.name || lead.contact || "Customer";
               const preview = lead.lastMessage ? (lead.lastMessage.length > 80 ? lead.lastMessage.slice(0, 80) + "..." : lead.lastMessage) : "No messages yet";
+              // A lead that is currently open in the detail pane should never show
+              // as unread — the user is viewing it live, so suppress the badge + highlight.
+              const isOpenHere = selectedLeadId === lead.id;
+              const shownUnread = isOpenHere ? 0 : lead.unreadCount;
 
               return (
                 <button
@@ -275,7 +324,7 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
                   }}
                   className={`w-full flex items-center gap-4 p-4 rounded-2xl border bg-[var(--ticket-bg)] text-[var(--ticket-text)] border-[var(--ticket-border)] hover:brightness-110 transition-all text-left cursor-pointer group ${
                     selectedLeadId === lead.id ? "ring-2 ring-[var(--brand-saffron)]" : ""
-                  }`}
+                  } ${(lead.isUnread && !isOpenHere) ? "bg-[var(--brand-saffron-soft)]/40 border-[var(--brand-saffron)]/40" : ""}`}
                 >
                   {/* Avatar */}
                   <div className="h-10 w-10 rounded-full bg-brand-navy text-white flex items-center justify-center shrink-0 text-xs font-black">
@@ -286,11 +335,16 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
                    <div className="flex-1 min-w-0">
                      <div className="flex items-center justify-between gap-2">
                        <div className="flex items-center gap-2">
-                         <h4 className="text-sm font-bold text-[var(--ticket-text)] truncate">{displayName}</h4>
-                         {/* 🆕 Unread indicator - 8px dot in brick color */}
-                         {lead.isUnread && (
-                           <div className="h-2 w-2 rounded-full bg-[var(--brick)] shrink-0" title="Unread"></div>
-                         )}
+                           <h4 className={`text-sm truncate ${(lead.isUnread && !isOpenHere) ? "font-extrabold" : "font-bold"} text-[var(--ticket-text)]`}>{displayName}</h4>
+                          {/* Unread message count badge (WhatsApp-style) — shows how many new messages arrived since last viewed */}
+                          {shownUnread > 0 && (
+                            <span
+                              className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--brand-saffron)] text-[var(--brand-saffron-contrast)] text-[10px] font-black leading-none shrink-0"
+                              title={`${shownUnread} unread message${shownUnread === 1 ? "" : "s"}`}
+                            >
+                              {shownUnread > 99 ? "99+" : shownUnread}
+                            </span>
+                          )}
                        </div>
                        <span className="text-[10px] text-[var(--ticket-text)] font-mono shrink-0 opacity-70">{relativeTime(lead.lastActiveAt)}</span>
                      </div>
@@ -341,7 +395,7 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
               <button
                 onClick={handleLoadMore}
                 disabled={loading}
-                className="px-6 py-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-xs font-black rounded-xl text-slate-300 transition cursor-pointer disabled:opacity-50"
+                className="px-6 py-2 bg-[var(--app-surface-alt)] border border-[var(--app-border)] hover:bg-[var(--app-bg-soft)] text-xs font-black rounded-xl text-[var(--app-text)] transition cursor-pointer disabled:opacity-50"
               >
                 {loading ? (
                   <span className="flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Loading...</span>
@@ -352,7 +406,7 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
             </div>
           ) : leads.length > 0 ? (
             <div className="py-8 text-center">
-              <span className="text-[10px] font-bold text-slate-500/70 uppercase tracking-widest font-mono">End of conversations</span>
+              <span className="text-[10px] font-bold text-[var(--app-text-muted)] uppercase tracking-widest font-mono">End of conversations</span>
             </div>
           ) : null}
         </>
