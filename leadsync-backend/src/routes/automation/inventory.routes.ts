@@ -181,7 +181,18 @@ router.get("/search", authMiddleware, async (req: AuthRequest, res) => {
   }
 
   if (!searchTerm) {
-    return res.json({ products: [] });
+    try {
+      const products = await prisma.inventoryProduct.findMany({
+        where: { companyId, isActive: true },
+        include: { variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } } },
+        orderBy: { createdAt: "desc" },
+        take: 20
+      });
+      return res.json({ products });
+    } catch (error: any) {
+      console.error("[InventoryRoutes] Default load error:", error);
+      return res.status(500).json({ error: "Failed to load default products" });
+    }
   }
 
   try {
