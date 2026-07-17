@@ -252,6 +252,10 @@ PROCESS_PROFILE="COMBINED" # Options: COMBINED, WORKER, WEB
 - **PgBouncer Transactions**: Always configure `DIRECT_URL` for schema migrations to avoid pgbouncer transactions errors.
 - **Do Not Run `git add .`**: The repo uses custom hooks and files that should not be mass-added. Add modified files explicitly.
 - **Windows PowerShell**: Running client generator scripts on Windows requires `-ExecutionPolicy Bypass`.
+- **OrderItem and InventoryProduct Dual-Table Gap (High Priority Fix Needed)**: The `OrderItem.productId` field references the old, legacy `Product` table rather than the new `InventoryProduct` table used for active inventory management. This architectural leftover has already caused two critical bugs:
+  1. **AI Checkout order creation** (originally threw `OrderItem_productId_fkey` constraint violation trying to write `InventoryProduct` ID to `Product` ID).
+  2. **Payment request generation** (failed because it queried the legacy `Product` table for catalog products instead of `InventoryProduct` and `InventoryVariant`).
+  Both have been patched with the temporary workaround of setting `productId: null` in `OrderItem` records. This creates a broken/missing link between orders and active catalog products, which will distort product performance reporting. It is strongly recommended to consolidate the schemas by migrating `OrderItem.productId` to reference `InventoryProduct` instead of continuing to patch around it.
 - **Manually Applied SQL Migrations (Prisma Schema Match)**: Two columns exist in the live database that were manually applied outside of standard Prisma migrations: `clientMessageId` and `deliveryError`. These columns are not recorded in the `prisma/migrations/` history, meaning the local migration history will not fully match the live DB schema representation.
 
 ---

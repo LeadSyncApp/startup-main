@@ -72,7 +72,7 @@ router.post("/generate-from-prompt", authMiddleware as any, async (req: any, res
         where: { id: input.companyId },
         select: { name: true, businessType: true },
       }),
-      prisma.product.findMany({
+      (prisma.inventoryProduct as any).findMany({
         where: { companyId: input.companyId, isActive: true },
         select: { name: true },
         take: 20,
@@ -89,7 +89,7 @@ router.post("/generate-from-prompt", authMiddleware as any, async (req: any, res
       companyId: input.companyId,
       businessType: input.businessType || company.businessType || undefined,
       businessName: input.businessName || company.name || undefined,
-      productCatalog: products.map((p) => p.name),
+      productCatalog: products.map((p: any) => p.name),
     });
 
     // Return the generated rule to the frontend for preview.
