@@ -1,0 +1,359 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { 
+  MessageSquare, 
+  Settings, 
+  Store,
+  LogOut,
+  Users,
+  ShoppingBag,
+  Bell,
+  Home,
+  Zap,
+  Menu,
+  X,
+  Sun,
+  Moon,
+  Inbox,
+  Package
+} from 'lucide-react';
+import { useActivityStore } from '../../features/activity-ledger/useActivityStore';
+import { ActivityFeedDrawer } from '../../features/activity-ledger/ActivityFeedDrawer';
+import { useTheme } from '../../features/theme/ThemeContext';
+import { useAuth } from '../../features/auth-tenancy/AuthContext';
+import { authedFetch } from '../../api/client';
+import { getSocket } from '../../lib/socketClient';
+import { NotificationBell } from '../../features/notifications/NotificationPanel';
+
+export type UserRole = 'OWNER' | 'MANAGER' | 'STAFF';
+export type TabID = 'shop' | 'messages' | 'inbox' | 'customers' | 'broadcast' | 'orders' | 'automation' | 'inventory' | 'settings';
+
+export interface TabItem {
+  id: TabID;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  allowedRoles: UserRole[];
+  badge?: string | number;
+}
+
+const tabConfig: TabItem[] = [
+  { id: 'shop', label: 'My Shop', icon: Home, allowedRoles: ['OWNER', 'MANAGER'] },
+  { id: 'messages', label: 'New Customers', icon: MessageSquare, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'] },
+  { id: 'inbox', label: 'My Chats', icon: Inbox, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'] },
+  { id: 'customers', label: 'Customers', icon: Users, allowedRoles: ['OWNER', 'MANAGER'] },
+  { id: 'broadcast', label: 'Broadcast', icon: Zap, allowedRoles: ['OWNER', 'MANAGER'] },
+  { id: 'orders', label: 'Orders', icon: ShoppingBag, allowedRoles: ['OWNER', 'MANAGER'] },
+  { id: 'automation', label: 'Automation', icon: MessageSquare, allowedRoles: ['OWNER', 'MANAGER'] },
+  { id: 'inventory', label: 'Inventory', icon: Package, allowedRoles: ['OWNER', 'MANAGER'] },
+  { id: 'settings', label: 'Settings', icon: Settings, allowedRoles: ['OWNER', 'MANAGER'] },
+];
+
+interface MasterDashboardLayoutProps {
+  children: React.ReactNode;
+  userRole: UserRole;
+  merchantName: string;
+  activeTab: TabID;
+  setActiveTab: (tab: TabID) => void;
+  onLogout?: () => void;
+}
+
+export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({ 
+  children, 
+  userRole, 
+  merchantName,
+  activeTab,
+  setActiveTab,
+  onLogout
+}) => {
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const { gatewayStatus, events } = useActivityStore();
+  const { theme, toggleTheme } = useTheme();
+  const { companyId } = useAuth();
+  const unreadCount = events.filter(e => !e.read).length;
+
+  // Real badge counts — reuse the same endpoints that power InboxList
+  // (filter=mine) and StreamTriage (filter=unclaimed). No new backend needed.
+  const [myConversations, setMyConversations] = useState(0);
+  const [unclaimedLeads, setUnclaimedLeads] = useState(0);
+
+  const refreshBadgeCounts = useCallback(async () => {
+    if (!companyId) return;
+    try {
+      const results = await Promise.all([
+        authedFetch('/api/leads?filter=mine&limit=1'),
+        authedFetch('/api/leads?filter=unclaimed&limit=1'),
+      ]);
+      const [mineRes, unclaimedRes] = results;
+      if (mineRes.ok) {
+        const json = await mineRes.json();
+        // Active conversations = non-resolved leads assigned to this user.
+        const active = (json.data || []).filter(
+          (l: { status: string }) => l.status !== 'RESOLVED'
+        );
+        setMyConversations(active.length);
+      }
+      if (unclaimedRes.ok) {
+        const json = await unclaimedRes.json();
+        setUnclaimedLeads(json.meta?.total ?? (json.data || []).length);
+      }
+    } catch {
+      // Keep counts at 0 on failure; badges simply don't show.
+    }
+  }, [companyId]);
+
+  // Initial fetch on mount; re-fetch if companyId changes
+  useEffect(() => {
+    refreshBadgeCounts();
+  }, [refreshBadgeCounts]);
+
+  // Live badge updates via socket events — debounced to batch rapid-fire events
+  const badgeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleBadgeRefresh = useCallback(() => {
+    if (badgeRefreshTimer.current) clearTimeout(badgeRefreshTimer.current);
+    badgeRefreshTimer.current = setTimeout(refreshBadgeCounts, 400);
+  }, [refreshBadgeCounts]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handler = () => scheduleBadgeRefresh();
+
+    socket.on("conversation:new", handler);
+    socket.on("conversation_updated", handler);
+    socket.on("conversation.resolved", handler);
+    socket.on("lead_updated", handler);
+
+    return () => {
+      socket.off("conversation:new", handler);
+      socket.off("conversation_updated", handler);
+      socket.off("conversation.resolved", handler);
+      socket.off("lead_updated", handler);
+      if (badgeRefreshTimer.current) clearTimeout(badgeRefreshTimer.current);
+    };
+  }, [scheduleBadgeRefresh]);
+
+  // Map dynamic counts onto ONLY the two tabs that should ever show a badge.
+  // Other tabs keep their original (absent) badge property, exactly as before.
+  const badgeFor: Partial<Record<string, number>> = {
+    messages: myConversations > 0 ? myConversations : undefined,
+    inbox: unclaimedLeads > 0 ? unclaimedLeads : undefined,
+  };
+
+  const allowedTabs = tabConfig
+    .filter(tab => tab.allowedRoles.includes(userRole))
+    .map(tab =>
+      tab.id in badgeFor
+        ? { ...tab, badge: badgeFor[tab.id] }
+        : tab
+    );
+
+  const displayRole = userRole === 'STAFF' ? 'Staff' : userRole === 'MANAGER' ? 'Manager' : 'Owner';
+
+  const isConnected = gatewayStatus === 'STABLE' || gatewayStatus === 'SYNCED';
+
+  return (
+    <>
+      {/* Ambient Glow Layer - Soft glow from top-left across the visual surface */}
+      <div className="fixed inset-0 z-0 pointer-events-none" style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
+        <div 
+          className="absolute rounded-full opacity-[var(--blob-opacity)] ambient-glow" 
+          style={{ 
+            width: '800px', 
+            height: '800px', 
+            background: 'radial-gradient(circle, var(--brand-saffron) 0%, transparent 70%)', 
+            filter: 'blur(80px)', 
+            top: '-200px', 
+            left: '-200px' 
+          }} 
+        />
+      </div>
+    <div className="flex h-[100dvh] bg-[var(--app-bg)] overflow-hidden relative z-[1]">
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex flex-col h-full w-64 flex-shrink-0 bg-transparent border-r border-[var(--app-border)]">
+        {/* Brand Header */}
+        <div className="p-5 border-b border-[var(--app-border)]">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-[var(--brand-saffron)] flex items-center justify-center text-[var(--app-bg)] shrink-0 btn-interactive">
+              <Store className="h-5 w-5" />
+            </div>
+              <div className="min-w-0">
+               <h1 className="text-sm font-bold text-[var(--text-primary)] truncate" style={{fontFamily: "'Fraunces', serif"}}>{merchantName}</h1>
+               <p className="text-xs text-[var(--text-secondary)] capitalize">{displayRole}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-[var(--app-border)]">
+            <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-[var(--success-green)] pulse-live' : 'bg-[var(--danger-red)]'}`} />
+            <span className={`text-xs font-semibold uppercase tracking-wide ${isConnected ? 'text-[var(--success-green)]' : 'text-[var(--text-secondary)]'}`}>
+              {isConnected ? 'LIVE — CONNECTED' : 'Disconnected'}
+            </span>
+            <div className="ml-auto">
+              <NotificationBell />
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+          {allowedTabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer btn-interactive ${
+                  isActive 
+                    ? 'bg-[var(--brand-saffron-soft)] text-[var(--text-primary)] border-l-2 border-transparent relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[2px] before:bg-[var(--brand-saffron)]' 
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--app-bg-soft)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Icon className={`h-5 w-5 ${isActive ? 'text-[var(--brand-saffron)]' : 'text-[var(--text-secondary)]'}`} />
+                  <span>{tab.label}</span>
+                </div>
+                {tab.badge && (
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)]">
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Theme Toggle + Logout */}
+        <div className="p-3 border-t border-[var(--app-border)] space-y-1">
+          <button
+            onClick={toggleTheme}
+            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--sidebar-text-muted)] hover:text-[var(--brand-saffron)] hover:bg-[var(--brand-saffron-soft)] transition-all cursor-pointer btn-interactive"
+          >
+            {theme === 'light' ? (
+              <Moon className="h-4 w-4" />
+            ) : (
+              <Sun className="h-4 w-4" />
+            )}
+            {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
+          </button>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--sidebar-text-muted)] hover:text-[var(--danger-red)] hover:bg-[var(--app-bg-soft)] transition-all cursor-pointer btn-interactive"
+            >
+              <LogOut className="h-4 w-4" />
+              Log Out
+            </button>
+          )}
+        </div>
+      </aside>
+      {/* Mobile Header */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-[var(--app-surface)] border-b border-[var(--app-border)] flex items-center justify-between px-4 z-30">
+        <button
+          onClick={() => setMobileSidebarOpen(true)}
+          className="p-2 rounded-lg hover:bg-[var(--app-bg-soft)] text-[var(--app-text-muted)] cursor-pointer"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="flex items-center gap-2">
+          <Store className="h-5 w-5 text-[var(--brand-saffron)]" />
+          <span className="font-bold text-[var(--app-text)] text-sm">{merchantName}</span>
+        </div>
+        <button
+          onClick={() => setIsDrawerOpen(true)}
+          className="p-2 rounded-lg hover:bg-[var(--app-bg-soft)] text-[var(--app-text-muted)] relative cursor-pointer"
+        >
+          <Bell className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-[var(--brand-saffron)] text-[var(--app-bg)] text-2xs font-bold flex items-center justify-center">
+              {unreadCount}
+            </span>
+          )}
+        </button>
+        <NotificationBell />
+      </div>
+
+      {/* Mobile Sidebar Drawer */}
+      {mobileSidebarOpen && (
+        <div className="md:hidden fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setMobileSidebarOpen(false)} />
+          <motion.div
+            initial={{ x: -300 }}
+            animate={{ x: 0 }}
+            className="relative w-72 h-full bg-[var(--app-surface)] shadow-xl"
+          >
+            <div className="p-5 border-b border-[var(--app-border)] flex items-center justify-between">
+              <span className="font-bold text-[var(--app-text)]">Menu</span>
+              <button onClick={() => setMobileSidebarOpen(false)} className="p-1 cursor-pointer">
+                <X className="h-5 w-5 text-[var(--app-text-muted)]" />
+              </button>
+            </div>
+            <nav className="p-3 space-y-1">
+              {allowedTabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => { setActiveTab(tab.id); setMobileSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                      isActive ? 'bg-[var(--brand-saffron-soft)] text-[var(--text-primary)]' : 'text-[var(--app-text-muted)] hover:bg-[var(--app-bg-soft)]'
+                    }`}
+                  >
+                    <Icon className={`h-5 w-5 ${isActive ? 'text-[var(--brand-saffron)]' : 'text-[var(--app-text-muted)]'}`} />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </nav>
+            {onLogout && (
+              <div className="p-3 border-t border-[var(--app-border)]">
+                <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-[var(--app-text-muted)] hover:text-[var(--danger-red)] cursor-pointer">
+                  <LogOut className="h-4 w-4" /> Log Out
+                </button>
+              </div>
+            )}
+          </motion.div>
+        </div>
+      )}
+
+      {/* Mobile Bottom Nav */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[var(--app-surface)] border-t border-[var(--app-border)] flex justify-around items-center z-30 px-2">
+        {allowedTabs.slice(0, 5).map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className="flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer"
+            >
+              <div className="relative">
+                <Icon className={`h-5 w-5 ${isActive ? 'text-[var(--brand-saffron)]' : 'text-[var(--app-text-muted)]'}`} />
+                {tab.badge && (
+                  <span className="absolute -top-1.5 -right-2 text-2xs font-bold w-4 h-4 rounded-full bg-[var(--brand-saffron)] text-[var(--app-bg)] flex items-center justify-center">
+                    {tab.badge}
+                  </span>
+                )}
+              </div>
+              <span className={`text-2xs mt-1 font-medium ${isActive ? 'text-[var(--brand-saffron)]' : 'text-[var(--app-text-muted)]'}`}>
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Main Content */}
+      <main className={`flex-1 h-full overflow-y-auto pt-14 md:pt-0 pb-16 md:pb-0 ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex flex-col' : ''}`}>
+        <div className={`p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex-1 flex flex-col min-h-0' : ''}`}>
+          {children}
+        </div>
+      </main>
+
+      {/* Activity Drawer */}
+      <ActivityFeedDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
+    </div>
+    </>
+  );
+};

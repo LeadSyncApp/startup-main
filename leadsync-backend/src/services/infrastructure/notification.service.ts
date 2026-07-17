@@ -13,10 +13,19 @@ export class NotificationService {
         type: "ORDER" | "MESSAGE" | "ALERT" | "SYSTEM"
     ) {
         try {
+            // Get user's companyId
+            const user = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { companyId: true }
+            });
+
+            if (!user) return null;
+
             // 1. Create DB Record
             const notification = await prisma.notification.create({
                 data: {
                     userId,
+                    companyId: user.companyId,
                     title,
                     body,
                     type,
@@ -34,9 +43,6 @@ export class NotificationService {
     }
 
     /**
-     * Creates a notification for all company admins and emits socket events.
-     */
-    /**
      * Creates a notification for all company admins and emits socket events with IDs.
      */
     async notifyCompanyAdmins(
@@ -50,7 +56,7 @@ export class NotificationService {
             const admins = await prisma.user.findMany({
                 where: {
                     companyId,
-                    role: { in: ["ADMIN", "OWNER"] },
+                    role: { in: ["MANAGER", "OWNER"] },
                     isActive: true
                 },
                 select: { id: true }

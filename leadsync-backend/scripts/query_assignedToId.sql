@@ -1,0 +1,1 @@
+SELECT id, "assignedToId", "claimedById" FROM "Conversation" LIMIT 10;

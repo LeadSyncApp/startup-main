@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma";
 import { eventBus, Events } from "../infrastructure/eventBus";
+import { emitToCompany } from "../../lib/socket";
 
 export class InventoryService {
     constructor() {
@@ -41,6 +42,12 @@ export class InventoryService {
                             }
                         });
                         console.log(`📦 [InventoryMicroservice] Deducted ${item.quantity} units from ${item.productId}. New Stock: ${newStock}`);
+
+                        // ✅ NEW: Emit real-time inventory update to all clients in the company
+                        emitToCompany(companyId, "inventory_updated", {
+                            productId: item.productId,
+                            newStock: newStock
+                        });
                     } else {
                         console.log(`📦 [InventoryMicroservice] Skipping stock deduction for ${item.productId} (trackInventory: false)`);
                     }

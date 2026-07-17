@@ -1,10 +1,11 @@
-import { prisma } from "../../lib/prisma";
-import { OrderStatus, OrderApprovalStatus, OrderLog } from "@prisma/client";
-import { safeEmitConversationUpdate, emitToCompany, emitToCompanyAdmin } from "../../lib/socket";
+import { createTenantRepository } from "../../lib/tenantDb";
+import { OrderStatus, OrderApprovalStatus } from "@prisma/client";
+import { safeEmitConversationUpdate, emitToCompany } from "../../lib/socket";
 import { notificationService } from "../infrastructure/notification.service";
 import { customerMessagingService } from "../messaging/customerMessaging.service";
 import { cacheService } from "../infrastructure/cache.service";
 import { recalculateLeadCRM } from "../integrations/crm.service";
+import { eventBus, Events } from "../../services/infrastructure/eventBus";
 
 /**
  * Strict Rank for Forward-Only Lifecycle
@@ -38,16 +39,19 @@ export class OrderWorkflowService {
      * Uses Optimistic Locking (version check) to prevent race conditions.
      */
     async transitionStatus(
+        companyId: string,
         orderId: string,
         newStatus: OrderStatus,
         actor: { id: string; name: string; role: string },
         expectedVersion?: number // CRITICAL: This must come from the UI's current state
     ) {
+        const tenantDb = createTenantRepository(companyId);
+
         // 1. Fetch Current State (Fresh from DB)
-        const order = await prisma.order.findUnique({
+        const order = await tenantDb.order.findUnique({
             where: { id: orderId },
             include: { conversation: true, lead: true }
-        });
+        }) as any;
 
         if (!order) throw new Error("Order not found");
 
@@ -60,13 +64,15 @@ export class OrderWorkflowService {
         }
 
         // b) Prevent Regression (Ranking check)
-        if (STATUS_RANK[newStatus] < STATUS_RANK[oldStatus]) {
+        if (STATUS_RANK[newStatus as OrderStatus] < STATUS_RANK[oldStatus as OrderStatus]) {
             throw new Error(`STATE_REGRESSION: Cannot move order from ${oldStatus} back to ${newStatus}. Transition rejected.`);
         }
 
         // b) Business Logic Transition check
         this.validateTransition(oldStatus, newStatus, actor.role);
 
+        // c) SME Fulfillment Optimization: No automatic jump, Frontend handles UI grouping
+        
         // 3. Perform Update with Optimistic Locking
         // If version is provided, we check it. If not, we just update (force).
         // For critical "Accept" actions, version MUST be provided.
@@ -78,18 +84,17 @@ export class OrderWorkflowService {
         const nextVersion = order.version + 1;
 
         // Transaction: Update Order + Create Log
-        // Note: Prisma interactive transactions ($transaction) are best here.
+        // Note: Prisma interactive transactions ($transaction) are run through tenantDb.$transaction
         try {
-            console.log(`[OrderWorkflow] Attempting transition from ${oldStatus} to ${newStatus} for order ${orderId}`);
+            console.log(`[OrderWorkflow] Attempting transition from ${oldStatus} to ${newStatus} for order ${orderId} in company ${companyId}`);
             
-            const [_, log] = await prisma.$transaction([
-                // Update Order
-                prisma.order.update({
+            const [updatedOrderResult, log] = await tenantDb.$transaction(async (txDb) => {
+                const updated = await txDb.order.update({
                     where: whereClause,
                     data: {
                         status: newStatus,
                         version: nextVersion,
-                        processedById: actor.id,
+                        processedById: (actor.id === 'SYSTEM' || actor.role === 'SYSTEM') ? null : actor.id,
                         completedAt: ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'SHIPPED'].includes(newStatus)
                             ? new Date()
                             : (oldStatus === OrderStatus.BOT_CREATED_ORDER ? null : order.completedAt),
@@ -97,9 +102,9 @@ export class OrderWorkflowService {
                             : newStatus === OrderStatus.REJECTED ? OrderApprovalStatus.REJECTED
                                 : order.approvalStatus
                     }
-                }),
-                // Create Audit Log
-                prisma.orderLog.create({
+                });
+
+                const createdLog = await txDb.orderLog.create({
                     data: {
                         orderId,
                         actorId: actor.id,
@@ -108,8 +113,10 @@ export class OrderWorkflowService {
                         action: "STATUS_CHANGE",
                         metadata: { from: oldStatus, to: newStatus, version: nextVersion },
                     }
-                })
-            ]);
+                });
+
+                return [updated, createdLog];
+            });
             
             console.log(`[OrderWorkflow] Successfully transitioned order ${orderId} to ${newStatus}`);
 
@@ -124,12 +131,12 @@ export class OrderWorkflowService {
             ].includes(newStatus as any);
 
             if (isNoLongerPending) {
-                const currentLead = await prisma.lead.findUnique({
+                const currentLead = await tenantDb.lead.findUnique({
                     where: { id: order.leadId },
                     select: { pendingOrderId: true }
                 });
                 if (currentLead && currentLead.pendingOrderId === orderId) {
-                    await prisma.lead.update({
+                    await tenantDb.lead.update({
                         where: { id: order.leadId },
                         data: {
                             pendingOrderState: "NONE",
@@ -144,21 +151,21 @@ export class OrderWorkflowService {
                 }
             }
 
-            // Central recalculation of Lead CRM metrics on status transitions (confirmed, paid, completed, cancelled, rejected)
+            // Central recalculation of Lead CRM metrics on status transitions
             await recalculateLeadCRM(order.leadId, order.companyId);
 
             // ⛔ CLEAR ORDERING INTENT and SESSION STATE for completed orders
             if (['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED'].includes(newStatus)) {
                 
                 // Invalidate KPI Cache
-                await prisma.company.findUnique({ where: { id: order.companyId }, select: { id: true } })
-                    .then(company => {
+                await tenantDb.company.findUnique({ where: { id: order.companyId }, select: { id: true } })
+                    .then(async (company: any) => {
                         if (company) {
-                            cacheService.delete(`dashboard_kpis_${company.id}`);
+                            await cacheService.delete(`dashboard_kpis_${company.id}`);
                         }
                     });
 
-                await prisma.conversation.update({
+                await tenantDb.conversation.update({
                     where: { id: order.conversationId },
                     data: { 
                         intent: null,
@@ -169,12 +176,12 @@ export class OrderWorkflowService {
             }
 
             // ⛔ STRICT PERSISTENCE: Re-fetch fresh state to ensure no race conditions
-            const updatedOrder = await prisma.order.findUnique({
+            const updatedOrder = await tenantDb.order.findUnique({
                 where: { id: orderId },
                 include: {
                     conversation: { include: { lead: true } },
                     lead: true,
-                    processedBy: { select: { id: true, name: true } },
+                    processedBy: { select: { id: true, firstName: true, lastName: true } },
                     invoice: { select: { id: true, invoiceNumber: true, pdfUrl: true } }
                 }
             });
@@ -182,7 +189,7 @@ export class OrderWorkflowService {
             if (!updatedOrder) throw new Error("Order lost after update");
 
             // 4. Emit Events & Notifications
-            this.handlePostTransition(updatedOrder, oldStatus, newStatus, actor);
+            this.handlePostTransition(companyId, updatedOrder, oldStatus, newStatus, actor);
 
             return { order: updatedOrder, log };
 
@@ -198,30 +205,26 @@ export class OrderWorkflowService {
      * Validates if a transition is allowed based on the current state.
      */
     private validateTransition(current: OrderStatus, next: OrderStatus, role: string) {
-        // Enforce simplified SME-friendly workflow transitions
-        // Valid transitions:
-        // PENDING -> PROCESSING, PENDING -> CANCELLED
-        // PROCESSING -> COMPLETED, PROCESSING -> CANCELLED
         const validTransitions: Record<string, OrderStatus[]> = {
-            [OrderStatus.PENDING]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
-            [OrderStatus.PROCESSING]: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+            [OrderStatus.PENDING]: [OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.PAID],
+            [OrderStatus.PROCESSING]: [OrderStatus.READY, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.PAID],
 
             // Legacy support mapping to avoid breaking existing orders in other states
-            [OrderStatus.BOT_CREATED_ORDER]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CANCELLED],
-            [OrderStatus.USER_CONFIRMED_PENDING_AGENT]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CANCELLED],
-            [OrderStatus.NEW]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CANCELLED],
-            [OrderStatus.CONFIRMED]: [OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
-            [OrderStatus.PAID]: [OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
-            [OrderStatus.PREPARING]: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
-            [OrderStatus.READY]: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
-            [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+            [OrderStatus.BOT_CREATED_ORDER]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.PAID],
+            [OrderStatus.USER_CONFIRMED_PENDING_AGENT]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.PAID],
+            [OrderStatus.NEW]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.PAID],
+            [OrderStatus.CONFIRMED]: [OrderStatus.READY, OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.PAID],
+            [OrderStatus.PAID]: [OrderStatus.READY, OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+            [OrderStatus.PREPARING]: [OrderStatus.READY, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+            [OrderStatus.READY]: [OrderStatus.SHIPPED, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+            [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
             [OrderStatus.DELIVERED]: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
         };
 
         const allowed = validTransitions[current] || [];
         if (!allowed.includes(next)) {
-            // Owner/Admin overrides as final safeguard
-            if (role === 'OWNER' || role === 'ADMIN') return true;
+            // Owner/Admin/System overrides as final safeguard
+            if (role === 'OWNER' || role === 'ADMIN' || role === 'SYSTEM') return true;
             throw new Error(`Invalid transition from ${current} to ${next}`);
         }
     }
@@ -229,11 +232,10 @@ export class OrderWorkflowService {
     /**
      * Handles side effects (Notifications, Socket Events)
      */
-    private async handlePostTransition(order: any, old: string, next: string, actor: any) {
+    private async handlePostTransition(companyId: string, order: any, old: string, next: string, actor: any) {
 
         // 1. Emit to Socket (UI Update)
-        // Global Company Room
-        emitToCompany(order.companyId, "order_updated", order);
+        emitToCompany(companyId, "order_updated", order);
 
         // Conversation Update (Chat View)
         safeEmitConversationUpdate(order.conversation, "order_updated", order);
@@ -249,9 +251,9 @@ export class OrderWorkflowService {
         ].includes(next as any);
 
         if (isNoLongerPending) {
-            emitToCompany(order.companyId, "lead_updated", {
+            emitToCompany(companyId, "lead_updated", {
                 leadId: order.leadId,
-                companyId: order.companyId,
+                companyId,
                 hasPendingOrderApproval: false,
                 pendingOrderState: "NONE",
                 pendingOrderId: null,
@@ -265,15 +267,15 @@ export class OrderWorkflowService {
         // 2. Notify ALL Company Users (Admins + Agents)
         if (next === OrderStatus.PENDING || next === OrderStatus.NEW) {
             await notificationService.notifyCompany(
-                order.companyId,
+                companyId,
                 "New Order detected",
                 `Value: ${order.amount} - ${order.summary}`,
                 "ORDER"
             );
         }
 
-        // 3. Notify Customer (Auto-Reply)
-        await customerMessagingService.sendStatusUpdate(order);
+        // 3. Fire ORDER_STATUS_CHANGED event for auto-reply system
+        eventBus.emit(Events.ORDER_STATUS_CHANGED, order.id, companyId);
     }
 }
 

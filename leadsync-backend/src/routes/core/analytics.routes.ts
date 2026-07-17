@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
-import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
+import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
 import ExcelJS from "exceljs";
 
 const router = Router();
@@ -8,7 +8,7 @@ const router = Router();
 /* ===============================
    GET MAIN ANALYTICS DASHBOARD
    Aggregates granular data for charts
-============================== */
+ ============================== */
 router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return res.status(401).json({ message: "Unauthorized" });
@@ -29,15 +29,16 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
         const orders = await prisma.order.findMany({
             where: {
                 companyId,
-                status: { in: ["DELIVERED", "COMPLETED"] },
+                status: { in: ["DELIVERED", "PAID"] },
                 createdAt: { gte: thirtyDaysAgo }
             },
             select: {
                 amount: true,
                 createdAt: true,
                 summary: true,
-                items: true,
-                processedBy: { select: { name: true } }
+                metadata: true,
+                orderItems: true,
+                processedBy: { select: { firstName: true, lastName: true } }
             }
         });
 
@@ -71,43 +72,21 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
         })).reverse();
 
 
-        // 4. Calculate Top Products (Enhanced logic: Sum quantities across orders)
-        const productMap: Record<string, number> = {};
-        
-        orders.forEach(o => {
-            // Priority 1: Use structured items if available
-            if (o.items && Array.isArray(o.items) && o.items.length > 0) {
-                (o.items as any[]).forEach(item => {
-                    if (item.name) {
-                        const name = item.name.trim();
-                        const qty = Number(item.quantity) || 1;
-                        productMap[name] = (productMap[name] || 0) + qty;
-                    }
-                });
-            } else {
-                // Priority 2: Fallback to summary parsing (for legacy/manual orders)
-                const lines = o.summary.split('\n');
-                lines.forEach(line => {
-                    // Try to extract quantity and name
-                    // Pattern: "2 x Cold Coffee" or "Cold Coffee x 2" or "2 Cold Coffee"
-                    let qty = 1;
-                    const qtyMatch = line.match(/^(\d+)\s*x?\s*/i) || line.match(/\s*x\s*(\d+)$/i);
-                    if (qtyMatch) {
-                        qty = parseInt(qtyMatch[1]) || 1;
-                    }
+        // 4. Calculate Top Products
+        // ⚡ CLEAN SINGLE SOURCE OF TRUTH: Rely entirely on the structured JSON populated by the AI orchestrator worker
+        const productPerformanceMatrix = orders.reduce((acc: any, order: any) => {
+            const items = (order.orderItems as any[]) || [];
+            items.forEach(item => {
+                const identifier = item.sku || item.name;
+                if (identifier) {
+                    acc[identifier] = (acc[identifier] || 0) + (item.quantity || 1);
+                }
+            });
+            return acc;
+        }, {});
 
-                    let cleanName = line.replace(/^\d+\s*x?\s*/i, "").replace(/\s*x\s*\d+$/i, "").trim();
-                    cleanName = cleanName.replace(/\s*\(Location:\s*.*?\)$/i, "").trim();
-                    
-                    if (cleanName) {
-                        productMap[cleanName] = (productMap[cleanName] || 0) + qty;
-                    }
-                });
-            }
-        });
-
-        const topProducts = Object.entries(productMap)
-            .sort((a, b) => b[1] - a[1]) // Sort desc by quantity sold
+        const topProducts = Object.entries(productPerformanceMatrix)
+            .sort((a: any, b: any) => b[1] - a[1]) // Sort desc by quantity sold
             .slice(0, 5)
             .map(([name, count]) => ({ name, count }));
 
@@ -115,8 +94,10 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
         // 5. Agent Performance (Orders Processed)
         const agentMap: Record<string, number> = {};
         orders.forEach(o => {
-            if (o.processedBy?.name) {
-                agentMap[o.processedBy.name] = (agentMap[o.processedBy.name] || 0) + 1;
+            const agent = o.processedBy as any;
+            if (agent) {
+                const agentName = `${agent.firstName} ${agent.lastName || ""}`.trim();
+                agentMap[agentName] = (agentMap[agentName] || 0) + 1;
             }
         });
 
@@ -151,7 +132,7 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
 /* ================================
    GET /analytics/revenue
    Full revenue analytics for the Revenue page
-================================ */
+ ================================ */
 router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return res.status(401).json({ message: "Unauthorized" });
@@ -165,7 +146,7 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
         const sixtyDaysAgo = new Date(now);
         sixtyDaysAgo.setDate(now.getDate() - 60);
 
-        const PAID_STATUSES = ["DELIVERED", "COMPLETED", "PAID"] as const;
+        const PAID_STATUSES = ["DELIVERED", "PAID"] as const;
 
         const [currentOrders, previousOrders] = await Promise.all([
             prisma.order.findMany({
@@ -177,7 +158,7 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
                 },
                 include: {
                     lead: { select: { name: true, contact: true, channel: true } },
-                    processedBy: { select: { id: true, name: true } }
+                    processedBy: { select: { id: true, firstName: true, lastName: true } }
                 },
                 orderBy: { createdAt: "desc" }
             }),
@@ -250,8 +231,9 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
         const agentMap: Record<string, { name: string; revenue: number; orders: number }> = {};
         currentOrders.forEach(o => {
             if (o.processedBy) {
-                const { id, name } = o.processedBy;
-                if (!agentMap[id]) agentMap[id] = { name, revenue: 0, orders: 0 };
+                const { id, firstName, lastName } = o.processedBy as any;
+                const agentName = `${firstName} ${lastName || ""}`.trim();
+                if (!agentMap[id]) agentMap[id] = { name: agentName, revenue: 0, orders: 0 };
                 agentMap[id].revenue += o.amount;
                 agentMap[id].orders += 1;
             }
@@ -283,13 +265,45 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
 });
 
 /* ================================
+   GET /analytics/crm
+   CRM Pipeline and Deal Analytics
+ ================================ */
+router.get("/crm", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const { companyId } = req.user!;
+
+        // 1. Pipeline Funnel (Disabled to omit corporate CRM bloat)
+        const funnel: any[] = [];
+
+        // 2. Win/Loss Ratio (Disabled to omit corporate CRM bloat)
+        const dealStats: any[] = [];
+
+        // 3. Activity Metrics (Disabled to omit corporate CRM bloat)
+        const taskStats: any[] = [];
+
+        // 4. Expected Revenue (Disabled to omit corporate CRM bloat)
+        const expectedRevenue = 0;
+
+        res.json({
+            funnel,
+            dealStats,
+            taskStats,
+            expectedRevenue,
+            period: "90d"
+        });
+    } catch (error) {
+        console.error("CRM Analytics Error:", error);
+        res.status(500).json({ message: "Failed to fetch CRM analytics" });
+    }
+});
+
+/* ================================
    GET /analytics/export
-   Download orders as Excel (OWNER/ADMIN only)
-================================ */
-router.get("/export", authMiddleware, async (req: AuthRequest, res: Response) => {
+   Download orders as Excel (OWNER/MANAGER only)
+ ================================ */
+router.get("/export", authMiddleware, authorizeRoles("OWNER", "MANAGER"), async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-        if (!["OWNER", "ADMIN"].includes(req.user.role)) return res.status(403).json({ message: "Forbidden" });
 
         const companyId = req.user.companyId;
         const { from, to } = req.query;
@@ -305,7 +319,7 @@ router.get("/export", authMiddleware, async (req: AuthRequest, res: Response) =>
             },
             include: {
                 lead: { select: { name: true, contact: true, channel: true } },
-                processedBy: { select: { name: true } }
+                processedBy: { select: { firstName: true, lastName: true } }
             },
             orderBy: { createdAt: "desc" }
         });
@@ -319,7 +333,7 @@ router.get("/export", authMiddleware, async (req: AuthRequest, res: Response) =>
             { header: "Contact", key: "contact", width: 22 },
             { header: "Channel", key: "channel", width: 14 },
             { header: "Summary", key: "summary", width: 42 },
-            { header: "Amount (INR)", key: "amount", width: 16 },
+            { header: "Amount", key: "amount", width: 16 },
             { header: "Status", key: "status", width: 20 },
             { header: "Agent", key: "agent", width: 22 },
         ];
@@ -328,15 +342,17 @@ router.get("/export", authMiddleware, async (req: AuthRequest, res: Response) =>
         sheet.getRow(1).font = { bold: true };
 
         orders.forEach(o => {
+            const agent = o.processedBy as any;
+            const agentName = agent ? `${agent.firstName} ${agent.lastName || ""}`.trim() : "Bot / Unassigned";
             sheet.addRow({
-                date: o.createdAt.toLocaleDateString("en-IN"),
+                date: o.createdAt.toLocaleDateString(),
                 customer: o.lead?.name || o.lead?.contact || "Unknown",
                 contact: o.lead?.contact || "",
                 channel: o.lead?.channel || "",
                 summary: o.summary,
                 amount: o.amount,
                 status: o.status,
-                agent: o.processedBy?.name || "Bot / Unassigned"
+                agent: agentName
             });
         });
 
@@ -354,12 +370,11 @@ router.get("/export", authMiddleware, async (req: AuthRequest, res: Response) =>
 
 /* ================================
    GET /analytics/export-leads
-   Download leads as Excel (OWNER/ADMIN only)
-================================ */
-router.get("/export-leads", authMiddleware, async (req: AuthRequest, res: Response) => {
+   Download leads as Excel (OWNER/MANAGER only)
+ ================================ */
+router.get("/export-leads", authMiddleware, authorizeRoles("OWNER", "MANAGER"), async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-        if (!["OWNER", "ADMIN"].includes(req.user.role)) return res.status(403).json({ message: "Forbidden" });
 
         const leads = await prisma.lead.findMany({
             where: { companyId: req.user.companyId },
@@ -382,7 +397,7 @@ router.get("/export-leads", authMiddleware, async (req: AuthRequest, res: Respon
             { header: "Channel", key: "channel", width: 14 },
             { header: "Segment", key: "segment", width: 16 },
             { header: "Status", key: "status", width: 14 },
-            { header: "Total Spend (INR)", key: "totalSpend", width: 18 },
+            { header: "Total Spend", key: "totalSpend", width: 18 },
             { header: "Orders", key: "orderCount", width: 10 },
             { header: "Last Active", key: "lastActiveAt", width: 20 },
             { header: "Created", key: "createdAt", width: 20 },
@@ -399,8 +414,8 @@ router.get("/export-leads", authMiddleware, async (req: AuthRequest, res: Respon
                 status: l.status,
                 totalSpend: l.totalSpend,
                 orderCount: l.orderCount,
-                lastActiveAt: l.lastActiveAt.toLocaleDateString("en-IN"),
-                createdAt: l.createdAt.toLocaleDateString("en-IN"),
+                lastActiveAt: l.lastActiveAt.toLocaleDateString(),
+                createdAt: l.createdAt.toLocaleDateString(),
             });
         });
 

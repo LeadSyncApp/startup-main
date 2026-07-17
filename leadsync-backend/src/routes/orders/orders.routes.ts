@@ -1,5 +1,7 @@
 import { Router, Response } from "express";
+import { ConversationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { createTenantRepository } from "../../lib/tenantDb";
 import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
 import { eventBus, Events } from "../../services/infrastructure/eventBus";
 import {
@@ -7,13 +9,224 @@ import {
   OrderStatus,
   OrderApprovalStatus,
   Role,
-  MessageSender,
 } from "@prisma/client";
 import { sendTelegramMessage } from "../../bot/telegram.sender";
 import { safeEmitConversationUpdate, emitToCompany, emitToAgent } from "../../lib/socket";
 import { recalculateLeadCRM } from "../../services/integrations/crm.service";
+import { triggerLeadWelcome } from "../../services/automation/autoReplyEventListeners";
 
 const router = Router();
+
+/* ===============================
+   CREATE PAYMENT REQUEST (PRODUCT CATALOG BASED)
+================================== */
+router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { conversationId, products, note } = req.body;
+    const { companyId } = req.user!;
+
+    if (!conversationId || !products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ message: "Conversation ID and a list of products are required" });
+    }
+
+    // 1. Fetch real product data to prevent price tampering
+    const productIds = products.map((p: any) => p.productId);
+    const dbProducts = await prisma.product.findMany({
+      where: { 
+        id: { in: productIds },
+        companyId 
+      }
+    });
+
+    if (dbProducts.length === 0) {
+      return res.status(400).json({ message: "No valid products found in catalog" });
+    }
+
+    // 2. Calculate real total and prepare items
+    let totalAmount = 0;
+    const orderItemsData = products.map((p: any) => {
+      const dbProduct = dbProducts.find(dp => dp.id === p.productId);
+      if (!dbProduct) return null;
+
+      const qty = parseInt(p.quantity) || 1;
+      const price = dbProduct.price;
+      totalAmount += price * qty;
+
+      return {
+        companyId,
+        productId: dbProduct.id,
+        sku: dbProduct.sku,
+        name: dbProduct.name,
+        quantity: qty,
+        price: price,
+        cogs: dbProduct.cogs
+      };
+    }).filter(Boolean);
+
+    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    if (!company) return res.status(404).json({ message: "Company not found" });
+
+    let lead = await prisma.lead.findFirst({
+      where: { companyId, contact: "9999999999" }
+    });
+    if (!lead) {
+      lead = await prisma.lead.create({
+        data: {
+          companyId,
+          name: "Simulator Customer",
+          contact: "9999999999",
+          channel: "WEBSITE",
+        }
+      });
+    }
+    if (lead) await triggerLeadWelcome(lead.id, companyId).catch(() => {});
+
+    const upiId = "business@bank";
+    const upiName = "business@bank";
+    const conv = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { company: { select: { name: true } } } });
+    const cleanNote = note || `Payment for order from ${conv?.company?.name || "store"}`;
+    const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(upiName)}&am=${totalAmount}&cu=INR&tn=${encodeURIComponent(cleanNote)}`;
+
+    // 3. Create the Order and its items in a transaction
+    const order = await prisma.$transaction(async (tx) => {
+      const newOrder = await tx.order.create({
+        data: {
+          companyId,
+          leadId: lead!.id,
+          amount: totalAmount,
+          status: OrderStatus.PENDING,
+          summary: note || `Order for ${dbProducts.length} item(s)`,
+          source: "MANUAL",
+          metadata: {
+            upiLink,
+            isPaymentRequest: true,
+            catalogBased: true
+          },
+          orderItems: {
+            create: orderItemsData as any
+          }
+        },
+        include: {
+          orderItems: true
+        }
+      });
+      return newOrder;
+    });
+
+    res.json({
+      message: "Catalog-based payment request generated",
+      order,
+      upiLink
+    });
+
+  } catch (error) {
+    console.error("Payment request error:", error);
+    res.status(500).json({ message: "Failed to generate payment request" });
+  }
+});
+
+/* ===============================
+   SIMULATE PAYMENT SUCCESS (WEBHOOK MOCK)
+================================== */
+router.post("/:id/simulate-success", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { companyId } = req.user!;
+
+    // 1. Find the order with items
+    const order = await prisma.order.findUnique({
+      where: { id, companyId },
+      include: { orderItems: true }
+    });
+
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (order.status === OrderStatus.PAID) return res.status(400).json({ message: "Order is already paid" });
+
+    // Find conversation via lead
+    const conv = order.leadId ? await prisma.conversation.findFirst({
+      where: { leadId: order.leadId, lifecycleStatus: 'active' }
+    }) : null;
+
+    // 2. Perform automated updates in a transaction
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      // Update order status
+      const updated = await tx.order.update({
+        where: { id },
+        data: { 
+          status: OrderStatus.PAID,
+          completedAt: new Date()
+        }
+      });
+
+      // Automated Inventory Management: Decrement stock for tracked products
+      for (const item of order.orderItems) {
+        if (item.productId) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              stockQuantity: {
+                decrement: item.quantity
+              }
+            }
+          });
+        }
+      }
+
+      return updated;
+    });
+
+    // Notify event bus for analytics/reporting
+    eventBus.emit(Events.ORDER_UPDATED, { order: updatedOrder });
+    
+    // Notify frontend via Socket - use the found conversation
+    if (conv) {
+      safeEmitConversationUpdate(conv as any, "payment_confirmed", updatedOrder);
+    }
+
+    res.json({ 
+      message: "Payment successfully simulated! Stock has been auto-deducted.", 
+      order: updatedOrder 
+    });
+  } catch (error) {
+    console.error("Simulate success error:", error);
+    res.status(500).json({ message: "Failed to simulate payment success" });
+  }
+});
+
+/* ===============================
+   MARK ORDER AS PAID
+================================== */
+router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const { companyId } = req.user!;
+
+    const order = await prisma.order.findUnique({
+      where: { id, companyId }
+    });
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: { id },
+      data: { 
+        status: status as OrderStatus,
+        completedAt: status === OrderStatus.PAID ? new Date() : order.completedAt
+      }
+    });
+
+    // Notify event bus (e.g. for analytics)
+    eventBus.emit(Events.ORDER_UPDATED, { order: updatedOrder });
+
+    res.json({ message: `Order status updated to ${status}`, order: updatedOrder });
+  } catch (error) {
+    console.error("Order status update error:", error);
+    res.status(500).json({ message: "Failed to update order status" });
+  }
+});
 
 /* ===============================
    CREATE ORDER
@@ -51,6 +264,9 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
             status: "CLAIMED"
           }
         });
+
+        // Trigger welcome auto-reply for new manually created lead
+        await triggerLeadWelcome(lead!.id, companyId).catch(() => {});
       } else {
         // Update client name if specified
         lead = await prisma.lead.update({
@@ -59,26 +275,26 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         });
       }
 
+      const safeLead = lead!;
+
       // Find or create Conversation
       let conversation = await prisma.conversation.findFirst({
-        where: { leadId: lead.id, companyId, channel: "WEBSITE" }
+        where: { leadId: safeLead.id, companyId, channel: "WEBSITE" }
       });
 
       if (!conversation) {
         conversation = await prisma.conversation.create({
           data: {
-            leadId: lead.id,
+            leadId: safeLead.id,
             companyId,
             channel: "WEBSITE",
-            mode: "HUMAN",
-            status: "ASSIGNED",
-            assignedToId: req.user!.userId,
-            summary: "Manually created conversation for order taking"
+            status: ConversationStatus.OPEN,
+            claimedById: req.user!.userId,
           }
         });
       }
 
-      targetConversationId = conversation.id;
+      targetConversationId = conversation!.id;
     }
 
     if (!targetConversationId || !targetSummary) {
@@ -104,7 +320,6 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     const order = await (prisma.order as any).create({
       data: {
         companyId,
-        conversationId: conversation.id,
         leadId: conversation.leadId,
         summary: targetSummary,
         priority: priority || OrderPriority.NORMAL,
@@ -115,11 +330,11 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         isUrgent: isUrgent || false,
         priorityScore: initialScore,
         predictedValue: amount,
-        processedById: conversation.assignedToId || req.user!.userId,
+        processedById: (conversation as any).claimedById || req.user!.userId,
         items: {
           location: targetLocation,
           baseSummary: summary,
-          agentName: agentName || req.user!.name || "Agent",
+          agentName: agentName || (req.user as any)?.firstName || "Agent",
           city: city || "",
           state: state || "",
           isManualLead: true,
@@ -147,21 +362,13 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // 🆕 Update lead with pending order approval state
-    await (prisma.lead as any).update({
-      where: { id: conversation.leadId },
-      data: {
-        pendingOrderState: "CLAIMED_FOR_APPROVAL",
-        pendingOrderId: order.id,
-        pendingOrderSummary: summary,
-        pendingOrderAmount: amount ?? 0,
-        pendingOrderClaimedById: conversation.assignedToId || req.user!.userId,
-        pendingOrderClaimedAt: new Date()
-      }
-    });
+    // 🆕 Update lead with pending order approval state (pendingOrder fields removed from schema)
+    // Removed pendingOrder state updates as they no longer exist in schema
 
     // Dynamic CRM metrics recalculation
-    await recalculateLeadCRM(conversation.leadId, companyId);
+    if (conversation.leadId) {
+      await recalculateLeadCRM(conversation.leadId, companyId);
+    }
 
     safeEmitConversationUpdate(conversation, "order_created", order);
     
@@ -175,9 +382,9 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       pendingOrderSummary: summary,
       pendingOrderAmount: amount ?? 0,
       // 🆕 Include assignment info if conversation was already assigned
-      ...(conversation.assignedToId ? {
-        pendingOrderClaimedById: conversation.assignedToId,
-        agentAssigned: "Agent" // Will be updated with actual agent name in frontend
+      ...((conversation as any).claimedById ? {
+        pendingOrderClaimedById: (conversation as any).claimedById,
+        agentAssigned: "Agent"
       } : {})
     });
 
@@ -193,36 +400,36 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 ================================== */
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user!.companyId;
+    const tenantDb = createTenantRepository(req.user!.companyId);
     const view = req.query.view as string; // 'active' | 'history'
     
     console.log(`[DEBUG] Orders endpoint called with view: ${view}, query:`, req.query);
 
-    let whereCondition: any = { companyId, isDeleted: false };
+    let whereCondition: any = { isDeleted: false };
 
     if (view === "manual") {
       whereCondition.source = "MANUAL";
     } else if (view === "history") {
-      // History: Completed, Delivered, Cancelled, Archived, Shipped
-      whereCondition.status = { in: ["DELIVERED", "COMPLETED", "CANCELLED", "ARCHIVED", "REJECTED", "SHIPPED"] };
-      if (req.user!.role === "AGENT") {
+      // History: Completed, Delivered, Cancelled, Archived, Shipped mapped to valid Enums
+      whereCondition.status = { in: ["DELIVERED", "PAID", "CANCELLED"] };
+      if (req.user!.role === "STAFF") {
         whereCondition.processedById = req.user!.userId;
       }
     } else {
       // Active Board: Include all stages for agent view since they are scoped. Also support NEW/BOT_CREATED_ORDER for agents to see their own
-      if (req.user!.role === "AGENT") {
+      if (req.user!.role === "STAFF") {
         whereCondition.status = {
-          in: ["NEW", "PENDING", "CONFIRMED", "PROCESSING", "PREPARING", "READY"]
+          in: ["NEW", "PENDING", "CONFIRMED", "PROCESSING", "PREPARING", "READY", "PAID", "SHIPPED"]
         };
         whereCondition.processedById = req.user!.userId;
       } else {
         whereCondition.status = {
-          in: ["PENDING", "CONFIRMED", "PROCESSING", "PREPARING", "READY"]
+          in: ["PENDING", "CONFIRMED", "PROCESSING", "PREPARING", "READY", "PAID", "SHIPPED"]
         };
       }
     }
 
-    const orders = await (prisma.order as any).findMany({
+    const orders = await tenantDb.order.findMany({
       where: whereCondition,
       include: {
         lead: {
@@ -236,18 +443,14 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
             orderCount: true,
             status: true,
             createdAt: true,
-            lastActiveAt: true,
-            pendingOrderState: true,
-            pendingOrderId: true,
-            pendingOrderSummary: true,
-            pendingOrderAmount: true,
-            conversations: {
-              select: { id: true }
-            }
+          lastActiveAt: true,
+          conversations: {
+            select: { id: true }
+          }
           }
         },
         processedBy: {
-          select: { id: true, name: true }
+          select: { id: true, firstName: true, lastName: true }
         },
         orderItems: true,
         invoice: {
@@ -280,6 +483,7 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
     const companyId = req.user!.companyId;
 
     const result = await orderWorkflowService.transitionStatus(
+      companyId,
       id,
       OrderStatus.PROCESSING, // 🆕 Move to PROCESSING (Active)
       {
@@ -292,30 +496,10 @@ router.post("/:id/approve", authMiddleware, async (req: AuthRequest, res: Respon
 
     // 🆕 Clear pending order state from lead when order is approved
     if (result.order) {
-      // Lock conversation ownership to this agent
+      // Lock conversation ownership to this agent - use claimedById instead of assignedToId
       await prisma.conversation.update({
-        where: { id: result.order.conversationId },
-        data: { assignedToId: req.user!.userId }
-      });
-
-      await (prisma.lead as any).update({
-        where: { id: result.order.leadId },
-        data: {
-          pendingOrderState: "NONE",
-          pendingOrderId: null,
-          pendingOrderClaimedById: null,
-          pendingOrderClaimedAt: null,
-          pendingOrderSummary: null,
-          pendingOrderAmount: null
-        }
-      });
-      
-      // 🆕 Emit lead update for all agents
-      emitToCompany(req.user!.companyId, "lead_updated", {
-        leadId: result.order.leadId,
-        companyId: req.user!.companyId,
-        hasPendingOrderApproval: false,
-        pendingOrderState: "NONE"
+        where: { id: (result.order as any).conversationId },
+        data: { claimedById: req.user!.userId }
       });
 
       // 🚀 FIRE IMMUTABLE EVENT TO MICROSERVICES (Deducts stock and creates bill)
@@ -341,6 +525,7 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
     const { version } = req.body;
 
     const result = await orderWorkflowService.transitionStatus(
+      req.user!.companyId,
       id,
       OrderStatus.REJECTED,
       {
@@ -353,33 +538,6 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
 
     // 🆕 Clear pending order state from lead when order is rejected
     if (result.order) {
-      await prisma.message.create({
-        data: {
-          content: "🚨 Order Rejected: Your order request has been rejected by the agent.",
-          sender: MessageSender.SYSTEM,
-          conversationId: result.order.conversationId
-        }
-      });
-
-      await (prisma.lead as any).update({
-        where: { id: result.order.leadId },
-        data: {
-          pendingOrderState: "NONE",
-          pendingOrderId: null,
-          pendingOrderClaimedById: null,
-          pendingOrderClaimedAt: null,
-          pendingOrderSummary: null,
-          pendingOrderAmount: null
-        }
-      });
-      
-      // 🆕 Emit lead update for all agents
-      emitToCompany(req.user!.companyId, "lead_updated", {
-        leadId: result.order.leadId,
-        companyId: req.user!.companyId,
-        hasPendingOrderApproval: false,
-        pendingOrderState: "NONE"
-      });
     }
 
     return res.json(result.order);
@@ -401,6 +559,7 @@ router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Respon
     const { id } = req.params;
 
     const result = await orderWorkflowService.transitionStatus(
+      req.user!.companyId,
       id,
       status as OrderStatus,
       {
@@ -434,7 +593,7 @@ router.post("/:id/claim", authMiddleware, async (req: AuthRequest, res: Response
     const { userId, companyId, role } = req.user!;
 
     // Only agents can claim orders
-    if (!["AGENT", "ADMIN", "OWNER"].includes(role)) {
+    if (!["STAFF", "MANAGER", "OWNER"].includes(role)) {
       return res.status(403).json({ message: "Only agents can claim orders" });
     }
 
@@ -461,13 +620,17 @@ router.post("/:id/claim", authMiddleware, async (req: AuthRequest, res: Response
       },
       include: {
         lead: { select: { name: true, contact: true } },
-        processedBy: { select: { id: true, name: true } },
-        conversation: { select: { id: true } }
+        processedBy: { select: { id: true, firstName: true, lastName: true } }
       }
     });
 
-    // Emit socket events
-    safeEmitConversationUpdate(updatedOrder.conversation, "order_updated", updatedOrder);
+    // Emit socket events - find conversation via lead for the emit
+    const conv = order.leadId ? await prisma.conversation.findFirst({
+      where: { leadId: order.leadId, lifecycleStatus: 'active' }
+    }) : null;
+    if (conv) {
+      safeEmitConversationUpdate(conv, "order_updated", updatedOrder);
+    }
     emitToAgent(userId, "order_claimed", updatedOrder);
 
     return res.json(updatedOrder);
@@ -491,7 +654,7 @@ router.get("/awaiting", authMiddleware, async (req: AuthRequest, res: Response) 
     };
 
     // Agents only see their own assigned/claimed orders
-    if (role === "AGENT") {
+    if (role === "STAFF") {
       whereCondition.processedById = userId;
     }
 
@@ -509,10 +672,7 @@ router.get("/awaiting", authMiddleware, async (req: AuthRequest, res: Response) 
           }
         },
         processedBy: {
-          select: { id: true, name: true }
-        },
-        conversation: {
-          select: { id: true }
+          select: { id: true, firstName: true, lastName: true }
         }
       },
       orderBy: [
@@ -533,7 +693,7 @@ router.get("/awaiting", authMiddleware, async (req: AuthRequest, res: Response) 
    SOFT DELETE ORDER (History Archive)
    🔒 Restricted to: OWNER, ADMIN
 ================================== */
-router.delete("/:id", authMiddleware, authorizeRoles("OWNER", "ADMIN"), async (req: AuthRequest, res: Response) => {
+router.delete("/:id", authMiddleware, authorizeRoles("OWNER", "MANAGER"), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const companyId = req.user!.companyId;
@@ -541,7 +701,7 @@ router.delete("/:id", authMiddleware, authorizeRoles("OWNER", "ADMIN"), async (r
     // Soft delete
     const updated = await prisma.order.updateMany({
       where: { id, companyId },
-      data: { isDeleted: true } as any
+      data: { isDeleted: true }
     });
 
     if (updated.count === 0) return res.status(404).json({ message: "Order not found" });

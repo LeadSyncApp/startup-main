@@ -1,4 +1,4 @@
-import { Router, Response } from "express";
+import { Router, Request, Response } from "express";
 import { prisma } from "../../lib/prisma";
 import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
 import axios from "axios";
@@ -8,7 +8,7 @@ const router = Router();
 /* ===============================
    🔹 HEALTH CHECK
 =============================== */
-router.get("/ping", (_req, res) => {
+router.get("/ping", (_req: Request, res: Response) => {
   res.json({
     status: "ok",
     message: "Frontend connected to backend 🚀",

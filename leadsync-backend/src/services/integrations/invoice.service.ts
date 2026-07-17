@@ -20,22 +20,12 @@ class InvoiceService {
      * IDEMPOTENT: If invoice exists, returns it.
      */
     async ensureInvoiceForPaidOrder(orderId: string, paymentRef?: string) {
-        // 1. Check if invoice already exists
-        const existingInvoice = await (prisma as any).invoice.findUnique({
-            where: { orderId },
-        });
-
-        if (existingInvoice) {
-            return existingInvoice;
-        }
-
-        // 2. Fetch order with details
+        // 1. Fetch order with details first (bypasses tenant check because it queries by ID)
         const order = await prisma.order.findUnique({
             where: { id: orderId },
             include: {
                 company: true,
                 lead: true,
-                conversation: true,
             },
         });
 
@@ -43,30 +33,43 @@ class InvoiceService {
             throw new Error("Order not found");
         }
 
-        // 3. Increment company invoice counter and get new number
-        const updatedCompany = await (prisma.company as any).update({
-            where: { id: order.companyId },
-            data: {
-                invoiceCounter: {
-                    increment: 1,
+        // 2. Check if invoice already exists with a PDF URL using companyId context
+        const existingInvoice = await (prisma as any).invoice.findFirst({
+            where: { orderId, companyId: order.companyId },
+        });
+
+        if (existingInvoice && existingInvoice.pdfUrl) {
+            return existingInvoice;
+        }
+
+        let invoice = existingInvoice;
+
+        if (!invoice) {
+            // 3. Increment company invoice counter and get new number
+            const updatedCompany = await (prisma.company as any).update({
+                where: { id: order.companyId },
+                data: {
+                    invoiceCounter: {
+                        increment: 1,
+                    },
                 },
-            },
-        });
+            });
 
-        const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(updatedCompany.invoiceCounter).padStart(6, "0")}`;
+            const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(updatedCompany.invoiceCounter).padStart(6, "0")}`;
 
-        // 4. Create invoice record (without PDF URL yet)
-        const invoice = await (prisma as any).invoice.create({
-            data: {
-                companyId: order.companyId,
-                orderId: order.id,
-                invoiceNumber,
-                subtotal: order.amount, // Simple MVP: total = subtotal for now
-                total: order.amount,
-                paymentStatus: "PAID",
-                paymentRef: paymentRef || null,
-            },
-        });
+            // 4. Create invoice record (without PDF URL yet)
+            invoice = await (prisma as any).invoice.create({
+                data: {
+                    companyId: order.companyId,
+                    orderId: order.id,
+                    invoiceNumber,
+                    subtotal: order.amount, // Simple MVP: total = subtotal for now
+                    total: order.amount,
+                    paymentStatus: "PAID",
+                    paymentRef: paymentRef || null,
+                },
+            });
+        }
 
         // 5. Generate PDF
         try {
@@ -74,7 +77,26 @@ class InvoiceService {
 
             // 6. Upload to Supabase Storage if configured
             if (this.supabase) {
-                const filePath = `invoices/${order.companyId}/${order.id}_${invoiceNumber}.pdf`;
+                // Ensure the 'invoices' bucket exists programmatically
+                try {
+                    const { data: buckets, error: listError } = await this.supabase.storage.listBuckets();
+                    if (!listError && buckets) {
+                        const bucketExists = buckets.some((b: any) => b.name === "invoices");
+                        if (!bucketExists) {
+                            console.log("🚀 Creating Supabase Storage bucket 'invoices'...");
+                            const { error: createError } = await this.supabase.storage.createBucket("invoices", {
+                                public: true
+                            });
+                            if (createError) {
+                                console.error("❌ Supabase Create Bucket Error:", createError);
+                            }
+                        }
+                    }
+                } catch (bucketCheckErr) {
+                    console.error("⚠️ Failed to check or create Supabase bucket 'invoices':", bucketCheckErr);
+                }
+
+                const filePath = `invoices/${order.companyId}/${order.id}_${invoice.invoiceNumber}.pdf`;
                 const { data, error } = await this.supabase.storage
                     .from("invoices")
                     .upload(filePath, pdfBuffer, {
@@ -84,24 +106,26 @@ class InvoiceService {
 
                 if (error) {
                     console.error("❌ Supabase Upload Error:", error);
-                } else {
-                    // Get public URL
-                    const { data: { publicUrl } } = this.supabase.storage
-                        .from("invoices")
-                        .getPublicUrl(filePath);
-
-                    // Update invoice with PDF URL
-                    return await (prisma as any).invoice.update({
-                        where: { id: invoice.id },
-                        data: { pdfUrl: publicUrl },
-                    });
+                    throw error;
                 }
+
+                // Get public URL
+                const { data: { publicUrl } } = this.supabase.storage
+                    .from("invoices")
+                    .getPublicUrl(filePath);
+
+                // Update invoice with PDF URL
+                return await (prisma as any).invoice.update({
+                    where: { id: invoice.id },
+                    data: { pdfUrl: publicUrl },
+                });
+            } else {
+                throw new Error("Supabase client is not initialized / configured");
             }
         } catch (error) {
-            console.error("❌ PDF Generation Error:", error);
+            console.error("❌ PDF Generation or Upload Error:", error);
+            throw error; // Fail loudly so the job can be retried
         }
-
-        return invoice;
     }
 
     private async generateInvoicePDF(order: any, invoice: any): Promise<Buffer> {
@@ -179,11 +203,11 @@ class InvoiceService {
 
             // Totals
             const totalY = currentY + 20;
-            doc.font("Helvetica-Bold");
-            this.generateTableRow(doc, totalY, "", "", "Total", `INR ${order.amount.toFixed(2)}`);
+            this.generateInvoiceTotalRow(doc, totalY, order);
 
             // Footer
             doc
+                .font("Helvetica")
                 .fontSize(10)
                 .text("Payment Status: PAID", 50, totalY + 40)
                 .text(`Payment Ref: ${invoice.paymentRef || "N/A"}`, 50, totalY + 55)
@@ -191,6 +215,30 @@ class InvoiceService {
 
             doc.end();
         });
+    }
+
+    /**
+     * Compiles and prints the transactional currency totals row cleanly onto the PDF layout plane.
+     * Removes static prefix strings in favor of contextually driven runtime labels.
+     */
+    public generateInvoiceTotalRow(doc: any, totalY: number, order: any): void {
+        // Gracefully resolve the target ISO token directly from the database schema model
+        const currencyLabel = (order.company?.currencyCode || "USD").toUpperCase();
+        
+        // Enforce precise decimal precision adjustments natively based on currency denomination types
+        const isZeroDecimal = ["JPY", "KRW", "CLP"].includes(currencyLabel);
+        const formattedAmountString = isZeroDecimal 
+            ? Math.round(order.amount).toString() 
+            : order.amount.toFixed(2);
+
+        this.generateTableRow(
+            doc,
+            totalY,
+            "",
+            "",
+            "Total",
+            `${currencyLabel} ${formattedAmountString}`
+        );
     }
 
     private generateTableRow(doc: any, y: number, item: string, qty: string, rate: string, total: string) {

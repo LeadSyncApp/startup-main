@@ -1,23 +1,33 @@
 import { Request, Response, NextFunction } from "express";
 import jwt, { JwtPayload as DefaultJwtPayload } from "jsonwebtoken";
-import { prisma } from "../lib/prisma";
+import { prisma, getTenantPrismaContext } from "../lib/prisma";
+import { tenantContextStorage, resolveTenantContext } from "../services/context/tenantContext.provider";
+
+// Augment Express's built-in User type
+declare global {
+  namespace Express {
+    interface User {
+      userId: string;
+      companyId: string;
+      role: "OWNER" | "MANAGER" | "STAFF";
+      staffId?: string;
+      name?: string;
+      authProvider?: string;
+    }
+  }
+}
 
 export interface AuthRequest extends Request {
-  user?: {
-    userId: string;
-    companyId: string;
-    role: "OWNER" | "ADMIN" | "AGENT";
-    staffId?: string;
-    name?: string; // Add name field for user identification
-  };
+  tenantDb?: ReturnType<typeof getTenantPrismaContext>;
 }
 
 interface JwtPayload extends DefaultJwtPayload {
   userId: string;
   companyId: string;
-  role: "OWNER" | "ADMIN" | "AGENT";
+  role: "OWNER" | "MANAGER" | "STAFF";
   staffId?: string;
-  name?: string; // Add name to JWT payload
+  name?: string;
+  authProvider?: string;
 }
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -26,6 +36,9 @@ if (!JWT_SECRET) {
   console.error("FATAL: JWT_SECRET is not defined in environment variables.");
   process.exit(1);
 }
+
+const agentStatusCache = new Map<string, { isActive: boolean; lastChecked: number }>();
+const CACHE_LIFECYCLE_MS = 30000;
 
 export const authMiddleware = async (
   req: AuthRequest,
@@ -54,17 +67,31 @@ export const authMiddleware = async (
       return res.status(401).json({ message: "Invalid token" });
     }
 
-    if (!["OWNER", "ADMIN", "AGENT"].includes(decoded.role)) {
+    if (!["OWNER", "MANAGER", "STAFF"].includes(decoded.role)) {
       return res.status(401).json({ message: "Invalid role" });
     }
 
-    // Verify user exists and is active in database to prevent stale token database errors
-    const userExists = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, isActive: true },
-    });
+    const now = Date.now();
+    const cachedSession = agentStatusCache.get(decoded.userId);
+    let isActive = false;
 
-    if (!userExists || !userExists.isActive) {
+    if (cachedSession && (now - cachedSession.lastChecked < CACHE_LIFECYCLE_MS)) {
+      isActive = cachedSession.isActive;
+    } else {
+      const userExists = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, isActive: true },
+      });
+
+      if (!userExists) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      isActive = userExists.isActive;
+      agentStatusCache.set(decoded.userId, { isActive, lastChecked: now });
+    }
+
+    if (!isActive) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
@@ -73,7 +100,8 @@ export const authMiddleware = async (
       companyId: decoded.companyId,
       role: decoded.role,
       staffId: decoded.staffId,
-      name: decoded.name, // Include name in user object
+      name: decoded.name,
+      authProvider: decoded.authProvider,
     };
 
     next();
@@ -83,10 +111,6 @@ export const authMiddleware = async (
   }
 };
 
-/**
- * RBAC Middleware: Restrict access based on user role.
- * Usage: authorizeRoles("OWNER", "ADMIN")
- */
 export const authorizeRoles = (...allowedRoles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
@@ -102,4 +126,27 @@ export const authorizeRoles = (...allowedRoles: string[]) => {
 
     next();
   };
+};
+
+export const injectTenantContext = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  if (!req.user || !req.user.companyId) {
+    return res.status(401).json({ message: "Unauthorized: Missing user context" });
+  }
+
+  const { companyId } = req.user;
+
+  try {
+    const context = await resolveTenantContext(companyId);
+    tenantContextStorage.run(context, () => {
+      req.tenantDb = getTenantPrismaContext(companyId);
+      next();
+    });
+  } catch (error: any) {
+    console.error("Tenant isolation middleware error:", error);
+    return res.status(500).json({ message: "Internal server error during tenant isolation setup" });
+  }
 };

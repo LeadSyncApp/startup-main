@@ -11,4 +11,5 @@ export const eventBus = new SystemEventBus();
 export const Events = {
     ORDER_CREATED: 'ORDER_CREATED',
     ORDER_STATUS_CHANGED: 'ORDER_STATUS_CHANGED',
+    ORDER_UPDATED: 'ORDER_UPDATED',
 };

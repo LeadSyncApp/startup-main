@@ -1,6 +1,10 @@
 import { Router } from 'express'
 import { prisma } from '../../lib/prisma'
-import { Channel } from '@prisma/client'
+import { Channel, MessageSender } from '@prisma/client'
+import { queueProvider } from '../../services/infrastructure/queue-provider/queue-provider.factory'
+import { autoReplyService } from '../../services/automation/autoReply.service'
+import { triggerLeadWelcome } from '../../services/automation/autoReplyEventListeners'
+import { PDF_JOB_NAME } from '../../services/infrastructure/pgboss/jobs/pdf.job'
 
 const router = Router()
 
@@ -51,6 +55,13 @@ router.post('/leads', async (req, res) => {
       },
     })
 
+    // Seed default auto-reply rules for this company (idempotent)
+    const companyName = await prisma.company.findUnique({ where: { id: company.id }, select: { name: true } });
+    await autoReplyService.seedDefaults(company.id, companyName?.name || "our store");
+
+    // Trigger welcome auto-reply for this new lead
+    await triggerLeadWelcome(lead.id, company.id);
+
     res.json({ success: true, leadId: lead.id })
   } catch (err) {
     console.error(err)
@@ -80,6 +91,11 @@ router.get('/orders/:id', async (req, res) => {
           select: {
             name: true
           }
+        },
+        company: {
+          select: {
+            currencySymbol: true
+          }
         }
       }
     });
@@ -103,56 +119,69 @@ router.get('/orders/:id', async (req, res) => {
 router.get('/mock-payment/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { orderWorkflowService } = await import("../../services/workflow/orderWorkflow.service.js");
-    const { invoiceService } = await import("../../services/integrations/invoice.service.js");
-    const { MessageSender } = await import("@prisma/client");
-    const { emitToConversation } = await import("../../lib/socket.js");
+    const { orderWorkflowService } = require("../../services/workflow/orderWorkflow.service");
+    // Queue PDF generation
+    // MessageSender enum removed from schema
+    const { emitToConversation } = require("../../lib/socket");
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { conversation: true, lead: true }
+      include: { lead: true }
     });
 
     if (!order) {
       return res.status(404).send("Order not found");
     }
 
-    // 1. Mark as PAID
-    await orderWorkflowService.transitionStatus(
-      id,
-      "PAID" as any,
-      { id: "SYSTEM", name: "Mock Payment Simulator", role: "SYSTEM" }
-    );
+    const { resolveTenantContext, tenantContextStorage } = require("../../services/context/tenantContext.provider");
+    const tenantContext = await resolveTenantContext(order.companyId);
 
-    // 2. Generate Invoice
-    const invoice = await invoiceService.ensureInvoiceForPaidOrder(id, "MOCK_PAY_" + Date.now());
+    await tenantContextStorage.run(tenantContext, async () => {
+      // 1. Mark as PAID
+      await orderWorkflowService.transitionStatus(
+        order.companyId,
+        id,
+        "PAID" as any,
+        { id: "SYSTEM", name: "Mock Payment Simulator", role: "SYSTEM" }
+      );
 
-    // 3. Update Lead Stats
-    const { recalculateLeadCRM } = await import("../../services/integrations/crm.service.js");
-    await recalculateLeadCRM(order.leadId, order.companyId);
+      // 2. Generate Invoice asynchronously
+      await queueProvider.enqueue(PDF_JOB_NAME, { orderId: id, paymentRef: "MOCK_PAY_" + Date.now() });
 
-    // 4. Confirmation Message
-    let content = "✅ [MOCK] Payment Received successfully! Your order is now being processed.";
-    if (invoice.pdfUrl) {
-      content += `\n\n📄 View your invoice: ${invoice.pdfUrl}`;
-    }
+      // 3. Update Lead Stats
+      const { recalculateLeadCRM } = require("../../services/integrations/crm.service");
+      if (order.leadId) {
+        await recalculateLeadCRM(order.leadId, order.companyId);
+      }
 
-    const sysMsg = await prisma.message.create({
-      data: {
-        content,
-        sender: MessageSender.SYSTEM,
-        conversationId: order.conversationId
+      // 4. Confirmation Message
+      let content = "✅ [MOCK] Payment Received successfully! Your order is now being processed. An invoice will be generated shortly.";
+
+      // Find conversation via lead (Order no longer has direct conversation relation)
+      const conv = order.leadId ? await prisma.conversation.findFirst({
+        where: { leadId: order.leadId, lifecycleStatus: 'active', companyId: order.companyId }
+      }) : null;
+      const conversationId = conv?.id;
+
+      const sysMsg = conversationId ? await prisma.message.create({
+        data: {
+          content: content,
+          sender: MessageSender.SYSTEM,
+          conversationId,
+          companyId: order.companyId
+        }
+      }) : null;
+
+      if (sysMsg && conversationId) {
+        emitToConversation(conversationId, "new_message", sysMsg);
       }
     });
-
-    emitToConversation(order.conversationId, "new_message", sysMsg);
 
     res.send(`
             <div style="font-family: sans-serif; text-align: center; padding: 50px;">
                 <h1 style="color: #4CAF50;">✅ Mock Payment Successful!</h1>
                 <p>Order ID: ${id}</p>
                 <p>Status updated to <b>PAID</b></p>
-                <p>Invoice generated and sent to chat. You can close this window now.</p>
-                <a href="${invoice.pdfUrl}" target="_blank" style="padding: 10px 20px; background: #2196F3; color: white; text-decoration: none; border-radius: 5px;">View Invoice PDF</a>
+                <p>Invoice will be generated shortly and sent to chat. You can close this window now.</p>
             </div>
         `);
   } catch (err: any) {
