@@ -259,7 +259,7 @@ export interface ShopReplyRequest {
 }
 
 export interface UnifiedShopResponse {
-  intent_type: "Checkout" | "Query" | "Support";
+  intent_type: "Checkout" | "OrderConfirmed" | "Query" | "Support";
   tool_call: string | null;
   replyText: string;
   thread_summary: string;
@@ -296,7 +296,7 @@ export interface UnifiedShopResponse {
 const SHOP_REPLY_SCHEMA = {
   type: SchemaType.OBJECT,
   properties: {
-    intent_type: { type: SchemaType.STRING, enum: ["Checkout", "Query", "Support"] },
+    intent_type: { type: SchemaType.STRING, enum: ["Checkout", "OrderConfirmed", "Query", "Support"] },
     tool_call: { type: SchemaType.STRING, nullable: true },
     replyText: { type: SchemaType.STRING },
     thread_summary: { type: SchemaType.STRING },
@@ -388,6 +388,13 @@ Carefully extract:
 
 # HARDENED DATA INTEGRITY POLICY
 If the customer has not supplied a valid, clean 6-digit pincode or clear landmark descriptors, mark "needs_follow_up": true, flag "follow_up_reason" explaining exactly what's required, and write a polite, vernacular reply in "replyText" prompting the client to supply the missing information.
+
+# INTENT RECOGNITION (CRITICAL)
+- "Checkout": The customer is building an order, but required fields (exact items, quantity, price, full shipping address, pincode) are missing, or they haven't given explicit confirmation yet. Set needs_follow_up: true and ask specifically for what is missing.
+- "OrderConfirmed": The customer has explicitly confirmed the order (e.g., "confirm my order", "yes book it") AND all required fields (items, total amount, shipping address) are present in the context. DO NOT return OrderConfirmed if shipping details or items are missing; return "Checkout" instead.
+
+# STATE TRACKING
+- Track partial order state via the conversation history. Remember previously provided items and addresses so you don't ask for them again.
 `;
 }
 
@@ -441,7 +448,7 @@ ${compileDynamicOmniPrompt(ruleSegment, heuristicSegment)}
 # RESPONSE SCHEMA (STRICT JSON)
 You MUST return a valid JSON object matching the following structure:
 {
-  "intent_type": "Checkout" | "Query" | "Support",
+  "intent_type": "Checkout" | "OrderConfirmed" | "Query" | "Support",
   "tool_call": string | null,
   "replyText": string (localized response to the customer),
   "thread_summary": string,

@@ -14,6 +14,7 @@ import { conversationalAutoReplyService } from "../automation/conversationalAuto
 import { detectLanguage } from "../ai/languageDetection.service";
 import { ChannelType } from "../../interfaces/outbound.interface";
 import { reapGhostsForCompany } from "../infrastructure/ghostReaper.service";
+import { newOrderArrivalService } from "../workflow/newOrderArrival.service";
 
 export function evaluateTenantPriorityRules(aiOutput: any, rules: TenantContext["priorityRules"]): string {
   if (!rules || rules.length === 0) {
@@ -351,6 +352,82 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     const intent_type = rawIntentType as string;
     const sentimentScoreMap: Record<string, number> = { "POSITIVE": 1, "NEUTRAL": 0, "NEGATIVE": -1 };
     const resolvedScore = sentimentScoreMap[detected_meta?.sentiment] ?? 0;
+
+    // 🛒 [INTERCEPT] AI Checkout OrderConfirmed
+    if (intent_type === "OrderConfirmed") {
+      const extractedOrder = (aiTurnResult as any).extracted_order;
+      console.log(`🛒 [Orchestrator] Intercepted OrderConfirmed intent. Raw AI payload:`, JSON.stringify(extractedOrder, null, 2));
+      
+      try {
+        // ── PRICE RESOLUTION: Never trust the AI for prices. ──
+        // Resolve each item against the real InventoryProduct table to get
+        // the canonical basePrice. The AI frequently returns price: null
+        // because structured extraction is unreliable for numeric fields.
+        const rawItems: any[] = extractedOrder?.items || [];
+        const resolvedItems: { name: string; quantity: number; price: number; productId: string | null }[] = [];
+        let resolvedTotal = 0;
+
+        for (const item of rawItems) {
+          const itemName = (item.name || "").trim();
+          const qty = Math.max(1, parseInt(item.quantity) || 1);
+
+          // Try exact match first, then fuzzy (contains) match
+          let dbProduct = await (prisma.inventoryProduct as any).findFirst({
+            where: { companyId, isActive: true, name: { equals: itemName, mode: "insensitive" } }
+          });
+          if (!dbProduct) {
+            dbProduct = await (prisma.inventoryProduct as any).findFirst({
+              where: { companyId, isActive: true, name: { contains: itemName, mode: "insensitive" } }
+            });
+          }
+          // Reverse search: does the item name contain a product name?
+          if (!dbProduct) {
+            const allProducts = await (prisma.inventoryProduct as any).findMany({
+              where: { companyId, isActive: true }
+            });
+            dbProduct = allProducts.find((p: any) =>
+              itemName.toLowerCase().includes(p.name.toLowerCase()) ||
+              p.name.toLowerCase().includes(itemName.toLowerCase())
+            ) || null;
+          }
+
+          const resolvedPrice = dbProduct?.basePrice ?? (item.price || 0);
+          const lineTotal = resolvedPrice * qty;
+          resolvedTotal += lineTotal;
+
+          resolvedItems.push({
+            name: dbProduct?.name || itemName,
+            quantity: qty,
+            price: resolvedPrice,
+            productId: null  // InventoryProduct IDs ≠ Product IDs; avoid FK violation
+          });
+
+          console.log(`🏷️ [Orchestrator] Item "${itemName}" → DB match: ${dbProduct ? `"${dbProduct.name}" @ ₹${dbProduct.basePrice}` : "NONE (fallback ₹" + (item.price || 0) + ")"} × ${qty} = ₹${lineTotal}`);
+        }
+
+        // Use resolved total; fall back to AI total only if resolution found nothing
+        const finalAmount = resolvedTotal > 0 ? resolvedTotal : (extractedOrder?.total_amount || orderTotal || 0);
+
+        console.log(`💰 [Orchestrator] Price resolution complete. Resolved total: ₹${resolvedTotal}, Final amount: ₹${finalAmount}`);
+
+        const orderData = {
+          companyId,
+          conversationId: conversation.id,
+          leadId: lead.id,
+          summary: `AI Order: ${resolvedItems.map((i) => `${i.name} x${i.quantity}`).join(", ") || "Unknown Items"}`,
+          amount: finalAmount,
+          items: resolvedItems,
+          source: "BOT_DETECTED" as any
+        };
+
+        console.log(`🛒 [Orchestrator] Final order payload for newOrderArrivalService:`, JSON.stringify(orderData, null, 2));
+
+        await newOrderArrivalService.processNewOrderArrival(orderData);
+        console.log(`✅ [Orchestrator] Successfully created order for conversation ${conversation.id} with amount ₹${finalAmount}`);
+      } catch (err) {
+        console.error(`❌ [Orchestrator] Failed to create order for conversation ${conversation.id}:`, err);
+      }
+    }
 
     // 🛡️ PRE-SEND GUARD: re-fetch conversation.mode fresh from the database.
     // The mode gate at the top of the BOT path (≈line 219) used a value loaded

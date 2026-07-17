@@ -84,7 +84,16 @@ export class NewOrderArrivalService {
                     amount,
                     totalCogs,
                     netProfit,
-                    items: items ?? undefined,
+                    orderItems: items && items.length > 0 ? {
+                        create: items.map((item: any) => ({
+                            companyId,
+                            name: item.name || "Unknown Item",
+                            quantity: item.quantity || 1,
+                            price: item.price || 0,
+                            sku: item.sku || null,
+                            productId: item.productId || null
+                        }))
+                    } : undefined,
                     status: initialStatus,
                     source: source || OrderSource.BOT_DETECTED,
                     priority: priority || (amount > 0 ? OrderPriority.URGENT : OrderPriority.NORMAL),
