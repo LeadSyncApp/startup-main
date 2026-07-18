@@ -35,6 +35,7 @@ model Company {
   businessEndHour          Int                     @default(22)
   customOooMessage         String                  @default("Hello! Our human team is currently offline. Your message has been pinned right at the top of our workbench queue, and we will message you as soon as our shift begins! ☀️")
   isArchived               Boolean                 @default(false)
+  isTest                   Boolean                 @default(false)
   currencySymbol           String                  @default("₹")
   currencyCode             String                  @default("INR")
   timezone                 String                  @default("Asia/Kolkata")
@@ -52,6 +53,7 @@ model Company {
   broadcasts               Broadcast[]
   ClaimLog                 ClaimLog[]
   analyticsRollup          CompanyAnalyticsRollup?
+  pollingLease             CompanyPollingLease?
   conversations            Conversation[]
   conversationalRules      ConversationalRule[]
   conversationalRuleLogs   ConversationalRuleLog[]
@@ -1062,3 +1064,14 @@ enum PendingOrderState {
   PENDING_APPROVAL
   CLAIMED_FOR_APPROVAL
 }
+
+model CompanyPollingLease {
+  companyId        String   @id
+  holderInstanceId String
+  lastHeartbeat    DateTime @default(now())
+  expiresAt        DateTime
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+

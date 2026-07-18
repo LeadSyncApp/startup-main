@@ -178,7 +178,6 @@ app.get("/api/debug/system", async (req, res) => {
       has_groq_key: !!process.env.GROQ_API_KEY,
       groq_key_prefix: process.env.GROQ_API_KEY?.substring(0, 7),
       has_sarvam_key: !!process.env.SARVAM_API_KEY,
-      has_telegram_token: !!process.env.TELEGRAM_BOT_TOKEN,
       has_db: !!process.env.DATABASE_URL,
     }
   };

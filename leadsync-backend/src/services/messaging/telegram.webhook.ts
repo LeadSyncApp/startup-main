@@ -44,7 +44,8 @@ export async function initializeTelegramWebhooks() {
     const companies = await prisma.company.findMany({
       where: {
         telegramConnected: true,
-        telegramBotToken: { not: null }
+        telegramBotToken: { not: null },
+        isTest: false
       }
     });
 

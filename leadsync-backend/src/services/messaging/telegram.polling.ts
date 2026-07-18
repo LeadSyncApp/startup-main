@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prisma";
 import { ProviderAdapterFactory } from "../../adapters/provider.factory";
-import { TelegramLeaseService, MY_ROLE, INSTANCE_ID } from "./telegramSelector.service";
+import { TelegramLeaseService, MY_ROLE, INSTANCE_ID, IS_LOCAL } from "./telegramSelector.service";
 import axios from "axios";
 import { taskTracker } from "../infrastructure/taskTracker";
 import { webhookPersistenceService } from "../infrastructure/webhookPersistence.service";
@@ -34,11 +34,19 @@ export async function startTelegramPolling() {
   // Run the polling query in a loop
   const poll = async () => {
     try {
+      // Fail-safe: if local dev and MY_BOT_USERNAME is not configured, poll nothing.
+      if (IS_LOCAL && !process.env.MY_BOT_USERNAME) {
+        setTimeout(poll, 1500);
+        return;
+      }
+
       // Find all companies with connected Telegram bots
       const companies = await prisma.company.findMany({
         where: {
           telegramBotToken: { not: null },
-          telegramConnected: true
+          telegramConnected: true,
+          isTest: IS_LOCAL ? true : false,
+          ...(IS_LOCAL ? { telegramBotUsername: process.env.MY_BOT_USERNAME } : {})
         },
         select: {
             id: true,
