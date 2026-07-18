@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Sparkles, MessageCircle, Instagram, Globe, UserPlus,
-  ShoppingBag, Clock, Eye, Zap, HeartHandshake, ChevronRight,
-  AlertTriangle, Shield, Bot, ChevronDown, Filter,
+  X, MessageCircle, Instagram, Globe, UserPlus,
+  ShoppingBag, Clock, ChevronRight,
+  AlertTriangle, Bot, ChevronDown, Filter, Target, Brain, Inbox, Hand, MessageSquare, Footprints,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
@@ -123,19 +123,19 @@ const TIER_CONFIG: Record<Tier, {
   borderGlow: string; cardBorder: string;
 }> = {
   claim_now: {
-    label: "Claim Now", icon: Zap, color: "#ff6b35",
+    label: "Claim Now", icon: Hand, color: "#ff6b35",
     badgeBg: "bg-orange-500", badgeText: "text-orange-400",
     sectionBg: "bg-orange-500/[0.04]", borderGlow: "shadow-[0_0_60px_rgba(255,107,53,0.10)]",
     cardBorder: "border-l-orange-500",
   },
   follow_up: {
-    label: "Follow Up", icon: Clock, color: "#d4a017",
+    label: "Needs Reply", icon: MessageSquare, color: "#d4a017",
     badgeBg: "bg-amber-600", badgeText: "text-amber-400",
     sectionBg: "bg-amber-500/[0.04]", borderGlow: "shadow-[0_0_60px_rgba(212,160,23,0.08)]",
     cardBorder: "border-l-amber-500",
   },
   browsing: {
-    label: "Browsing", icon: Eye, color: "#2dd4bf",
+    label: "Just Looking", icon: Footprints, color: "#2dd4bf",
     badgeBg: "bg-teal-600", badgeText: "text-teal-400",
     sectionBg: "bg-teal-500/[0.03]", borderGlow: "shadow-[0_0_60px_rgba(45,212,191,0.06)]",
     cardBorder: "border-l-teal-500",
@@ -173,7 +173,7 @@ const TIERS: Tier[] = ["claim_now", "follow_up", "browsing"];
 const MAX_COLLAPSED = 3;
 const VIRTUAL_ROW_HEIGHT = 82;
 
-const glassStyles = "backdrop-filter backdrop-blur-[20px] bg-[rgba(22,29,45,0.75)]";
+const glassStyles = "backdrop-filter backdrop-blur-[20px] bg-app-surface/75";
 
 // ── Conversation card (shared between collapsed and virtual views) ──
 function ConversationCard({
@@ -189,7 +189,7 @@ function ConversationCard({
     <button
       onClick={() => onSelect(lead.id)}
       className={`w-full text-left transition-all cursor-pointer group border-l-2 ${
-        isSelected ? `bg-slate-800/40 ${cfg.cardBorder}` : `hover:bg-slate-800/20 ${cfg.cardBorder}`
+        isSelected ? `bg-app-surface/40 ${cfg.cardBorder}` : `hover:bg-app-surface/20 ${cfg.cardBorder}`
       }`}
     >
       <div className="px-3 py-2.5">
@@ -205,13 +205,13 @@ function ConversationCard({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <p className="text-[11px] font-bold text-slate-200 truncate">{lead.name || lead.contact || "Customer"}</p>
+              <p className="text-[11px] font-bold text-app-text truncate">{lead.name || lead.contact || "Customer"}</p>
               {isUrgent && <span className="h-1.5 w-1.5 rounded-full bg-orange-400 shrink-0" />}
             </div>
-            <p className="text-[9px] text-slate-500 font-mono flex items-center gap-1">
+            <p className="text-[9px] text-app-text-muted font-mono flex items-center gap-1">
               <ChannelIcon channel={lead.channel} />
               <span>{lead.channel}</span>
-              <span className="text-slate-600">·</span>
+              <span className="text-app-text-muted">·</span>
               <span>{waitTime(lead)}</span>
             </p>
           </div>
@@ -221,14 +221,14 @@ function ConversationCard({
             className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider font-mono transition-all active:scale-95 ${
               isUrgent
                 ? "bg-orange-500 hover:bg-orange-400 text-white shadow-lg shadow-orange-500/20"
-                : "bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/60"
+                : "bg-app-surface hover:bg-app-surface-alt text-app-text border border-app-border/60"
             }`}
           >
             <UserPlus className="h-2.5 w-2.5" />
             Claim
           </button>
         </div>
-        <p className="text-[10px] text-slate-400 mt-1 truncate leading-relaxed pl-8">
+        <p className="text-[10px] text-app-text-muted mt-1 truncate leading-relaxed pl-8">
           &ldquo;{lead.lastMessage || "No messages"}&rdquo;
         </p>
         <AiReasonTags lead={lead} />
@@ -248,7 +248,7 @@ function AiReasonTags({ lead }: { lead: BackendLead }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
       {reasons.map((r, i) => (
-        <span key={i} className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800/60 text-slate-400 border border-slate-700/50">
+        <span key={i} className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-app-surface/60 text-app-text-muted border border-app-border/50">
           <span>{r.icon}</span>
           <span>{r.label}</span>
         </span>
@@ -281,29 +281,25 @@ function TierSection({
   });
 
   return (
-    <div className={`rounded-xl border border-slate-800/60 overflow-hidden ${cfg.borderGlow} transition-all duration-200`}>
+    <div className={`rounded-xl border border-app-border/60 bg-app-bg/50 overflow-hidden ${cfg.borderGlow} transition-all duration-200`}>
       {/* Header — always visible */}
       <button
         onClick={onToggle}
-        className={`w-full flex items-center justify-between px-3 py-2 border-b border-slate-800/60 ${cfg.sectionBg} cursor-pointer hover:brightness-110 transition-all`}
+        className={`w-full flex items-center justify-between px-3 py-2.5 border-b border-app-border/60 bg-app-surface/40 cursor-pointer hover:bg-app-surface/60 transition-all`}
       >
         <div className="flex items-center gap-2">
           <div className={`relative ${isUrgent ? "animate-pulse" : ""}`}>
-            <Icon className={`h-3.5 w-3.5 ${isUrgent ? "text-orange-400" : tier === "follow_up" ? "text-amber-400" : "text-teal-400"}`} />
-            {isUrgent && <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-orange-400 animate-ping" />}
+            <Icon className="h-3.5 w-3.5 stroke-[2.5] text-[var(--brand-saffron)]" />
+            {isUrgent && <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-[var(--brand-saffron)] animate-ping" />}
           </div>
-          <h3 className={`text-[10px] font-black uppercase tracking-widest font-mono ${
-            isUrgent ? "text-orange-300" : tier === "follow_up" ? "text-amber-300" : "text-teal-300"
-          }`}>
+          <h3 className="text-[10px] font-black uppercase tracking-widest font-mono text-[var(--brand-saffron)]">
             {cfg.label}
           </h3>
-          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-            isUrgent ? "bg-orange-500/20 text-orange-300" : tier === "follow_up" ? "bg-amber-500/20 text-amber-300" : "bg-teal-500/20 text-teal-300"
-          }`}>
+          <span className="h-4 w-4 rounded-full flex items-center justify-center text-[8px] font-mono font-bold bg-[var(--brand-saffron)] text-app-bg shrink-0">
             {total}
           </span>
         </div>
-        <span className="text-[8px] font-mono text-slate-500 flex items-center gap-1">
+        <span className="text-[8px] font-mono text-app-text-muted flex items-center gap-1">
           {expanded ? "Hide" : `${Math.min(MAX_COLLAPSED, total)}/${total}`}
           <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
         </span>
@@ -311,10 +307,11 @@ function TierSection({
 
       {/* Collapsed: show top N cards */}
       {!expanded && (
-        <div className="divide-y divide-slate-800/40">
+        <div className="divide-y divide-app-border/40">
           {visible.length === 0 ? (
-            <div className="px-3 py-4 text-center">
-              <p className="text-[10px] text-slate-600 font-mono">{emptyLabel || "No conversations"}</p>
+            <div className="px-3 py-6 flex flex-col items-center justify-center gap-1.5 text-center">
+              <Inbox className="h-4 w-4 text-app-text-muted/40" />
+              <p className="text-[10px] text-app-text-muted font-mono font-medium">{emptyLabel || "No conversations"}</p>
             </div>
           ) : (
             visible.map(lead => (
@@ -331,7 +328,7 @@ function TierSection({
           {total > MAX_COLLAPSED && (
             <button
               onClick={onToggle}
-              className="w-full px-3 py-2 text-[9px] font-mono font-bold text-slate-500 hover:text-slate-300 hover:bg-slate-800/20 transition-colors flex items-center justify-center gap-1"
+              className="w-full px-3 py-2 text-[9px] font-mono font-bold text-app-text-muted hover:text-app-text hover:bg-app-surface/20 transition-colors flex items-center justify-center gap-1"
             >
               View all {total} <ChevronRight className="h-3 w-3" />
             </button>
@@ -343,11 +340,12 @@ function TierSection({
       {expanded && (
         <div className="relative">
           {leads.length === 0 ? (
-            <div className="px-3 py-4 text-center">
-              <p className="text-[10px] text-slate-600 font-mono">{emptyLabel || "No conversations"}</p>
+            <div className="px-3 py-6 flex flex-col items-center justify-center gap-1.5 text-center">
+              <Inbox className="h-4 w-4 text-app-text-muted/40" />
+              <p className="text-[10px] text-app-text-muted font-mono font-medium">{emptyLabel || "No conversations"}</p>
             </div>
           ) : (
-            <div ref={scrollRef} className="overflow-auto max-h-[400px] divide-y divide-slate-800/40">
+            <div ref={scrollRef} className="overflow-auto max-h-[400px] divide-y divide-app-border/40">
               <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
                 {virtualizer.getVirtualItems().map(virtualItem => {
                   const lead = leads[virtualItem.index];
@@ -548,22 +546,22 @@ export function StreamTriage() {
 
   // ── Loading state ──
   if (loading) {
-    return <div className="p-12 text-center text-slate-400 animate-pulse text-xs font-mono">Loading intelligence streams...</div>;
+    return <div className="p-12 text-center text-app-text-muted animate-pulse text-xs font-mono">Loading intelligence streams...</div>;
   }
 
   // ── Empty state ──
   if (leads.length === 0) {
     return (
-      <div className="p-4 bg-slate-950 rounded-3xl border border-slate-900 shadow-2xl text-slate-200">
-        <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-slate-900 rounded-2xl bg-slate-950/40 min-h-[440px]">
+      <div className="p-4 bg-app-bg rounded-3xl border border-app-border-strong shadow-2xl text-app-text">
+        <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-app-border-strong rounded-2xl bg-app-bg/40 min-h-[440px]">
           <div className="h-12 w-12 bg-[var(--brand-saffron-soft)] rounded-full flex items-center justify-center text-[var(--brand-saffron)] border border-[var(--brand-saffron)]/25 mb-4">
             <ShoppingBag className="h-6 w-6 text-[var(--brand-saffron)] animate-bounce" />
           </div>
-          <h3 className="text-xs font-black text-slate-300 uppercase tracking-widest font-mono">No new conversations!</h3>
-          <p className="text-[11px] text-slate-500 max-w-xs mt-2 leading-relaxed">
+          <h3 className="text-xs font-black text-app-text uppercase tracking-widest font-mono">No new conversations!</h3>
+          <p className="text-[11px] text-app-text-muted max-w-xs mt-2 leading-relaxed">
             Excellent work! The shared inbox zero-queue rule is maintained. We will alert you when a new ticket drops.
           </p>
-          <button onClick={initialFetch} className="mt-6 px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-black rounded-xl text-slate-300 transition cursor-pointer">
+          <button onClick={initialFetch} className="mt-6 px-4 py-2 bg-app-surface border border-app-border hover:bg-app-surface-alt text-xs font-black rounded-xl text-app-text transition cursor-pointer">
             Retrieve Fresh Streams
           </button>
         </div>
@@ -573,34 +571,33 @@ export function StreamTriage() {
 
   // ── Main render ──
   return (
-    <div className="p-4 bg-slate-950 rounded-3xl border border-slate-900 shadow-2xl text-slate-200">
+    <div className="p-4 bg-app-bg rounded-3xl border border-app-border-strong shadow-2xl text-app-text">
       {/* Top bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-900 pb-5 mb-5 gap-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-app-border-strong pb-5 mb-5 gap-3">
         <div>
-          <h2 className="text-xs font-black text-slate-300 uppercase tracking-widest font-mono flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-amber-500 animate-spin" style={{ animationDuration: "3s" }} />
-            Intelligence Stream
+          <h2 className="text-xs font-black text-app-text uppercase tracking-widest font-mono">
+            New Messages
           </h2>
-          <p className="text-[11px] text-slate-500 mt-0.5">
+          <p className="text-[11px] text-app-text-muted mt-0.5">
             Review and claim unassigned inbound conversations in real-time.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={initialFetch} className="text-[10px] font-mono font-black border border-slate-800 bg-slate-900/40 hover:bg-slate-900 px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition cursor-pointer">
+          <button onClick={initialFetch} className="text-[10px] font-mono font-black border border-app-border bg-app-surface/40 hover:bg-app-surface-alt px-3 py-1.5 rounded-lg text-app-text-muted hover:text-app-text transition cursor-pointer">
             Refresh Queue
           </button>
         </div>
       </div>
 
       {/* Platform filter chips */}
-      <div className="flex items-center gap-1.5 pb-4 flex-wrap border-b border-slate-900 mb-5 -mt-2">
-        <Filter className="h-3 w-3 text-slate-500 shrink-0" />
+      <div className="flex items-center gap-1.5 pb-4 flex-wrap border-b border-app-border-strong mb-5 -mt-2">
+        <Filter className="h-3 w-3 text-app-text-muted shrink-0" />
         <button
           onClick={() => setSelectedPlatforms(new Set())}
           className={`text-[9px] font-mono px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
             selectedPlatforms.size === 0
               ? "bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)] border-[var(--brand-saffron)]/30"
-              : "bg-slate-800/40 text-slate-500 border-slate-700/50 hover:text-slate-300"
+              : "bg-app-surface/40 text-app-text-muted border-app-border/50 hover:text-app-text"
           }`}
         >
           All Platforms
@@ -619,7 +616,7 @@ export function StreamTriage() {
               className={`inline-flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
                 isActive
                   ? "bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)] border-[var(--brand-saffron)]/30"
-                  : "bg-slate-800/40 text-slate-500 border-slate-700/50 hover:text-slate-300"
+                  : "bg-app-surface/40 text-app-text-muted border-app-border/50 hover:text-app-text"
               }`}
             >
               {Icon && <Icon className="h-2.5 w-2.5" />}
@@ -628,7 +625,7 @@ export function StreamTriage() {
           );
         })}
         {selectedPlatforms.size > 0 && (
-          <span className="text-[8px] font-mono text-slate-600 ml-auto">
+          <span className="text-[8px] font-mono text-app-text-muted ml-auto">
             {filteredLeads.length} of {leads.length} conversations
           </span>
         )}
@@ -645,13 +642,13 @@ export function StreamTriage() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-slate-900 rounded-2xl bg-slate-950/40 min-h-[560px]"
+                className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-app-border-strong rounded-2xl bg-app-bg/40 min-h-[560px]"
               >
                 <div className="h-12 w-12 bg-[var(--brand-saffron-soft)] rounded-full flex items-center justify-center text-[var(--brand-saffron)] border border-[var(--brand-saffron)]/25 mb-4">
                   <ShoppingBag className="h-6 w-6 text-[var(--brand-saffron)] animate-bounce" />
                 </div>
-                <h3 className="text-xs font-black text-slate-300 uppercase tracking-widest font-mono">Select a conversation</h3>
-                <p className="text-[11px] text-slate-500 max-w-xs mt-2 leading-relaxed">
+                <h3 className="text-xs font-black text-app-text uppercase tracking-widest font-mono">Select a conversation</h3>
+                <p className="text-[11px] text-app-text-muted max-w-xs mt-2 leading-relaxed">
                   Click on any conversation in the queue to review details and claim it.
                 </p>
               </motion.div>
@@ -662,7 +659,7 @@ export function StreamTriage() {
                 animate={{ opacity: 1, scale: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.95, x: -30 }}
                 transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                className={`bg-slate-950 border border-slate-800/80 rounded-2xl shadow-xl overflow-hidden flex flex-col justify-between min-h-[560px] relative ${glassStyles} ${TIER_CONFIG[getEffectiveTier(activeLead)].borderGlow}`}
+                className={`bg-app-bg border border-app-border/80 rounded-2xl shadow-xl overflow-hidden flex flex-col justify-between min-h-[560px] relative ${glassStyles} ${TIER_CONFIG[getEffectiveTier(activeLead)].borderGlow}`}
               >
                 <div className={`absolute left-0 top-0 bottom-0 w-1 ${
                   getEffectiveTier(activeLead) === "claim_now" ? "bg-orange-500" :
@@ -670,15 +667,15 @@ export function StreamTriage() {
                 }`} />
 
                 {activeLead.status !== "OPEN" && (
-                  <div className="absolute inset-0 bg-slate-950/80 z-20 flex flex-col items-center justify-center border-2 border-amber-500/50 rounded-2xl backdrop-blur-sm">
+                  <div className="absolute inset-0 bg-app-bg/80 z-20 flex flex-col items-center justify-center border-2 border-amber-500/50 rounded-2xl backdrop-blur-sm">
                     <AlertTriangle className="h-10 w-10 text-amber-500 mb-3 animate-pulse" />
                     <h4 className="text-sm font-black text-amber-400 font-mono tracking-widest uppercase mb-1">Queue Handled</h4>
-                    <p className="text-[10px] text-slate-300 uppercase font-black">Already Assigned</p>
-                    <button onClick={() => setCurrentIndex(prev => prev + 1)} className="mt-6 px-4 py-2 bg-slate-800 text-white text-[10px] font-black uppercase rounded-lg shadow cursor-pointer">Next Ticket</button>
+                    <p className="text-[10px] text-app-text uppercase font-black">Already Assigned</p>
+                    <button onClick={() => setCurrentIndex(prev => prev + 1)} className="mt-6 px-4 py-2 bg-app-surface text-app-text text-[10px] font-black uppercase rounded-lg shadow cursor-pointer">Next Ticket</button>
                   </div>
                 )}
 
-                <div className="p-4 border-b border-slate-900 bg-slate-900/20 flex justify-between items-center">
+                <div className="p-4 border-b border-app-border-strong bg-app-surface/20 flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-black font-mono border ${
                       getEffectiveTier(activeLead) === "claim_now"
@@ -690,11 +687,11 @@ export function StreamTriage() {
                       {(activeLead.name || activeLead.contact || "??").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
                     </div>
                     <div>
-                      <h4 className="text-sm font-black text-slate-200">{activeLead.name || activeLead.contact || "Customer"}</h4>
-                      <p className="text-[9px] text-slate-500 font-mono tracking-widest uppercase flex items-center gap-1">
+                      <h4 className="text-sm font-black text-app-text">{activeLead.name || activeLead.contact || "Customer"}</h4>
+                      <p className="text-[9px] text-app-text-muted font-mono tracking-widest uppercase flex items-center gap-1">
                         <ChannelIcon channel={activeLead.channel} />
                         {activeLead.channel}
-                        <span className="text-slate-600 mx-0.5">·</span>
+                        <span className="text-app-text-muted mx-0.5">·</span>
                         {activeLead.lastActiveAt ? timeAgo(activeLead.lastActiveAt) : "No activity"}
                       </p>
                     </div>
@@ -708,7 +705,7 @@ export function StreamTriage() {
                 <div className="p-4 space-y-3 flex-1 overflow-y-auto">
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest font-mono">Last Customer Message</span>
+                      <span className="text-[9px] font-black text-app-text-muted uppercase tracking-widest font-mono">Last Customer Message</span>
                       {activeLead.hasAutoReply && activeLead.botRepliedAt && (
                         <span className="inline-flex items-center gap-1 text-[9px] font-mono text-teal-400/70">
                           <Bot className="h-2.5 w-2.5" />
@@ -716,14 +713,14 @@ export function StreamTriage() {
                         </span>
                       )}
                     </div>
-                    <blockquote className="p-3 bg-slate-900/60 rounded-xl border border-slate-800/60 font-mono text-xs text-slate-300 italic mt-1 leading-relaxed relative text-left">
+                    <blockquote className="p-3 bg-app-surface/60 rounded-xl border border-app-border/60 font-mono text-xs text-app-text italic mt-1 leading-relaxed relative text-left">
                       &ldquo;{activeLead.lastMessage || "No messages yet"}&rdquo;
                     </blockquote>
                   </div>
 
                   <div className="p-3 rounded-xl bg-[var(--brand-saffron-soft)]/40 border border-[var(--brand-saffron)]/20">
                     <div className="flex items-center gap-1.5 mb-2">
-                      <Shield className="h-3 w-3 text-[var(--brand-saffron)]" />
+                      <Brain className="h-3.5 w-3.5 text-[var(--brand-saffron)]" />
                       <span className="text-[9px] font-black text-[var(--brand-saffron)] uppercase tracking-widest font-mono">AI Intelligence</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
@@ -732,8 +729,8 @@ export function StreamTriage() {
                           {r.icon} {r.label}
                         </span>
                       ))}
-                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-800/60 text-slate-400 border border-slate-700/50 font-mono">
-                        <HeartHandshake className="h-2.5 w-2.5" />
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-app-surface/60 text-app-text-muted border border-app-border/50 font-mono">
+                        <Target className="h-2.5 w-2.5 text-[var(--brand-saffron)]" />
                         {activeLead.aiScore}% confidence
                       </span>
                     </div>
@@ -745,8 +742,8 @@ export function StreamTriage() {
                   </div>
 
                   {activeLead.pendingOrderAmount !== null && activeLead.pendingOrderAmount > 0 && (
-                    <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800/60 text-center">
-                      <span className="text-[10px] text-slate-500 font-mono uppercase tracking-wider">Pending Order</span>
+                    <div className="p-4 bg-app-surface/40 rounded-xl border border-app-border/60 text-center">
+                      <span className="text-[10px] text-app-text-muted font-mono uppercase tracking-wider">Pending Order</span>
                       <p className="text-4xl font-black text-[var(--brand-saffron)] font-mono mt-1">₹{activeLead.pendingOrderAmount.toLocaleString("en-IN")}</p>
                     </div>
                   )}
@@ -764,7 +761,7 @@ export function StreamTriage() {
                       }`}>
                         {activeLead.pastOrders === 0 ? "New" : "Repeat"}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
+                      <span className="text-[10px] text-app-text-muted font-mono">
                         {activeLead.pastOrders === 0
                           ? "First interaction"
                           : `${ordinal(activeLead.pastOrders + 1)} order · ₹${activeLead.lifetimeValue.toLocaleString("en-IN")} lifetime`
@@ -780,16 +777,16 @@ export function StreamTriage() {
                         <span className="text-[9px] font-black text-[var(--brand-saffron)] uppercase tracking-widest font-mono">Product Match</span>
                       </div>
                       <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-lg bg-slate-800/80 border border-slate-700/50 flex items-center justify-center text-[8px] text-slate-500 overflow-hidden shrink-0">
+                        <div className="h-8 w-8 rounded-lg bg-app-surface/80 border border-app-border/50 flex items-center justify-center text-[8px] text-app-text-muted overflow-hidden shrink-0">
                           {activeLead.matchedProduct.thumbnailUrl ? (
                             <img src={activeLead.matchedProduct.thumbnailUrl} alt="" className="h-full w-full object-cover" />
                           ) : (
-                            <ShoppingBag className="h-4 w-4 text-slate-600" />
+                            <ShoppingBag className="h-4 w-4 text-app-text-muted" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-bold text-slate-200 truncate">{activeLead.matchedProduct.name}</p>
-                          <p className="text-[9px] text-slate-400 font-mono">{activeLead.matchedProduct.variant}</p>
+                          <p className="text-[11px] font-bold text-app-text truncate">{activeLead.matchedProduct.name}</p>
+                          <p className="text-[9px] text-app-text-muted font-mono">{activeLead.matchedProduct.variant}</p>
                         </div>
                         <span className="text-[10px] font-mono font-bold text-emerald-400 whitespace-nowrap">
                           {activeLead.matchedProduct.stock} in stock
@@ -808,8 +805,8 @@ export function StreamTriage() {
                   )}
                 </div>
 
-                <div className="p-4 border-t border-slate-900 bg-slate-900/40 grid grid-cols-2 gap-3">
-                  <button onClick={handleSkip} className="py-3 bg-rose-950/50 hover:bg-rose-950/70 font-black uppercase tracking-widest text-[10px] text-rose-400 border border-rose-900/50 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-95">
+                <div className="p-4 border-t border-app-border-strong bg-app-surface/40 grid grid-cols-2 gap-3">
+                  <button onClick={handleSkip} className="py-3 bg-[var(--brick)]/10 hover:bg-[var(--brick)]/20 font-black uppercase tracking-widest text-[10px] text-[var(--brick)] border border-[var(--brick)]/30 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-95">
                     <X className="h-4 w-4" /> Skip / Spam
                   </button>
                   <button
@@ -848,10 +845,10 @@ export function StreamTriage() {
 
             {/* Summary footer */}
             <div className="flex items-center justify-between px-1 pt-1">
-              <span className="text-[8px] font-mono text-slate-600">
+              <span className="text-[8px] font-mono text-app-text-muted">
                 {selectedPlatforms.size > 0 ? `${filteredLeads.length} of ` : ""}{leads.length} total · {partitioned.claim_now.length} urgent
               </span>
-              <span className="text-[8px] font-mono text-slate-600 flex items-center gap-1">
+              <span className="text-[8px] font-mono text-app-text-muted flex items-center gap-1">
                 <Bot className="h-2.5 w-2.5" />
                 AI-sorted
               </span>
