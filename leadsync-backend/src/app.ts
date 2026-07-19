@@ -32,8 +32,6 @@ import ordersRoutes from "./routes/orders/orders.routes";
 import newOrderArrivalsRoutes from "./routes/orders/newOrderArrivals.routes";
 
 import automationRoutes from "./routes/bot/automation.routes";
-import autoReplyRoutes from "./routes/automation/autoReply.routes";
-import { setupAutoReplyEventListeners } from "./services/automation/autoReplyEventListeners";
 import botKnowledgeRoutes from "./routes/bot/bot-knowledge.routes";
 import conversationalRulesRoutes from "./routes/automation/conversationalRules.routes";
 import ruleGroupsRoutes from "./routes/automation/ruleGroups.routes";
@@ -138,12 +136,9 @@ app.use("/api/orders", ordersRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/companies", inventoryRoutes);
-app.use("/api/auto-reply", autoReplyRoutes);
 app.use("/api/automation/rule-groups", authMiddleware, ruleGroupsRoutes);
 app.use("/api/automation/conversational-rules", authMiddleware, conversationalRulesRoutes);
 
-// Setup event-driven auto-reply listeners
-setupAutoReplyEventListeners();
 app.use("/api/webhook", webhookRoutes);
 app.use("/api/webhook/telegram", telegramWebhookRoutes);
 app.use("/api/bot-knowledge", botKnowledgeRoutes);

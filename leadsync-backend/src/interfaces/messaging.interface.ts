@@ -12,5 +12,7 @@ export interface StandardMessageFrame {
   contactName?: string;
   isCallback: boolean;
   callbackData?: string;
+  callbackQueryId?: string;
+  callbackMessageId?: string;
   companyId: string;
 }

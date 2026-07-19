@@ -34,32 +34,61 @@ export async function startTelegramPolling() {
   // Run the polling query in a loop
   const poll = async () => {
     try {
-      // Fail-safe: if local dev and MY_BOT_USERNAME is not configured, poll nothing.
-      if (IS_LOCAL && !process.env.MY_BOT_USERNAME) {
-        setTimeout(poll, 1500);
-        return;
-      }
-
-      // Find all companies with connected Telegram bots
+      // Find all companies with connected Telegram bots for this polling instance
       const companies = await prisma.company.findMany({
         where: {
           telegramBotToken: { not: null },
-          telegramConnected: true,
-          isTest: IS_LOCAL ? true : false,
-          ...(IS_LOCAL ? { telegramBotUsername: process.env.MY_BOT_USERNAME } : {})
+          telegramConnected: true
         },
         select: {
-            id: true,
-            telegramBotToken: true,
-            telegramBotUsername: true,
-            telegramConnected: true
+          id: true,
+          telegramBotToken: true,
+          telegramBotUsername: true,
+          telegramConnected: true
         }
       });
+
+      // Safeguard: Check for duplicate bot tokens across the entire database to prevent misrouting
+      const allActiveBots = await prisma.company.findMany({
+        where: {
+          telegramBotToken: { not: null },
+          telegramConnected: true
+        },
+        select: {
+          id: true,
+          name: true,
+          telegramBotToken: true,
+          telegramBotUsername: true
+        }
+      });
+
+      const tokenToCompanies: { [decryptedToken: string]: typeof allActiveBots } = {};
+      const duplicateCompanyIds = new Set<string>();
+
+      for (const bot of allActiveBots) {
+        const decrypted = decryptSecret(bot.telegramBotToken);
+        if (decrypted) {
+          if (!tokenToCompanies[decrypted]) {
+            tokenToCompanies[decrypted] = [];
+          }
+          tokenToCompanies[decrypted].push(bot);
+        }
+      }
+
+      for (const [_, bots] of Object.entries(tokenToCompanies)) {
+        if (bots.length > 1) {
+          const companyList = bots.map(b => `'${b.name}' (${b.id})`).join(", ");
+          console.error(`🚨 [CRITICAL CONFIGURATION ERROR] Telegram bot token is configured across MULTIPLE companies: ${companyList}. Polling for these companies is disabled to prevent message misrouting.`);
+          bots.forEach(b => duplicateCompanyIds.add(b.id));
+        }
+      }
+
+      const activeCompanies = companies.filter(c => !duplicateCompanyIds.has(c.id));
 
       // 🛑 FIX: Parallelize polling across all companies instead of sequential.
       // Each company's poll cycle runs independently via Promise.all.
       // This eliminates the N*(1s webhook cleanup + fetch + process) bottleneck.
-      await Promise.all(companies.map(async (company) => {
+      await Promise.all(activeCompanies.map(async (company) => {
         // Enforce centralized primary/passive consumer selection lease
         const authorized = await TelegramLeaseService.isAuthorizedToConsume(company.id);
         if (!authorized) {

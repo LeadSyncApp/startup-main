@@ -12,6 +12,35 @@ import { PRODUCT_PARSING_PROMPT } from "../ai/modelComparison.service";
 import { normalizeProductsArray, ProductData, ProductVariantData, ParsedData } from "../ai/numeralConverter";
 import { randomUUID } from "crypto";
 
+export const LOW_STOCK_THRESHOLD = 5;
+
+export function getStockStatus(stock: number | null): "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK" | null {
+  if (stock === null) return null;
+  if (stock === 0) return "OUT_OF_STOCK";
+  if (stock <= LOW_STOCK_THRESHOLD) return "LOW_STOCK";
+  return "IN_STOCK";
+}
+
+function enrichWithStockStatus(product: any) {
+  const variants = (product.variants || []).map((v: any) => ({
+    ...v,
+    stockStatus: getStockStatus(v.stock),
+  }));
+
+  const hasOutOfStock = variants.some((v: any) => v.stockStatus === "OUT_OF_STOCK");
+  const hasLowStock = variants.some((v: any) => v.stockStatus === "LOW_STOCK");
+  const hasAnyTracked = variants.some((v: any) => v.stockStatus !== null);
+
+  let stockStatus = null;
+  if (hasAnyTracked) {
+    if (hasOutOfStock) stockStatus = "OUT_OF_STOCK";
+    else if (hasLowStock) stockStatus = "LOW_STOCK";
+    else stockStatus = "IN_STOCK";
+  }
+
+  return { ...product, stockStatus, variants };
+}
+
 // Re-export for use in routes
 export { PRODUCT_PARSING_PROMPT };
 export type { ProductData, ProductVariantData, ParsedData };
@@ -80,9 +109,54 @@ function buildProductName(product: ProductData): string {
 }
 
 /**
+ * Sanitize a string for use in a SKU (uppercase alphanumeric + hyphens)
+ */
+function sanitizeForSku(value: string): string {
+  return value
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .substring(0, 10);
+}
+
+/**
+ * Generate a base SKU from a product name (e.g. "Premium Cotton T-Shirt" → "PREMIUM-COTTON-TSHIRT")
+ */
+function generateBaseSku(name: string): string {
+  return name
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .substring(0, 30);
+}
+
+/**
+ * Ensure a SKU is unique within a company. Appends -1, -2, etc. on conflict.
+ */
+async function ensureSkuUnique(companyId: string, baseSku: string): Promise<string> {
+  let sku = baseSku;
+  let counter = 1;
+  while (true) {
+    const exists = await prisma.inventoryProduct.findFirst({
+      where: { companyId, sku },
+      select: { id: true },
+    });
+    if (!exists) return sku;
+    sku = `${baseSku}-${counter}`;
+    counter++;
+  }
+}
+
+/**
  * Upsert variants for a product, removing stale ones
  */
-async function upsertVariants(productId: string, variants: ProductVariantData[]) {
+async function upsertVariants(productId: string, variants: ProductVariantData[], parentSku: string | null) {
   const existing = await prisma.inventoryVariant.findMany({ where: { productId } });
   const existingValues = new Set(existing.map(v => v.attributeValue));
   const incomingValues = new Set(variants.map(v => v.attribute_value));
@@ -96,10 +170,13 @@ async function upsertVariants(productId: string, variants: ProductVariantData[])
 
   // Upsert each variant
   for (const v of variants) {
+    const variantSku = v.sku || (parentSku && v.attribute_value
+      ? `${parentSku}-${sanitizeForSku(v.attribute_value)}`
+      : null);
     await prisma.inventoryVariant.upsert({
       where: { productId_attributeValue: { productId, attributeValue: v.attribute_value } },
-      update: { price: v.price_override ?? 0, stock: v.stock },
-      create: { productId, attributeValue: v.attribute_value, price: v.price_override ?? 0, stock: v.stock }
+      update: { price: v.price_override ?? 0, stock: v.stock, ...(variantSku ? { sku: variantSku } : {}) },
+      create: { productId, attributeValue: v.attribute_value, price: v.price_override ?? 0, stock: v.stock, sku: variantSku }
     });
   }
 }
@@ -133,9 +210,11 @@ export async function confirmInventoryProducts(
     });
 
     let productId: string;
+    let productSku: string | null = null;
 
     if (existing) {
-      // Update existing product
+      // Update existing product — only update SKU if explicitly provided
+      productSku = product.sku ?? existing.sku;
       await prisma.inventoryProduct.update({
         where: { id: existing.id },
         data: {
@@ -144,11 +223,15 @@ export async function confirmInventoryProducts(
           variantAttributeName: product.attribute_name,
           description: product.description ?? existing.description,
           isAvailable,
+          ...(product.sku !== undefined ? { sku: product.sku } : {}),
+          ...(product.categories !== undefined ? { categories: product.categories } : {}),
         }
       });
       productId = existing.id;
     } else {
-      // Create new product
+      // Create new product — auto-generate SKU if not provided
+      const baseSku = product.sku || generateBaseSku(productName);
+      productSku = await ensureSkuUnique(companyId, baseSku);
       const newProduct = await prisma.inventoryProduct.create({
         data: {
           companyId,
@@ -158,6 +241,8 @@ export async function confirmInventoryProducts(
           hasVariants,
           variantAttributeName: product.attribute_name,
           isAvailable,
+          sku: productSku,
+          categories: product.categories || [],
         }
       });
       productId = newProduct.id;
@@ -165,7 +250,7 @@ export async function confirmInventoryProducts(
 
     // Upsert variants
     if (hasVariants) {
-      await upsertVariants(productId, product.variants);
+      await upsertVariants(productId, product.variants, productSku);
     }
 
     // Also maintain KnowledgeChunk for RAG retrieval backward compatibility
@@ -219,9 +304,13 @@ function generateProductSignature(product: ProductData): string {
 function formatProductForKnowledgeChunk(product: ProductData): string {
   const parts: string[] = [];
 
+  if (product.sku) parts.push(`SKU: ${product.sku}`);
   if (product.brand) parts.push(`Brand: ${product.brand}`);
   if (product.description) parts.push(`Description: ${product.description}`);
   parts.push(`Product: ${product.product_type}`);
+  if (product.categories && product.categories.length > 0) {
+    parts.push(`Categories: ${product.categories.join(", ")}`);
+  }
   if (product.attribute_name && product.variants && product.variants.length > 0) {
     const variantValues = product.variants.map(v => v.attribute_value).join(", ");
     parts.push(`${product.attribute_name}: ${variantValues}`);
@@ -244,7 +333,8 @@ export async function searchInventoryProducts(
       isActive: true,
       OR: [
         { name: { contains: searchTerm, mode: "insensitive" } },
-        { category: { contains: searchTerm, mode: "insensitive" } },
+        { categories: { has: searchTerm } },
+        { sku: { contains: searchTerm, mode: "insensitive" } },
       ]
     },
     include: { variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } } },
@@ -252,16 +342,17 @@ export async function searchInventoryProducts(
     take: 20
   });
 
-  return products;
+  return products.map(enrichWithStockStatus);
 }
 
 /**
  * Get all active inventory products for a company
  */
 export async function getInventoryProducts(companyId: string) {
-  return prisma.inventoryProduct.findMany({
+  const products = await prisma.inventoryProduct.findMany({
     where: { companyId, isActive: true },
     include: { variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } } },
     orderBy: { createdAt: "desc" }
   });
+  return products.map(enrichWithStockStatus);
 }

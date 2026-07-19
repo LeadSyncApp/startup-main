@@ -16,6 +16,15 @@ interface InventoryConfirmationScreenProps {
   onBack: () => void;
 }
 
+const LOW_STOCK_THRESHOLD = 5;
+
+function getStockStatus(stock: number | null): string | null {
+  if (stock === null) return null;
+  if (stock === 0) return "OUT_OF_STOCK";
+  if (stock <= LOW_STOCK_THRESHOLD) return "LOW_STOCK";
+  return "IN_STOCK";
+}
+
 export function InventoryConfirmationScreen({
   companyId,
   businessType,
@@ -244,6 +253,21 @@ export function InventoryConfirmationScreen({
                   />
                 </div>
 
+                {/* SKU */}
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--app-text-muted)' }}>
+                    SKU (auto-generated if empty)
+                  </label>
+                  <input
+                    type="text"
+                    value={product.sku || ""}
+                    onChange={(e) => updateProduct(idx, { sku: e.target.value || undefined })}
+                    placeholder="e.g. OTTO-SHIRT-BLK"
+                    className="w-full px-3 py-2 text-sm rounded-lg border font-mono"
+                    style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                  />
+                </div>
+
                 {/* Price */}
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--app-text-muted)' }}>
@@ -316,17 +340,21 @@ export function InventoryConfirmationScreen({
                     {/* Attribute Name */}
                     <div>
                       <label className="block text-xs font-medium mb-1" style={{ color: 'var(--app-text-muted)' }}>
-                        Variant Label (e.g. {variantLabelHint})
+                        What varies across these rows? (e.g. {variantLabelHint.split(',')[0]})
                       </label>
                       <input
                         type="text"
                         value={product.attribute_name || ""}
                         onChange={(e) => handleAttributeNameChange(idx, e.target.value)}
-                        placeholder="e.g. Size, Duration, Color, Plates"
+                        placeholder="e.g. Size, Color, Plates"
                         className="w-full px-3 py-2 text-sm rounded-lg border"
                         style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                       />
+                      <p className="text-[11px] mt-1" style={{ color: 'var(--app-text-muted)', lineHeight: '1.4' }}>
+                        All rows below use this same attribute (e.g. all are sizes or all are colors). For multiple attributes like Size AND Color, contact support.
+                      </p>
                     </div>
+
 
                     {/* Variant Rows */}
                     <div className="space-y-2">
@@ -364,16 +392,33 @@ export function InventoryConfirmationScreen({
                             <label className="block text-[10px] font-medium mb-0.5" style={{ color: 'var(--app-text-muted)' }}>
                               Stock
                             </label>
-                            <input
-                              type="number"
-                              value={variant.stock ?? ""}
-                              onChange={(e) => updateVariant(idx, vIdx, {
-                                stock: e.target.value === "" ? null : parseInt(e.target.value) || null
-                              })}
-                              placeholder="#"
-                              className="w-20 px-3 py-1.5 text-sm rounded border"
-                              style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                            />
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                value={variant.stock ?? ""}
+                                onChange={(e) => updateVariant(idx, vIdx, {
+                                  stock: e.target.value === "" ? null : parseInt(e.target.value) || null
+                                })}
+                                placeholder="#"
+                                className="w-20 px-3 py-1.5 text-sm rounded border"
+                                style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                              />
+                              {(() => {
+                                const status = getStockStatus(variant.stock);
+                                if (!status) return null;
+                                const colors: Record<string, { bg: string; text: string; border: string }> = {
+                                  IN_STOCK: { bg: "rgba(16, 185, 129, 0.15)", text: "#10b981", border: "rgba(16, 185, 129, 0.3)" },
+                                  LOW_STOCK: { bg: "rgba(245, 158, 11, 0.15)", text: "#d97706", border: "rgba(245, 158, 11, 0.3)" },
+                                  OUT_OF_STOCK: { bg: "rgba(239, 68, 68, 0.15)", text: "#dc2626", border: "rgba(239, 68, 68, 0.3)" },
+                                };
+                                const c = colors[status];
+                                return (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap" style={{ backgroundColor: c.bg, color: c.text, borderColor: c.border }}>
+                                    {status === "IN_STOCK" ? "In Stock" : status === "LOW_STOCK" ? "Low Stock" : "Out of Stock"}
+                                  </span>
+                                );
+                              })()}
+                            </div>
                           </div>
                           <button
                             onClick={() => removeVariant(idx, vIdx)}

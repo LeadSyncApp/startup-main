@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth-tenancy/AuthContext";
 
 // NOTE FOR REVIEW: InboxDetail accepts optional leadId and showBackButton props.
 // When rendered from InboxSplitView, leadId is passed directly and back button is hidden.
@@ -57,6 +58,7 @@ const STATUS_VARIANT: Record<string, "success" | "warning" | "error" | "info" | 
 };
 
 export function InboxDetail({ leadId: propLeadId, showBackButton = true }: InboxDetailProps = {}) {
+  const { company } = useAuth();
   const { leadId: paramLeadId } = useParams<{ leadId: string }>();
   const navigate = useNavigate();
   const leadId = propLeadId || paramLeadId;
@@ -311,12 +313,12 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
     const isBot = msg.sender === "BOT";
     const isSystem = msg.sender === "SYSTEM";
     const isFailed = msg.deliveryStatus === "FAILED";
-    const senderLabel = msg.senderName || (isBot ? "Auto-reply" : isAgent ? "Agent" : isClient ? customerDisplayName : "System");
+    const senderLabel = msg.senderName || (isBot ? (company?.telegramBotUsername ? `@${company.telegramBotUsername}` : "Auto-reply") : isAgent ? "Agent" : isClient ? customerDisplayName : "System");
 
     if (isSystem) {
       return (
         <div key={msg.id} className="flex justify-center py-0.5">
-          <div className="px-3 py-1.5 rounded-2xl border border-slate-800 bg-slate-900/60 text-[11px] text-slate-400 font-mono max-w-[85%] text-center">
+          <div className="px-3 py-1.5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-alt)] text-[11px] text-[var(--app-text-muted)] font-mono max-w-[85%] text-center">
             {msg.content}
           </div>
         </div>
@@ -329,7 +331,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
           isFailed
             ? "bg-rose-500/10 border-rose-500/30 text-rose-200"
             : isClient
-            ? "bg-slate-800 border-slate-700 text-slate-200"
+            ? "bg-[var(--app-surface)] border-[var(--app-border)] text-[var(--app-text)]"
             : isBot
             ? "bg-teal-600/90 border-teal-500/70 text-white"
             : "bg-brand-navy border-brand-navy/80 text-white"
@@ -352,7 +354,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
               </span>
             )}
           </div>
-          <p className="text-sm leading-[1.6] whitespace-pre-wrap break-words mt-1 mb-1 text-slate-100">{msg.content}</p>
+          <p className="text-sm leading-[1.6] whitespace-pre-wrap break-words mt-1 mb-1 text-[var(--app-text)]">{msg.content}</p>
           {msg.deliveryError && (
             <p className="text-[10px] font-mono text-rose-400/70 mt-0 italic">{msg.deliveryError}</p>
           )}
@@ -382,7 +384,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
       {/* Header */}
       <div className="flex items-center gap-4 px-4 py-4 border-b border-[var(--app-border)] bg-app-surface">
         {showBackButton && (
-          <button onClick={() => navigate("/inbox")} className="p-2 rounded-xl hover:bg-slate-900 border border-slate-800 transition cursor-pointer">
+          <button onClick={() => navigate("/inbox")} className="p-2 rounded-xl hover:bg-[var(--app-bg-soft)] border border-[var(--app-border)] transition cursor-pointer">
             <ArrowLeft className="h-4 w-4 text-app-text-muted" />
           </button>
         )}
@@ -390,7 +392,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
           <h2 className="text-base font-black text-app-text truncate">{customerDisplayName}</h2>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {customerPhone && customerPhone !== customerDisplayName && (
-              <span className="text-[10px] text-slate-400 font-mono">{customerPhone}</span>
+              <span className="text-[10px] text-[var(--app-text-muted)] font-mono">{customerPhone}</span>
             )}
             <Badge variant="neutral" className="flex items-center gap-1">
               <ChannelIcon className="h-3 w-3" />
@@ -571,17 +573,17 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
               {history && (
                 <div className="space-y-3">
                   {history.totalConversations === 0 ? (
-                    <div className="text-[10px] text-slate-500 font-mono italic">
+                    <div className="text-[10px] text-[var(--app-text-muted)] font-mono italic">
                       No past conversations
                     </div>
                   ) : (
                     <>
-                      <div className="text-[10px] text-slate-500 font-mono">
+                      <div className="text-[10px] text-[var(--app-text-muted)] font-mono">
                         {history.totalConversations} past conversation{history.totalConversations !== 1 ? 's' : ''}
                       </div>
-                      <table className="w-full text-[11px] border border-slate-800 rounded-lg overflow-hidden">
+                      <table className="w-full text-[11px] border border-[var(--app-border)] rounded-lg overflow-hidden">
                         <thead>
-                          <tr className="bg-slate-900/60 text-slate-400 text-left">
+                          <tr className="bg-[var(--app-surface-alt)] text-[var(--app-text-muted)] text-left">
                             <th className="px-2 py-1.5 font-bold">Staff</th>
                             <th className="px-2 py-1.5 font-bold">Status</th>
                             <th className="px-2 py-1.5 font-bold text-right">Date</th>
@@ -622,24 +624,24 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
                             return (
                               <Fragment key={c.id}>
                                 <tr
-                                  className="h-11 border-t border-slate-800 cursor-pointer hover:bg-slate-800/60 transition-colors"
-                                  onClick={() => setExpandedHistoryId(isOpen ? null : c.id)}
-                                >
-                                  <td className="px-3 py-2 font-bold text-slate-200 truncate max-w-[120px]">{displayName}</td>
+                                   className="h-11 border-t border-[var(--app-border)] cursor-pointer hover:bg-[var(--app-bg-soft)] transition-colors"
+                                   onClick={() => setExpandedHistoryId(isOpen ? null : c.id)}
+                                 >
+                                   <td className="px-3 py-2 font-bold text-[var(--app-text)] truncate max-w-[120px]">{displayName}</td>
                                   <td className="px-3 py-2">
                                     <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
                                       c.status === "RESOLVED" ? "bg-emerald-500/20 text-emerald-300"
                                       : c.status === "ASSIGNED" ? "bg-amber-500/20 text-amber-300"
-                                      : "bg-slate-700/60 text-slate-300"
+                                       : "bg-[var(--app-surface-alt)] text-[var(--app-text-muted)]"
                                     }`}>{c.status}</span>
                                   </td>
-                                  <td className="px-3 py-2 text-slate-500 text-right whitespace-nowrap">{formattedTime}</td>
+                                   <td className="px-3 py-2 text-[var(--app-text-muted)] text-right whitespace-nowrap">{formattedTime}</td>
                                 </tr>
                                 {isOpen && (
-                                  <tr className="border-t border-slate-800 bg-slate-900/40">
-                                    <td colSpan={3} className="px-3 py-2 text-[10px] text-slate-400 font-mono space-y-0.5">
-                                      <div>Claimed / Updated: <span className="text-slate-300">{formattedTime} at {timeString}</span></div>
-                                      <div>Conversation started: <span className="text-slate-300">{createdDate} at {createdTimeStr}</span></div>
+                                   <tr className="border-t border-[var(--app-border)] bg-[var(--app-surface-alt)]">
+                                     <td colSpan={3} className="px-3 py-2 text-[10px] text-[var(--app-text-muted)] font-mono space-y-0.5">
+                                       <div>Claimed / Updated: <span className="text-[var(--app-text)]">{formattedTime} at {timeString}</span></div>
+                                       <div>Conversation started: <span className="text-[var(--app-text)]">{createdDate} at {createdTimeStr}</span></div>
                                     </td>
                                   </tr>
                                 )}
@@ -667,7 +669,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
           )}
           {panelTab === "ai" && mode === "AI" && (
             <div className="p-4 text-center">
-              <p className="text-[10px] text-slate-500 font-mono">
+              <p className="text-[10px] text-[var(--app-text-muted)] font-mono">
                 Switch to Human Mode to use AI suggestions
               </p>
             </div>
@@ -678,15 +680,15 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
       {/* Resolve Confirmation Modal */}
       {showResolveConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 max-w-sm w-full mx-4">
+          <div className="bg-[var(--app-surface)] border border-[var(--app-border)] rounded-xl p-4 max-w-sm w-full mx-4">
             <h3 className="text-sm font-black text-app-text mb-2">Mark conversation as resolved?</h3>
-            <p className="text-xs text-slate-400 mb-4">
+            <p className="text-xs text-[var(--app-text-muted)] mb-4">
               This will mark the conversation as resolved. The customer will be moved to the resolved list.
             </p>
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setShowResolveConfirm(false)}
-                className="px-3 py-1.5 text-xs font-black text-slate-400 border border-slate-700 rounded hover:bg-slate-800 transition cursor-pointer"
+                className="px-3 py-1.5 text-xs font-black text-[var(--app-text-muted)] border border-[var(--app-border)] rounded hover:bg-[var(--app-bg-soft)] transition cursor-pointer"
               >
                 Cancel
               </button>

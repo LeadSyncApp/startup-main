@@ -32,7 +32,3 @@ export {
   escalateToHuman,
   resolveConversation,
 } from "./assignment.service";
-
-// Automation Services (Auto-Reply)
-export { AutoReplyService, autoReplyService, AUTO_REPLY_EVENTS } from "./automation/autoReply.service";
-export { setupAutoReplyEventListeners, triggerLeadWelcome, triggerLeadFollowUp } from "./automation/autoReplyEventListeners";

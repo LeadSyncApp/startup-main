@@ -18,11 +18,45 @@ const createPrismaClient = () => {
   if (!dbUrl.searchParams.has("connection_limit")) {
     dbUrl.searchParams.set("connection_limit", "10");
   }
+  if (!dbUrl.searchParams.has("pool_timeout")) {
+    dbUrl.searchParams.set("pool_timeout", "10");
+  }
+  if (!dbUrl.searchParams.has("connect_timeout")) {
+    dbUrl.searchParams.set("connect_timeout", "10");
+  }
   return new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
     datasources: { db: { url: dbUrl.toString() } },
   });
 };
+
+// Helper: execute query with automatic retry for transient DB connection resets (P1017, P1001, ECONNRESET)
+async function executeQueryWithTransientRetry<T>(queryFn: () => Promise<T>): Promise<T> {
+  const MAX_RETRIES = 2;
+  let attempt = 0;
+  while (true) {
+    try {
+      return await queryFn();
+    } catch (err: any) {
+      attempt++;
+      const errMsg = err?.message || String(err);
+      const isTransientConnectionErr =
+        err?.code === "P1017" ||
+        err?.code === "P1001" ||
+        err?.code === "P1002" ||
+        errMsg.includes("Server has closed the connection") ||
+        errMsg.includes("ECONNRESET") ||
+        errMsg.includes("socket hang up");
+
+      if (isTransientConnectionErr && attempt <= MAX_RETRIES) {
+        sysLog.warn(`⚠️ [Prisma] Transient DB connection error (${err?.code || errMsg}). Retrying query (attempt ${attempt}/${MAX_RETRIES})...`);
+        await new Promise((r) => setTimeout(r, 200 * attempt));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
 
 // Base unextended Prisma Client instance
 export const basePrisma = globalForPrisma.prisma || createPrismaClient();
@@ -179,9 +213,12 @@ export const prisma = basePrisma.$extends({
   },
   query: {
     $allModels: {
-      async $allOperations({ model, operation, args, query }) {
+      async $allOperations(params) {
+        const { model, operation, args, query } = params;
+        const isTx = !!(params as any).__internalParams?.transaction;
+
         if (GLOBAL_SYSTEM_TABLES.includes(model.toLowerCase())) {
-          return query(args);
+          return isTx ? query(args) : executeQueryWithTransientRetry(() => query(args));
         }
 
         // Extract tenant ID context from various possible argument paths
@@ -229,7 +266,7 @@ export const prisma = basePrisma.$extends({
           applyTenantScopingRecursively(scopedArgs, tenantId, model, operation);
         }
 
-        return query(scopedArgs);
+        return isTx ? query(scopedArgs) : executeQueryWithTransientRetry(() => query(scopedArgs));
       }
     }
   }
@@ -333,14 +370,17 @@ export const getTenantPrismaContext = (companyId: string) => {
     },
     query: {
       $allModels: {
-        async $allOperations({ model, operation, args, query }) {
+        async $allOperations(params) {
+          const { model, operation, args, query } = params;
+          const isTx = !!(params as any).__internalParams?.transaction;
+
           if (GLOBAL_SYSTEM_TABLES.includes(model.toLowerCase())) {
-            return query(args);
+            return isTx ? query(args) : executeQueryWithTransientRetry(() => query(args));
           }
 
           const scopedArgs = deepClonePrismaArgs(args || {});
           applyTenantScopingRecursively(scopedArgs, companyId, model, operation);
-          return query(scopedArgs);
+          return isTx ? query(scopedArgs) : executeQueryWithTransientRetry(() => query(scopedArgs));
         },
       },
     },

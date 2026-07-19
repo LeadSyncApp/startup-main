@@ -15,6 +15,7 @@
 
 import { prisma } from "../../lib/prisma";
 import { retrieveProductChunks } from "../knowledge/knowledgeRetriever.service";
+import { LOW_STOCK_THRESHOLD } from "./inventory.service";
 
 export interface ProductMatchResult {
   /** InventoryProduct UUID */
@@ -25,6 +26,8 @@ export interface ProductMatchResult {
   variant: string;
   /** Live stock count (sum across variants, or 0 if none) */
   stock: number;
+  /** Computed stock status: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK" | null */
+  stockStatus: string | null;
   /** Product image URL if available */
   thumbnailUrl: string;
   /** Similarity score of the top match (0..1) */
@@ -149,6 +152,7 @@ export async function matchProductForMessage(
       name: product.name,
       variant,
       stock,
+      stockStatus: stock === 0 ? "OUT_OF_STOCK" : stock > 0 && stock <= LOW_STOCK_THRESHOLD ? "LOW_STOCK" : "IN_STOCK",
       thumbnailUrl: product.imageUrl || "",
       score: top.similarity,
       gap,

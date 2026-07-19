@@ -24,9 +24,7 @@ class PgBossService {
     'automation_runner',
     'menu.restructure.job',
     'knowledge.train.job',
-    'voice.process.job',
-    'delayed_auto_reply',  // 🛑 FIX: Persistent delayed auto-reply queue (replaces setTimeout)
-    'LEAD_FOLLOWUP'        // ⏰ Lead follow-up cron queue
+    'voice.process.job'
   ];
 
   private constructor() {}

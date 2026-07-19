@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Package, Plus, ShoppingBag, RefreshCw, ChevronRight } from "lucide-react";
+import { Package, Plus, ShoppingBag, RefreshCw, ChevronRight, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface ProductVariant {
@@ -13,6 +13,7 @@ interface ProductVariant {
   attributeValue: string;
   price: number;
   stock: number | null;
+  stockStatus?: string | null;
 }
 
 interface SavedProduct {
@@ -20,6 +21,7 @@ interface SavedProduct {
   name: string;
   description: string | null;
   category: string | null;
+  sku: string | null;
   basePrice: number;
   imageUrl: string | null;
   hasVariants: boolean;
@@ -41,10 +43,36 @@ interface InventoryListScreenProps {
   onSelectProduct?: (product: SavedProduct) => void;
 }
 
+const LOW_STOCK_THRESHOLD = 5;
+
+function getStockStatus(stock: number | null): string | null {
+  if (stock === null) return null;
+  if (stock === 0) return "OUT_OF_STOCK";
+  if (stock <= LOW_STOCK_THRESHOLD) return "LOW_STOCK";
+  return "IN_STOCK";
+}
+
+function StockBadge({ status }: { status: string | null }) {
+  if (!status) return null;
+  const colors: Record<string, { bg: string; text: string; border: string }> = {
+    IN_STOCK: { bg: "rgba(16, 185, 129, 0.15)", text: "#10b981", border: "rgba(16, 185, 129, 0.3)" },
+    LOW_STOCK: { bg: "rgba(245, 158, 11, 0.15)", text: "#d97706", border: "rgba(245, 158, 11, 0.3)" },
+    OUT_OF_STOCK: { bg: "rgba(239, 68, 68, 0.15)", text: "#dc2626", border: "rgba(239, 68, 68, 0.3)" },
+  };
+  const c = colors[status] || colors.OUT_OF_STOCK;
+  return (
+    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border" style={{ backgroundColor: c.bg, color: c.text, borderColor: c.border }}>
+      {status === "IN_STOCK" ? "In Stock" : status === "LOW_STOCK" ? "Low Stock" : "Out of Stock"}
+    </span>
+  );
+}
+
 export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: InventoryListScreenProps) {
   const [products, setProducts] = useState<SavedProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -62,6 +90,27 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
       setLoading(false);
     }
   };
+
+  const handleDeleteProduct = async (productId: string) => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/companies/${companyId}/inventory/${productId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to delete product");
+      }
+      setProducts((prev) => prev.filter((p) => p.id !== productId));
+      setDeletingProductId(null);
+    } catch (err: any) {
+      console.error("Failed to delete product:", err);
+      alert(err.message || "An error occurred while deleting the product");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
 
   useEffect(() => {
     fetchProducts();
@@ -167,6 +216,24 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
                         <h3 className="font-medium text-base" style={{ color: 'var(--app-text)' }}>
                           {product.name}
                         </h3>
+                        {product.sku && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--app-border)', color: 'var(--app-text-muted)' }}>
+                            {product.sku}
+                          </span>
+                        )}
+                        {(() => {
+                          const variantStatuses = product.variants.map(v => v.stockStatus || getStockStatus(v.stock));
+                          const hasOutOfStock = variantStatuses.some(s => s === "OUT_OF_STOCK");
+                          const hasLowStock = variantStatuses.some(s => s === "LOW_STOCK");
+                          const hasAnyTracked = variantStatuses.some(s => s !== null);
+                          let productStatus = null;
+                          if (hasAnyTracked) {
+                            if (hasOutOfStock) productStatus = "OUT_OF_STOCK";
+                            else if (hasLowStock) productStatus = "LOW_STOCK";
+                            else productStatus = "IN_STOCK";
+                          }
+                          return productStatus ? <StockBadge status={productStatus} /> : null;
+                        })()}
                         {product.description && (
                           <span className="text-xs px-2 py-0.5 rounded-full border" style={{ borderColor: 'var(--app-border)', color: 'var(--app-text-muted)' }}>
                             {product.description}
@@ -194,6 +261,7 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
                                 ₹{v.price}
                               </span>
                             )}
+                            <StockBadge status={v.stockStatus || getStockStatus(v.stock)} />
                           </span>
                         ))}
                       </div>
@@ -208,7 +276,18 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
                       )}
                     </p>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-app-text-muted" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingProductId(product.id);
+                      }}
+                      className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-black/5 transition cursor-pointer"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    <ChevronRight className="h-4 w-4 text-app-text-muted" />
+                  </div>
                 </div>
                 
                 <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--app-border)' }}>
@@ -221,6 +300,48 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Confirmation Modal */}
+      {deletingProductId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="w-full max-w-sm p-6 rounded-2xl shadow-xl border text-center space-y-4"
+            style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}
+          >
+            <div className="mx-auto w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+              <Trash2 className="h-6 w-6" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold" style={{ color: 'var(--app-text)' }}>
+                Delete Product
+              </h3>
+              <p className="text-sm" style={{ color: 'var(--app-text-muted)' }}>
+                Are you sure you want to delete this product? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                disabled={isDeleting}
+                onClick={() => setDeletingProductId(null)}
+                className="flex-1 px-4 py-2 border rounded-lg text-sm font-medium transition cursor-pointer hover:bg-black/5"
+                style={{ borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={isDeleting}
+                onClick={() => handleDeleteProduct(deletingProductId)}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium transition cursor-pointer hover:bg-red-700 flex items-center justify-center gap-2"
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
+

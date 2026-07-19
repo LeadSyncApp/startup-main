@@ -16,13 +16,9 @@ import {
   RECOVER_WEBHOOK_JOB_NAME
 } from './jobs/cleanup.job';
 import { PROCESS_AI_TASK_JOB_NAME } from './jobs/ai.job';
-import { DELAYED_AUTO_REPLY_JOB_NAME } from './jobs/delayedAutoReply.job';
 import { executeDelayedAutomation } from '../../workflow/automation.service';
 import { tenantContextStorage, resolveTenantContext } from '../../context/tenantContext.provider';
 import { outboundDispatcherService } from '../../outbound.dispatcher';
-import { autoReplyService } from '../../automation/autoReply.service';
-import { LEAD_FOLLOWUP_JOB_NAME } from './jobs/leadFollowUp.job';
-import { executeLeadFollowUpCron } from '../../automation/leadFollowUp.cron';
 
 export async function processConfigMaintenanceTask(job: { data: any }) {
   const { tenantContextEnvelope, rawTaskPayload } = job.data;
@@ -185,94 +181,6 @@ export class WorkerRegistry {
     await boss.work(PROCESS_AI_TASK_JOB_NAME, async (jobs: Array<{ id: string; name: string; data: any }>) => {
       for (const job of jobs) {
         await processIncomingMessageJob(job);
-      }
-    });
-
-    // 🛑 FIX: Delayed Auto-Reply Worker — replaces fragile setTimeout.
-    // This job is fired by pg-boss after the configured delay (minutes/hours/days).
-    // It survives server restarts because pg-boss stores the job in PostgreSQL.
-    await boss.work(DELAYED_AUTO_REPLY_JOB_NAME, async (jobs: Array<{ id: string; data: any }>) => {
-      for (const job of jobs) {
-        try {
-          console.log(`[PgBoss] Processing ${DELAYED_AUTO_REPLY_JOB_NAME}. JobID: ${job.id}`);
-          
-          const payload = job.data;
-          const tenantDb = getTenantPrismaContext(payload.companyId);
-          
-          // 🛑 FIX: Fetch the LIVE rule from DB instead of trusting stale job payload
-          // This ensures we respect any rule changes (disable, message edit) made while the job was pending
-          const liveRule = await tenantDb.autoReplyRule.findUnique({
-            where: { id: payload.ruleId },
-          });
-          
-          if (!liveRule || !liveRule.isEnabled) {
-            console.log(`[PgBoss] Skipping ${DELAYED_AUTO_REPLY_JOB_NAME} JobID: ${job.id} — rule disabled or deleted`);
-            continue;
-          }
-          
-          await autoReplyService.executeDelayedAutoReply(
-            {
-              id: liveRule.id,
-              messageBody: liveRule.messageBody,
-              useAI: liveRule.useAI || false,
-              brandVoice: liveRule.brandVoice,
-              targetLanguage: liveRule.targetLanguage,
-            },
-            {
-              companyId: payload.companyId,
-              conversationId: payload.conversationId,
-              leadId: payload.leadId,
-              contact: payload.contact,
-              channel: payload.channel,
-              customerName: payload.customerName,
-              brandName: payload.brandName,
-              orderId: payload.orderId,
-              customerHistory: payload.customerHistory,
-            },
-            payload.eventKey
-          );
-          
-          console.log(`[PgBoss] ${DELAYED_AUTO_REPLY_JOB_NAME} completed for JobID: ${job.id}`);
-        } catch (err: any) {
-          console.error(`[PgBoss] ${DELAYED_AUTO_REPLY_JOB_NAME} failed for JobID: ${job.id}:`, err.message);
-          
-          // 🛑 FIX: Log failure to autoReplyLog for visibility
-          try {
-            const payload = job.data;
-            const tenantDb = getTenantPrismaContext(payload.companyId);
-            await tenantDb.autoReplyLog.create({
-              data: {
-                companyId: payload.companyId,
-                ruleId: payload.ruleId,
-                eventKey: payload.eventKey,
-                triggeredFor: payload.leadId,
-                recipient: payload.contact,
-                channel: payload.channel,
-                messageBody: payload.messageBody,
-                status: "FAILED",
-                error: err.message,
-              },
-            });
-          } catch (logErr) {
-            console.error(`[PgBoss] Failed to create failure log for JobID: ${job.id}:`, logErr);
-          }
-          
-          throw err; // Let pg-boss handle retries
-        }
-      }
-    });
-
-    // ⏰ Lead Follow-Up Cron Worker
-    await boss.work(LEAD_FOLLOWUP_JOB_NAME, async (jobs: Array<{ id: string; data: any }>) => {
-      for (const job of jobs) {
-        try {
-          console.log(`[PgBoss] Processing ${LEAD_FOLLOWUP_JOB_NAME}. JobID: ${job.id}`);
-          const result = await executeLeadFollowUpCron();
-          console.log(`[PgBoss] ${LEAD_FOLLOWUP_JOB_NAME} completed for JobID: ${job.id}`, result);
-        } catch (err: any) {
-          console.error(`[PgBoss] ${LEAD_FOLLOWUP_JOB_NAME} failed for JobID: ${job.id}:`, err.message);
-          throw err;
-        }
       }
     });
 

@@ -4,13 +4,13 @@ import { prisma, getTenantPrismaContext } from "../../lib/prisma";
 import { ConcurrencyLock } from "../../utils/concurrencyLock";
 import { outboundDispatcherService } from "../outbound.dispatcher";
 import { Channel, MessageSender, ConversationStatus } from "@prisma/client";
-import { generateShopReply } from "../ai/ai.service";
-import { retrieveProductChunks, RetrievedChunk } from "../knowledge/knowledgeRetriever.service";
+import { generateShopReply, classifyMessageIntentWithTimeout, PreFlightClassification } from "../ai/ai.service";
+import { retrieveProductChunks, retrieveSimilarChunks, RetrievedChunk } from "../knowledge/knowledgeRetriever.service";
 import { StandardMessageFrame } from "../../interfaces/messaging.interface";
 import { tenantContextStorage, TenantContext } from "../context/tenantContext.provider";
 import { safeEmitConversationUpdate, emitToConversation, getIO } from "../../lib/socket";
-import { triggerLeadWelcome } from "../automation/autoReplyEventListeners";
 import { conversationalAutoReplyService } from "../automation/conversationalAutoReply.service";
+import { telegramSurfaceAdapter } from "../automation/telegramSurface.adapter";
 import { detectLanguage } from "../ai/languageDetection.service";
 import { ChannelType } from "../../interfaces/outbound.interface";
 import { reapGhostsForCompany } from "../infrastructure/ghostReaper.service";
@@ -151,9 +151,6 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
           include: { lead: true },
         });
 
-        triggerLeadWelcome(newLead.id, companyContext.id).catch(err =>
-          console.error("[Orchestrator] Failed to trigger lead welcome:", err)
-        );
         pgBossService.getBoss().send(
           "ai-triage-job",
           { conversationId: localConversation.id, companyId: companyContext.id },
@@ -231,6 +228,102 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
 
     conversation = freshConversation as any;
 
+    // ── Phase 1.5: Tapped-button / slash-command bypass ──
+    // A tapped inline button (callback_query) carries the rule id in callback_data.
+    // A typed "/command" resolves to a surfaced rule. Either way we execute the
+    // rule's reply directly and skip keyword/RAG/LLM matching entirely.
+    if (frame.channel === Channel.TELEGRAM) {
+      let resolvedRuleId: string | null = null;
+      let surfacePath: "tap" | "command" | null = null;
+
+      if (frame.isCallback && frame.callbackData) {
+        if (frame.callbackData === "back_root") {
+          console.log(`[Orchestrator] 🎯 Navigation bypass → back_root`);
+          if (frame.callbackQueryId) {
+            await telegramSurfaceAdapter.answerCallbackQuery(companyId, frame.callbackQueryId).catch(() => {});
+          }
+          if (frame.callbackMessageId) {
+            try {
+              const company = await prisma.company.findUnique({
+                where: { id: companyId },
+                select: { botWelcomeMessage: true }
+              });
+              const welcomeText = company?.botWelcomeMessage || "Welcome! Please choose an option from the menu below:";
+              const surfaced = await telegramSurfaceAdapter.getActiveSurfacedRules(companyId, null);
+              const kb = telegramSurfaceAdapter.buildInlineKeyboard(surfaced, null);
+              await outboundDispatcherService.editMessageFrame(
+                frame.channel as any,
+                frame.externalChatId,
+                frame.callbackMessageId,
+                { bodyText: welcomeText, replyMarkup: kb || undefined }
+              );
+            } catch (err: any) {
+              console.error(`[Orchestrator] Failed to render root menu for back_root:`, err.message);
+            }
+          }
+          return { surfacePath: "tap", ruleId: "root" };
+        }
+
+        // callback_data stores the rule id (uuid)
+        const exists = await prisma.conversationalRule.findUnique({
+          where: { id: frame.callbackData },
+          select: { id: true, isEnabled: true },
+        });
+        if (exists && exists.isEnabled) {
+          resolvedRuleId = exists.id;
+          surfacePath = "tap";
+        }
+      } else if (processingText && processingText.startsWith("/")) {
+        resolvedRuleId = await conversationalAutoReplyService.resolveByCommand(companyId, processingText.trim());
+        if (resolvedRuleId) surfacePath = "command";
+      }
+
+      if (resolvedRuleId && surfacePath) {
+        console.log(`[Orchestrator] 🎯 Surface bypass (${surfacePath}) → rule ${resolvedRuleId}`);
+        try {
+          await conversationalAutoReplyService.executeRuleById(resolvedRuleId, {
+            companyId,
+            conversationId: conversation.id,
+            leadId: lead.id,
+            messageText: processingText || "",
+            customerName: lead.name || undefined,
+            customerSegment: lead.segment,
+            customerLanguage: lead.preferredLanguage || undefined,
+            channel: (channel === Channel.TELEGRAM ? "TELEGRAM" : channel === Channel.WHATSAPP ? "WHATSAPP" : "INSTAGRAM") as any,
+            contact: lead.contact,
+            isCallback: frame.isCallback,
+            callbackQueryId: frame.callbackQueryId,
+            callbackMessageId: frame.callbackMessageId,
+          });
+        } catch (err: any) {
+          console.error(`[Orchestrator] Surface rule execution failed:`, err.message);
+        }
+
+        // Clear the button spinner for taps
+        if (surfacePath === "tap" && frame.callbackQueryId) {
+          await telegramSurfaceAdapter.answerCallbackQuery(companyId, frame.callbackQueryId).catch(() => {});
+        }
+
+        // Persist inbound message + update conversation state (no AI reply)
+        await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
+          const clientMsg = await tx.message.create({
+            data: { companyId, conversationId: conversation.id, content: processingText || "", sender: MessageSender.CLIENT }
+          });
+          emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
+          await tx.lead.update({ where: { id: lead.id }, data: { lastActiveAt: new Date() } });
+          await tx.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } });
+        });
+
+        safeEmitConversationUpdate(conversation, "conversation_updated", {
+          conversationId: conversation.id,
+          lastContent: "[Rule triggered by tap/command]",
+          updatedAt: new Date().toISOString(),
+        });
+
+        return { surfacePath, ruleId: resolvedRuleId };
+      }
+    }
+
     // Load active rules to use for BOTH rule matching AND AI context
     const activeConversationalRules = await prisma.conversationalRule.findMany({
       where: {
@@ -282,7 +375,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
           leadId: lead.id,
           messageText: processingText,
           customerName: lead.name || undefined,
-          channel: ((channel as string) === "telegram" ? "TELEGRAM" : (channel as string) === "whatsapp" ? "WHATSAPP" : "INSTAGRAM") as ChannelType,
+          channel: (channel === Channel.TELEGRAM ? "TELEGRAM" : channel === Channel.WHATSAPP ? "WHATSAPP" : "INSTAGRAM") as ChannelType,
           contact: lead.contact,
         });
 
@@ -323,16 +416,97 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       ? (await detectLanguage(processingText, process.env.SARVAM_API_KEY)).language
       : "en";
 
-    // Retrieve product chunks for RAG grounding if processing text exists
+    // Retrieve product chunks or policy chunks based on pre-flight intent classification
     let menuSnapshotForAi = config?.botStructuredMenu;
+    const totalPipelineStart = Date.now();
+    let classificationTime = 0;
+
     if (processingText) {
-      const matchingProducts = await retrieveProductChunks(companyId, processingText, 10);
-      console.log("[DEBUG] matchingProducts length:", matchingProducts.length);
-      if (matchingProducts.length > 0) {
-        menuSnapshotForAi = "Available products:\n" + matchingProducts.map((p) => `- ${p.content}`).join("\n");
+      // 1. Fetch thread history for classification context
+      let threadHistoryStr = "";
+      try {
+        const recentMessages = await tenantPrisma.message.findMany({
+          where: { conversationId: conversation.id },
+          orderBy: { createdAt: "desc" },
+          take: 6,
+        });
+        threadHistoryStr = recentMessages
+          .reverse()
+          .map((m: any) => `${m.sender}: ${m.content}`)
+          .join("\n");
+      } catch (err: any) {
+        console.error("[Orchestrator] Error fetching thread history for classification:", err.message);
       }
-      console.log("[DEBUG] menuSnapshotForAi:", menuSnapshotForAi?.substring(0, 200));
+
+      // 2. Run pre-flight classifier
+      const startClassificationTime = Date.now();
+      const classification = await classifyMessageIntentWithTimeout(processingText, threadHistoryStr, 2000);
+      classificationTime = Date.now() - startClassificationTime;
+
+      console.log(`⚙️ [Orchestrator Intent] "${processingText}" → Classified as: ${classification.intent} (${classification.inquiryType || "N/A"})`);
+
+      // 3. Conditional context injection based on classified intent
+      if (classification.intent === "ProductInquiry") {
+        if (classification.inquiryType === "specific") {
+          // Specific Query -> narrow RAG semantic match
+          const matchingProducts = await retrieveProductChunks(companyId, processingText, 5);
+          console.log(`[Orchestrator RAG] Narrow retrieval match size: ${matchingProducts.length}`);
+          if (matchingProducts.length > 0) {
+            menuSnapshotForAi = "Available products:\n" + matchingProducts.map((p) => `- ${p.content}`).join("\n");
+          } else {
+            menuSnapshotForAi = "No matching products found.";
+          }
+        } else {
+          // General Query -> broader DB lookup showing multiple relevant active products
+          try {
+            console.log(`[Orchestrator RAG] Broad DB retrieval query initiated for companyId: "${companyId}"`);
+            const dbProducts = await prisma.inventoryProduct.findMany({
+              where: { companyId, isActive: true },
+              take: 15,
+              include: { variants: { where: { isActive: true } } }
+            });
+            console.log(`[Orchestrator RAG] Broad DB retrieval completed. Found ${dbProducts.length} active products for companyId: "${companyId}"`);
+            if (dbProducts.length > 0) {
+              menuSnapshotForAi = "Available products:\n" + dbProducts.map((p) => {
+                const parts = [`Product: ${p.name}`];
+                if (p.description) parts.push(`Description: ${p.description}`);
+                if (p.hasVariants && p.variants.length > 0 && p.variantAttributeName) {
+                  const variantVals = p.variants.map((v) => `${v.attributeValue} (Price: ₹${v.price})`).join(", ");
+                  parts.push(`${p.variantAttributeName}: ${variantVals}`);
+                }
+                parts.push(`Price: ₹${p.basePrice}`);
+                return `- ` + parts.join(", ");
+              }).join("\n");
+            } else {
+              menuSnapshotForAi = config?.botStructuredMenu || "No products currently available.";
+            }
+          } catch (dbErr: any) {
+            console.error("[Orchestrator] Fallback broad inventory query failed:", dbErr.message);
+            menuSnapshotForAi = config?.botStructuredMenu || "No products currently available.";
+          }
+        }
+      } else if (classification.intent === "Support/Policy") {
+        // Support/Policy Query -> policy-only lookup
+        try {
+          const policyChunks = await retrieveSimilarChunks(companyId, processingText, 5, "POLICY");
+          console.log(`[Orchestrator RAG] Policy retrieval size: ${policyChunks.length}`);
+          if (policyChunks.length > 0) {
+            menuSnapshotForAi = "Company Policies & Info:\n" + policyChunks.map((p) => `- ${p.content}`).join("\n");
+          } else {
+            menuSnapshotForAi = config?.botPolicies || "No specific policy guidelines registered.";
+          }
+        } catch (err: any) {
+          console.error("[Orchestrator] Policy chunk retrieval failed, using fallback:", err.message);
+          menuSnapshotForAi = config?.botPolicies || "No specific policy guidelines registered.";
+        }
+      } else {
+        // Greeting/SmallTalk, OrderRelated, Other -> zero product catalog injection
+        menuSnapshotForAi = "";
+        console.log(`[Orchestrator RAG] Skipping product catalog lookup for intent "${classification.intent}"`);
+      }
     }
+
+
 
     const aiTurnResult = await generateShopReply({
       tenant_id: companyId,
@@ -342,6 +516,9 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       detected_language: detectedLanguage,
       activeRules: rulesAsContext,
     });
+
+    const totalPipelineDuration = Date.now() - totalPipelineStart;
+    console.log(`⏱️ [Pipeline Latency] Intent classifier: ${classificationTime}ms, Total: ${totalPipelineDuration}ms (including main generation)`);
 
     const sessionStateObj: any = (conversation as any)?.sessionState || {};
     const cartItemsCount = sessionStateObj.cart?.items?.length || 0;
@@ -449,8 +626,19 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
 
     // Add the outbound dispatcher ONLY if mode is still BOT
     if (modeIsBot) {
+      // RENDER: attach surfaced ConversationalRule inline buttons (Telegram only)
+      let replyMarkup: any = undefined;
+      if (frame.channel === "TELEGRAM") {
+        try {
+          const surfaced = await telegramSurfaceAdapter.getActiveSurfacedRules(companyId, null);
+          const kb = telegramSurfaceAdapter.buildInlineKeyboard(surfaced, null);
+          if (kb) replyMarkup = kb;
+        } catch (e: any) {
+          console.error(`[Orchestrator] Failed to build surfaced keyboard: ${e.message}`);
+        }
+      }
       promisesToRun.push(
-        outboundDispatcherService.sendMessageFrame(frame.channel as any, frame.externalChatId, conversation.id, { bodyText: replyText, interactivePayload: tool_call ? JSON.parse(JSON.stringify(tool_call)) : null }, "BOT")
+        outboundDispatcherService.sendMessageFrame(frame.channel as any, frame.externalChatId, conversation.id, { bodyText: replyText, interactivePayload: tool_call ? JSON.parse(JSON.stringify(tool_call)) : null, replyMarkup }, "BOT")
       );
     } else {
       console.log(

@@ -15,9 +15,9 @@ BUSINESS TYPE CONTEXT: {{BUSINESS_TYPE}}
 This business type determines which fields are relevant. Extract ONLY the fields that apply to this business type and follow its rules below. Do NOT invent fields that are not part of this business type's template.
 
 BUSINESS TYPE RULES:
-- RETAIL: Extract brand (optional), product_type (required), description (optional), price_inr (required). Variants use attribute_name "Size" or "Color" (optional), with stock as a quantity number.
-- RESTAURANT: Do NOT extract brand (hide it). Extract product_type (required), description (optional), price_inr (required, price per portion/plate). Variants use attribute_name "Portion" or "Duration" (optional). Products are available by default (no stock concept — leave stock null).
-- SERVICES: Do NOT extract brand. Extract product_type (required), description (optional), price_inr (required, price per duration). Variants use attribute_name "Duration" (e.g. "60 min", optional). Leave stock null.
+- RETAIL: Extract brand (optional), product_type (required), description (optional), price_inr (required). Variants use attribute_name "Size" or "Color" (optional), with stock as a quantity number. Extract categories as a comma-separated list (e.g. "Sarees, Festive Wear").
+- RESTAURANT: Do NOT extract brand (hide it). Extract product_type (required), description (optional), price_inr (required, price per portion/plate). Variants use attribute_name "Portion" or "Duration" (optional). Products are available by default (no stock concept — leave stock null). Extract categories as a comma-separated list (e.g. "Starters, Main Course").
+- SERVICES: Do NOT extract brand. Extract product_type (required), description (optional), price_inr (required, price per duration). Variants use attribute_name "Duration" (e.g. "60 min", optional). Leave stock null. Extract categories as a comma-separated list (e.g. "Hair Services, Skin Care").
 
 Return ONLY valid JSON, no preamble, no markdown fences. Schema:
 {
@@ -26,6 +26,7 @@ Return ONLY valid JSON, no preamble, no markdown fences. Schema:
       "brand": string | null,
       "product_type": string,
       "attribute_name": string | null,
+      "categories": string[],   // comma-separated list of categories for this product
       "description": string | null,
       "variants": [
         {
@@ -36,7 +37,8 @@ Return ONLY valid JSON, no preamble, no markdown fences. Schema:
         }
       ],
       "price_inr": number | null,
-      "raw_source_fragment": string
+      "raw_source_fragment": string,
+      "sku": string | null
     }
   ],
   "unparsed_notes": string | null
@@ -78,6 +80,11 @@ DESCRIPTION FIELD RULE:
 - If no such attributes exist, set description to null.
 - Do NOT repeat variant values in description.
 - Do NOT put the brand or product_type in description.
+
+SKU EXTRACTION RULE:
+- If the source text contains an explicit SKU, product code, or catalog number (e.g. "SKU: ABC-123", "code: TSHIRT-001", "ref# 456"), extract it into the "sku" field.
+- Only extract if it is clearly a product identifier. Do NOT invent SKUs.
+- If no explicit SKU is present, set "sku" to null. The system will auto-generate one if needed.
 
 Rules:
 - If a price is not explicitly stated for a product, use null. Never guess a price.

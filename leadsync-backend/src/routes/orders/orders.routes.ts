@@ -13,7 +13,6 @@ import {
 import { sendTelegramMessage } from "../../bot/telegram.sender";
 import { safeEmitConversationUpdate, emitToCompany, emitToAgent } from "../../lib/socket";
 import { recalculateLeadCRM } from "../../services/integrations/crm.service";
-import { triggerLeadWelcome } from "../../services/automation/autoReplyEventListeners";
 
 const router = Router();
 
@@ -108,7 +107,6 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
         }
       });
     }
-    if (lead) await triggerLeadWelcome(lead.id, companyId).catch(() => {});
 
     const upiId = "business@bank";
     const upiName = "business@bank";
@@ -292,8 +290,6 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
           }
         });
 
-        // Trigger welcome auto-reply for new manually created lead
-        await triggerLeadWelcome(lead!.id, companyId).catch(() => {});
       } else {
         // Update client name if specified
         lead = await prisma.lead.update({

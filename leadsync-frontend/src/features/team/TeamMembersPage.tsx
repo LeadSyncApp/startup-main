@@ -12,6 +12,7 @@ import { apiClient } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { can, getRoleLabel, getRoleIcon, getRoleColor, Role } from "../../lib/permissions";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 
 // Types
 interface TeamMember {
@@ -74,6 +75,8 @@ export function TeamMembersPage() {
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<{ id: string; name: string } | null>(null);
+  const [inviteToRevoke, setInviteToRevoke] = useState<{ id: string; email: string } | null>(null);
 
   // Search filters
   const [directorySearch, setDirectorySearch] = useState("");
@@ -176,16 +179,22 @@ export function TeamMembersPage() {
     }
   };
 
-  const handleRemoveMember = async (memberId: string, memberName: string) => {
-    if (!window.confirm(`Are you sure you want to remove ${memberName} from the team?`)) return;
-
+  const triggerRemoveMember = async () => {
+    if (!memberToRemove) return;
+    const { id, name } = memberToRemove;
     try {
-      await apiClient.post(`/team/members/${memberId}/remove`);
-      toast.success(`${memberName} has been removed from the team`);
+      await apiClient.post(`/team/members/${id}/remove`);
+      toast.success(`${name} has been removed from the team`);
       fetchMembers();
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Failed to remove member");
+    } finally {
+      setMemberToRemove(null);
     }
+  };
+
+  const handleRemoveMember = (memberId: string, memberName: string) => {
+    setMemberToRemove({ id: memberId, name: memberName });
   };
 
   const handleChangeRole = async (memberId: string, newRole: Role) => {
@@ -198,18 +207,24 @@ export function TeamMembersPage() {
     }
   };
 
-  const handleRevokeInvite = async (invitationId: string, email: string) => {
-    if (!window.confirm(`Revoke the invitation for ${email}?`)) return;
-    setRevokingId(invitationId);
+  const triggerRevokeInvite = async () => {
+    if (!inviteToRevoke) return;
+    const { id, email } = inviteToRevoke;
+    setRevokingId(id);
     try {
-      await apiClient.post(`/team/invitations/${invitationId}/revoke`);
+      await apiClient.post(`/team/invitations/${id}/revoke`);
       toast.success(`Invitation revoked for ${email}`);
       fetchOnboardingSummary();
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Failed to revoke invitation");
     } finally {
       setRevokingId(null);
+      setInviteToRevoke(null);
     }
+  };
+
+  const handleRevokeInvite = (invitationId: string, email: string) => {
+    setInviteToRevoke({ id: invitationId, email });
   };
 
   const getStatusIndicator = (member: TeamMember) => {
@@ -1135,6 +1150,28 @@ export function TeamMembersPage() {
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        isOpen={!!memberToRemove}
+        onClose={() => setMemberToRemove(null)}
+        onConfirm={triggerRemoveMember}
+        title="Remove Team Member"
+        message={`Are you sure you want to remove ${memberToRemove?.name} from the team?`}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        isDestructive={true}
+      />
+
+      <ConfirmDialog
+        isOpen={!!inviteToRevoke}
+        onClose={() => setInviteToRevoke(null)}
+        onConfirm={triggerRevokeInvite}
+        title="Revoke Invitation"
+        message={`Are you sure you want to revoke the invitation for ${inviteToRevoke?.email}?`}
+        confirmLabel="Revoke"
+        cancelLabel="Cancel"
+        isDestructive={true}
+      />
     </div>
   );
 }

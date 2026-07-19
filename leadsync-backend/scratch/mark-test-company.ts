@@ -1,6 +1,6 @@
 import { prisma } from "../src/lib/prisma";
 
-const botUsername = "CHANGE_ME"; // set this before running
+const botUsername = "fucknikil_bot"; // set this before running
 
 async function main() {
   const before = await prisma.company.findFirst({ where: { telegramBotUsername: botUsername } });

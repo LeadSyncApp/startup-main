@@ -11,7 +11,7 @@ export class OutboundDispatcher {
    * and records the delivery status ('SENT' or 'FAILED') atomically back to the message table.
    */
   public async dispatch(payload: OutboundPayload): Promise<{ messageId: string; deliveryStatus: "SENT" | "FAILED"; message?: any }> {
-    const { companyId, conversationId, to, channel, content, sender, clientMessageId } = payload;
+    const { companyId, conversationId, to, channel, content, sender, clientMessageId, replyMarkup } = payload;
 
     // 1. Strict Input Verification
     if (!companyId || typeof companyId !== "string" || companyId.trim() === "") {
@@ -36,7 +36,7 @@ export class OutboundDispatcher {
     // 2. Dispatch through the targeted channel adapter
     try {
       if (channel === "TELEGRAM") {
-        await TelegramTransportService.sendOutboundPayload(companyId, to, content.text);
+        await TelegramTransportService.sendOutboundPayload(companyId, to, content.text, undefined, replyMarkup);
       } else if (channel === "WHATSAPP") {
         await metaAdapterService.sendWhatsAppMessage(companyId, to, content.text);
       } else if (channel === "INSTAGRAM") {
@@ -117,7 +117,7 @@ const messageSender = payload.sender === "AGENT" ? MessageSender.AGENT
     return { messageId: createdMessageId, deliveryStatus, message: createdMessage };
   }
 
-  public async sendMessageFrame(channel: ChannelType, externalChatId: string, conversationId: string, payload: { bodyText: string; interactivePayload: any }, sender?: "BOT" | "SYSTEM") {
+  public async sendMessageFrame(channel: ChannelType, externalChatId: string, conversationId: string, payload: { bodyText: string; interactivePayload: any; replyMarkup?: any }, sender?: "BOT" | "SYSTEM") {
       const context = getTenantContext();
       if (!context) throw new Error("OutboundDispatcher: No tenant context");
       
@@ -127,9 +127,19 @@ const messageSender = payload.sender === "AGENT" ? MessageSender.AGENT
           to: externalChatId,
           channel: channel,
           content: { text: payload.bodyText },
-          sender: sender || "SYSTEM"
+          sender: sender || "SYSTEM",
+          replyMarkup: payload.replyMarkup
       });
       return result;
+  }
+
+  public async editMessageFrame(channel: ChannelType, externalChatId: string, messageId: string, payload: { bodyText: string; replyMarkup?: any }) {
+      const context = getTenantContext();
+      if (!context) throw new Error("OutboundDispatcher: No tenant context");
+
+      if (channel === "TELEGRAM") {
+          await TelegramTransportService.editMessageText(context.companyId, externalChatId, messageId, payload.bodyText, payload.replyMarkup);
+      }
   }
 
   public async dispatchAction(validatedIntent: string, aiTurnResult: any) {

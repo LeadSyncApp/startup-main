@@ -12,6 +12,7 @@ import { OutboundDispatcher } from "../outbound.dispatcher";
 import { retrieveSimilarChunks, RetrievedChunk } from "../knowledge/knowledgeRetriever.service";
 import { aiPersonalityService } from "../ai/aiPersonality.service";
 import { ChannelType } from "../../interfaces/outbound.interface";
+import { telegramSurfaceAdapter } from "./telegramSurface.adapter";
 
 const outboundDispatcher = new OutboundDispatcher();
 
@@ -25,6 +26,9 @@ interface InboundMessageContext {
   customerLanguage?: string;
   channel: ChannelType;
   contact: string;
+  isCallback?: boolean;
+  callbackQueryId?: string;
+  callbackMessageId?: string;
 }
 
 interface RuleMatchResult {
@@ -413,7 +417,8 @@ export class ConversationalAutoReplyService {
       .replace(/\{shopname\}/gi, "")
       .replace(/\{shopName\}/g, "")
       .replace(/\{brand\}/gi, "")
-      .replace(/\{name\}/gi, context.customerName || "there");
+      .replace(/\{name\}/gi, context.customerName || "there")
+      .replace(/\{\{(\d+)\}\}/g, "Rs. $1");
 
     // If useAI is enabled, enhance the response with AI
     if (rule.useAI) {
@@ -552,6 +557,153 @@ export class ConversationalAutoReplyService {
   }
 
   /**
+   * Resolve a surfaced rule by its Telegram command string (e.g. "/biryani").
+   */
+  async resolveByCommand(companyId: string, command: string): Promise<string | null> {
+    const normalized = command.startsWith("/") ? command : `/${command}`;
+    const cleanCmd = normalized.split("@")[0].trim().toLowerCase();
+
+    const rules = await prisma.conversationalRule.findMany({
+      where: {
+        companyId,
+        isEnabled: true,
+      },
+      select: { id: true, surfaceConfig: true },
+    });
+
+    const matched = rules.find((r) => {
+      const config = r.surfaceConfig as any;
+      if (!config || typeof config !== "object" || !config.enabled) return false;
+      const cmd = (config.command || "").trim().toLowerCase();
+      return cmd === cleanCmd;
+    });
+
+    return matched?.id || null;
+  }
+
+  /**
+   * Fire all active EVENT-type rules whose eventConfig.eventName matches.
+   * Replaces the deleted AutoReplyRule event pipeline (order/lead events).
+   *
+   * TODO(v2): eventConfig.delayMinutes is currently NOT honored — events fire
+   * synchronously. When delay support is added, schedule via setTimeout and at
+   * FIRE TIME re-fetch the rule to confirm it still exists and isEnabled === true
+   * (a rule toggled off / deleted during the delay window must not fire). Also
+   * re-validate eventConfig.eventName still matches. Do NOT trust the in-memory
+   * `rule` snapshot captured at schedule time.
+   */
+  async fireEventRules(
+    eventName: string,
+    context: InboundMessageContext & { orderId?: string; brandName?: string }
+  ): Promise<number> {
+    const rules = await prisma.conversationalRule.findMany({
+      where: {
+        companyId: context.companyId,
+        isEnabled: true,
+        triggerType: "EVENT",
+        eventConfig: { path: ["eventName"], equals: eventName },
+      },
+    });
+
+    let fired = 0;
+    for (const rule of rules) {
+      const response = await this.generateResponse(rule, context);
+      if (!response) continue;
+      await this.sendResponse(context, response);
+      await this.logRuleMatch({
+        companyId: context.companyId,
+        ruleId: rule.id,
+        conversationId: context.conversationId,
+        leadId: context.leadId,
+        inboundText: `event:${eventName}`,
+        responseSent: response,
+        matchedKeyword: null,
+        aiGenerated: !!rule.useAI,
+      });
+      await prisma.conversationalRule.update({
+        where: { id: rule.id },
+        data: { triggerCount: { increment: 1 }, lastTriggeredAt: new Date() },
+      });
+      fired++;
+    }
+    return fired;
+  }
+
+  /**
+   * Execute a single rule directly (used when a customer taps an inline button
+   * or types its Telegram command). Skips keyword/RAG matching entirely.
+   * Returns true if the rule was found + a reply was sent.
+   */
+  async executeRuleById(
+    ruleId: string,
+    context: InboundMessageContext
+  ): Promise<boolean> {
+    const rule = await prisma.conversationalRule.findUnique({ where: { id: ruleId } });
+    if (!rule || !rule.isEnabled) return false;
+
+    // Check if Category or Leaf by looking for active children
+    const children = await telegramSurfaceAdapter.getActiveSurfacedRules(context.companyId, ruleId);
+    const isCategory = children.length > 0;
+
+    let responseText = await this.generateResponse(rule, context);
+    if (isCategory && (!responseText || !responseText.trim())) {
+      responseText = `Please select an option under ${rule.name}:`;
+    }
+
+    if (!responseText) return false;
+
+    let replyMarkup: any = undefined;
+    if (context.channel === "TELEGRAM") {
+      if (isCategory) {
+        const grandparentRuleId = (rule.surfaceConfig as any)?.parentRuleId || null;
+        replyMarkup = telegramSurfaceAdapter.buildInlineKeyboard(children, ruleId, grandparentRuleId);
+      } else {
+        if (context.isCallback) {
+          const parentRuleId = (rule.surfaceConfig as any)?.parentRuleId || null;
+          replyMarkup = telegramSurfaceAdapter.buildLeafKeyboard(parentRuleId);
+        }
+      }
+    }
+
+    if (context.isCallback && context.callbackMessageId && context.channel === "TELEGRAM") {
+      // Edit the existing message in place
+      await outboundDispatcher.editMessageFrame(
+        context.channel,
+        context.contact,
+        context.callbackMessageId,
+        { bodyText: responseText, replyMarkup }
+      );
+    } else {
+      // Send a new message
+      await outboundDispatcher.sendMessageFrame(
+        context.channel,
+        context.contact,
+        context.conversationId,
+        { bodyText: responseText, interactivePayload: null, replyMarkup },
+        "BOT"
+      );
+    }
+
+    await this.logRuleMatch({
+      companyId: context.companyId,
+      ruleId: rule.id,
+      conversationId: context.conversationId,
+      leadId: context.leadId,
+      inboundText: context.messageText,
+      responseSent: responseText,
+      matchedKeyword: null,
+      aiGenerated: !!rule.useAI,
+    });
+
+    await prisma.conversationalRule.update({
+      where: { id: rule.id },
+      data: { triggerCount: { increment: 1 }, lastTriggeredAt: new Date() },
+    });
+
+    return true;
+  }
+
+  /**
    * Test a rule against a sample message (for the frontend simulator)
    */
   async testRule(ruleId: string, sampleMessage: string): Promise<{
@@ -580,7 +732,8 @@ export class ConversationalAutoReplyService {
       .replace(/\{shopname\}/gi, "")
       .replace(/\{shopName\}/g, "")
       .replace(/\{brand\}/gi, "")
-      .replace(/\{name\}/gi, "Test Customer");
+      .replace(/\{name\}/gi, "Test Customer")
+      .replace(/\{\{(\d+)\}\}/g, "Rs. $1");
 
     if (rule.useAI) {
       try {

@@ -26,12 +26,14 @@ const router = Router();
  * GET /companies/:id/inventory
  * 
  * Returns all active InventoryProduct records with nested variants.
+ * Optional query param: ?categories=X,Y — filter by any of the given categories (AND logic for array overlap).
  */
 router.get("/:id/inventory", async (req, res) => {
   const { id: companyId } = req.params;
+  const { categories } = req.query;
 
   try {
-    const products = await getInventoryProducts(companyId);
+    const products = await getInventoryProducts(companyId, categories as string | undefined);
     res.json({ products, count: products.length });
   } catch (error: any) {
     console.error("[InventoryRoutes] List error:", error);
@@ -207,4 +209,50 @@ router.get("/search", authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+/**
+ * DELETE /companies/:id/inventory/:productId
+ * 
+ * Soft-deletes a product by setting isActive = false, and also deactivates 
+ * the corresponding KnowledgeChunk (sourceType = 'PRODUCT') so it's removed from RAG search.
+ */
+router.delete("/:id/inventory/:productId", async (req, res) => {
+  const { id: companyId, productId } = req.params;
+
+  try {
+    // 1. Verify product belongs to the requested company (tenant check)
+    const existingProduct = await prisma.inventoryProduct.findFirst({
+      where: { id: productId, companyId }
+    });
+
+    if (!existingProduct) {
+      return res.status(404).json({ error: "Product not found or access denied" });
+    }
+
+    // 2. Soft-delete the product
+    await prisma.inventoryProduct.update({
+      where: { id: productId },
+      data: { isActive: false }
+    });
+
+    // 3. Deactivate associated KnowledgeChunks
+    await prisma.knowledgeChunk.updateMany({
+      where: {
+        companyId,
+        sourceType: "PRODUCT",
+        sourceId: productId
+      },
+      data: { isActive: false }
+    });
+
+    res.json({ success: true, message: "Product deleted successfully" });
+  } catch (error: any) {
+    console.error("[InventoryRoutes] Delete error:", error);
+    res.status(500).json({
+      error: "Failed to delete product",
+      details: error.message
+    });
+  }
+});
+
 export default router;
+

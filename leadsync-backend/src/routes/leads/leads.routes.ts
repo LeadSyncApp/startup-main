@@ -10,6 +10,7 @@ import { ConversationStatus, ConversationMode, MessageSender, Channel as PrismaC
 import { outboundDispatcherService } from "../../services/outbound.dispatcher";
 import { escalateToHuman, resolveConversation } from "../../services";
 import { generateReplySuggestion } from "../../services/ai/ai.service";
+import { LOW_STOCK_THRESHOLD, getStockStatus } from "../../services/knowledge/inventory.service";
 
 const router = Router();
 
@@ -26,6 +27,7 @@ async function resolveMatchedProduct(conversation: any, companyId: string): Prom
   name: string;
   variant: string;
   stock: number;
+  stockStatus: string | null;
   thumbnailUrl: string;
 } | null> {
   const cached = conversation?.matchedProduct as
@@ -59,6 +61,7 @@ async function resolveMatchedProduct(conversation: any, companyId: string): Prom
       name: cached.name || product.name,
       variant: cached.variant || "",
       stock,
+      stockStatus: getStockStatus(stock),
       thumbnailUrl: cached.thumbnailUrl || product.imageUrl || "",
     };
   } catch (err: any) {

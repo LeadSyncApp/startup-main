@@ -5,15 +5,8 @@ import { decryptSecret } from "../../utils/encryption";
  * Pure, isolated transport layer completely segregated from normalization rules.
  */
 export class TelegramTransportService {
-  public static async sendOutboundPayload(
-    botTokenOrCompanyId: string, 
-    chatTarget: string, 
-    textFrame: string, 
-    structuralTools?: any
-  ): Promise<void> {
+  private static async resolveBotToken(botTokenOrCompanyId: string): Promise<string> {
     let botToken = botTokenOrCompanyId;
-    
-    // Support resolution by either active token or database-registered company ID
     if (!botTokenOrCompanyId.startsWith("bot") && botTokenOrCompanyId.includes("-")) {
       const company = await prisma.company.findUnique({
         where: { id: botTokenOrCompanyId },
@@ -25,7 +18,6 @@ export class TelegramTransportService {
       }
       botToken = resolved;
     } else if (!botTokenOrCompanyId.includes(":") && botTokenOrCompanyId.length > 20) {
-      // It is a company UUID without hyphens or another format, let's do a quick lookup
       const company = await prisma.company.findUnique({
         where: { id: botTokenOrCompanyId },
         select: { telegramBotToken: true }
@@ -35,8 +27,17 @@ export class TelegramTransportService {
         botToken = resolved;
       }
     }
+    return botToken;
+  }
 
-    // Ensure botToken format is prefixed with 'bot' if not already
+  public static async sendOutboundPayload(
+    botTokenOrCompanyId: string, 
+    chatTarget: string, 
+    textFrame: string, 
+    structuralTools?: any,
+    replyMarkup?: any
+  ): Promise<void> {
+    const botToken = await this.resolveBotToken(botTokenOrCompanyId);
     const cleanedToken = botToken.startsWith("bot") ? botToken.slice(3) : botToken;
     const endpoint = `https://api.telegram.org/bot${cleanedToken}/sendMessage`;
     
@@ -47,13 +48,43 @@ export class TelegramTransportService {
         chat_id: chatTarget,
         text: textFrame,
         parse_mode: "HTML",
-        reply_markup: structuralTools ? this.mapToolsToTelegramInterface(structuralTools) : undefined
+        reply_markup: replyMarkup ?? (structuralTools ? this.mapToolsToTelegramInterface(structuralTools) : undefined)
       })
     });
 
     if (!response.ok) {
       const errText = await response.text();
       console.error(`[TelegramOutboundError] Telegram sendOutboundPayload returned status ${response.status}:`, errText);
+      throw new Error(`Telegram API responded with status ${response.status}: ${errText}`);
+    }
+  }
+
+  public static async editMessageText(
+    botTokenOrCompanyId: string,
+    chatTarget: string,
+    messageId: string,
+    textFrame: string,
+    replyMarkup?: any
+  ): Promise<void> {
+    const botToken = await this.resolveBotToken(botTokenOrCompanyId);
+    const cleanedToken = botToken.startsWith("bot") ? botToken.slice(3) : botToken;
+    const endpoint = `https://api.telegram.org/bot${cleanedToken}/editMessageText`;
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatTarget,
+        message_id: Number(messageId),
+        text: textFrame,
+        parse_mode: "HTML",
+        reply_markup: replyMarkup
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[TelegramEditError] Telegram editMessageText returned status ${response.status}:`, errText);
       throw new Error(`Telegram API responded with status ${response.status}: ${errText}`);
     }
   }

@@ -922,3 +922,98 @@ Return ONLY a JSON object (no markdown):
     throw new Error("Failed to generate reply suggestion");
   }
 }
+
+export type PreFlightIntent = "Greeting/SmallTalk" | "ProductInquiry" | "Support/Policy" | "OrderRelated" | "Other";
+export type InquirySpecificity = "specific" | "general" | null;
+
+export interface PreFlightClassification {
+  intent: PreFlightIntent;
+  inquiryType: InquirySpecificity;
+  reasoning?: string;
+}
+
+export async function classifyMessageIntent(
+  messageText: string,
+  threadHistory?: string
+): Promise<PreFlightClassification> {
+  const startTime = Date.now();
+  try {
+    const groq = getGroq();
+    const systemPrompt = `
+You are a high-speed message classification router for an AI ecommerce assistant.
+Analyze the user's message and determine their primary intent and, if applicable, the specificity of their inquiry.
+
+Categories:
+1. "Greeting/SmallTalk": Polite greetings, small talk, pleasantries (e.g. "hi", "hello", "how are you", "good morning").
+2. "ProductInquiry": Inquiries about products, catalog, items, menu, prices, services, or availability.
+   - If "ProductInquiry", also classify "inquiryType" as:
+     - "specific": The user is asking for a specific item, attribute, brand, size, color, design, or looking up a particular product (e.g. "red checked shirt size M", "do you have butter chicken", "what's the price of hair spa package").
+     - "general": The user is asking to see the overall menu, catalog, what products are available, categories, or broad lists (e.g. "what do you have?", "show me the menu", "catalog please", "what services do you offer?", "any shirts?").
+3. "Support/Policy": Questions about delivery times, store policies, shipping charges, complaints, refunds, or customer support (e.g. "when will it be delivered", "what is your return policy", "how to contact support").
+4. "OrderRelated": Questions about their active orders, status of previous order, canceling/modifying order, or checkout confirmation (e.g. "where is my order", "order status", "i want to cancel").
+5. "Other": Anything else not fitting the above categories.
+
+Context Consideration:
+If the user's message is a short fragment or follow-up (e.g., "in blue color", "size M", "add it"), look at the recent thread history to determine if they are continuing a previous topic (e.g. if they previously inquired about a shirt, then "size M" is a continuation of a specific ProductInquiry).
+
+You MUST return a valid JSON object matching this structure:
+{
+  "intent": "Greeting/SmallTalk" | "ProductInquiry" | "Support/Policy" | "OrderRelated" | "Other",
+  "inquiryType": "specific" | "general" | null,
+  "reasoning": "Brief explanation"
+}
+`.trim();
+
+    const userPrompt = `
+${threadHistory ? `RECENT THREAD HISTORY:\n${threadHistory}\n\n` : ""}
+CURRENT CUSTOMER MESSAGE: "${messageText}"
+`.trim();
+
+    const result = await groq.chat.completions.create({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      model: "llama-3.1-8b-instant",
+      response_format: { type: "json_object" },
+      temperature: 0.0,
+    });
+
+    const text = result.choices[0]?.message?.content || "{}";
+    const parsed: PreFlightClassification = JSON.parse(text);
+    console.log(`⏱️ [PreFlight Classification] Completed in ${Date.now() - startTime}ms. Result:`, JSON.stringify(parsed));
+    return parsed;
+  } catch (err: any) {
+    console.error("❌ [PreFlight Classification] Failed, falling back:", err.message);
+    return {
+      intent: "ProductInquiry",
+      inquiryType: "specific",
+      reasoning: "Fallback due to classification failure"
+    };
+  }
+}
+
+export async function classifyMessageIntentWithTimeout(
+  messageText: string,
+  threadHistory?: string,
+  timeoutMs: number = 2000
+): Promise<PreFlightClassification> {
+  const fallback: PreFlightClassification = {
+    intent: "ProductInquiry",
+    inquiryType: "specific",
+    reasoning: "Fallback due to timeout/error"
+  };
+
+  const timeoutPromise = new Promise<PreFlightClassification>((resolve) =>
+    setTimeout(() => {
+      console.warn(`⚠️ [PreFlight] Classification timed out after ${timeoutMs}ms. Using fallback.`);
+      resolve(fallback);
+    }, timeoutMs)
+  );
+
+  return Promise.race([
+    classifyMessageIntent(messageText, threadHistory),
+    timeoutPromise
+  ]);
+}
+

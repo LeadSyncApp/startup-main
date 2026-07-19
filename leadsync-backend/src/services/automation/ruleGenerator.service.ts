@@ -127,7 +127,8 @@ export class RuleGeneratorService {
     }
 
     // 3. templateBody must be long enough to be useful
-    const cleanTemplate = parsed.templateBody && typeof parsed.templateBody === "string" ? parsed.templateBody.trim() : "";
+    let cleanTemplate = parsed.templateBody && typeof parsed.templateBody === "string" ? parsed.templateBody.trim() : "";
+    cleanTemplate = cleanTemplate.replace(/\{\{(\d+)\}\}/g, "Rs. $1");
     if (cleanTemplate.length < MIN_TEMPLATE_LENGTH) {
       throw new Error(
         clarificationHint || `Generated response template is too short (${cleanTemplate.length} chars). Please provide more detail in your instruction.`
@@ -202,7 +203,8 @@ RULES:
 6. If the prompt is about a special offer/discount, set brandVoice to "salesy"
 7. Keep templateBody under 200 characters
 8. confidence must be "clear" if you fully understood the instruction and can generate meaningful keywords and template; "vague" if parts are unclear but you can still produce a partial rule; "unintelligible" if the input is gibberish, random characters, or nonsensical
-9. When confidence is "vague" or "unintelligible", populate clarificationHint with a specific question about what the user meant (e.g. "I couldn't understand your request. Please describe what behavior you want the bot to have.")`;
+9. When confidence is "vague" or "unintelligible", populate clarificationHint with a specific question about what the user meant (e.g. "I couldn't understand your request. Please describe what behavior you want the bot to have.")
+10. Do NOT wrap numbers, prices, or other literal values in double curly braces (e.g. do NOT generate {{100}} or {{price}}). Use them as literals directly in the response template.`
   }
 
   /**

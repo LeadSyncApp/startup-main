@@ -119,8 +119,8 @@ export class TelegramLeaseService {
         await Promise.all(
           myLeases.map(lease => this.acquireOrRefreshLease(lease.companyId))
         );
-      } catch (err) {
-        console.error("Error in lease heartbeat loop:", err);
+      } catch (err: any) {
+        console.debug(`[TelegramLeaseService] Transient error in lease heartbeat loop: ${err?.message || String(err)}`);
       }
     }, HEARTBEAT_INTERVAL_MS);
   }

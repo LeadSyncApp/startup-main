@@ -1,4 +1,5 @@
 import { createTenantRepository } from "../../lib/tenantDb";
+import { prisma } from "../../lib/prisma";
 import { OrderStatus, OrderApprovalStatus } from "@prisma/client";
 import { safeEmitConversationUpdate, emitToCompany } from "../../lib/socket";
 import { notificationService } from "../infrastructure/notification.service";
@@ -6,6 +7,8 @@ import { customerMessagingService } from "../messaging/customerMessaging.service
 import { cacheService } from "../infrastructure/cache.service";
 import { recalculateLeadCRM } from "../integrations/crm.service";
 import { eventBus, Events } from "../../services/infrastructure/eventBus";
+import { conversationalAutoReplyService } from "../automation/conversationalAutoReply.service";
+import { ORDER_EVENT_PREFIX } from "../automation/conversationalRule.constants";
 
 /**
  * Strict Rank for Forward-Only Lifecycle
@@ -274,8 +277,31 @@ export class OrderWorkflowService {
             );
         }
 
-        // 3. Fire ORDER_STATUS_CHANGED event for auto-reply system
+        // 3. Emit ORDER_STATUS_CHANGED (kept for external consumers)
         eventBus.emit(Events.ORDER_STATUS_CHANGED, order.id, companyId);
+
+        // Fire EVENT-type ConversationalRules whose eventConfig.eventName matches.
+        // eventName mirrors the old AutoReplyRule event keys, using the shared
+        // ORDER_EVENT_PREFIX so emit + matcher catalog can never drift.
+        const eventName = `${ORDER_EVENT_PREFIX}${String(next).toLowerCase()}`;
+        const conv = order.conversation;
+        if (conv?.leadId) {
+          const lead = await prisma.lead.findUnique({ where: { id: conv.leadId } });
+          if (lead) {
+            conversationalAutoReplyService.fireEventRules(eventName, {
+              companyId,
+              conversationId: conv.id,
+              leadId: lead.id,
+              messageText: "",
+              customerName: lead.name || undefined,
+              customerSegment: lead.segment,
+              customerLanguage: lead.preferredLanguage || undefined,
+              channel: conv.channel as any,
+              contact: lead.contact,
+              orderId: order.id.slice(0, 8),
+            }).catch((err) => console.error(`[OrderWorkflow] EVENT rule fire failed:`, err.message));
+          }
+        }
     }
 }
 

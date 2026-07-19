@@ -132,6 +132,7 @@ export interface ProductVariantData {
   attribute_value: string;
   price_override: number | null;
   stock: number | null;
+  sku?: string;
 }
 
 /**
@@ -149,6 +150,7 @@ export interface ProductData {
   sku?: string;
   colors?: string[];
   sizes?: string[];
+  categories?: string[];
 }
 
 /**

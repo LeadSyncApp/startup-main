@@ -256,6 +256,7 @@ PROCESS_PROFILE="COMBINED" # Options: COMBINED, WORKER, WEB
   1. **AI Checkout order creation** (originally threw `OrderItem_productId_fkey` constraint violation trying to write `InventoryProduct` ID to `Product` ID).
   2. **Payment request generation** (failed because it queried the legacy `Product` table for catalog products instead of `InventoryProduct` and `InventoryVariant`).
   Both have been patched with the temporary workaround of setting `productId: null` in `OrderItem` records. This creates a broken/missing link between orders and active catalog products, which will distort product performance reporting. It is strongly recommended to consolidate the schemas by migrating `OrderItem.productId` to reference `InventoryProduct` instead of continuing to patch around it.
+  - **Consequence: Stock decrement operates on the legacy `Product.stockQuantity`, not `InventoryVariant.stock`.** `Inventory.service.ts` (lines 30-43) decrements stock on the old model when events fire via `Events.ORDER_CREATED`. The new `InventoryProduct`/`InventoryVariant` system has no decrement path connected to order creation, meaning stock values in the new system will never decrease automatically. Any "Low Stock" or "Out of Stock" status computed from `InventoryVariant.stock` will become stale/inaccurate over time until this is fixed.
 - **Manually Applied SQL Migrations (Prisma Schema Match)**: Two columns exist in the live database that were manually applied outside of standard Prisma migrations: `clientMessageId` and `deliveryError`. These columns are not recorded in the `prisma/migrations/` history, meaning the local migration history will not fully match the live DB schema representation.
 
 ---
@@ -280,3 +281,33 @@ To secure tenant boundaries, we leverage a dynamic, recursive Prisma extension (
 - Separation by `sourceType` (`RULE`, `PRODUCT`, `POLICY`, `MANUAL`) allows pgvector queries to run scoped searches (e.g., matching only rules in `conversationalAutoReply.service.ts` or matching only inventory catalog items in `retrieveProductChunks`). This keeps search spaces narrow and prevents false crossovers.
 
 ---
+
+## 8. Theme Coverage Gaps (Light/Dark Mode)
+
+The frontend uses CSS custom property tokens (`var(--app-bg)`, `var(--app-surface)`, `var(--app-border)`, `var(--app-text)`, `var(--app-text-muted)`, `var(--brand-saffron)`) for theme-aware styling. The following components still contain hardcoded dark-only Tailwind classes (`bg-slate-900`, `text-white`, `border-slate-800`, etc.) and will not render correctly in light mode:
+
+### Fully Hardcoded Dark (need full conversion)
+| # | File | Description |
+|---|------|-------------|
+| 1 | `components/layouts/Sidebar.tsx` | **Dead code** — zero imports anywhere. Replaced by `MasterDashboardLayout.tsx`. Safe to delete. |
+| 2 | `features/auth-tenancy/OnboardingWizard.tsx` | Multi-step onboarding wizard |
+| 3 | `features/auth-tenancy/OnboardingForm.tsx` | Signup form |
+| 4 | `features/ai-orchestration/AIOrchestrator.tsx` | AI configuration panel |
+| 5 | `features/configurations/MetadataManager.tsx` | Metadata editing UI |
+| 6 | `components/activity/ActivityFeedDrawer.tsx` | Activity feed slide-over |
+| 7 | `components/security/SecurityGuards.tsx` | Role/permission guard wrappers |
+
+### Partially Themed (minor accents still hardcoded)
+| # | File | Notes |
+|---|------|-------|
+| 8 | `components/onboarding/TourGuideOverlay.tsx` | Step badges use brand saffron; overlay bg is `bg-black/80` (intentional) |
+| 9 | Various buttons across app | Small `bg-brand-navy text-white` accent buttons — white on brand-color is correct contrast |
+| 10 | `features/inbox/InboxDetail.tsx` | Bot/Agent message bubbles use `bg-teal-600`/`bg-brand-navy` — brand colors, intentional |
+
+### Converted (2026-07-19)
+| File | Scope |
+|------|-------|
+| `features/inventory/InventoryListScreen.tsx` | SKU badge |
+| `features/inbox/InboxDetail.tsx` | Message bubbles, history table, resolve modal, back button, phone text |
+| `features/inbox/ProductPickerModal.tsx` | Full conversion |
+| `features/inbox/PaymentRequestModal.tsx` | Full conversion |

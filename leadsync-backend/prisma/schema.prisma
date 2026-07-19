@@ -45,8 +45,6 @@ model Company {
   upiName                  String?
   updatedAt                DateTime                @updatedAt
   agentFeedPosts           AgentFeedPost[]
-  autoReplyLogs            AutoReplyLog[]
-  autoReplyRules           AutoReplyRule[]
   automationRules          AutomationRule[]
   botConfiguration         BotConfiguration?
   botKnowledge             BotKnowledge[]
@@ -201,7 +199,8 @@ model InventoryProduct {
   companyId             String
   name                  String
   description           String?
-  category              String?
+  categories            String[]            @default([])
+  sku                   String?
   basePrice             Float
   imageUrl              String?
   hasVariants           Boolean             @default(false)
@@ -214,6 +213,7 @@ model InventoryProduct {
   company               Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, name])
+  @@unique([companyId, sku])
   @@index([companyId])
   @@index([companyId, isActive])
 }
@@ -222,6 +222,7 @@ model InventoryVariant {
   id             String           @id @default(uuid())
   productId      String
   attributeValue String
+  sku            String?
   price          Float
   stock          Int?
   isActive       Boolean          @default(true)
@@ -492,48 +493,6 @@ model AutomationLog {
   @@index([createdAt])
 }
 
-model AutoReplyRule {
-  id             String         @id @default(uuid())
-  companyId      String
-  eventKey       String
-  isEnabled      Boolean        @default(true)
-  messageBody    String
-  delayMinutes   Int            @default(0)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  useAI          Boolean        @default(false)
-  brandVoice     String?        @default("friendly")
-  targetLanguage String?        @default("en")
-  logs           AutoReplyLog[]
-  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@unique([companyId, eventKey])
-  @@index([companyId])
-  @@index([eventKey])
-  @@index([isEnabled])
-}
-
-model AutoReplyLog {
-  id           String         @id @default(uuid())
-  companyId    String
-  ruleId       String?
-  eventKey     String
-  triggeredFor String
-  recipient    String
-  channel      String
-  messageBody  String
-  status       String         @default("SENT")
-  error        String?
-  sentAt       DateTime       @default(now())
-  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  rule         AutoReplyRule? @relation(fields: [ruleId], references: [id])
-
-  @@index([companyId])
-  @@index([ruleId])
-  @@index([sentAt])
-  @@index([status])
-}
-
 model RuleGroup {
   id          String               @id @default(uuid())
   companyId   String
@@ -557,7 +516,9 @@ model ConversationalRule {
   name            String
   isEnabled       Boolean                 @default(true)
   triggerKeywords String[]                @default([])
-  triggerType     String                  @default("KEYWORD")
+  triggerType     String                  @default("TEXT_MATCH") // TEXT_MATCH | EVENT
+  surfaceConfig   Json?                   // Telegram button/command surfacing (orthogonal to triggerType)
+  eventConfig     Json?                   // Only when triggerType = EVENT
   conditions      Json?
   templateBody    String                  @default("")
   useAI           Boolean                 @default(false)
@@ -583,6 +544,7 @@ model ConversationalRule {
   @@index([triggerKeywords])
   @@index([groupId])
   @@index([companyId, ruleType])
+  @@index([triggerType])
   @@index([dateRange], type: Gin)
   @@index([hourRange], type: Gin)
 }
