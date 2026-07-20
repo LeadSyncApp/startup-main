@@ -74,7 +74,11 @@ const GLOBAL_SYSTEM_TABLES = [
   "company",
   "idempotency",
   "inventoryvariant",
-  "postalpincodeindex"
+  "postalpincodeindex",
+  "productimage",
+  "pricehistory",
+  "stockhistory",
+  "images"
 ];
 
 const tenantModels = [

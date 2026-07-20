@@ -21,6 +21,7 @@ interface SavedProduct {
   name: string;
   description: string | null;
   category: string | null;
+  categories: string[];
   sku: string | null;
   basePrice: number;
   imageUrl: string | null;
@@ -73,6 +74,12 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
   const [error, setError] = useState<string | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  const allCategories = [...new Set(products.flatMap(p => p.categories || []))].sort();
+  const filteredProducts = selectedCategories.length > 0
+    ? products.filter(p => (p.categories || []).some(c => selectedCategories.includes(c)))
+    : products;
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -137,7 +144,7 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
               Your Inventory
             </h1>
             <p className="text-sm" style={{ color: 'var(--app-text-muted)' }}>
-              {loading ? "Loading..." : `${products.length} product${products.length !== 1 ? 's' : ''} saved`}
+              {loading ? "Loading..." : `${filteredProducts.length} product${filteredProducts.length !== 1 ? 's' : ''} saved${selectedCategories.length > 0 ? ` (filtered)` : ""}`}
             </p>
           </div>
         </div>
@@ -161,6 +168,38 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
           </motion.button>
         </div>
       </div>
+
+      {/* Category Filter Bar */}
+      {allCategories.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 px-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--app-text-muted)' }}>Categories:</span>
+          {allCategories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategories(prev =>
+                prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+              )}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-full border transition cursor-pointer"
+              style={{
+                backgroundColor: selectedCategories.includes(cat) ? 'var(--brand-saffron)' : 'var(--app-surface)',
+                color: selectedCategories.includes(cat) ? 'var(--app-bg)' : 'var(--app-text-muted)',
+                borderColor: selectedCategories.includes(cat) ? 'var(--brand-saffron)' : 'var(--app-border)',
+              }}
+            >
+              {cat}
+            </button>
+          ))}
+          {selectedCategories.length > 0 && (
+            <button
+              onClick={() => setSelectedCategories([])}
+              className="text-[10px] px-2 py-1 rounded-full border transition cursor-pointer"
+              style={{ color: 'var(--app-text-muted)', borderColor: 'var(--app-border)' }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Error State */}
       {error && (
@@ -191,16 +230,32 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
         </div>
       )}
 
+      {/* No Results (filter active but nothing matches) */}
+      {!loading && !error && products.length > 0 && filteredProducts.length === 0 && (
+        <div className="text-center py-8">
+          <p className="text-sm" style={{ color: 'var(--app-text-muted)' }}>
+            No products match the selected categories.
+          </p>
+          <button
+            onClick={() => setSelectedCategories([])}
+            className="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg border transition cursor-pointer"
+            style={{ color: 'var(--app-text-muted)', borderColor: 'var(--app-border)' }}
+          >
+            Clear Filters
+          </button>
+        </div>
+      )}
+
       {/* Product Grid */}
       <AnimatePresence>
-        {products.length > 0 && (
+        {filteredProducts.length > 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="grid gap-4"
           >
-            {products.map((product) => (
+            {filteredProducts.map((product) => (
               <motion.div
                 key={product.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -211,6 +266,19 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
                 style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}
               >
                 <div className="flex items-start justify-between">
+                  <div className="flex gap-4 items-start">
+                    {product.imageUrl ? (
+                      <img 
+                        src={product.imageUrl} 
+                        alt={product.name} 
+                        className="w-14 h-14 object-cover rounded-lg border"
+                        style={{ borderColor: 'var(--app-border)' }}
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-lg bg-black/5 flex items-center justify-center border" style={{ borderColor: 'var(--app-border)' }}>
+                        <Package className="h-5 w-5 text-gray-400" />
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <h3 className="font-medium text-base" style={{ color: 'var(--app-text)' }}>
@@ -275,6 +343,7 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
                         </span>
                       )}
                     </p>
+                  </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button

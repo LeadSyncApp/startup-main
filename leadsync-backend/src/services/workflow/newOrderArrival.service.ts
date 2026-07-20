@@ -10,6 +10,7 @@ import { notificationService } from "../../services/infrastructure/notification.
 import { eventBus, Events } from "../../services/infrastructure/eventBus";
 import { recalculateLeadCRM } from "../integrations/crm.service";
 import { AnalyticsRollupService } from "../analytics/analyticsRollup.service";
+import { decrementStockForOrder } from "../knowledge/inventory.service";
 
 /**
  * Unified New Order Intake / Allocation Service
@@ -147,6 +148,11 @@ export class NewOrderArrivalService {
         }).catch(err => console.error("💥 [AnalyticsRollup] Failed to increment metrics:", err));
 
         console.log(`✅ [NewOrderArrival] Order ${order.id} processed - Status: ${initialStatus} - Customer: ${customerHistory.isExistingCustomer ? 'Existing' : 'New'}`);
+
+        // Decrement InventoryVariant.stock for each ordered item
+        decrementStockForOrder(order.id, companyId).catch(err =>
+            console.error(`❌ [StockDecrement] Failed for order ${order.id}:`, err)
+        );
 
         return {
             order,

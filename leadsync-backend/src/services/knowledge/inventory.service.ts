@@ -156,7 +156,12 @@ async function ensureSkuUnique(companyId: string, baseSku: string): Promise<stri
 /**
  * Upsert variants for a product, removing stale ones
  */
-async function upsertVariants(productId: string, variants: ProductVariantData[], parentSku: string | null) {
+async function upsertVariants(
+  productId: string, 
+  variants: ProductVariantData[], 
+  parentSku: string | null,
+  historyPromises: Promise<any>[]
+) {
   const existing = await prisma.inventoryVariant.findMany({ where: { productId } });
   const existingValues = new Set(existing.map(v => v.attributeValue));
   const incomingValues = new Set(variants.map(v => v.attribute_value));
@@ -173,6 +178,40 @@ async function upsertVariants(productId: string, variants: ProductVariantData[],
     const variantSku = v.sku || (parentSku && v.attribute_value
       ? `${parentSku}-${sanitizeForSku(v.attribute_value)}`
       : null);
+    
+    const existingVar = existing.find(ev => ev.attributeValue === v.attribute_value);
+    if (existingVar) {
+      const newPrice = v.price_override ?? 0;
+      if (existingVar.price !== newPrice) {
+        historyPromises.push(
+          prisma.priceHistory.create({
+            data: {
+              productId,
+              variantId: existingVar.id,
+              oldPrice: existingVar.price,
+              newPrice: newPrice,
+              actorName: "System Ingestion"
+            }
+          })
+        );
+      }
+
+      const newStock = v.stock;
+      if (v.stock !== undefined && existingVar.stock !== newStock) {
+        historyPromises.push(
+          prisma.stockHistory.create({
+            data: {
+              productId,
+              variantId: existingVar.id,
+              oldStock: existingVar.stock,
+              newStock: newStock,
+              actorName: "System Ingestion"
+            }
+          })
+        );
+      }
+    }
+
     await prisma.inventoryVariant.upsert({
       where: { productId_attributeValue: { productId, attributeValue: v.attribute_value } },
       update: { price: v.price_override ?? 0, stock: v.stock, ...(variantSku ? { sku: variantSku } : {}) },
@@ -190,6 +229,7 @@ export async function confirmInventoryProducts(
   products: ProductData[]
 ): Promise<{ count: number; ids: string[] }> {
   const createdIds: string[] = [];
+  const historyPromises: Promise<any>[] = [];
 
   // Load business type once to know whether the availability toggle applies.
   const company = await prisma.company.findUnique({
@@ -215,10 +255,25 @@ export async function confirmInventoryProducts(
     if (existing) {
       // Update existing product — only update SKU if explicitly provided
       productSku = product.sku ?? existing.sku;
+      const newPrice = product.price_inr ?? existing.basePrice;
+      
+      if (existing.basePrice !== newPrice) {
+        historyPromises.push(
+          prisma.priceHistory.create({
+            data: {
+              productId: existing.id,
+              oldPrice: existing.basePrice,
+              newPrice: newPrice,
+              actorName: "System Ingestion"
+            }
+          })
+        );
+      }
+
       await prisma.inventoryProduct.update({
         where: { id: existing.id },
         data: {
-          basePrice: product.price_inr ?? existing.basePrice,
+          basePrice: newPrice,
           hasVariants,
           variantAttributeName: product.attribute_name,
           description: product.description ?? existing.description,
@@ -250,7 +305,7 @@ export async function confirmInventoryProducts(
 
     // Upsert variants
     if (hasVariants) {
-      await upsertVariants(productId, product.variants, productSku);
+      await upsertVariants(productId, product.variants, productSku, historyPromises);
     }
 
     // Also maintain KnowledgeChunk for RAG retrieval backward compatibility
@@ -274,6 +329,19 @@ export async function confirmInventoryProducts(
     `;
 
     createdIds.push(productId);
+  }
+
+  // Execute history log writes asynchronously and non-blocking
+  if (historyPromises.length > 0) {
+    Promise.allSettled(historyPromises).then((results) => {
+      results.forEach((res, i) => {
+        if (res.status === "rejected") {
+          console.error(`❌ [InventoryHistory] Failed to write history row at index ${i}:`, res.reason);
+        }
+      });
+    }).catch(err => {
+      console.error("❌ [InventoryHistory] Promise.allSettled critical error:", err);
+    });
   }
 
   return { count: createdIds.length, ids: createdIds };
@@ -337,7 +405,10 @@ export async function searchInventoryProducts(
         { sku: { contains: searchTerm, mode: "insensitive" } },
       ]
     },
-    include: { variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } } },
+    include: { 
+      variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } },
+      images: { orderBy: { order: "asc" } }
+    },
     orderBy: { createdAt: "desc" },
     take: 20
   });
@@ -346,13 +417,115 @@ export async function searchInventoryProducts(
 }
 
 /**
- * Get all active inventory products for a company
+ * Get all active inventory products for a company, optionally filtered by categories
  */
-export async function getInventoryProducts(companyId: string) {
+export async function getInventoryProducts(companyId: string, categoriesFilter?: string) {
+  const where: any = { companyId, isActive: true };
+
+  if (categoriesFilter) {
+    const cats = categoriesFilter.split(",").map(c => c.trim()).filter(Boolean);
+    if (cats.length > 0) {
+      where.categories = { hasSome: cats };
+    }
+  }
+
   const products = await prisma.inventoryProduct.findMany({
-    where: { companyId, isActive: true },
-    include: { variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } } },
+    where,
+    include: { 
+      variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } },
+      images: { orderBy: { order: "asc" } }
+    },
     orderBy: { createdAt: "desc" }
   });
   return products.map(enrichWithStockStatus);
+}
+
+/**
+ * Decrement InventoryVariant.stock for each item in an order.
+ * Matches OrderItem → InventoryProduct by name (case-insensitive),
+ * then resolves the variant by SKU, attribute value in item name, or
+ * falls back to the most-stocked variant. Floors at 0 to prevent negatives.
+ * Skips variant-less products (no `stock` field on the product itself).
+ */
+export async function decrementStockForOrder(orderId: string, companyId: string): Promise<void> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { orderItems: true }
+  });
+  if (!order || !order.orderItems.length) return;
+
+  for (const item of order.orderItems) {
+    let product = item.sku
+      ? await (prisma.inventoryProduct as any).findFirst({
+          where: { companyId, sku: item.sku, isActive: true }
+        })
+      : null;
+
+    if (!product) {
+      product = await (prisma.inventoryProduct as any).findFirst({
+        where: { companyId, name: { equals: item.name, mode: "insensitive" }, isActive: true }
+      });
+    }
+
+    if (!product || !product.hasVariants) continue;
+
+    const allVariants: any[] = await (prisma.inventoryVariant as any).findMany({
+      where: { productId: product.id, isActive: true }
+    });
+    if (!allVariants.length) continue;
+
+    let targetVariant: any = null;
+
+    // 1. Direct variant ID match (payment-request stores variant.id in item.sku)
+    if (item.sku) {
+      targetVariant = allVariants.find((v: any) => v.id === item.sku);
+    }
+
+    // 2. Attribute value as whole word in item name (word-boundary, avoids false positives)
+    if (!targetVariant) {
+      targetVariant = allVariants.find((v: any) => {
+        const escaped = v.attributeValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return new RegExp(`\\b${escaped}\\b`, "i").test(item.name);
+      });
+    }
+
+    // 3. Fallback: pick variant with same price as OrderItem (if unique)
+    if (!targetVariant) {
+      const samePrice = allVariants.filter((v: any) => v.price === item.price);
+      if (samePrice.length === 1) {
+        targetVariant = samePrice[0];
+      }
+    }
+
+    // 4. Last resort: most-stocked variant (triggers only when all above fail)
+    if (!targetVariant) {
+      targetVariant = allVariants.sort((a: any, b: any) => (b.stock ?? -1) - (a.stock ?? -1))[0];
+      console.warn(`⚠️ [StockDecrement] FALLBACK: No variant match for order ${orderId}, item "${item.name}" (qty ${item.quantity}). Using most-stocked variant "${targetVariant?.attributeValue}" (id: ${targetVariant?.id}). Product "${product.name}" has ${allVariants.length} variants: [${allVariants.map((v: any) => v.attributeValue).join(", ")}].`);
+    }
+
+    if (!targetVariant || targetVariant.stock === null || targetVariant.stock === undefined) continue;
+
+    const newStock = Math.max(0, targetVariant.stock - item.quantity);
+    await (prisma.inventoryVariant as any).update({
+      where: { id: targetVariant.id },
+      data: { stock: newStock }
+    });
+
+    // Write to StockHistory table
+    try {
+      await prisma.stockHistory.create({
+        data: {
+          productId: product.id,
+          variantId: targetVariant.id,
+          oldStock: targetVariant.stock,
+          newStock: newStock,
+          actorName: `Order ${order.id}`
+        }
+      });
+    } catch (historyErr) {
+      console.error("❌ [StockDecrement] Failed to write StockHistory row:", historyErr);
+    }
+
+    console.log(`📦 [StockDecrement] Variant ${targetVariant.id} ("${targetVariant.attributeValue}"): ${targetVariant.stock} → ${newStock} (ordered ${item.quantity})`);
+  }
 }

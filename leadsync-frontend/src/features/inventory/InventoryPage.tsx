@@ -48,6 +48,7 @@ export function InventoryPage({ companyId, businessType }: InventoryPageProps) {
     }));
 
     setProducts([{
+      id: product.id,
       brand: null,
       product_type: product.name,
       variants,
@@ -56,6 +57,8 @@ export function InventoryPage({ companyId, businessType }: InventoryPageProps) {
       price_inr: product.basePrice,
       raw_source_fragment: product.name,
       hasVariants: product.hasVariants,
+      imageUrl: product.imageUrl,
+      images: product.images || [],
     }]);
     setStep("confirm");
   };

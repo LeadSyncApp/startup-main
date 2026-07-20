@@ -13,6 +13,7 @@ import {
 import { sendTelegramMessage } from "../../bot/telegram.sender";
 import { safeEmitConversationUpdate, emitToCompany, emitToAgent } from "../../lib/socket";
 import { recalculateLeadCRM } from "../../services/integrations/crm.service";
+import { decrementStockForOrder } from "../../services/knowledge/inventory.service";
 
 const router = Router();
 
@@ -60,11 +61,13 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
 
         const qty = parseInt(p.quantity) || 1;
         let price = dbProduct.basePrice;
+        let variantAttr: string | null = null;
         
         if (p.variantId) {
           const variant = dbProduct.variants.find((v: any) => v.id === p.variantId);
-          if (variant && variant.price !== null) {
-            price = variant.price;
+          if (variant) {
+            if (variant.price !== null) price = variant.price;
+            variantAttr = variant.attributeValue;
           }
         }
         
@@ -72,9 +75,9 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
 
         return {
           companyId,
-          productId: null, // Avoid FK constraint violation with legacy Product table
-          sku: null,
-          name: dbProduct.name,
+          productId: null,
+          sku: p.variantId || null,
+          name: variantAttr ? `${dbProduct.name} - ${variantAttr}` : dbProduct.name,
           quantity: qty,
           price: price,
           cogs: 0
@@ -137,6 +140,13 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
         orderItems: true
       }
     });
+
+    // Decrement stock for catalog-based orders with real products
+    if (hasProducts) {
+      decrementStockForOrder(order.id, companyId).catch(err =>
+        console.error(`❌ [StockDecrement] Failed for order ${order.id}:`, err)
+      );
+    }
 
     res.json({
       message: "Catalog-based payment request generated",

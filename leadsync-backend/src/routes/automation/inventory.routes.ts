@@ -19,8 +19,26 @@ import {
 } from "../../services/knowledge/inventory.service";
 import { prisma } from "../../lib/prisma";
 import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
+import multer from "multer";
+import { supabase } from "../../lib/supabase";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only JPEG, PNG, and WebP are allowed."));
+    }
+  }
+});
 
 const router = Router();
+
 
 /**
  * GET /companies/:id/inventory
@@ -251,6 +269,221 @@ router.delete("/:id/inventory/:productId", async (req, res) => {
       error: "Failed to delete product",
       details: error.message
     });
+  }
+});
+
+/**
+ * POST /companies/:id/inventory/:productId/images
+ * Upload an image for a product
+ */
+router.post(
+  "/:id/inventory/:productId/images",
+  upload.single("image"),
+  async (req, res) => {
+    const { id: companyId, productId } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: "No image file provided" });
+    }
+
+    try {
+      const product = await prisma.inventoryProduct.findFirst({
+        where: { id: productId, companyId }
+      });
+      if (!product) {
+        return res.status(404).json({ error: "Product not found or access denied" });
+      }
+
+      const existingCount = await prisma.productImage.count({
+        where: { productId }
+      });
+      if (existingCount >= 10) {
+        return res.status(400).json({ error: "Maximum limit of 10 images reached" });
+      }
+
+      if (!supabase) {
+        return res.status(500).json({ error: "Storage client not initialized" });
+      }
+
+      try {
+        const { data: buckets } = await supabase.storage.listBuckets();
+        const exists = buckets?.some(b => b.name === "product-images");
+        if (!exists) {
+          await supabase.storage.createBucket("product-images", { public: true });
+        }
+      } catch (err) {
+        console.error("Failed to check/create bucket:", err);
+      }
+
+      const fileName = `${Date.now()}_${file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const filePath = `products/${companyId}/${productId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("product-images")
+        .upload(filePath, file.buffer, {
+          contentType: file.mimetype,
+          upsert: true
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(filePath);
+
+      const nextOrder = existingCount;
+      const newImage = await prisma.productImage.create({
+        data: {
+          productId,
+          url: publicUrl,
+          order: nextOrder
+        }
+      });
+
+      if (nextOrder === 0) {
+        await prisma.inventoryProduct.update({
+          where: { id: productId },
+          data: { imageUrl: publicUrl }
+        });
+      }
+
+      res.status(201).json({ image: newImage });
+    } catch (error: any) {
+      console.error("[InventoryRoutes] Image upload error:", error);
+      res.status(500).json({ error: "Failed to upload image", details: error.message });
+    }
+  }
+);
+
+/**
+ * DELETE /companies/:id/inventory/:productId/images/:imageId
+ * Delete an image
+ */
+router.delete("/:id/inventory/:productId/images/:imageId", async (req, res) => {
+  const { id: companyId, productId, imageId } = req.params;
+
+  try {
+    const image = await prisma.productImage.findFirst({
+      where: { id: imageId, productId, product: { companyId } }
+    });
+    if (!image) {
+      return res.status(404).json({ error: "Image not found or access denied" });
+    }
+
+    if (supabase) {
+      const urlParts = image.url.split("/product-images/");
+      if (urlParts.length > 1) {
+        const filePath = urlParts[1];
+        await supabase.storage.from("product-images").remove([filePath]);
+      }
+    }
+
+    await prisma.productImage.delete({ where: { id: imageId } });
+
+    const remainingImages = await prisma.productImage.findMany({
+      where: { productId },
+      orderBy: { order: "asc" }
+    });
+
+    let newImageUrl: string | null = null;
+    for (let i = 0; i < remainingImages.length; i++) {
+      const img = remainingImages[i];
+      await prisma.productImage.update({
+        where: { id: img.id },
+        data: { order: i }
+      });
+      if (i === 0) {
+        newImageUrl = img.url;
+      }
+    }
+
+    await prisma.inventoryProduct.update({
+      where: { id: productId },
+      data: { imageUrl: newImageUrl }
+    });
+
+    res.json({ success: true, message: "Image deleted successfully" });
+  } catch (error: any) {
+    console.error("[InventoryRoutes] Image delete error:", error);
+    res.status(500).json({ error: "Failed to delete image", details: error.message });
+  }
+});
+
+/**
+ * POST /companies/:id/inventory/:productId/images/reorder
+ * Reorder image gallery
+ */
+router.post("/:id/inventory/:productId/images/reorder", async (req, res) => {
+  const { id: companyId, productId } = req.params;
+  const { imageIds } = req.body;
+
+  if (!Array.isArray(imageIds)) {
+    return res.status(400).json({ error: "imageIds must be an array of strings" });
+  }
+
+  try {
+    const product = await prisma.inventoryProduct.findFirst({
+      where: { id: productId, companyId }
+    });
+    if (!product) {
+      return res.status(404).json({ error: "Product not found or access denied" });
+    }
+
+    await prisma.$transaction(
+      imageIds.map((id, index) =>
+        prisma.productImage.update({
+          where: { id, productId },
+          data: { order: index }
+        })
+      )
+    );
+
+    const primaryImage = await prisma.productImage.findFirst({
+      where: { productId, order: 0 },
+      select: { url: true }
+    });
+    await prisma.inventoryProduct.update({
+      where: { id: productId },
+      data: { imageUrl: primaryImage?.url || null }
+    });
+
+    res.json({ success: true, message: "Images reordered successfully" });
+  } catch (error: any) {
+    console.error("[InventoryRoutes] Image reorder error:", error);
+    res.status(500).json({ error: "Failed to reorder images", details: error.message });
+  }
+});
+
+/**
+ * GET /companies/:id/inventory/:productId/history
+ * Fetch price and stock history logs for a product
+ */
+router.get("/:id/inventory/:productId/history", async (req, res) => {
+  const { id: companyId, productId } = req.params;
+
+  try {
+    const product = await prisma.inventoryProduct.findFirst({
+      where: { id: productId, companyId }
+    });
+    if (!product) {
+      return res.status(404).json({ error: "Product not found or access denied" });
+    }
+
+    const priceHistory = await prisma.priceHistory.findMany({
+      where: { productId },
+      orderBy: { changedAt: "desc" }
+    });
+
+    const stockHistory = await prisma.stockHistory.findMany({
+      where: { productId },
+      orderBy: { changedAt: "desc" }
+    });
+
+    res.json({ priceHistory, stockHistory });
+  } catch (error: any) {
+    console.error("[InventoryRoutes] Get history error:", error);
+    res.status(500).json({ error: "Failed to fetch history", details: error.message });
   }
 });
 

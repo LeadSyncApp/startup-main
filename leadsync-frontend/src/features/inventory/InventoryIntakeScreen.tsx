@@ -15,6 +15,7 @@ export interface ProductVariantData {
 }
 
 export interface ProductData {
+  id?: string;
   brand: string | null;
   product_type: string;
   variants: ProductVariantData[];
@@ -27,6 +28,9 @@ export interface ProductData {
   colors?: string[];
   sizes?: string[];
   hasVariants?: boolean;
+  categories?: string[];
+  imageUrl?: string | null;
+  images?: any[];
 }
 
 interface IntakeResponse {
