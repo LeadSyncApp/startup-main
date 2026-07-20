@@ -59,12 +59,7 @@ export async function initializeTelegramWebhooks() {
       }
       const token = decryptedToken;
 
-      const decryptedSecret = decryptSecret(company.telegramWebhookSecret);
-      if (!decryptedSecret) {
-        console.error(`❌ Failed to decrypt webhook secret for company: ${company.name}. Skipping.`);
-        continue;
-      }
-      let secret = decryptedSecret;
+      let secret = decryptSecret(company.telegramWebhookSecret);
 
       // Ensure secret exists
       if (!secret) {
