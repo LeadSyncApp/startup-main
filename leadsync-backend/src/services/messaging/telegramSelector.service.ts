@@ -49,6 +49,7 @@ export class TelegramLeaseService {
       });
 
       if (updateResult.count > 0) {
+        this.localLeaseExpiryMap.set(companyId, newExpiresAt.getTime());
         return true;
       }
 
@@ -60,6 +61,7 @@ export class TelegramLeaseService {
 
       if (exists) {
         // Exists but is held by another active instance
+        this.localLeaseExpiryMap.delete(companyId);
         return false;
       }
 
@@ -75,6 +77,7 @@ export class TelegramLeaseService {
         }
       });
 
+      this.localLeaseExpiryMap.set(companyId, newExpiresAt.getTime());
       return true;
     } catch (error: any) {
       // Unique constraint violation (P2002): another instance inserted it first
@@ -86,9 +89,12 @@ export class TelegramLeaseService {
     }
   }
 
+  private static localLeaseExpiryMap = new Map<string, number>();
+
   /**
    * Checks if this instance is authorized to consume messages for the given company.
    * Runs as a fast guard before invoking Telegram API poll cycles.
+   * Uses in-memory cache to avoid unnecessary DB queries on fast poll iterations.
    */
   static async isAuthorizedToConsume(companyId: string): Promise<boolean> {
     // If running in PASSIVE role, ignore completely
@@ -96,8 +102,20 @@ export class TelegramLeaseService {
       return false;
     }
 
-    // Attempt to acquire or refresh the lease
-    return await this.acquireOrRefreshLease(companyId);
+    // Fast path: If we already hold a valid lease that won't expire in the next 3 seconds, return true immediately
+    const cachedExpiry = this.localLeaseExpiryMap.get(companyId);
+    if (cachedExpiry && cachedExpiry > Date.now() + 3000) {
+      return true;
+    }
+
+    // Attempt to acquire or refresh the lease in DB
+    const acquired = await this.acquireOrRefreshLease(companyId);
+    if (acquired) {
+      this.localLeaseExpiryMap.set(companyId, Date.now() + LEASE_DURATION_MS);
+    } else {
+      this.localLeaseExpiryMap.delete(companyId);
+    }
+    return acquired;
   }
 
   /**
