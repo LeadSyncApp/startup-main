@@ -74,7 +74,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
 
   // Real badge counts — reuse the same endpoints that power InboxList
   // (filter=mine) and StreamTriage (filter=unclaimed). No new backend needed.
-  const [myConversations, setMyConversations] = useState(0);
+  const [unclaimedCount, setUnclaimedCount] = useState(0);
   // Set of lead ids that currently have unread messages (server-authoritative base).
   const [unreadLeadIds, setUnreadLeadIds] = useState<Set<string>>(new Set());
   // The conversation currently open in the inbox detail pane (set instantly via
@@ -85,14 +85,20 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
   const refreshBadgeCounts = useCallback(async () => {
     if (!companyId) return;
     try {
+      // Fetch unclaimed conversations for the "New Customers" badge (StreamTriage queue).
+      const unclaimedRes = await authedFetch('/api/leads?filter=unclaimed&limit=1');
+      if (unclaimedRes.ok) {
+        const unclaimedJson = await unclaimedRes.json();
+        setUnclaimedCount(unclaimedJson.meta?.total ?? (unclaimedJson.data?.length ?? 0));
+      }
+
+      // Fetch my assigned conversations for the "My Chats" unread badge.
       const mineRes = await authedFetch('/api/leads?filter=mine&limit=50');
       if (mineRes.ok) {
         const json = await mineRes.json();
         const active = (json.data || []).filter(
           (l: { status: string }) => l.status !== 'RESOLVED'
         );
-        // Active conversations = non-resolved leads assigned to this user.
-        setMyConversations(active.length);
         // Unread chats = active chats that actually have unread messages.
         // Use unreadCount (>0) as the single source of truth so the sidebar
         // stays consistent with the per-chat badge in the chat list.
@@ -155,7 +161,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
   // Map dynamic counts onto ONLY the two tabs that should ever show a badge.
   // Other tabs keep their original (absent) badge property, exactly as before.
   const badgeFor: Partial<Record<string, number>> = {
-    messages: myConversations > 0 ? myConversations : undefined,
+    messages: unclaimedCount > 0 ? unclaimedCount : undefined,
     inbox: myUnreadChats > 0 ? myUnreadChats : undefined,
   };
 

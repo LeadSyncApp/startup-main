@@ -469,12 +469,12 @@ export function StreamTriage() {
       });
     };
 
-    socket.on("conversation.new", handleNewConversation);
-    socket.on("conversation.updated", handleUpdatedConversation);
+    socket.on("conversation:new", handleNewConversation);
+    socket.on("conversation_updated", handleUpdatedConversation);
 
     return () => {
-      socket.off("conversation.new", handleNewConversation);
-      socket.off("conversation.updated", handleUpdatedConversation);
+      socket.off("conversation:new", handleNewConversation);
+      socket.off("conversation_updated", handleUpdatedConversation);
     };
   }, []);
 
