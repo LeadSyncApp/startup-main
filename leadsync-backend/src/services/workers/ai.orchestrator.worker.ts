@@ -249,7 +249,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
                 select: { botWelcomeMessage: true }
               });
               const welcomeText = company?.botWelcomeMessage || "Welcome! Please choose an option from the menu below:";
-              const surfaced = await telegramSurfaceAdapter.getActiveSurfacedRules(companyId, null);
+              const surfaced = await telegramSurfaceAdapter.getActiveSurfacedRules(companyId, null, "BUTTON");
               const kb = telegramSurfaceAdapter.buildInlineKeyboard(surfaced, null);
               await outboundDispatcherService.editMessageFrame(
                 frame.channel as any,
@@ -355,14 +355,19 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         useAI: true,
         brandVoice: true,
         targetLanguage: true,
+        sourcePrompt: true,
       },
     });
 
     // Build a text summary of active rules to feed to the main AI as context
     const rulesAsContext = activeConversationalRules.length > 0
-      ? activeConversationalRules.map(r =>
-          `[Rule: ${r.name}] Keywords: ${(r.triggerKeywords as string[]).join(", ")} → Response: ${(r.templateBody as string || "").substring(0, 120)}`
-        ).join("\n")
+      ? activeConversationalRules.map(r => {
+          if (r.useAI) {
+            return `[Rule Instruction: ${r.name}] Keywords: ${(r.triggerKeywords as string[]).join(", ")} → Behavior: ${r.sourcePrompt || r.name} (AI should draft response dynamically using shop context and live inventory)`;
+          } else {
+            return `[Rule Canned Reply: ${r.name}] Keywords: ${(r.triggerKeywords as string[]).join(", ")} → Response: ${r.templateBody || ""}`;
+          }
+        }).join("\n")
       : "No custom conversational rules active.";
 
     // Phase 2a: Try rule matching first (now blocking/awaited)
@@ -534,14 +539,33 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     if (intent_type === "OrderConfirmed") {
       const extractedOrder = (aiTurnResult as any).extracted_order;
       console.log(`🛒 [Orchestrator] Intercepted OrderConfirmed intent. Raw AI payload:`, JSON.stringify(extractedOrder, null, 2));
-      
+
+      // ── DEDUP GUARD: Skip if a non-terminal order already exists for this conversation. ──
+      const existingOrder = await (prisma.order as any).findFirst({
+        where: {
+          conversationId: conversation.id,
+          isDeleted: false,
+          status: { notIn: ["CANCELLED", "REJECTED", "ARCHIVED", "DELIVERED", "COMPLETED"] }
+        }
+      });
+      if (existingOrder) {
+        console.log(`🛡️ [Orchestrator] Order ${existingOrder.id} already exists for conversation ${conversation.id} — skipping duplicate creation. Clearing session state to break loop.`);
+        // Clear session state so the AI doesn't see stale cart data on next turn
+        await (prisma.conversation as any).update({
+          where: { id: conversation.id },
+          data: { sessionState: {}, intent: null }
+        });
+        // replyText still gets sent below — the customer sees the existing confirmation message
+      } else {
+        console.log(`🛒 [Orchestrator] No existing order found — proceeding to create new order.`);
+
       try {
         // ── PRICE RESOLUTION: Never trust the AI for prices. ──
         // Resolve each item against the real InventoryProduct table to get
         // the canonical basePrice. The AI frequently returns price: null
         // because structured extraction is unreliable for numeric fields.
         const rawItems: any[] = extractedOrder?.items || [];
-        const resolvedItems: { name: string; quantity: number; price: number; productId: string | null }[] = [];
+        const resolvedItems: { name: string; quantity: number; price: number; productId: string | null; sku: string | null }[] = [];
         let resolvedTotal = 0;
 
         for (const item of rawItems) {
@@ -572,11 +596,24 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
           const lineTotal = resolvedPrice * qty;
           resolvedTotal += lineTotal;
 
+          // Try to match the variant so decrementStockForOrder gets a direct variant ID
+          let matchedVariantId: string | null = null;
+          if (dbProduct?.hasVariants) {
+            const variants = await (prisma.inventoryVariant as any).findMany({
+              where: { productId: dbProduct.id, isActive: true }
+            });
+            const matched = variants.find((v: any) =>
+              new RegExp(`\\b${v.attributeValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(itemName)
+            );
+            if (matched) matchedVariantId = matched.id;
+          }
+
           resolvedItems.push({
             name: dbProduct?.name || itemName,
             quantity: qty,
             price: resolvedPrice,
-            productId: null  // InventoryProduct IDs ≠ Product IDs; avoid FK violation
+            productId: null,
+            sku: matchedVariantId
           });
 
           console.log(`🏷️ [Orchestrator] Item "${itemName}" → DB match: ${dbProduct ? `"${dbProduct.name}" @ ₹${dbProduct.basePrice}` : "NONE (fallback ₹" + (item.price || 0) + ")"} × ${qty} = ₹${lineTotal}`);
@@ -601,8 +638,17 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
 
         await newOrderArrivalService.processNewOrderArrival(orderData);
         console.log(`✅ [Orchestrator] Successfully created order for conversation ${conversation.id} with amount ₹${finalAmount}`);
+
+        // ── BREAK THE LOOP: Clear session cart data + intent so subsequent
+        // messages don't re-trigger OrderConfirmed with stale checkout context. ──
+        await (prisma.conversation as any).update({
+          where: { id: conversation.id },
+          data: { sessionState: {}, intent: null }
+        });
+        console.log(`🧹 [Orchestrator] Cleared sessionState and intent for conversation ${conversation.id} — loop broken.`);
       } catch (err) {
         console.error(`❌ [Orchestrator] Failed to create order for conversation ${conversation.id}:`, err);
+      }
       }
     }
 
@@ -630,7 +676,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       let replyMarkup: any = undefined;
       if (frame.channel === "TELEGRAM") {
         try {
-          const surfaced = await telegramSurfaceAdapter.getActiveSurfacedRules(companyId, null);
+          const surfaced = await telegramSurfaceAdapter.getActiveSurfacedRules(companyId, null, "BUTTON");
           const kb = telegramSurfaceAdapter.buildInlineKeyboard(surfaced, null);
           if (kb) replyMarkup = kb;
         } catch (e: any) {

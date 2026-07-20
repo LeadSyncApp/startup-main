@@ -31,13 +31,30 @@ const generateFromPromptSchema = z.object({
 });
 
 const surfaceConfigSchema = z.object({
-  enabled: z.boolean(),
-  channel: z.literal("TELEGRAM"),
-  buttonLabel: z.string().min(1).max(64),
-  command: z.string().min(1).max(32).regex(/^\/[a-z0-9_]+$/, "Command must start with '/' and contain lowercase letters, numbers, or underscores"),
-  menuPosition: z.number().int().min(0).max(9999),
+  enabled: z.boolean().optional(),
+  showAsButton: z.boolean().default(false),
+  showAsCommand: z.boolean().default(false),
+  channel: z.literal("TELEGRAM").default("TELEGRAM"),
+  buttonLabel: z.string().max(64).optional().default(""),
+  command: z.string().max(32).optional().default(""),
+  menuPosition: z.number().int().min(0).max(9999).default(0),
   parentRuleId: z.string().uuid().nullable().optional(),
-}).nullable().optional();
+}).nullable().optional()
+  .refine((data) => {
+    if (!data) return true;
+    const showAsButton = data.showAsButton !== undefined ? data.showAsButton : !!data.enabled;
+    const showAsCommand = data.showAsCommand !== undefined ? data.showAsCommand : !!data.enabled;
+    
+    if (showAsButton || showAsCommand) {
+      if (!data.buttonLabel || data.buttonLabel.trim().length === 0) return false;
+      if (!data.command || !/^\/[a-z0-9_]+$/.test(data.command)) return false;
+    }
+    return true;
+  }, {
+    message: "Button label and command (starting with '/' and lowercase letters/numbers/underscores) are required when surfacing is enabled.",
+    path: ["buttonLabel"]
+  });
+
 
 const eventConfigSchema = z.object({
   // Restrict to the known-event catalog so a rule can never be persisted with an

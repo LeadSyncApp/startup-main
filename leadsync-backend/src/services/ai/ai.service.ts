@@ -409,7 +409,14 @@ export async function generateShopReply(payload: any): Promise<UnifiedShopRespon
     // Use escapeHtmlBrackets to prevent XML breakout / prompt injection.
     const ruleSegment = context.businessRulesSchema || "No custom business parameters enregistered.";
     const heuristicSegment = context.localizedHeuristics || "Standard Indian localized dialect patterns.";
-    
+
+    // Fetch distinct product categories for the merchant
+    const categoryRows = await prisma.inventoryProduct.findMany({
+      where: { companyId: context.companyId, isActive: true },
+      select: { categories: true },
+    });
+    const allCategories = [...new Set(categoryRows.flatMap(r => r.categories))].sort();
+
     const contextBoundaryBlock = `
 [CONTEXT LOCK ENCLOSURES]
 
@@ -420,6 +427,10 @@ ${escapeHtmlBrackets(ruleSegment)}
 <RegionalLinguisticHeuristics>
 ${escapeHtmlBrackets(heuristicSegment)}
 </RegionalLinguisticHeuristics>
+
+<MerchantCategoryList>
+${escapeHtmlBrackets(allCategories.length > 0 ? allCategories.join(", ") : "No categories registered.")}
+</MerchantCategoryList>
 
 <ActiveMerchantMenuSnapshot>
 ${escapeHtmlBrackets(payload.menu_snapshot || "No product inventory registered.")}

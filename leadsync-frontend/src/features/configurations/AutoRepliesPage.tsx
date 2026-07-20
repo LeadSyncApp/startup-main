@@ -14,6 +14,8 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 
 interface SurfaceConfig {
   enabled: boolean;
+  showAsButton?: boolean;
+  showAsCommand?: boolean;
   channel: "TELEGRAM";
   buttonLabel: string;
   command: string;
@@ -97,6 +99,8 @@ export function AutoRepliesPage() {
   const [surfaceDraft, setSurfaceDraft] = useState<SurfaceConfig>({
     enabled: false, channel: "TELEGRAM", buttonLabel: "", command: "", menuPosition: 0,
   });
+  const [draftUseAI, setDraftUseAI] = useState(false);
+  const [draftTemplateBody, setDraftTemplateBody] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Preview-before-confirm state
@@ -222,14 +226,20 @@ export function AutoRepliesPage() {
 
   const openSurfaceEditor = (rule: ConversationalRule) => {
     const sc = rule.surfaceConfig;
+    const showAsButton = sc?.showAsButton ?? (sc?.enabled ? true : false);
+    const showAsCommand = sc?.showAsCommand ?? (sc?.enabled ? true : false);
     setSurfaceDraft({
       enabled: sc?.enabled ?? false,
+      showAsButton,
+      showAsCommand,
       channel: "TELEGRAM",
       buttonLabel: sc?.buttonLabel ?? "",
       command: sc?.command ?? "",
       menuPosition: sc?.menuPosition ?? 0,
       parentRuleId: sc?.parentRuleId ?? null,
     });
+    setDraftUseAI(rule.useAI ?? false);
+    setDraftTemplateBody(rule.templateBody ?? "");
     setSurfaceEditId(rule.id);
   };
 
@@ -238,20 +248,31 @@ export function AutoRepliesPage() {
   const atCap = (ruleId: string, parentRuleId: string | null | undefined) => {
     const targetParentId = parentRuleId || null;
     const existingRule = instructions.find(r => r.id === ruleId);
+    
+    const existingSc = existingRule?.surfaceConfig;
+    const wasSurfacedButton = existingSc ? (existingSc.showAsButton !== undefined ? !!existingSc.showAsButton : !!existingSc.enabled) : false;
     const wasSurfacedUnderThisParent =
-      existingRule?.surfaceConfig?.enabled &&
-      (existingRule.surfaceConfig.parentRuleId || null) === targetParentId;
+      wasSurfacedButton &&
+      (existingSc?.parentRuleId || null) === targetParentId;
     if (wasSurfacedUnderThisParent) return false;
 
     const currentCount = instructions.filter(
-      (r) => r.surfaceConfig?.enabled && (r.surfaceConfig.parentRuleId || null) === targetParentId
+      (r) => {
+        const sc = r.surfaceConfig;
+        if (!sc) return false;
+        const activeBtn = sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled;
+        return activeBtn && (sc.parentRuleId || null) === targetParentId;
+      }
     ).length;
     return currentCount >= constants.maxSurfacedRules;
   };
 
   const saveSurface = async (ruleId: string) => {
     const draft = { ...surfaceDraft };
-    if (draft.enabled) {
+    const showAsButton = !!draft.showAsButton;
+    const showAsCommand = !!draft.showAsCommand;
+
+    if (showAsButton || showAsCommand) {
       if (!draft.buttonLabel.trim()) {
         toast.error("Button label is required when surfacing a rule");
         return;
@@ -260,24 +281,32 @@ export function AutoRepliesPage() {
         toast.error("Command must start with '/' and use lowercase letters, numbers, or underscores (no spaces)");
         return;
       }
-      if (atCap(ruleId, draft.parentRuleId)) {
-        toast.error(`Surfaced rule limit reached (${constants.maxSurfacedRules}). Disable another surfaced rule in this menu first.`);
+      if (showAsButton && atCap(ruleId, draft.parentRuleId)) {
+        toast.error(`Surfaced rule button limit reached (${constants.maxSurfacedRules}). Disable another surfaced button in this menu first.`);
         return;
       }
     }
+
+    if (!draftUseAI && !draftTemplateBody.trim()) {
+      toast.error("A Fixed Reply is required when AI Behavior is disabled.");
+      return;
+    }
+
     setSaving(true);
     try {
       const data = await updateSmartRule(ruleId, {
-        surfaceConfig: draft.enabled
-          ? {
-              enabled: true,
-              channel: "TELEGRAM",
-              buttonLabel: draft.buttonLabel.trim(),
-              command: draft.command.trim(),
-              menuPosition: Number(draft.menuPosition) || 0,
-              parentRuleId: draft.parentRuleId || null,
-            }
-          : { enabled: false, channel: "TELEGRAM", buttonLabel: draft.buttonLabel, command: draft.command, menuPosition: draft.menuPosition, parentRuleId: draft.parentRuleId || null },
+        useAI: draftUseAI,
+        templateBody: draftTemplateBody.trim(),
+        surfaceConfig: {
+          showAsButton,
+          showAsCommand,
+          enabled: showAsButton || showAsCommand,
+          channel: "TELEGRAM",
+          buttonLabel: showAsButton || showAsCommand ? draft.buttonLabel.trim() : "",
+          command: showAsButton || showAsCommand ? draft.command.trim() : "",
+          menuPosition: Number(draft.menuPosition) || 0,
+          parentRuleId: draft.parentRuleId || null,
+        },
       });
       if (data.rule) {
         setInstructions(prev => prev.map(r => r.id === ruleId ? data.rule : r));
@@ -285,7 +314,7 @@ export function AutoRepliesPage() {
         await fetchInstructions();
       }
       setSurfaceEditId(null);
-      toast.success(draft.enabled ? "Rule now shows as a button / command" : "Rule button removed");
+      toast.success("Rule settings updated successfully");
     } catch (err: any) {
       const serverMsg = err?.response?.data?.error || err?.message;
       if (err?.response?.status === 409 || err?.message?.includes("SURFACED_LIMIT_REACHED")) {
@@ -293,7 +322,7 @@ export function AutoRepliesPage() {
       } else if (serverMsg) {
         toast.error(serverMsg);
       } else {
-        toast.error("Failed to save surface settings");
+        toast.error("Failed to save rule settings");
       }
     } finally {
       setSaving(false);
@@ -793,12 +822,27 @@ export function AutoRepliesPage() {
                               </div>
                             )}
 
-                            {_effectiveActive && !inst.useAI && (!inst.templateBody || !inst.templateBody.trim()) && (
-                              <div className="mt-2.5 px-3 py-2 bg-amber-50 border border-amber-200/80 rounded-xl text-xs font-semibold text-amber-800 flex items-center gap-2">
-                                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                                <span>Warning: No response text configured — customers who trigger this instruction won't receive a reply.</span>
-                              </div>
-                            )}
+                            {(() => {
+                              const sc = inst.surfaceConfig;
+                              const showAsButton = sc ? (sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled) : false;
+                              const showAsCommand = sc ? (sc.showAsCommand !== undefined ? !!sc.showAsCommand : !!sc.enabled) : false;
+                              const needsTemplate = !inst.useAI || showAsButton || showAsCommand;
+                              const noTemplate = !inst.templateBody || !inst.templateBody.trim();
+                              
+                              if (_effectiveActive && needsTemplate && noTemplate) {
+                                return (
+                                  <div className="mt-2.5 px-3 py-2 bg-amber-50 border border-amber-200/80 rounded-xl text-xs font-semibold text-amber-800 flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                                    <span>
+                                      Warning: No response text configured. 
+                                      {!inst.useAI ? " This is required for free-text matching." : ""}
+                                      {showAsButton || showAsCommand ? " This is required for button/command taps." : ""}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
                         </div>
 
@@ -825,7 +869,7 @@ export function AutoRepliesPage() {
                           className="flex items-center gap-2 text-xs font-bold text-purple-600 hover:text-purple-800 transition-all cursor-pointer"
                         >
                           <CommandIcon className="w-3.5 h-3.5" />
-                          {inst.surfaceConfig?.enabled ? "Edit button / command" : "Show as button / command"}
+                          Configure reply & surfacing
                           <span className="text-slate-300">›</span>
                         </button>
 
@@ -840,13 +884,22 @@ export function AutoRepliesPage() {
                               <SurfaceEditor
                                 draft={surfaceDraft}
                                 setDraft={setSurfaceDraft}
+                                draftUseAI={draftUseAI}
+                                setDraftUseAI={setDraftUseAI}
+                                draftTemplateBody={draftTemplateBody}
+                                setDraftTemplateBody={setDraftTemplateBody}
                                 rule={inst}
                                 allRules={instructions}
                                 constants={constants}
                                 atCap={atCap(inst.id, surfaceDraft.parentRuleId)}
                                 commandValid={commandSeemsValid(surfaceDraft.command)}
                                 surfacedCount={instructions.filter(
-                                  (r) => r.surfaceConfig?.enabled && (r.surfaceConfig.parentRuleId || null) === (surfaceDraft.parentRuleId || null) && r.id !== inst.id
+                                  (r) => {
+                                    const sc = r.surfaceConfig;
+                                    if (!sc) return false;
+                                    const activeBtn = sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled;
+                                    return activeBtn && (sc.parentRuleId || null) === (surfaceDraft.parentRuleId || null) && r.id !== inst.id;
+                                  }
                                 ).length}
                                 saving={saving}
                                 onCancel={() => setSurfaceEditId(null)}
@@ -1199,14 +1252,26 @@ export function AutoRepliesPage() {
    Surface badge — shown next to a rule when it's surfaced
    ────────────────────────────────────────────────────────────── */
 function SurfacedBadge({ rule }: { rule: ConversationalRule }) {
-  if (!rule.surfaceConfig?.enabled || !rule.surfaceConfig.command) return null;
+  const sc = rule.surfaceConfig;
+  if (!sc) return null;
+
+  const showAsButton = sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled;
+  const showAsCommand = sc.showAsCommand !== undefined ? !!sc.showAsCommand : !!sc.enabled;
+
+  if (!showAsButton && !showAsCommand) return null;
+
+  let label = "";
+  if (showAsButton && showAsCommand) label = `Button & Command: ${sc.command || ""}`;
+  else if (showAsButton) label = "Inline Button Only";
+  else if (showAsCommand) label = `Command Only: ${sc.command || ""}`;
+
   return (
     <span
       className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200"
-      title="Shows as a Telegram button / command"
+      title="Surfacing configured in Telegram"
     >
       <CommandIcon className="w-3 h-3" />
-      {rule.surfaceConfig.command}
+      {label}
     </span>
   );
 }
@@ -1217,6 +1282,10 @@ function SurfacedBadge({ rule }: { rule: ConversationalRule }) {
 interface SurfaceEditorProps {
   draft: SurfaceConfig;
   setDraft: (d: SurfaceConfig) => void;
+  draftUseAI: boolean;
+  setDraftUseAI: (val: boolean) => void;
+  draftTemplateBody: string;
+  setDraftTemplateBody: (val: string) => void;
   rule: ConversationalRule;
   allRules: ConversationalRule[];
   constants: RuleConstants;
@@ -1228,9 +1297,25 @@ interface SurfaceEditorProps {
   onSave: () => void;
 }
 
-function SurfaceEditor({ draft, setDraft, rule, allRules, constants, atCap, commandValid, surfacedCount, saving, onCancel, onSave }: SurfaceEditorProps) {
+function SurfaceEditor({
+  draft,
+  setDraft,
+  draftUseAI,
+  setDraftUseAI,
+  draftTemplateBody,
+  setDraftTemplateBody,
+  rule,
+  allRules,
+  constants,
+  atCap,
+  commandValid,
+  surfacedCount,
+  saving,
+  onCancel,
+  onSave
+}: SurfaceEditorProps) {
   const isEventRule = rule.triggerType === "EVENT";
-  const capBlocked = draft.enabled && atCap;
+  const capBlocked = draft.showAsButton && atCap;
 
   const getParentChain = (
     rules: ConversationalRule[],
@@ -1268,141 +1353,232 @@ function SurfaceEditor({ draft, setDraft, rule, allRules, constants, atCap, comm
   };
 
   const parentCandidates = allRules.filter(
-    (r) => r.surfaceConfig?.enabled && !r.surfaceConfig.parentRuleId && r.id !== rule.id
+    (r) => {
+      const sc = r.surfaceConfig;
+      if (!sc) return false;
+      const activeBtn = sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled;
+      return activeBtn && !sc.parentRuleId && r.id !== rule.id;
+    }
   );
 
+  const isSurfaced = !!(draft.showAsButton || draft.showAsCommand);
+
   return (
-    <div className="mt-3 pt-3 border-t border-slate-100 space-y-3 bg-slate-50/60 rounded-xl p-3">
-      {/* Toggle */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-bold text-slate-700">Show as Telegram button / command</p>
-          <p className="text-[10px] text-slate-400">Customers can tap a button or type the command to trigger this rule.</p>
+    <div className="mt-3 pt-3 border-t border-slate-100 space-y-4 bg-slate-50/60 rounded-xl p-4">
+      {/* 1. AI Behavior Section */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-sm">🧠</span>
+          <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">AI Behavior (Free-Text Matches)</h3>
         </div>
-        <button
-          onClick={() => setDraft({ ...draft, enabled: !draft.enabled })}
-          className={`relative w-11 h-6 rounded-full transition-all cursor-pointer shrink-0 ${draft.enabled ? "bg-purple-600" : "bg-slate-300"}`}
-        >
-          <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${draft.enabled ? "translate-x-5" : ""}`} />
-        </button>
-      </div>
-
-      {capBlocked && (
-        <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] font-bold text-amber-700">
-          Limit reached ({surfacedCount}/{constants.maxSurfacedRules} slots used in this menu level). Disable another rule in this menu first.
-        </div>
-      )}
-
-      {draft.enabled && (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] font-bold text-slate-600 mb-1 block">Button Label</label>
-              <input
-                type="text"
-                value={draft.buttonLabel}
-                maxLength={64}
-                onChange={e => setDraft({ ...draft, buttonLabel: e.target.value })}
-                placeholder="e.g. 🍛 View Menu"
-                className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-purple-500 transition-all font-medium"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] font-bold text-slate-600 mb-1 block">Command</label>
-              <input
-                type="text"
-                value={draft.command}
-                maxLength={32}
-                onChange={e => setDraft({ ...draft, command: e.target.value })}
-                placeholder="/menu"
-                className={`w-full bg-white border-2 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none transition-all font-mono ${commandValid ? 'border-slate-200 focus:border-purple-500' : 'border-red-300 focus:border-red-500'}`}
-              />
-              {!commandValid && draft.command && (
-                <p className="text-[10px] text-red-500 mt-1 font-medium">Must start with / and use lowercase letters, numbers, or underscores.</p>
-              )}
-              {commandValid && draft.command && (
-                <p className="text-[10px] text-slate-400 mt-1">Customers type this in Telegram to trigger the rule.</p>
-              )}
+        <p className="text-[10px] text-slate-400">Configures how the bot responds when a customer types a message related to this instruction.</p>
+        
+        {rule.triggerKeywords && rule.triggerKeywords.length > 0 && (
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Keywords Driving Match</label>
+            <div className="flex flex-wrap gap-1.5">
+              {rule.triggerKeywords.map((kw, idx) => (
+                <span key={idx} className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">{kw}</span>
+              ))}
             </div>
           </div>
+        )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] font-bold text-slate-600 mb-1 block">Parent Menu Level</label>
-              <select
-                value={draft.parentRuleId || ""}
-                onChange={(e) => setDraft({ ...draft, parentRuleId: e.target.value || null })}
-                className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-purple-500 transition-all font-medium"
-              >
-                <option value="">Root / Main Menu (/start)</option>
-                {parentCandidates.map((p) => {
-                  const { hasCycle, depth: parentDepth } = getParentChain(allRules, p.id, rule.id);
-                  const subtreeHeight = getSubtreeHeight(allRules, rule.id);
-                  const isTooDeep = parentDepth + 1 + subtreeHeight > 2;
+        <div className="flex items-center justify-between pt-1">
+          <div>
+            <p className="text-xs font-bold text-slate-700">Enable dynamic AI elaboration</p>
+            <p className="text-[10px] text-slate-400">If enabled, matches are answered dynamically by the AI using your shop context and live product inventory.</p>
+          </div>
+          <button
+            onClick={() => setDraftUseAI(!draftUseAI)}
+            className={`relative w-11 h-6 rounded-full transition-all cursor-pointer shrink-0 ${draftUseAI ? "bg-purple-600" : "bg-slate-300"}`}
+          >
+            <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${draftUseAI ? "translate-x-5" : ""}`} />
+          </button>
+        </div>
 
-                  const isDisabled = hasCycle || isTooDeep;
-                  let labelSuffix = "";
-                  if (hasCycle) labelSuffix = " ⚠️ (Disabled: would create cycle)";
-                  else if (isTooDeep) labelSuffix = " ⚠️ (Disabled: would exceed depth limit)";
+        {draftUseAI && (
+          <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-3 text-[11px] space-y-1.5 text-purple-800">
+            <p className="font-bold flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+              Available Shop Context Data Sources for AI:
+            </p>
+            <ul className="list-disc pl-4 space-y-0.5 text-purple-700 font-medium">
+              <li>📦 <strong>Live Product Catalog & Variants</strong> (Stock count, categories, and item prices)</li>
+              <li>ℹ️ <strong>Shop Profile</strong> (Welcome messages, custom guidelines, and storefront configurations)</li>
+              <li>💬 <strong>Conversation Context</strong> (Customer's segment, language, and recent message thread history)</li>
+            </ul>
+          </div>
+        )}
+      </div>
 
-                  return (
-                    <option key={p.id} value={p.id} disabled={isDisabled}>
-                      {p.surfaceConfig?.buttonLabel || p.name} ({p.surfaceConfig?.command}){labelSuffix}
-                    </option>
-                  );
-                })}
-              </select>
+      {/* 2. Fixed Reply & Surfacing Section */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4 shadow-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-sm">💬</span>
+          <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">Fixed Reply & Surfacing</h3>
+        </div>
+        <p className="text-[10px] text-slate-400">Configures the canned response sent when a button is tapped or a command is typed.</p>
+
+        <div>
+          <label className="text-[11px] font-bold text-slate-600 mb-1 block">
+            Fixed Reply Message {!draftUseAI && <span className="text-red-500">*</span>}
+          </label>
+          <textarea
+            value={draftTemplateBody}
+            onChange={e => setDraftTemplateBody(e.target.value)}
+            rows={2}
+            placeholder="Enter the fixed response message..."
+            className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-purple-500 transition-all font-medium resize-none"
+          />
+          <p className="text-[9px] text-slate-400 mt-1">Always sent exactly as written when tapped or typed. Supported variables: <code className="bg-slate-100 px-1 rounded font-mono">{`{customerName}`}</code>.</p>
+        </div>
+
+        <div>
+          <label className="text-[11px] font-bold text-slate-600 mb-1.5 block">Surfacing Options</label>
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!draft.showAsButton}
+                onChange={e => setDraft({ ...draft, showAsButton: e.target.checked })}
+                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300"
+              />
+              Show as inline button
+            </label>
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!draft.showAsCommand}
+                onChange={e => setDraft({ ...draft, showAsCommand: e.target.checked })}
+                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300"
+              />
+              Show as typed command
+            </label>
+          </div>
+        </div>
+
+        {capBlocked && (
+          <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] font-bold text-amber-700">
+            Limit reached ({surfacedCount}/{constants.maxSurfacedRules} slots used in this menu level). Disable another button in this menu first.
+          </div>
+        )}
+
+        {isSurfaced && (
+          <div className="space-y-3 pt-2 border-t border-slate-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Button Label <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={draft.buttonLabel}
+                  maxLength={64}
+                  onChange={e => setDraft({ ...draft, buttonLabel: e.target.value })}
+                  placeholder="e.g. 🍛 View Menu"
+                  className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-purple-500 transition-all font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Command <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={draft.command}
+                  maxLength={32}
+                  onChange={e => setDraft({ ...draft, command: e.target.value })}
+                  placeholder="/menu"
+                  className={`w-full bg-white border-2 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none transition-all font-mono ${commandValid ? 'border-slate-200 focus:border-purple-500' : 'border-red-300 focus:border-red-500'}`}
+                />
+                {!commandValid && draft.command && (
+                  <p className="text-[10px] text-red-500 mt-1 font-medium">Must start with / and use lowercase letters, numbers, or underscores.</p>
+                )}
+                {commandValid && draft.command && (
+                  <p className="text-[10px] text-slate-400 mt-1 font-medium">Customers type this in Telegram to trigger the rule.</p>
+                )}
+              </div>
             </div>
 
-            <div>
-              <label className="text-[11px] font-bold text-slate-600 mb-1 block">Menu Position (order shown, 0 = first)</label>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setDraft({ ...draft, menuPosition: Math.max(0, draft.menuPosition - 1) })}
-                  className="w-8 h-8 rounded-lg bg-white border-2 border-slate-200 text-slate-600 font-bold hover:border-purple-400 transition-all cursor-pointer"
-                >−</button>
-                <span className="w-10 text-center text-sm font-bold text-slate-800">{draft.menuPosition}</span>
-                <button
-                  onClick={() => setDraft({ ...draft, menuPosition: draft.menuPosition + 1 })}
-                  className="w-8 h-8 rounded-lg bg-white border-2 border-slate-200 text-slate-600 font-bold hover:border-purple-400 transition-all cursor-pointer"
-                >+</button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Parent Menu Level</label>
+                <select
+                  value={draft.parentRuleId || ""}
+                  onChange={(e) => setDraft({ ...draft, parentRuleId: e.target.value || null })}
+                  className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-purple-500 transition-all font-medium"
+                >
+                  <option value="">Root / Main Menu (/start)</option>
+                  {parentCandidates.map((p) => {
+                    const { hasCycle, depth: parentDepth } = getParentChain(allRules, p.id, rule.id);
+                    const subtreeHeight = getSubtreeHeight(allRules, rule.id);
+                    const isTooDeep = parentDepth + 1 + subtreeHeight > 2;
+
+                    const isDisabled = hasCycle || isTooDeep;
+                    let labelSuffix = "";
+                    if (hasCycle) labelSuffix = " ⚠️ (Disabled: would create cycle)";
+                    else if (isTooDeep) labelSuffix = " ⚠️ (Disabled: would exceed depth limit)";
+
+                    return (
+                      <option key={p.id} value={p.id} disabled={isDisabled}>
+                        {p.surfaceConfig?.buttonLabel || p.name} ({p.surfaceConfig?.command}){labelSuffix}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Menu Position (order shown, 0 = first)</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setDraft({ ...draft, menuPosition: Math.max(0, draft.menuPosition - 1) })}
+                    className="w-8 h-8 rounded-lg bg-white border-2 border-slate-200 text-slate-600 font-bold hover:border-purple-400 transition-all cursor-pointer"
+                  >−</button>
+                  <span className="w-10 text-center text-sm font-bold text-slate-800">{draft.menuPosition}</span>
+                  <button
+                    onClick={() => setDraft({ ...draft, menuPosition: draft.menuPosition + 1 })}
+                    className="w-8 h-8 rounded-lg bg-white border-2 border-slate-200 text-slate-600 font-bold hover:border-purple-400 transition-all cursor-pointer"
+                  >+</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Event config: only relevant for EVENT rules */}
+            {isEventRule && (
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Trigger Event</label>
+                <select
+                  value={rule.eventConfig?.eventName || ""}
+                  onChange={() => {/* eventName managed at create time; read-only here */}}
+                  className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-purple-500 transition-all font-medium"
+                  disabled
+                >
+                  {(constants.knownEvents || []).map(ev => (
+                    <option key={ev.value} value={ev.value}>{ev.label}</option>
+                  ))}
+                  {rule.eventConfig?.eventName && !(constants.knownEvents || []).some(ev => ev.value === rule.eventConfig!.eventName) && (
+                    <option value={rule.eventConfig.eventName}>{rule.eventConfig.eventName}</option>
+                  )}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">Event name is set when the rule is created and matches a known event.</p>
+              </div>
+            )}
+
+            {/* Live preview */}
+            <div className="bg-white rounded-xl border border-slate-200 p-3">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Live preview</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {draft.showAsButton && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-bold shadow-sm">
+                    {draft.buttonLabel || "Button Label"}
+                  </span>
+                )}
+                {draft.showAsCommand && (
+                  <code className="px-2 py-1 rounded bg-slate-100 text-slate-600 text-xs font-mono">{commandValid && draft.command ? draft.command : "/command"}</code>
+                )}
               </div>
             </div>
           </div>
-
-          {/* Event config: only relevant for EVENT rules */}
-          {isEventRule && (
-            <div>
-              <label className="text-[11px] font-bold text-slate-600 mb-1 block">Trigger Event</label>
-              <select
-                value={rule.eventConfig?.eventName || ""}
-                onChange={() => {/* eventName managed at create time; read-only here */}}
-                className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-purple-500 transition-all font-medium"
-                disabled
-              >
-                {(constants.knownEvents || []).map(ev => (
-                  <option key={ev.value} value={ev.value}>{ev.label}</option>
-                ))}
-                {rule.eventConfig?.eventName && !(constants.knownEvents || []).some(ev => ev.value === rule.eventConfig!.eventName) && (
-                  <option value={rule.eventConfig.eventName}>{rule.eventConfig.eventName}</option>
-                )}
-              </select>
-              <p className="text-[10px] text-slate-400 mt-1">Event name is set when the rule is created and matches a known event.</p>
-            </div>
-          )}
-
-          {/* Live preview */}
-          <div className="bg-white rounded-xl border border-slate-200 p-3">
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Live preview</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-bold">
-                {draft.buttonLabel || "Button Label"}
-              </span>
-              <code className="px-2 py-1 rounded bg-slate-100 text-slate-600 text-xs font-mono">{commandValid && draft.command ? draft.command : "/command"}</code>
-            </div>
-          </div>
-        </>
-      )}
+        )}
+      </div>
 
       <div className="flex gap-2">
         <button
@@ -1417,7 +1593,7 @@ function SurfaceEditor({ draft, setDraft, rule, allRules, constants, atCap, comm
           className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
         >
           {saving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-          Save
+          Save Settings
         </button>
       </div>
     </div>

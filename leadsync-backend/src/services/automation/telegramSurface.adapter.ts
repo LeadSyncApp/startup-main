@@ -32,13 +32,17 @@ export interface SurfacedRule {
 }
 
 function isSurfaced(rule: any): rule is { id: string; surfaceConfig: any } {
+  if (rule.isEnabled === false || !rule.surfaceConfig || typeof rule.surfaceConfig !== "object") {
+    return false;
+  }
+  const config = rule.surfaceConfig;
+  const showAsButton = config.showAsButton !== undefined ? !!config.showAsButton : !!config.enabled;
+  const showAsCommand = config.showAsCommand !== undefined ? !!config.showAsCommand : !!config.enabled;
+
   return (
-    rule.isEnabled !== false &&
-    rule.surfaceConfig &&
-    typeof rule.surfaceConfig === "object" &&
-    rule.surfaceConfig.enabled === true &&
-    typeof rule.surfaceConfig.command === "string" &&
-    typeof rule.surfaceConfig.buttonLabel === "string"
+    (showAsButton || showAsCommand) &&
+    typeof config.command === "string" &&
+    typeof config.buttonLabel === "string"
   );
 }
 
@@ -48,21 +52,32 @@ export class TelegramSurfaceAdapter {
    * If parentRuleId is undefined, returns all rules (for command sync).
    * If parentRuleId is specified, filters rules belonging to that parent level.
    */
-  async getActiveSurfacedRules(companyId: string, parentRuleId?: string | null): Promise<SurfacedRule[]> {
+  async getActiveSurfacedRules(
+    companyId: string,
+    parentRuleId?: string | null,
+    surfaceType: "BUTTON" | "COMMAND" | "ANY" = "ANY"
+  ): Promise<SurfacedRule[]> {
     const rules = await prisma.conversationalRule.findMany({
       where: {
         companyId,
         isEnabled: true,
-        surfaceConfig: { path: ["enabled"], equals: true },
       },
-      select: { id: true, surfaceConfig: true },
+      select: { id: true, surfaceConfig: true, isEnabled: true },
     });
 
     return rules
       .filter(isSurfaced)
       .filter((r) => {
+        const config = r.surfaceConfig as any;
+        const showAsButton = config.showAsButton !== undefined ? !!config.showAsButton : !!config.enabled;
+        const showAsCommand = config.showAsCommand !== undefined ? !!config.showAsCommand : !!config.enabled;
+
+        if (surfaceType === "BUTTON" && !showAsButton) return false;
+        if (surfaceType === "COMMAND" && !showAsCommand) return false;
+        if (surfaceType === "ANY" && !showAsButton && !showAsCommand) return false;
+
         if (parentRuleId === undefined) return true;
-        const pId = (r.surfaceConfig as any).parentRuleId || null;
+        const pId = config.parentRuleId || null;
         const targetId = parentRuleId || null;
         return pId === targetId;
       })
@@ -134,7 +149,7 @@ export class TelegramSurfaceAdapter {
     });
     if (!company?.telegramConnected || !company.telegramBotToken) return;
 
-    const surfaced = await this.getActiveSurfacedRules(companyId);
+    const surfaced = await this.getActiveSurfacedRules(companyId, undefined, "COMMAND");
 
     const commands = [...BASE_COMMANDS];
     for (const r of surfaced) {
