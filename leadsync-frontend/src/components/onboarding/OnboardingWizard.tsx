@@ -112,14 +112,14 @@ export function OnboardingWizard({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex-1 flex min-h-screen bg-white w-full"
+      className="flex-1 flex min-h-screen w-full bg-[var(--app-bg)]"
     >
       {/* Left Column: Dynamic Branding / Value Prop (Hidden on smaller screens) */}
-      <div className="hidden lg:flex w-[45%] bg-slate-950 text-white flex-col justify-between p-12 lg:p-16 relative overflow-hidden">
+      <div className="hidden lg:flex w-[45%] flex-col justify-between p-12 lg:p-16 relative overflow-hidden bg-[var(--app-surface)] text-[var(--app-text)]">
         {/* Abstract Background Decoration */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-96 h-96 bg-teal-500/20 rounded-full blur-3xl opacity-50" />
-          <div className="absolute top-1/2 -left-20 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl opacity-50 text-white" />
+          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, var(--brand-saffron) 0%, transparent 70%)', opacity: 0.15 }} />
+          <div className="absolute top-1/2 -left-20 w-72 h-72 rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, var(--brand-saffron) 0%, transparent 70%)', opacity: 0.08 }} />
         </div>
 
         <div className="relative z-10 flex items-center gap-3">
@@ -127,21 +127,21 @@ export function OnboardingWizard({
             <ZapIcon className="h-5 w-5 fill-current text-white" />
           </div>
           <div>
-            <span className="font-black text-white tracking-tight text-xl">LeadSync</span>
-            <span className="text-[10px] text-teal-400 font-bold ml-2 uppercase tracking-widest bg-teal-400/10 px-2 py-0.5 rounded-full border border-teal-400/20">Sandbox</span>
+            <span className="font-black tracking-tight text-xl text-[var(--app-text)]">LeadSync</span>
+            <span className="text-[10px] font-bold ml-2 uppercase tracking-widest px-2 py-0.5 rounded-full border text-[var(--brand-saffron)]" style={{ backgroundColor: 'var(--brand-saffron-soft)', borderColor: 'var(--brand-saffron)', opacity: 0.8 }}>Sandbox</span>
           </div>
         </div>
 
         <div className="relative z-10 space-y-12">
           {step === 1 && (
              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full border border-white/10 text-xs font-medium text-slate-300">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
                   <User className="w-3.5 h-3.5" /> Workspace Identity
                 </div>
-                <h1 className="text-4xl lg:text-5xl font-black text-white leading-[1.1] tracking-tight">
+                <h1 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-[var(--app-text)]">
                   Welcome.<br/>Let's configure your command center.
                 </h1>
-                <p className="text-slate-400 text-lg leading-relaxed max-w-md">
+                <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
                   Establish your secure administration seat to begin orchestrating leads, dispatch queues, and customer relations.
                 </p>
              </motion.div>
@@ -149,13 +149,13 @@ export function OnboardingWizard({
 
           {step === 2 && (
              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full border border-white/10 text-xs font-medium text-slate-300">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
                   <Component className="w-3.5 h-3.5" /> Merchant DNA
                 </div>
-                <h1 className="text-4xl lg:text-5xl font-black text-white leading-[1.1] tracking-tight">
+                <h1 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-[var(--app-text)]">
                   What are we<br/>building today?
                 </h1>
-                <p className="text-slate-400 text-lg leading-relaxed max-w-md">
+                <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
                   Whether you're running a home-grown boutique or a high-traffic retail outlet, LeadSync adapts structurally to your vertical.
                 </p>
              </motion.div>
@@ -163,34 +163,34 @@ export function OnboardingWizard({
 
           {step === 3 && (
              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full border border-white/10 text-xs font-medium text-slate-300">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
                   <LineChart className="w-3.5 h-3.5" /> Migration Path
                 </div>
-                <h1 className="text-4xl lg:text-5xl font-black text-white leading-[1.1] tracking-tight">
+                <h1 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-[var(--app-text)]">
                   Start exactly<br/>where you left off.
                 </h1>
-                <p className="text-slate-400 text-lg leading-relaxed max-w-md">
+                <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
                   Whether you're switching from scribbled notebooks or massive excel sheets, we'll configure your dashboard to make the transition perfectly seamless.
                 </p>
 
                 {/* Live Preview Card */}
-                <div className="mt-8 bg-slate-900/50 border border-slate-700/50 rounded-2xl p-6 backdrop-blur-sm">
+                <div className="mt-8 rounded-2xl p-6 backdrop-blur-sm" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', borderWidth: 1 }}>
                    <div className="flex flex-col gap-2 mb-4">
-                     <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Recommended Action</span>
-                     <span className="text-sm text-teal-400 font-bold">
+                     <span className="text-xs font-bold uppercase tracking-widest text-[var(--app-text-muted)]">Recommended Action</span>
+                     <span className="text-sm font-bold text-[var(--brand-saffron)]">
                        {currentWorkflow === "PAPER" && "Prepare for digital logging 📝"}
                        {currentWorkflow === "SPREADSHEET" && "Ready CSV for import 📊"}
                        {currentWorkflow === "CRM" && "Initialize CRM Sync 🔄"}
                      </span>
                    </div>
                    <div className="space-y-3">
-                     <div className="h-2 bg-slate-800 rounded-full w-3/4" />
-                     <div className="h-2 bg-slate-800 rounded-full w-1/2" />
-                     <div className="h-2 bg-slate-800 rounded-full w-5/6" />
+                     <div className="h-2 rounded-full w-3/4" style={{ backgroundColor: 'var(--app-surface-alt)' }} />
+                     <div className="h-2 rounded-full w-1/2" style={{ backgroundColor: 'var(--app-surface-alt)' }} />
+                     <div className="h-2 rounded-full w-5/6" style={{ backgroundColor: 'var(--app-surface-alt)' }} />
                    </div>
-                   <div className="mt-6 pt-4 border-t border-slate-800 flex items-center gap-3">
-                     <Globe className="h-5 w-5 text-blue-400" />
-                     <span className="text-sm font-medium text-slate-300">
+                   <div className="mt-6 pt-4 flex items-center gap-3" style={{ borderTopWidth: 1, borderTopColor: 'var(--app-border)' }}>
+                     <Globe className="h-5 w-5" style={{ color: 'var(--brand-saffron)' }} />
+                     <span className="text-sm font-medium text-[var(--app-text-muted)]">
                        Setting up tailored empty states.
                      </span>
                    </div>
@@ -199,14 +199,14 @@ export function OnboardingWizard({
           )}
         </div>
 
-        <div className="relative z-10 flex items-center gap-3 text-sm text-slate-500 font-mono">
+        <div className="relative z-10 flex items-center gap-3 text-sm font-mono text-[var(--app-text-muted)]">
           <Shield className="h-4 w-4" />
           SOC2 Compliant Framework Placeholder
         </div>
       </div>
 
       {/* Right Column: Interactive Wizard Form */}
-      <div className="flex-1 flex flex-col justify-center overflow-y-auto px-6 py-12 lg:px-16 xl:px-24">
+      <div className="flex-1 flex flex-col justify-center overflow-y-auto px-6 py-12 lg:px-16 xl:px-24" style={{ backgroundColor: 'var(--app-bg)' }}>
         <div className="w-full max-w-md mx-auto">
           
           {/* Header Progress for Mobile (Hidden on Desktop since left handles context, but good for progress) */}
@@ -215,11 +215,12 @@ export function OnboardingWizard({
               {[1, 2, 3].map((s) => (
                 <div 
                   key={s} 
-                  className={`h-1.5 rounded-full transition-all duration-500 ease-out ${s <= step ? 'w-full bg-teal-600' : 'w-full bg-slate-100'}`} 
+                  className={`h-1.5 rounded-full transition-all duration-500 ease-out ${s <= step ? 'w-full' : 'w-full'}`}
+                  style={{ backgroundColor: s <= step ? 'var(--brand-saffron)' : 'var(--app-border)' }}
                 />
               ))}
             </div>
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Step {step} of 3</p>
+            <p className="text-xs font-black uppercase tracking-widest text-[var(--app-text-muted)]">Step {step} of 3</p>
           </div>
 
           <AnimatePresence mode="wait">
@@ -235,8 +236,8 @@ export function OnboardingWizard({
                 className="space-y-8"
               >
                 <div className="space-y-2">
-                  <h2 className="text-3xl font-black text-slate-900 tracking-tight">Your Profile</h2>
-                  <p className="text-slate-500 leading-relaxed text-sm">Tell us who will be managing this instance.</p>
+                  <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">Your Profile</h2>
+                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">Tell us who will be managing this instance.</p>
                 </div>
 
                 <div className="space-y-3">
@@ -246,16 +247,16 @@ export function OnboardingWizard({
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="p-4 rounded-2xl border-2 flex items-start gap-3"
-                      style={{ backgroundColor: 'rgba(239, 68, 68, 0.06)', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                      style={{ backgroundColor: 'rgba(166, 50, 50, 0.06)', borderColor: 'rgba(166, 50, 50, 0.2)' }}
                     >
-                      <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: '#dc2626' }} />
+                      <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: 'var(--danger-red)' }} />
                       <div className="flex-1">
-                        <p className="text-sm font-bold" style={{ color: '#dc2626' }}>Account Already Exists</p>
-                        <p className="text-xs mt-1" style={{ color: '#991b1b' }}>{accountExistsError}</p>
+                        <p className="text-sm font-bold" style={{ color: 'var(--danger-red)' }}>Account Already Exists</p>
+                        <p className="text-xs mt-1" style={{ color: 'var(--app-text-muted)' }}>{accountExistsError}</p>
                         <button
                           onClick={onSwitchToSignIn}
                           className="mt-2 text-sm font-black underline hover:no-underline"
-                          style={{ color: '#dc2626' }}
+                          style={{ color: 'var(--danger-red)' }}
                         >
                           Sign in → 
                         </button>
@@ -267,45 +268,54 @@ export function OnboardingWizard({
                   <button 
                     type="button"
                     onClick={() => { window.location.href = "/api/auth/google/signup"; }}
-                    className="w-full py-4 border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50 rounded-2xl flex items-center justify-center gap-3 transition-all font-bold text-sm text-slate-700 cursor-pointer shadow-sm"
+                    className="w-full py-4 border-2 rounded-2xl flex items-center justify-center gap-3 transition-all font-bold text-sm cursor-pointer shadow-sm text-[var(--app-text)]"
+                    style={{ borderColor: 'var(--app-border)', backgroundColor: 'var(--app-bg)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--app-border-strong)'; e.currentTarget.style.backgroundColor = 'var(--app-bg-soft)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--app-border)'; e.currentTarget.style.backgroundColor = 'var(--app-bg)'; }}
                   >
                     <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="h-5 w-5" alt="Google" />
                     Sign up with Google
                   </button>
 
                   <div className="relative flex items-center justify-center py-2">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100" /></div>
-                    <span className="relative px-4 text-[10px] font-black text-slate-400 bg-white uppercase tracking-widest">Or manually enter</span>
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t" style={{ borderColor: 'var(--app-border)' }} /></div>
+                    <span className="relative px-4 text-[10px] font-black uppercase tracking-widest text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg)' }}>Or manually enter</span>
                   </div>
 
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-xs font-bold text-slate-700 mb-2 block">First Name</label>
+                        <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">First Name</label>
                         <input
                           type="text"
                           value={firstName}
                           onChange={(e) => setFirstName(e.target.value)}
-                          className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 focus:outline-none focus:border-teal-500 transition-all font-medium"
+                          className="w-full border-2 rounded-2xl px-5 py-4 font-medium transition-all"
+                          style={{ backgroundColor: 'var(--app-input-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                           placeholder="John"
+                          onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--brand-saffron)'; }}
+                          onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--app-border)'; }}
                         />
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-slate-700 mb-2 block">Last Name</label>
+                        <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">Last Name</label>
                         <input
                           type="text"
                           value={lastName}
                           onChange={(e) => setLastName(e.target.value)}
-                          className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 focus:outline-none focus:border-teal-500 transition-all font-medium"
+                          className="w-full border-2 rounded-2xl px-5 py-4 font-medium transition-all"
+                          style={{ backgroundColor: 'var(--app-input-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                           placeholder="Doe"
+                          onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--brand-saffron)'; }}
+                          onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--app-border)'; }}
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="text-xs font-bold text-slate-700 mb-2 block">Mobile Number</label>
-                      <div className="flex rounded-2xl border-2 border-slate-100 overflow-hidden focus-within:border-teal-500 transition-all">
-                        <div className="bg-slate-50 px-5 flex items-center border-r-2 border-slate-100 text-sm font-bold text-slate-500">
+                      <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">Mobile Number</label>
+                      <div className="flex rounded-2xl border-2 overflow-hidden transition-all" style={{ borderColor: 'var(--app-border)' }}>
+                        <div className="px-5 flex items-center text-sm font-bold text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderRightWidth: 2, borderRightColor: 'var(--app-border)' }}>
                           +91
                         </div>
                         <input
@@ -315,37 +325,44 @@ export function OnboardingWizard({
                             const v = e.target.value.replace(/\D/g, "");
                             if (v.length <= 10) setPhone(v);
                           }}
-                          className="flex-1 bg-white px-5 py-4 text-slate-900 focus:outline-none font-medium tracking-wide"
+                          className="flex-1 px-5 py-4 font-medium tracking-wide transition-all"
+                          style={{ backgroundColor: 'var(--app-input-bg)', color: 'var(--app-text)' }}
                           placeholder="98765 43210"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="text-xs font-bold text-slate-700 mb-2 block">Work Email</label>
+                      <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">Work Email</label>
                       <input
                         type="email"
                         value={mockEmail}
                         onChange={(e) => setMockEmail(e.target.value)}
-                        className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 focus:outline-none focus:border-teal-500 transition-all font-medium"
+                        className="w-full border-2 rounded-2xl px-5 py-4 font-medium transition-all"
+                        style={{ backgroundColor: 'var(--app-input-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                         placeholder="john@company.com"
+                        onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--brand-saffron)'; }}
+                        onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--app-border)'; }}
                       />
                     </div>
 
                     <div>
-                      <label className="text-xs font-bold text-slate-700 mb-2 block">Email Password</label>
+                      <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">Email Password</label>
                       <div className="relative">
                         <input
                           type={showPassword ? "text" : "password"}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 pr-12 text-slate-900 focus:outline-none focus:border-teal-500 transition-all font-medium"
+                          className="w-full border-2 rounded-2xl px-5 py-4 pr-12 font-medium transition-all"
+                          style={{ backgroundColor: 'var(--app-input-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                           placeholder="••••••••"
+                          onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--brand-saffron)'; }}
+                          onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--app-border)'; }}
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+                          className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors p-1 text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
                         >
                           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
@@ -357,17 +374,20 @@ export function OnboardingWizard({
                 <div className="pt-4 space-y-4">
                   <button
                     onClick={handleNextStep1}
-                    className="w-full py-4.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-slate-900/20 text-sm"
+                    className="w-full py-4.5 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer text-sm"
+                    style={{ backgroundColor: 'var(--brand-saffron)', color: 'var(--app-bg)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-primary-strong)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--brand-saffron)'; }}
                   >
                     Continue <ArrowRight className="h-4 w-4" />
                   </button>
                   
                   <div className="text-center">
-                    <p className="text-xs text-slate-500 font-medium">
+                    <p className="text-xs font-medium text-[var(--app-text-muted)]">
                       Already using LeadSync?{" "}
                       <button 
                         onClick={onSwitchToSignIn}
-                        className="text-teal-600 font-black hover:underline cursor-pointer"
+                        className="font-black hover:underline cursor-pointer text-[var(--brand-saffron)]"
                       >
                         Sign In
                       </button>
@@ -388,36 +408,41 @@ export function OnboardingWizard({
                 className="space-y-8"
               >
                 <div className="space-y-2">
-                  <h2 className="text-3xl font-black text-slate-900 tracking-tight">Business Profile</h2>
-                  <p className="text-slate-500 leading-relaxed text-sm">How is your operation structured?</p>
+                  <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">Business Profile</h2>
+                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">How is your operation structured?</p>
                 </div>
 
                 <div className="space-y-6">
                   {/* Business Name */}
                   <div>
-                    <label className="text-xs font-bold text-slate-700 mb-2 block">Brand or Organization Name</label>
+                    <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">Brand or Organization Name</label>
                     <input
                       type="text"
                       value={mockCompany}
                       onChange={(e) => setMockCompany(e.target.value)}
-                      className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 focus:outline-none focus:border-teal-500 transition-all font-bold text-lg"
+                      className="w-full border-2 rounded-2xl px-5 py-4 font-bold text-lg transition-all"
+                      style={{ backgroundColor: 'var(--app-input-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                       placeholder="e.g. Acme Corp"
+                      onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--brand-saffron)'; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--app-border)'; }}
                     />
                   </div>
 
                   {/* Operational Scale */}
                   <div>
-                    <label className="text-xs font-bold text-slate-700 mb-3 block">Business Scale</label>
-                    <div className="grid grid-cols-2 gap-3 p-1.5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <label className="text-xs font-bold mb-3 block text-[var(--app-text-muted)]">Business Scale</label>
+                    <div className="grid grid-cols-2 gap-3 p-1.5 rounded-2xl border" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
                       <button
                         onClick={() => setBusinessScale("HOME")}
-                        className={`py-3.5 rounded-xl text-sm font-bold transition-all ${businessScale === "HOME" ? "bg-white text-teal-700 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:bg-white/50"}`}
+                        className={`py-3.5 rounded-xl text-sm font-bold transition-all ${businessScale === "HOME" ? "shadow-sm text-[var(--brand-saffron)]" : "text-[var(--app-text-muted)] hover:bg-[var(--app-bg)]/50"}`}
+                        style={businessScale === "HOME" ? { backgroundColor: 'var(--app-bg)', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' } : {}}
                       >
                         Home-Grown
                       </button>
                       <button
                         onClick={() => setBusinessScale("SME")}
-                        className={`py-3.5 rounded-xl text-sm font-bold transition-all ${businessScale === "SME" ? "bg-white text-teal-700 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:bg-white/50"}`}
+                        className={`py-3.5 rounded-xl text-sm font-bold transition-all ${businessScale === "SME" ? "shadow-sm text-[var(--brand-saffron)]" : "text-[var(--app-text-muted)] hover:bg-[var(--app-bg)]/50"}`}
+                        style={businessScale === "SME" ? { backgroundColor: 'var(--app-bg)', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' } : {}}
                       >
                         SME / Retail
                       </button>
@@ -426,7 +451,7 @@ export function OnboardingWizard({
 
                   {/* Vertical */}
                   <div>
-                    <label className="text-xs font-bold text-slate-700 mb-3 block">Primary Vertical</label>
+                    <label className="text-xs font-bold mb-3 block text-[var(--app-text-muted)]">Primary Vertical</label>
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         { id: "Fashion & Retail", icon: ShoppingBag, label: "Fashion & Retail" },
@@ -445,10 +470,16 @@ export function OnboardingWizard({
                                else setMockCompany("Om Sai Cafe");
                             }
                           }}
-                          className={`flex items-center flex-col justify-center text-center gap-3 p-5 rounded-2xl border-2 transition-all ${businessType === v.id ? "border-teal-500 bg-teal-50" : "border-slate-100 bg-white hover:border-slate-200"}`}
+                          className={`flex items-center flex-col justify-center text-center gap-3 p-5 rounded-2xl border-2 transition-all`}
+                          style={{
+                            borderColor: businessType === v.id ? 'var(--brand-saffron)' : 'var(--app-border)',
+                            backgroundColor: businessType === v.id ? 'var(--brand-saffron-soft)' : 'var(--app-bg)'
+                          }}
+                          onMouseEnter={(e) => { if (businessType !== v.id) e.currentTarget.style.borderColor = 'var(--app-border-strong)'; }}
+                          onMouseLeave={(e) => { if (businessType !== v.id) e.currentTarget.style.borderColor = 'var(--app-border)'; }}
                         >
-                          <v.icon className={`w-6 h-6 ${businessType === v.id ? "text-teal-600" : "text-slate-400"}`} />
-                          <span className={`text-xs font-bold ${businessType === v.id ? "text-teal-800" : "text-slate-600"}`}>{v.label}</span>
+                          <v.icon className={`w-6 h-6`} style={{ color: businessType === v.id ? 'var(--brand-saffron)' : 'var(--app-text-muted)' }} />
+                          <span className={`text-xs font-bold`} style={{ color: businessType === v.id ? 'var(--brand-saffron)' : 'var(--app-text-muted)' }}>{v.label}</span>
                         </button>
                       ))}
                     </div>
@@ -458,13 +489,19 @@ export function OnboardingWizard({
                 <div className="pt-4 flex gap-3">
                   <button 
                     onClick={() => setStep(1)}
-                    className="px-6 py-4.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-2xl font-bold transition-all text-sm border border-slate-200"
+                    className="px-6 py-4.5 rounded-2xl font-bold transition-all text-sm border cursor-pointer"
+                    style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-surface)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-bg-soft)'; }}
                   >
                     Back
                   </button>
                   <button
                     onClick={handleNextStep2}
-                    className="flex-1 py-4.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-slate-900/20 text-sm"
+                    className="flex-1 py-4.5 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer text-sm"
+                    style={{ backgroundColor: 'var(--brand-saffron)', color: 'var(--app-bg)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-primary-strong)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--brand-saffron)'; }}
                   >
                     Continue <ArrowRight className="h-4 w-4" />
                   </button>
@@ -483,61 +520,60 @@ export function OnboardingWizard({
                 className="space-y-8"
               >
                 <div className="space-y-2">
-                  <h2 className="text-3xl font-black text-slate-900 tracking-tight">Your Current Workflow</h2>
-                  <p className="text-slate-500 leading-relaxed text-sm">How are you currently tracking your leads and orders?</p>
+                  <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">Your Current Workflow</h2>
+                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">How are you currently tracking your leads and orders?</p>
                 </div>
 
                 <div className="space-y-4">
-                  <button
-                     onClick={() => setCurrentWorkflow("PAPER")}
-                     className={`w-full flex items-start gap-4 p-5 rounded-2xl border-2 transition-all text-left ${currentWorkflow === "PAPER" ? "border-teal-500 bg-teal-50" : "border-slate-100 bg-white hover:border-slate-200"}`}
-                  >
-                     <div className={`p-2.5 rounded-xl ${currentWorkflow === "PAPER" ? "bg-teal-500 text-white" : "bg-slate-100 text-slate-500"}`}>
-                       <Target className="w-5 h-5" />
-                     </div>
-                     <div>
-                       <div className={`font-bold text-sm ${currentWorkflow === "PAPER" ? "text-teal-900" : "text-slate-800"}`}>Pen, Paper & Notebooks</div>
-                       <div className="text-xs text-slate-500 mt-1 leading-relaxed">I'm manually writing things down or keeping it in my head.</div>
-                     </div>
-                  </button>
-
-                  <button
-                     onClick={() => setCurrentWorkflow("SPREADSHEET")}
-                     className={`w-full flex items-start gap-4 p-5 rounded-2xl border-2 transition-all text-left ${currentWorkflow === "SPREADSHEET" ? "border-teal-500 bg-teal-50" : "border-slate-100 bg-white hover:border-slate-200"}`}
-                  >
-                     <div className={`p-2.5 rounded-xl ${currentWorkflow === "SPREADSHEET" ? "bg-teal-500 text-white" : "bg-slate-100 text-slate-500"}`}>
-                       <LineChart className="w-5 h-5" />
-                     </div>
-                     <div>
-                       <div className={`font-bold text-sm ${currentWorkflow === "SPREADSHEET" ? "text-teal-900" : "text-slate-800"}`}>Excel / Google Sheets</div>
-                       <div className="text-xs text-slate-500 mt-1 leading-relaxed">I have digital records that I maintain manually in columns.</div>
-                     </div>
-                  </button>
-
-                  <button
-                     onClick={() => setCurrentWorkflow("CRM")}
-                     className={`w-full flex items-start gap-4 p-5 rounded-2xl border-2 transition-all text-left ${currentWorkflow === "CRM" ? "border-teal-500 bg-teal-50" : "border-slate-100 bg-white hover:border-slate-200"}`}
-                  >
-                     <div className={`p-2.5 rounded-xl ${currentWorkflow === "CRM" ? "bg-teal-500 text-white" : "bg-slate-100 text-slate-500"}`}>
-                       <Component className="w-5 h-5" />
-                     </div>
-                     <div>
-                       <div className={`font-bold text-sm ${currentWorkflow === "CRM" ? "text-teal-900" : "text-slate-800"}`}>Another CRM or App</div>
-                       <div className="text-xs text-slate-500 mt-1 leading-relaxed">I need to migrate from an existing software tool.</div>
-                     </div>
-                  </button>
+                  {(["PAPER", "SPREADSHEET", "CRM"] as const).map((wf) => {
+                    const isActive = currentWorkflow === wf;
+                    const icons = { PAPER: Target, SPREADSHEET: LineChart, CRM: Component } as const;
+                    const Icon = icons[wf];
+                    const labels = {
+                      PAPER: { title: "Pen, Paper & Notebooks", desc: "I'm manually writing things down or keeping it in my head." },
+                      SPREADSHEET: { title: "Excel / Google Sheets", desc: "I have digital records that I maintain manually in columns." },
+                      CRM: { title: "Another CRM or App", desc: "I need to migrate from an existing software tool." },
+                    };
+                    return (
+                      <button
+                        key={wf}
+                        onClick={() => setCurrentWorkflow(wf)}
+                        className="w-full flex items-start gap-4 p-5 rounded-2xl border-2 transition-all text-left cursor-pointer"
+                        style={{
+                          borderColor: isActive ? 'var(--brand-saffron)' : 'var(--app-border)',
+                          backgroundColor: isActive ? 'var(--brand-saffron-soft)' : 'var(--app-bg)',
+                        }}
+                        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.borderColor = 'var(--app-border-strong)'; }}
+                        onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.borderColor = 'var(--app-border)'; }}
+                      >
+                        <div className="p-2.5 rounded-xl" style={{ backgroundColor: isActive ? 'var(--brand-saffron)' : 'var(--app-surface)', color: isActive ? 'var(--app-bg)' : 'var(--app-text-muted)' }}>
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm" style={{ color: isActive ? 'var(--brand-saffron)' : 'var(--app-text)' }}>{labels[wf].title}</div>
+                          <div className="text-xs mt-1 leading-relaxed text-[var(--app-text-muted)]">{labels[wf].desc}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <div className="pt-4 flex gap-3">
                   <button 
                     onClick={() => setStep(2)}
-                    className="px-6 py-4.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-2xl font-bold transition-all text-sm border border-slate-200"
+                    className="px-6 py-4.5 rounded-2xl font-bold transition-all text-sm border cursor-pointer"
+                    style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-surface)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-bg-soft)'; }}
                   >
                     Back
                   </button>
                   <button
                     onClick={handleFinalize}
-                    className="flex-1 py-4.5 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xl shadow-teal-500/25 text-sm"
+                    className="flex-1 py-4.5 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer text-sm"
+                    style={{ backgroundColor: 'var(--brand-saffron)', color: 'var(--app-bg)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-primary-strong)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--brand-saffron)'; }}
                   >
                     Deploy Dashboard <Sparkles className="h-4 w-4" />
                   </button>
