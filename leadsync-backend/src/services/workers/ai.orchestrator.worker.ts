@@ -552,28 +552,35 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
             menuSnapshotForAi = "No matching products found.";
           }
         } else {
-          // General Query -> broader DB lookup showing multiple relevant active products
+          // General Query -> broader DB lookup (cached 60s) showing multiple relevant active products
           try {
-            console.log(`[Orchestrator RAG] Broad DB retrieval query initiated for companyId: "${companyId}"`);
-            const dbProducts = await prisma.inventoryProduct.findMany({
-              where: { companyId, isActive: true },
-              take: 15,
-              include: { variants: { where: { isActive: true } } }
-            });
-            console.log(`[Orchestrator RAG] Broad DB retrieval completed. Found ${dbProducts.length} active products for companyId: "${companyId}"`);
-            if (dbProducts.length > 0) {
-              menuSnapshotForAi = "Available products:\n" + dbProducts.map((p) => {
-                const parts = [`Product: ${p.name}`];
-                if (p.description) parts.push(`Description: ${p.description}`);
-                if (p.hasVariants && p.variants.length > 0 && p.variantAttributeName) {
-                  const variantVals = p.variants.map((v) => `${v.attributeValue} (Price: ₹${v.price})`).join(", ");
-                  parts.push(`${p.variantAttributeName}: ${variantVals}`);
-                }
-                parts.push(`Price: ₹${p.basePrice}`);
-                return `- ` + parts.join(", ");
-              }).join("\n");
+            const cached = productMenuCache.get(companyId);
+            if (cached && Date.now() - cached.cachedAt < PRODUCT_MENU_CACHE_TTL) {
+              console.log(`[Orchestrator RAG] Broad DB retrieval served from cache (age=${Date.now() - cached.cachedAt}ms)`);
+              menuSnapshotForAi = cached.snapshot;
             } else {
-              menuSnapshotForAi = config?.botStructuredMenu || "No products currently available.";
+              console.log(`[Orchestrator RAG] Broad DB retrieval query initiated for companyId: "${companyId}"`);
+              const dbProducts = await prisma.inventoryProduct.findMany({
+                where: { companyId, isActive: true },
+                take: 15,
+                include: { variants: { where: { isActive: true } } }
+              });
+              console.log(`[Orchestrator RAG] Broad DB retrieval completed. Found ${dbProducts.length} active products for companyId: "${companyId}"`);
+              if (dbProducts.length > 0) {
+                menuSnapshotForAi = "Available products:\n" + dbProducts.map((p) => {
+                  const parts = [`Product: ${p.name}`];
+                  if (p.description) parts.push(`Description: ${p.description}`);
+                  if (p.hasVariants && p.variants.length > 0 && p.variantAttributeName) {
+                    const variantVals = p.variants.map((v) => `${v.attributeValue} (Price: ₹${v.price})`).join(", ");
+                    parts.push(`${p.variantAttributeName}: ${variantVals}`);
+                  }
+                  parts.push(`Price: ₹${p.basePrice}`);
+                  return `- ` + parts.join(", ");
+                }).join("\n");
+              } else {
+                menuSnapshotForAi = config?.botStructuredMenu || "No products currently available.";
+              }
+              productMenuCache.set(companyId, { snapshot: menuSnapshotForAi, cachedAt: Date.now() });
             }
           } catch (dbErr: any) {
             console.error("[Orchestrator] Fallback broad inventory query failed:", dbErr.message);
@@ -723,6 +730,12 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
 // Tracks job IDs processed in this process lifetime to prevent duplicate
 // execution from pg-boss retries or crash-recovery replay.
 const processedJobIds = new Set<string>();
+
+// Cache for general product menu queries (broad inventoryProduct.findMany).
+// 60s TTL means catalog changes by admin take up to 60s to reflect in chat;
+// this is an accepted latency-vs-consistency tradeoff for a ~1.2s query.
+const productMenuCache = new Map<string, { snapshot: string; cachedAt: number }>();
+const PRODUCT_MENU_CACHE_TTL = 60_000;
 const JOB_ID_CLEANUP_INTERVAL = 3600_000; // 1 hour
 
 // Periodically trim the processed-job Set to prevent unbounded memory growth.
