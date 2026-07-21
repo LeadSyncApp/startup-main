@@ -1,7 +1,7 @@
 import { prisma } from "../../lib/prisma";
 import axios from "axios";
 import crypto from "crypto";
-import { decryptSecret } from "../../utils/encryption";
+import { encrypt, decryptSecret } from "../../utils/encryption";
 
 export async function registerTelegramWebhook(
   botToken: string,
@@ -66,7 +66,7 @@ export async function initializeTelegramWebhooks() {
         secret = crypto.randomBytes(32).toString("hex");
         await prisma.company.update({
           where: { id: company.id },
-          data: { telegramWebhookSecret: secret }
+          data: { telegramWebhookSecret: encrypt(secret) }
         });
         console.log(`🔑 Generated new telegramWebhookSecret for company: ${company.name}`);
       }
