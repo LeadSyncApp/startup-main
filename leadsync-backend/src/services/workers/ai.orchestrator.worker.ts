@@ -508,21 +508,24 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     const totalPipelineStart = Date.now();
     let classificationTime = 0;
 
+    // Single fetch of 10 messages, shared by classification context (needs 6) and conversation history (needs all 10)
+    const recentMessagesDesc = await tenantPrisma.message.findMany({
+      where: { conversationId: conversation.id },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    });
+
     if (processingText) {
-      // 1. Fetch thread history for classification context
+      // 1. Build thread history for classification context (most recent 6 messages, chronological)
       let threadHistoryStr = "";
       try {
-        const recentMessages = await tenantPrisma.message.findMany({
-          where: { conversationId: conversation.id },
-          orderBy: { createdAt: "desc" },
-          take: 6,
-        });
-        threadHistoryStr = recentMessages
+        threadHistoryStr = recentMessagesDesc
+          .slice(0, 6)
           .reverse()
           .map((m: any) => `${m.sender}: ${m.content}`)
           .join("\n");
       } catch (err: any) {
-        console.error("[Orchestrator] Error fetching thread history for classification:", err.message);
+        console.error("[Orchestrator] Error building thread history for classification:", err.message);
       }
 
       // 2. Run pre-flight classifier
@@ -595,13 +598,8 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
 
 
 
-    // 🧠 Fetch recent 10 messages for conversation memory window
-    const recentMessagesDesc = await tenantPrisma.message.findMany({
-      where: { conversationId: conversation.id },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    });
-    const conversationHistory = recentMessagesDesc.reverse().map((m: any) => ({
+    // Conversation memory window from shared 10-message fetch (chronological order)
+    const conversationHistory = [...recentMessagesDesc].reverse().map((m: any) => ({
       sender: m.sender,
       content: m.content
     }));
