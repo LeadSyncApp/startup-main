@@ -121,6 +121,7 @@ flowchart TD
 - [ ] Confirm `TELEGRAM_POLLING=false` (or omitted) on production servers so polling loops do not run.
 - [ ] Confirm `MY_BOT_USERNAME` is **NOT** set or required on production servers.
 - [ ] Confirm `ENCRYPTION_KEY` in production matches the key used to encrypt `telegramBotToken` in DB.
+- [ ] Confirm `telegramConnected: true` should self-correct to `false` automatically if Telegram rejects the token — confirm this self-healing logic is present before relying on log silence as a health signal.
 
 ### Step 2: Production Webhook Endpoint Reachability
 - [ ] Confirm `API_BASE_URL` is set to the public HTTPS domain (e.g. `https://api.leadsync.ai`).

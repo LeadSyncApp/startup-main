@@ -107,6 +107,7 @@ export async function createTestCompany(tag = "SUITE") {
       companyCode: code,
       isTest: true,
       telegramBotToken: mockToken,
+      telegramConnected: false, // Test companies must default to telegramConnected: false
     },
   });
 

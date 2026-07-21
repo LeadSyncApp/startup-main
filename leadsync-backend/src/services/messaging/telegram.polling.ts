@@ -120,6 +120,15 @@ export async function startTelegramPolling() {
             // Safety delay to let Telegram process webhook deletion
             await new Promise(resolve => setTimeout(resolve, 1000));
           } catch (err: any) {
+            const is401 = err.response?.status === 401 || err.response?.data?.error_code === 401 || err.message?.includes("401");
+            if (is401) {
+              await prisma.company.update({
+                where: { id: company.id },
+                data: { telegramConnected: false }
+              }).catch(() => {});
+              console.warn(`⚠️ Bot token for ${company.telegramBotUsername || company.id} was rejected by Telegram (401) — marking telegramConnected: false. Reconnect via the UI with a valid token to restore.`);
+              return;
+            }
             console.error(`⚠️ Failed to delete webhook for bot @${company.telegramBotUsername || "bot"}:`, err.message);
             return;
           }
@@ -185,6 +194,15 @@ export async function startTelegramPolling() {
             }
           }
         } catch (fetchErr: any) {
+          const is401 = fetchErr.response?.status === 401 || fetchErr.response?.data?.error_code === 401 || fetchErr.message?.includes("401");
+          if (is401) {
+            await prisma.company.update({
+              where: { id: company.id },
+              data: { telegramConnected: false }
+            }).catch(() => {});
+            console.warn(`⚠️ Bot token for ${company.telegramBotUsername || company.id} was rejected by Telegram (401) — marking telegramConnected: false. Reconnect via the UI with a valid token to restore.`);
+            return;
+          }
           if (fetchErr.code !== "ECONNABORTED") {
             const isConflict = fetchErr.response?.status === 409;
             if (isConflict) {

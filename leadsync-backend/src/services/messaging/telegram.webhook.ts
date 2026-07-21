@@ -101,7 +101,16 @@ export async function initializeTelegramWebhooks() {
         });
 
       } catch (botErr: any) {
-        console.error(`❌ Failed to register/sync bot @${company.telegramBotUsername || "bot"}:`, botErr.message);
+        const is401 = botErr.response?.status === 401 || botErr.response?.data?.error_code === 401 || botErr.message?.includes("401");
+        if (is401) {
+          await prisma.company.update({
+            where: { id: company.id },
+            data: { telegramConnected: false }
+          }).catch(() => {});
+          console.warn(`⚠️ Bot token for ${company.name} was rejected by Telegram (401) — marking telegramConnected: false. Reconnect via the UI with a valid token to restore.`);
+        } else {
+          console.error(`❌ Failed to register/sync bot @${company.telegramBotUsername || "bot"}:`, botErr.message);
+        }
       }
     }
   } catch (err: any) {
