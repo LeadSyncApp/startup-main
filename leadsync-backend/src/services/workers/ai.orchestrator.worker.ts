@@ -508,12 +508,15 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     const totalPipelineStart = Date.now();
     let classificationTime = 0;
 
-    // Single fetch of 10 messages, shared by classification context (needs 6) and conversation history (needs all 10)
-    const recentMessagesDesc = await tenantPrisma.message.findMany({
-      where: { conversationId: conversation.id },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    });
+    // Parallel fetch: messages (shared by classification + conversation history) and draft order (independent)
+    const [recentMessagesDesc, activeDraftOrder] = await Promise.all([
+      tenantPrisma.message.findMany({
+        where: { conversationId: conversation.id },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+      getActiveDraftOrder(companyId, conversation.id),
+    ]);
 
     if (processingText) {
       // 1. Build thread history for classification context (most recent 6 messages, chronological)
@@ -603,9 +606,6 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       sender: m.sender,
       content: m.content
     }));
-
-    // 🛒 Fetch current active draft order for context
-    const activeDraftOrder = await getActiveDraftOrder(companyId, conversation.id);
 
     const aiTurnResult = await generateShopReply({
       tenant_id: companyId,
