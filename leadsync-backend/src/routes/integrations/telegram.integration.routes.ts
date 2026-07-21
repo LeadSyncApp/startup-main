@@ -47,6 +47,7 @@ router.post(
         {
           url: webhookUrl,
           secret_token: webhookSecret,
+          allowed_updates: ["message", "callback_query"],
         }
       );
 
