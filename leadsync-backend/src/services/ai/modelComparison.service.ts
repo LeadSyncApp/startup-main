@@ -26,7 +26,7 @@ Return ONLY valid JSON, no preamble, no markdown fences. Schema:
       "brand": string | null,
       "product_type": string,
       "attribute_name": string | null,
-      "categories": string[],   // comma-separated list of categories for this product
+      "categories": string[],   // array of category strings, e.g. ["Sarees", "Festive Wear"]
       "description": string | null,
       "variants": [
         {
