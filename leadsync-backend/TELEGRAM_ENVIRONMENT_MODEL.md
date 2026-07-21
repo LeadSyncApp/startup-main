@@ -121,3 +121,74 @@ flowchart TD
 4. `telegramWebhookSecret` must be encrypted in DB (auto-generated if missing).
 5. `API_BASE_URL` on server must be a valid public HTTPS URL.
 6. `allowed_updates` must include `["message", "callback_query"]`.
+
+---
+
+## 5. Production Deployment Checklist (Telegram Integration)
+
+Follow this checklist prior to and during any live production deployment to ensure zero token collisions, valid webhook registration, and isolation of test data.
+
+### Step 1: Database Flag Flip for Production Companies
+- [ ] For `3102a85e-1798-45bb-b6c5-d94ea436f775` (**Om Sai Silk Boutique**) and any future real business company, set `isTest = false` in the production database:
+  ```sql
+  UPDATE "Company"
+  SET "isTest" = false
+  WHERE id = '3102a85e-1798-45bb-b6c5-d94ea436f775';
+  ```
+  *Why*: `initializeTelegramWebhooks()` filters strictly by `isTest: false`. If `isTest` remains `true`, production webhook registration will skip this company.
+
+### Step 2: Environment Variable Verification
+- [ ] Confirm `IS_LOCAL` resolves to `false` in production environment (`IS_LOCAL=false` or `NODE_ENV=production`).
+- [ ] Confirm `TELEGRAM_POLLING=false` (or omitted) on production servers so polling loops do not run.
+- [ ] Confirm `MY_BOT_USERNAME` is **NOT** set or required on production servers (production webhooks use `secret_token` HMAC routing).
+- [ ] Confirm `ENCRYPTION_KEY` in production matches the key used to encrypt `telegramBotToken` in DB.
+
+### Step 3: Production Webhook Endpoint Reachability
+- [ ] Confirm `API_BASE_URL` is set to the public HTTPS domain (e.g. `https://api.leadsync.ai`).
+- [ ] Verify `setWebhook` call includes `allowed_updates: ["message", "callback_query"]` so both text messages and inline button taps are delivered.
+
+### Step 4: Pre-Flight Integrity Queries against Production Database
+
+Run these diagnostic SQL queries directly against the target database before starting the production application server:
+
+#### A. Duplicate Bot Token Check
+```sql
+SELECT "telegramBotToken", COUNT(*) as count, ARRAY_AGG(name) as company_names, ARRAY_AGG(id) as company_ids
+FROM "Company"
+WHERE "telegramBotToken" IS NOT NULL
+  AND "telegramConnected" = true
+  AND "isTest" = false
+GROUP BY "telegramBotToken"
+HAVING COUNT(*) > 1;
+```
+* **Clean Result**: `0 rows returned`.
+* **Action if > 0 rows**: Resolve duplicate tokens immediately before deployment to avoid cross-tenant misrouting.
+
+#### B. Decryption Integrity Audit
+Run pre-flight decryption check via Node runner:
+```ts
+import { prisma } from "./src/lib/prisma";
+import { decryptSecret } from "./src/utils/encryption";
+
+async function auditProductionTokens() {
+  const prodCompanies = await prisma.company.findMany({
+    where: { telegramConnected: true, isTest: false }
+  });
+
+  let failed = 0;
+  for (const c of prodCompanies) {
+    const tokenDecrypted = decryptSecret(c.telegramBotToken);
+    if (!tokenDecrypted) {
+      console.error(`❌ Decryption failed for company: ${c.name} (${c.id})`);
+      failed++;
+    }
+  }
+  console.log(`Audit complete: ${prodCompanies.length} checked, ${failed} failed.`);
+}
+auditProductionTokens();
+```
+* **Clean Result**: `0 failed`. All production bot tokens decrypt successfully using the server's `ENCRYPTION_KEY`.
+
+### Step 5: Test Company Isolation Audit
+- [ ] Verify test companies (`MD Homemades` `6e91a188`, `jj enterprise` `b136e450`) retain `isTest = true` in production database.
+- [ ] Confirm `initializeTelegramWebhooks` output during startup logs `0` webhooks registered for test companies.
