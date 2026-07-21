@@ -452,7 +452,12 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         }).join("\n")
       : "No custom conversational rules active.";
 
-    // Phase 2a: Try rule matching first (now blocking/awaited)
+    // Phase 2a: Start language detection in parallel with rule matching (both only need processingText)
+    // detectLanguage always returns a result (never throws — falls back to Unicode on API failure)
+    const langPromise = process.env.SARVAM_API_KEY && processingText
+      ? detectLanguage(processingText, process.env.SARVAM_API_KEY)
+      : Promise.resolve({ language: "en" as const, confidence: 0 });
+
     let ruleMatched = false;
     if (processingText && activeConversationalRules.length > 0) {
       try {
@@ -497,11 +502,8 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       }
     }
 
-    // Phase 2b: Only run main AI if no rule matched
-    // Detect language using Sarvam AI (with Unicode fallback)
-    const detectedLanguage = process.env.SARVAM_API_KEY && processingText
-      ? (await detectLanguage(processingText, process.env.SARVAM_API_KEY)).language
-      : "en";
+    // Phase 2b: Await language detection (started in parallel with rule matching, likely already resolved)
+    const detectedLanguage = (await langPromise).language;
 
     // Retrieve product chunks or policy chunks based on pre-flight intent classification
     let menuSnapshotForAi = config?.botStructuredMenu;
