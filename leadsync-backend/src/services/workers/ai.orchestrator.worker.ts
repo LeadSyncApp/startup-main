@@ -452,6 +452,56 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         }).join("\n")
       : "No custom conversational rules active.";
 
+    // ⚡ Fast-path: short-circuit simple messages (greetings, acknowledgments, farewells, yes/no)
+    // Precise anchored regexes avoid false positives on longer messages that merely contain these words.
+    const FAST_PATH_PATTERNS = [
+      { pattern: /^(hi|hello|hey|hey there|helloo|howdy|good morning|good afternoon|good evening)$/i, category: "greeting" },
+      { pattern: /^(ok|okay|k|got it|sure|thanks|thank you|ty|thx|thankyou|okie|okies)$/i, category: "acknowledgment" },
+      { pattern: /^(bye|goodbye|cya|see you|see ya|take care|talk later|gotta go)$/i, category: "farewell" },
+      { pattern: /^(yes|no|yeah|nope|yep|nah|yup|nahi|haan|haa)$/i, category: "yesno" },
+    ];
+    const FAST_PATH_RESPONSES: Record<string, string[]> = {
+      greeting: ["Hello! How can I help you today?", "Hi there! What can I do for you?", "Hey! How can I assist you?"],
+      acknowledgment: ["You're welcome! Let me know if you need anything else.", "Happy to help! Anything else?", "Got it! Feel free to ask if you have more questions."],
+      farewell: ["Goodbye! Have a great day!", "Take care! Reach out anytime.", "Bye! See you next time!"],
+      yesno: ["I see. Could you tell me more about what you'd like to order?", "Alright! Let me know how I can help.", "Thanks for letting me know! Can I help with anything else?"],
+    };
+    const trimmedInput = (processingText || "").trim();
+    let fastPathCategory: string | null = null;
+    let fastPathResponse: string | null = null;
+    for (const entry of FAST_PATH_PATTERNS) {
+      if (entry.pattern.test(trimmedInput)) {
+        fastPathCategory = entry.category;
+        const responses = FAST_PATH_RESPONSES[entry.category];
+        fastPathResponse = responses[Math.floor(Math.random() * responses.length)];
+        break;
+      }
+    }
+    if (fastPathResponse) {
+      console.log(`[Orchestrator] ⚡ Fast path triggered (${fastPathCategory}): "${trimmedInput}"`);
+      await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
+        const clientMsg = await tx.message.create({
+          data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
+        });
+        emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
+        await tx.lead.update({ where: { id: lead.id }, data: { lastActiveAt: new Date() } });
+        await tx.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } });
+      });
+      await outboundDispatcherService.sendMessageFrame(
+        frame.channel as any,
+        frame.externalChatId,
+        conversation.id,
+        { bodyText: fastPathResponse, interactivePayload: null, replyMarkup: undefined },
+        "BOT"
+      );
+      safeEmitConversationUpdate(conversation, "conversation_updated", {
+        conversationId: conversation.id,
+        lastContent: fastPathResponse,
+        updatedAt: new Date().toISOString(),
+      });
+      return { fast_path: true, category: fastPathCategory, response: fastPathResponse } as any;
+    }
+
     // Phase 2a: Start language detection in parallel with rule matching (both only need processingText)
     // detectLanguage always returns a result (never throws — falls back to Unicode on API failure)
     const langPromise = process.env.SARVAM_API_KEY && processingText
