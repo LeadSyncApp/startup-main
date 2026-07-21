@@ -34,11 +34,18 @@ export async function startTelegramPolling() {
   // Run the polling query in a loop
   const poll = async () => {
     try {
+      // Fail-safe: if local dev and MY_BOT_USERNAME is not configured, poll nothing.
+      if (IS_LOCAL && !process.env.MY_BOT_USERNAME) {
+        setTimeout(poll, 1500);
+        return;
+      }
+
       // Find all companies with connected Telegram bots for this polling instance
       const companies = await prisma.company.findMany({
         where: {
           telegramBotToken: { not: null },
-          telegramConnected: true
+          telegramConnected: true,
+          ...(IS_LOCAL ? { telegramBotUsername: process.env.MY_BOT_USERNAME } : {})
         },
         select: {
           id: true,
@@ -48,11 +55,12 @@ export async function startTelegramPolling() {
         }
       });
 
-      // Safeguard: Check for duplicate bot tokens across the entire database to prevent misrouting
+      // Safeguard: Check for duplicate bot tokens across the targeted environment to prevent misrouting
       const allActiveBots = await prisma.company.findMany({
         where: {
           telegramBotToken: { not: null },
-          telegramConnected: true
+          telegramConnected: true,
+          ...(IS_LOCAL ? { telegramBotUsername: process.env.MY_BOT_USERNAME } : {})
         },
         select: {
           id: true,
