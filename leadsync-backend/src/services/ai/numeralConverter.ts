@@ -226,6 +226,15 @@ export function normalizeProductData(product: ProductData): NormalizedProductDat
     result.variants = [...(result.variants || []), ...sizeVariants];
     result.attribute_name = result.attribute_name || "Size";
   }
-  
+
+  // Normalize categories: ensure it's always a string[]
+  if (Array.isArray(result.categories)) {
+    // already correct
+  } else if (typeof result.categories === "string") {
+    result.categories = result.categories.split(",").map((c: string) => c.trim()).filter(Boolean);
+  } else {
+    result.categories = [];
+  }
+
   return result;
 }
