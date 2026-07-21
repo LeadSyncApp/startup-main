@@ -12,44 +12,39 @@ import { conversationalAutoReplyService } from "../../src/services/automation/co
 import { tenantContextStorage, resolveTenantContext } from "../../src/services/context/tenantContext.provider";
 import { embedRuleToKnowledgeChunk } from "../../src/services/knowledge/ruleEmbedding.service";
 import { Channel, ConversationStatus } from "@prisma/client";
+import { withTestCompany } from "./testCompanyFactory";
 
-const COMPANY_ID = "6e91a188-f794-4c59-b367-44b9db07b10f";
 const TEST_CONTACT = "verify-scoring-test";
 
 async function run() {
-  let conversationId: string | null = null;
-  let leadId: string | null = null;
-  const createdRuleIds: string[] = [];
+  await withTestCompany("KEYWORD-SCORING", async (testCompany) => {
+    const companyId = testCompany.id;
+    let conversationId: string | null = null;
+    let leadId: string | null = null;
+    const createdRuleIds: string[] = [];
 
-  // Intercept fetch to prevent actual Telegram sends
-  const originalFetch = global.fetch;
-  global.fetch = async (url: any, options: any) => {
-    if (typeof url === "string" && url.includes("sendMessage")) {
-      console.log(`  [INTERCEPTED] Telegram sendMessage — not actually sending`);
-    }
-    return { ok: true, text: async () => '{"ok":true}', json: async () => ({ ok: true }) } as any;
-  };
+    const originalFetch = global.fetch;
+    global.fetch = async (url: any, options: any) => {
+      if (typeof url === "string" && url.includes("sendMessage")) {
+        console.log(`  [INTERCEPTED] Telegram sendMessage — not actually sending`);
+      }
+      return { ok: true, text: async () => '{"ok":true}', json: async () => ({ ok: true }) } as any;
+    };
 
-  try {
-    const contextStore = await resolveTenantContext(COMPANY_ID);
+    try {
+      const contextStore = await resolveTenantContext(companyId);
 
-    // Setup: create test lead + conversation
-    let lead = await prisma.lead.findFirst({
-      where: { companyId: COMPANY_ID, contact: TEST_CONTACT, channel: Channel.TELEGRAM },
-    });
-    if (!lead) {
-      lead = await prisma.lead.create({
-        data: { companyId: COMPANY_ID, contact: TEST_CONTACT, channel: Channel.TELEGRAM, name: "Verify Scoring User" },
+      let lead = await prisma.lead.create({
+        data: { companyId, contact: TEST_CONTACT, channel: Channel.TELEGRAM, name: "Verify Scoring User" },
       });
-    }
-    leadId = lead.id;
+      leadId = lead.id;
 
-    const conv = await prisma.conversation.create({
-      data: { companyId: COMPANY_ID, channel: Channel.TELEGRAM, status: ConversationStatus.OPEN, leadId: lead.id },
-    });
-    conversationId = conv.id;
+      const conv = await prisma.conversation.create({
+        data: { companyId, channel: Channel.TELEGRAM, status: ConversationStatus.OPEN, leadId: lead.id },
+      });
+      conversationId = conv.id;
 
-    await tenantContextStorage.run(contextStore, async () => {
+      await tenantContextStorage.run(contextStore, async () => {
       // ====================================================================
       // TEST 1: Specificity — "briyani" vs "briyani offer"
       // ====================================================================
@@ -59,7 +54,7 @@ async function run() {
 
       const ruleGeneric = await prisma.conversationalRule.create({
         data: {
-          companyId: COMPANY_ID,
+          companyId: companyId!,
           name: "Briyani Generic (test)",
           isEnabled: true,
           triggerKeywords: ["briyani"],
@@ -71,7 +66,7 @@ async function run() {
 
       const ruleSpecific = await prisma.conversationalRule.create({
         data: {
-          companyId: COMPANY_ID,
+          companyId: companyId!,
           name: "Briyani Offer (test)",
           isEnabled: true,
           triggerKeywords: ["briyani offer"],
@@ -84,19 +79,19 @@ async function run() {
       // IMPORTANT: Embed rules into KnowledgeChunks so retrieveSimilarChunks can find them
       console.log("  Embedding rules into KnowledgeChunks...");
       await embedRuleToKnowledgeChunk({
-        id: ruleGeneric.id, companyId: COMPANY_ID,
+        id: ruleGeneric.id, companyId: companyId!,
         name: ruleGeneric.name, triggerKeywords: ruleGeneric.triggerKeywords as string[],
         templateBody: ruleGeneric.templateBody,
       });
       await embedRuleToKnowledgeChunk({
-        id: ruleSpecific.id, companyId: COMPANY_ID,
+        id: ruleSpecific.id, companyId: companyId!,
         name: ruleSpecific.name, triggerKeywords: ruleSpecific.triggerKeywords as string[],
         templateBody: ruleSpecific.templateBody,
       });
       console.log("  Embedded successfully.");
 
       // Invalidate cache so new rules are picked up
-      conversationalAutoReplyService.invalidateCache(COMPANY_ID);
+      conversationalAutoReplyService.invalidateCache(companyId!);
 
       console.log(`\nCreated rules:`);
       console.log(`  Generic : ${ruleGeneric.id} — keywords: ["briyani"]`);
@@ -107,7 +102,7 @@ async function run() {
       console.log(`\nSending message: "${testMessage1}"`);
 
       const result1 = await conversationalAutoReplyService.evaluateMessage({
-        companyId: COMPANY_ID,
+        companyId: companyId!,
         conversationId: conv.id,
         leadId: lead.id,
         messageText: testMessage1,
@@ -144,7 +139,7 @@ async function run() {
       for (const rid of [ruleGeneric.id, ruleSpecific.id]) {
         await prisma.$executeRaw`
           DELETE FROM "KnowledgeChunk"
-          WHERE "companyId" = ${COMPANY_ID}
+          WHERE "companyId" = ${companyId!}
             AND "sourceType" = 'RULE'::"KnowledgeSourceType"
             AND "sourceId" = ${rid}
         `;
@@ -153,14 +148,14 @@ async function run() {
         where: { id: { in: [ruleGeneric.id, ruleSpecific.id] } },
       });
       createdRuleIds.splice(0, 2); // remove from cleanup list
-      conversationalAutoReplyService.invalidateCache(COMPANY_ID);
+      conversationalAutoReplyService.invalidateCache(companyId!);
       console.log("  Test 1 rules removed.");
 
       // Use keywords where NEITHER gets an exact phrase match in the test message,
       // so both get the same partial-overlap bonus. The gap should be tiny.
       const ruleA = await prisma.conversationalRule.create({
         data: {
-          companyId: COMPANY_ID,
+          companyId: companyId!,
           name: "Chicken Biryani (test)",
           isEnabled: true,
           triggerKeywords: ["chicken briyani"],
@@ -172,7 +167,7 @@ async function run() {
 
       const ruleB = await prisma.conversationalRule.create({
         data: {
-          companyId: COMPANY_ID,
+          companyId: companyId!,
           name: "Mutton Biryani (test)",
           isEnabled: true,
           triggerKeywords: ["mutton briyani"],
@@ -186,14 +181,14 @@ async function run() {
       console.log("  Embedding chicken/mutton biryani rules...");
       for (const r of [ruleA, ruleB]) {
         await embedRuleToKnowledgeChunk({
-          id: r.id, companyId: COMPANY_ID,
+          id: r.id, companyId: companyId!,
           name: r.name, triggerKeywords: r.triggerKeywords as string[],
           templateBody: r.templateBody,
         });
       }
       console.log("  Embedded successfully.");
 
-      conversationalAutoReplyService.invalidateCache(COMPANY_ID);
+      conversationalAutoReplyService.invalidateCache(companyId!);
 
       console.log(`\nCreated rules:`);
       console.log(`  A: ${ruleA.id} — keywords: ["chicken briyani"]`);
@@ -216,7 +211,7 @@ async function run() {
       };
 
       const result2 = await conversationalAutoReplyService.evaluateMessage({
-        companyId: COMPANY_ID,
+        companyId: companyId!,
         conversationId: conv.id,
         leadId: lead.id,
         messageText: testMessage2,
@@ -259,7 +254,7 @@ async function run() {
 
       const ruleSolo = await prisma.conversationalRule.create({
         data: {
-          companyId: COMPANY_ID,
+          companyId: companyId!,
           name: "Samosa Special (test)",
           isEnabled: true,
           triggerKeywords: ["samosa"],
@@ -272,13 +267,13 @@ async function run() {
       // Embed it
       console.log("  Embedding samosa rule...");
       await embedRuleToKnowledgeChunk({
-        id: ruleSolo.id, companyId: COMPANY_ID,
+        id: ruleSolo.id, companyId: companyId!,
         name: ruleSolo.name, triggerKeywords: ruleSolo.triggerKeywords as string[],
         templateBody: ruleSolo.templateBody,
       });
       console.log("  Embedded successfully.");
 
-      conversationalAutoReplyService.invalidateCache(COMPANY_ID);
+      conversationalAutoReplyService.invalidateCache(companyId!);
 
       const testMessage3 = "do you have samosa?";
       console.log(`\nCreated solo rule: ${ruleSolo.id} — keywords: ["samosa"]`);
@@ -286,7 +281,7 @@ async function run() {
       console.log(`(Other test rules exist but have different keywords — may or may not compete)`);
 
       const result3 = await conversationalAutoReplyService.evaluateMessage({
-        companyId: COMPANY_ID,
+        companyId: companyId!,
         conversationId: conv.id,
         leadId: lead.id,
         messageText: testMessage3,
@@ -320,7 +315,7 @@ async function run() {
       for (const rid of createdRuleIds) {
         await prisma.$executeRaw`
           DELETE FROM "KnowledgeChunk"
-          WHERE "companyId" = ${COMPANY_ID}
+          WHERE "companyId" = ${companyId!}
             AND "sourceType" = 'RULE'::"KnowledgeSourceType"
             AND "sourceId" = ${rid}
         `;
@@ -329,11 +324,11 @@ async function run() {
       console.log(`  Cleaned up ${createdRuleIds.length} test rules + their KnowledgeChunks.`);
       createdRuleIds.length = 0; // prevent double-delete in finally
 
-      conversationalAutoReplyService.invalidateCache(COMPANY_ID);
+      conversationalAutoReplyService.invalidateCache(companyId!);
 
       // Now audit the REAL production rules
       const allActiveRules = await prisma.conversationalRule.findMany({
-        where: { companyId: COMPANY_ID, isEnabled: true, useAI: false },
+        where: { companyId: companyId!, isEnabled: true, useAI: false },
         select: {
           id: true,
           name: true,
@@ -366,7 +361,7 @@ async function run() {
           const kw = (r.triggerKeywords as string[])[0];
           const hasKnowledgeChunk = await prisma.$queryRaw<{ cnt: bigint }[]>`
             SELECT COUNT(*) as cnt FROM "KnowledgeChunk"
-            WHERE "companyId" = ${COMPANY_ID}
+            WHERE "companyId" = ${companyId!}
               AND "sourceType" = 'RULE'::"KnowledgeSourceType"
               AND "sourceId" = ${r.id}
               AND "isActive" = true
@@ -392,36 +387,16 @@ async function run() {
           console.log(`   - "${r.name}": [${kw}]`);
         }
       }
-    });
-  } catch (err: any) {
-    console.error("TEST FAILED:", err);
-    console.error(err.stack);
-  } finally {
-    global.fetch = originalFetch;
-
-    // Cleanup: delete test rules + KnowledgeChunks + conversation
-    console.log("\n" + "=".repeat(70));
-    console.log("CLEANUP");
-    console.log("=".repeat(70));
-    if (createdRuleIds.length > 0) {
-      for (const rid of createdRuleIds) {
-        await prisma.$executeRaw`
-          DELETE FROM "KnowledgeChunk"
-          WHERE "companyId" = ${COMPANY_ID}
-            AND "sourceType" = 'RULE'::"KnowledgeSourceType"
-            AND "sourceId" = ${rid}
-        `;
-      }
-      await prisma.conversationalRule.deleteMany({ where: { id: { in: createdRuleIds } } });
-      console.log(`Deleted ${createdRuleIds.length} test rules + KnowledgeChunks.`);
+      });
+    } catch (err: any) {
+      console.error("TEST FAILED:", err);
+      console.error(err.stack);
+    } finally {
+      global.fetch = originalFetch;
     }
-    if (conversationId) {
-      await prisma.conversation.delete({ where: { id: conversationId } }).catch(() => {});
-      console.log("Deleted test conversation.");
-    }
-    await prisma.$disconnect();
-    console.log("Done. Disconnecting.");
-  }
+  });
+  await prisma.$disconnect();
 }
 
 run();
+
