@@ -231,7 +231,7 @@ export function normalizeProductData(product: ProductData): NormalizedProductDat
   if (Array.isArray(result.categories)) {
     // already correct
   } else if (typeof result.categories === "string") {
-    result.categories = result.categories.split(",").map((c: string) => c.trim()).filter(Boolean);
+    result.categories = (result.categories as unknown as string).split(",").map((c: string) => c.trim()).filter(Boolean);
   } else {
     result.categories = [];
   }
