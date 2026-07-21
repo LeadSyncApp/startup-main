@@ -159,7 +159,18 @@ export class TelegramSurfaceAdapter {
       }
     }
 
-    const token = decryptSecret(company.telegramBotToken);
+    let token: string;
+    try {
+      const decrypted = decryptSecret(company.telegramBotToken);
+      if (!decrypted) {
+        console.error(`[TelegramSurface] Decrypt returned null for company ${companyId} during command sync. The bot integration may be broken — shop owner should reconnect Telegram.`);
+        return;
+      }
+      token = decrypted;
+    } catch (decryptErr: any) {
+      console.error(`[TelegramSurface] Failed to decrypt bot token for company ${companyId} during command sync. Error: ${decryptErr.message}`);
+      return;
+    }
     await axiosPost(`${TELEGRAM_API}${token}/setMyCommands`, { commands });
   }
 
@@ -181,14 +192,32 @@ export class TelegramSurfaceAdapter {
   /**
    * Acknowledge a tapped inline button so Telegram clears its loading spinner.
    */
-  async answerCallbackQuery(companyId: string, callbackQueryId: string): Promise<void> {
+  async answerCallbackQuery(companyId: string, callbackQueryId: string, text?: string): Promise<void> {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       select: { telegramBotToken: true },
     });
-    if (!company?.telegramBotToken) return;
-    const token = decryptSecret(company.telegramBotToken);
-    await axiosPost(`${TELEGRAM_API}${token}/answerCallbackQuery`, { callback_query_id: callbackQueryId });
+    if (!company?.telegramBotToken) {
+      console.warn(`[TelegramSurface] Cannot answer callback query for company ${companyId}: no bot token configured`);
+      return;
+    }
+    let token: string;
+    try {
+      const decrypted = decryptSecret(company.telegramBotToken);
+      if (!decrypted) {
+        console.error(`[TelegramSurface] Decrypt returned null for company ${companyId} during callback answer. The bot integration may be broken.`);
+        return;
+      }
+      token = decrypted;
+    } catch (decryptErr: any) {
+      console.error(`[TelegramSurface] Failed to decrypt bot token for company ${companyId} during callback answer. Error: ${decryptErr.message}`);
+      return;
+    }
+    const payload: any = { callback_query_id: callbackQueryId };
+    if (text) {
+      payload.text = text;
+    }
+    await axiosPost(`${TELEGRAM_API}${token}/answerCallbackQuery`, payload);
   }
 }
 

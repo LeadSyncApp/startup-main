@@ -235,34 +235,8 @@ async function main() {
   });
   console.log(`✅ Created ClaimLog entries for conversation ls-103 (CLAIM + HEARTBEAT)`);
 
-  // 8. Seed default automation rules for the demo company
-  // These are basic rules that make sense out of the box for any new company
-  await prisma.automationRule.createMany({
-    data: [
-      {
-        companyId: company.id,
-        name: "Greeting & Language Menu",
-        trigger: "keyword:hi,hello,namaste,start",
-        action: "send_message:Namaste! Welcome to our store. How can we help you today?",
-        isActive: true,
-      },
-      {
-        companyId: company.id,
-        name: "Human Verification",
-        trigger: "keyword:human,agent,support,call",
-        action: "handover:Transferring you to our support agent. Please wait...",
-        isActive: true,
-      },
-      {
-        companyId: company.id,
-        name: "Price Inquiry",
-        trigger: "intent:PRICE_CHECK",
-        action: "send_catalog:CATALOG_SUMMER_24",
-        isActive: false,
-      },
-    ],
-  });
-  console.log(`✅ Created 3 default automation rules for demo company`);
+  // 8. Conversational rules for the demo company are created via the
+  // AutoRepliesPage UI or API — no legacy automation rules to seed here.
 
   console.log("\n🎉 Seed complete!");
   console.log("\n📋 Demo login credentials:");

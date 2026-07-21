@@ -26,7 +26,6 @@ export { TelegramLeaseService, INSTANCE_ID, IS_LOCAL, MY_ROLE } from "./messagin
 // Workflow Services
 export { NewOrderArrivalService, newOrderArrivalService } from "./workflow/newOrderArrival.service";
 export { OrderWorkflowService, orderWorkflowService } from "./workflow/orderWorkflow.service";
-export { startAutomationRunner, stopAutomationRunner } from "./workflow/automation.service";
 export {
   findLeastLoadedStaff,
   escalateToHuman,

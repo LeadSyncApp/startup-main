@@ -256,6 +256,8 @@ export interface ShopReplyRequest {
   active_order?: any;
   detected_language?: string;
   activeRules?: string;
+  conversation_history?: { sender: string; content: string }[];
+  active_draft_order?: any;
 }
 
 export interface UnifiedShopResponse {
@@ -393,8 +395,14 @@ If the customer has not supplied a valid, clean 6-digit pincode or clear landmar
 - "Checkout": The customer is building an order, but required fields (exact items, quantity, price, full shipping address, pincode) are missing, or they haven't given explicit confirmation yet. Set needs_follow_up: true and ask specifically for what is missing.
 - "OrderConfirmed": The customer has explicitly confirmed the order (e.g., "confirm my order", "yes book it") AND all required fields (items, total amount, shipping address) are present in the context. DO NOT return OrderConfirmed if shipping details or items are missing; return "Checkout" instead.
 
-# STATE TRACKING
-- Track partial order state via the conversation history. Remember previously provided items and addresses so you don't ask for them again.
+# STRUCTURED DRAFT ORDER & CONVERSATIONAL MEMORY RULES
+- The active transactional state of the customer's order is provided in <ActiveDraftOrder> tags.
+- <ActiveDraftOrder> is the SINGLE SOURCE OF TRUTH for order items, prices, total amount, and status.
+- You MUST defer to <ActiveDraftOrder> for order details rather than trying to re-guess items or prices from past chat text.
+- If items in <ActiveDraftOrder> are marked (UNVERIFIED) or status is DRAFTING, ask the customer clarifying questions to verify product details before asking for final confirmation.
+- If status is AWAITING_CONFIRMATION, inform the customer of the total price and ask them to confirm if they haven't already.
+- Recent dialogue turns are provided in <RecentConversationHistory> tags to maintain smooth tone and natural back-and-forth without repeating yourself.
+- Do NOT generate intent_type "OrderConfirmed" unless the customer has explicitly confirmed AND an active draft order exists in AWAITING_CONFIRMATION status.
 `;
 }
 
@@ -417,8 +425,29 @@ export async function generateShopReply(payload: any): Promise<UnifiedShopRespon
     });
     const allCategories = [...new Set(categoryRows.flatMap(r => r.categories))].sort();
 
+    const historyText = Array.isArray(payload.conversation_history) && payload.conversation_history.length > 0
+      ? payload.conversation_history.map((m: any) => `${m.sender === "CLIENT" ? "Customer" : "Assistant"}: ${m.content}`).join("\n")
+      : "No prior conversation messages.";
+
+    let draftText = "No active draft order.";
+    if (payload.active_draft_order) {
+      const d = payload.active_draft_order;
+      const itemsStr = Array.isArray(d.items) && d.items.length > 0
+        ? d.items.map((i: any) => `${i.name} x${i.quantity} @ ₹${i.price}${i.isMatched === false ? " (UNVERIFIED)" : ""}`).join(", ")
+        : "None";
+      draftText = `Status: ${d.status}\nItems: ${itemsStr}\nTotal Amount: ₹${d.totalAmount || 0}\nRecipient: ${d.recipientName || "N/A"}\nPhone: ${d.recipientPhone || "N/A"}\nAddress: ${d.shippingAddress ? JSON.stringify(d.shippingAddress) : "N/A"}`;
+    }
+
     const contextBoundaryBlock = `
 [CONTEXT LOCK ENCLOSURES]
+
+<RecentConversationHistory>
+${escapeHtmlBrackets(historyText)}
+</RecentConversationHistory>
+
+<ActiveDraftOrder>
+${escapeHtmlBrackets(draftText)}
+</ActiveDraftOrder>
 
 <MerchantRules>
 ${escapeHtmlBrackets(ruleSegment)}

@@ -8,15 +8,12 @@ import { getTenantPrismaContext, prisma } from '../../../lib/prisma';
 import { EMAIL_JOB_NAME } from './jobs/email.job';
 import { PDF_JOB_NAME } from './jobs/pdf.job';
 import { invoiceService } from '../../integrations/invoice.service';
-import { AUTOMATION_JOB_NAME } from './jobs/automation.job';
 import {
   CLEANUP_IDEMPOTENCY_JOB_NAME,
   CLEANUP_WEBHOOKS_JOB_NAME,
-  CLEANUP_AUTOMATION_LOGS_JOB_NAME,
   RECOVER_WEBHOOK_JOB_NAME
 } from './jobs/cleanup.job';
 import { PROCESS_AI_TASK_JOB_NAME } from './jobs/ai.job';
-import { executeDelayedAutomation } from '../../workflow/automation.service';
 import { tenantContextStorage, resolveTenantContext } from '../../context/tenantContext.provider';
 import { outboundDispatcherService } from '../../outbound.dispatcher';
 
@@ -119,15 +116,7 @@ export class WorkerRegistry {
       }
     });
 
-    // 3. Run Automation Worker
-    await boss.work(AUTOMATION_JOB_NAME, { batchSize: 5 }, async (jobs: Array<{ id: string; name: string; data: any }>) => {
-      for (const job of jobs) {
-        console.log(`[PgBoss] Processing ${AUTOMATION_JOB_NAME}. JobID: ${job.id}`);
-        await executeDelayedAutomation(job.data as any);
-      }
-    });
-
-    // 4. Menu Restructure & Knowledge training are now executed dynamically and synchronously
+    // 3. Menu Restructure & Knowledge training are now executed dynamically and synchronously
     // via direct, high-performance in-memory flows inside ai.service.ts to prevent out-of-band state desynchronizations.
 
     // Cleanup Idempotency
@@ -165,11 +154,6 @@ export class WorkerRegistry {
     // Cleanup Webhooks
     await boss.work(CLEANUP_WEBHOOKS_JOB_NAME, async (jobs: Array<{ id: string; name: string; data: any }>) => {
       console.log(`[PgBoss] Processed ${CLEANUP_WEBHOOKS_JOB_NAME}`);
-    });
-
-    // Cleanup Automation Logs
-    await boss.work(CLEANUP_AUTOMATION_LOGS_JOB_NAME, async (jobs: Array<{ id: string; name: string; data: any }>) => {
-      console.log(`[PgBoss] Processed ${CLEANUP_AUTOMATION_LOGS_JOB_NAME}`);
     });
 
     // Recover Webhook

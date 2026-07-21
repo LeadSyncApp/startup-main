@@ -16,7 +16,7 @@ const createPrismaClient = () => {
   const dbUrl = new URL(DATABASE_URL);
   // Increase connection pool to handle concurrent Telegram polling + staff requests
   if (!dbUrl.searchParams.has("connection_limit")) {
-    dbUrl.searchParams.set("connection_limit", "10");
+    dbUrl.searchParams.set("connection_limit", "15");
   }
   if (!dbUrl.searchParams.has("pool_timeout")) {
     dbUrl.searchParams.set("pool_timeout", "10");
@@ -83,7 +83,7 @@ const GLOBAL_SYSTEM_TABLES = [
 
 const tenantModels = [
   'User', 'Contact', 'Deal', 'Lead', 
-  'AutomationRule', 'CustomFieldDefinition', 'BotConfiguration', 
+  'CustomFieldDefinition', 'BotConfiguration', 
   'Order', 'Product', 'Message', 'Conversation', 'Tag'
 ];
 

@@ -14,6 +14,7 @@ export type Permission =
   | "settings.connections.whatsapp"
   | "settings.connections.instagram"
   | "settings.connections.messenger"
+  | "settings.connections.webhook"
   | "team.invite"
   | "team.invite.revoke"
   | "team.remove"
@@ -43,6 +44,7 @@ const PERMISSION_MAP: Record<Permission, Role[]> = {
   "settings.connections.whatsapp":  ["OWNER", "MANAGER"],
   "settings.connections.instagram": ["OWNER", "MANAGER"],
   "settings.connections.messenger": ["OWNER", "MANAGER"],
+  "settings.connections.webhook":    ["OWNER", "MANAGER"],
   "team.invite":                    ["OWNER", "MANAGER"],
   "team.invite.revoke":             ["OWNER", "MANAGER"],
   "team.remove":                    ["OWNER"],

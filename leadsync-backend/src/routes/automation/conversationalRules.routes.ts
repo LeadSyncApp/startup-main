@@ -45,13 +45,15 @@ const surfaceConfigSchema = z.object({
     const showAsButton = data.showAsButton !== undefined ? data.showAsButton : !!data.enabled;
     const showAsCommand = data.showAsCommand !== undefined ? data.showAsCommand : !!data.enabled;
     
-    if (showAsButton || showAsCommand) {
-      if (!data.buttonLabel || data.buttonLabel.trim().length === 0) return false;
-      if (!data.command || !/^\/[a-z0-9_]+$/.test(data.command)) return false;
+    if (showAsButton && (!data.buttonLabel || data.buttonLabel.trim().length === 0)) {
+      return false;
+    }
+    if (showAsCommand && (!data.command || !/^\/[a-z0-9_]+$/.test(data.command))) {
+      return false;
     }
     return true;
   }, {
-    message: "Button label and command (starting with '/' and lowercase letters/numbers/underscores) are required when surfacing is enabled.",
+    message: "Button label is required when 'Show as inline button' is checked. Command (starting with '/' and lowercase letters/numbers/underscores) is required when 'Show as typed command' is checked.",
     path: ["buttonLabel"]
   });
 
@@ -61,7 +63,6 @@ const eventConfigSchema = z.object({
   // event name that can't be matched (the matcher is exact/case-sensitive). The
   // frontend surfaces this as a dropdown, not a free-text field.
   eventName: z.enum(KNOWN_EVENTS.map((e) => e.value) as [string, ...string[]]),
-  delayMinutes: z.number().int().min(0).optional(),
 }).nullable().optional();
 
 const createRuleSchema = z.object({

@@ -13,6 +13,7 @@ import { SchedulerRegistry } from "./services/infrastructure/pgboss/scheduler.re
 import { sysLog } from "./lib/logger";
 import { startOrchestratorWorker } from "./services/workers/ai.orchestrator.worker";
 import { startAiTriageWorker } from "./services/workers/ai.triage.worker";
+import { ensureRerankerReady } from "./services/knowledge/productMatch.service";
 import { reapGhostsForCompany } from "./services/infrastructure/ghostReaper.service";
 
 const PROCESS_PROFILE = process.env.PROCESS_PROFILE || "COMBINED";
@@ -110,6 +111,13 @@ async function bootstrap() {
     // Initialize the PgBoss service client (always required so database schema is synchronized or jobs can be queued)
     await pgBossService.initialize();
     sysLog.info("📦 [Bootstrap] PgBoss queue service successfully initialized.");
+
+    // Verify the BGE reranker can load before accepting any work.
+    // If it fails, crash hard — product matching silently returning null
+    // for every query is worse than a startup failure that gets noticed.
+    sysLog.info("🧠 [Bootstrap] Loading BGE reranker (first load downloads ~571 MB from HuggingFace)...");
+    await ensureRerankerReady();
+    sysLog.info("🧠 [Bootstrap] BGE reranker loaded OK.");
 
     // Execution path for background WORKER profiles
     if (PROCESS_PROFILE === "WORKER" || PROCESS_PROFILE === "COMBINED") {

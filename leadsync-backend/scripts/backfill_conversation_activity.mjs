@@ -5,8 +5,18 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-const TEST_TENANT = "3102a85e-1798-45bb-b6c5-d94ea436f775";
-const companyId = process.argv[2] || TEST_TENANT;
+const companyId = process.argv[2];
+
+if (!companyId) {
+  console.error("Usage: node scripts/backfill_conversation_activity.mjs <companyId>");
+  console.error("companyId is required. Pass a valid company UUID.");
+  process.exit(1);
+}
+
+if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(companyId)) {
+  console.error("Error: companyId must be a valid UUID.");
+  process.exit(1);
+}
 
 async function main() {
   console.log(`Backfilling ConversationActivity (type=RESOLVED) for companyId=${companyId}`);

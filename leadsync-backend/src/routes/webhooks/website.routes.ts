@@ -1,8 +1,28 @@
 import { Router, Request, Response } from "express";
+import { prisma } from "../../lib/prisma";
 import { pgBossService } from "../../services/infrastructure/pgboss/pgboss.service";
 import { Channel, StandardMessageFrame } from "../../interfaces/messaging.interface";
+import { validateWebsiteWebhookSignature, WebhookPlatform } from "../../middleware/websiteWebhookValidator";
 
 const router = Router();
+
+async function logDelivery(
+  companyId: string,
+  platform: WebhookPlatform,
+  outcome: string,
+  statusCode: number,
+  reason?: string,
+  rawPayload?: string,
+  rawHeaders?: string
+) {
+  try {
+    await prisma.webhookDeliveryLog.create({
+      data: { companyId, platform, outcome, statusCode, reason, rawPayload, rawHeaders },
+    });
+  } catch (err: any) {
+    console.error("[WebhookDeliveryLog] Write failed:", err.message);
+  }
+}
 
 /**
  * Country Dial Code Registry for automatic normalization of international checkout numbers
@@ -80,9 +100,16 @@ function normalizePhoneNumber(phone: string, countryCode?: string): string {
  * 💻 WEBSITES WEBHOOK GATEWAY (Shopify, WooCommerce, Custom Storefronts)
  * Normalizes e-commerce transactional updates into cCommerce interaction streams.
  */
-router.post("/:companyId", async (req: Request, res: Response): Promise<Response> => {
+router.post("/:companyId", validateWebsiteWebhookSignature, async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.params;
   const body = req.body;
+  const platform: WebhookPlatform = req.detectedPlatform || "custom";
+  const rawPayload = JSON.stringify(body).slice(0, 4000);
+  const rawHeaders = JSON.stringify({
+    "x-shopify-hmac-sha256": req.header("X-Shopify-Hmac-SHA256") ? "[present]" : undefined,
+    "x-wc-webhook-signature": req.header("X-WC-Webhook-Signature") ? "[present]" : undefined,
+    "x-webhook-signature": req.header("X-Webhook-Signature") ? "[present]" : undefined,
+  });
 
   if (!companyId) {
     return res.status(400).json({ error: "Missing required route parameter companyId" });
@@ -96,8 +123,14 @@ router.post("/:companyId", async (req: Request, res: Response): Promise<Response
     let rawAddress = "";
     let countryCode = "IN";
 
-    // 1️⃣ Normalize Shopify payloads
-    if (body.total_price && body.customer) {
+    // Platform detection is driven by which signature header the validator confirmed.
+    // When platform is explicitly known, use ONLY that parser — never cross-match on shape.
+    // Shape-based detection only runs as a fallback when no platform header was present
+    // (should not happen after middleware, but kept as safety net).
+    const platform = req.detectedPlatform;
+
+    if (platform === "shopify") {
+      // ── Shopify parser ──────────────────────────────────────────────────
       customerName = `${body.customer.first_name || ""} ${body.customer.last_name || ""}`.trim() || "Shopify Customer";
       contactPhone = body.customer.phone || body.billing_address?.phone || body.shipping_address?.phone || "";
       totalAmount = parseFloat(body.total_price);
@@ -109,9 +142,9 @@ router.post("/:companyId", async (req: Request, res: Response): Promise<Response
       const sa = body.shipping_address || {};
       rawAddress = [sa.address1, sa.address2, sa.city, sa.province, sa.zip, sa.country || "India"].filter(Boolean).join(", ");
       countryCode = sa.country_code || body.billing_address?.country_code || "IN";
-    } 
-    // 2️⃣ Normalize WooCommerce payloads
-    else if (body.billing && body.line_items && body.total) {
+
+    } else if (platform === "woocommerce") {
+      // ── WooCommerce parser ──────────────────────────────────────────────
       customerName = `${body.billing.first_name || ""} ${body.billing.last_name || ""}`.trim() || "WooCommerce Customer";
       contactPhone = body.billing.phone || "";
       totalAmount = parseFloat(body.total);
@@ -123,9 +156,9 @@ router.post("/:companyId", async (req: Request, res: Response): Promise<Response
       const sa = body.shipping || {};
       rawAddress = [sa.address_1, sa.address_2, sa.city, sa.state, sa.postcode, sa.country || "India"].filter(Boolean).join(", ");
       countryCode = sa.country || body.billing.country || "IN";
-    }
-    // 3️⃣ Normalize Custom Webhooks
-    else {
+
+    } else if (platform === "custom") {
+      // ── Custom parser (header-confirmed, shape-independent) ──────────────
       customerName = body.customer?.name || body.name || "Store Shopper";
       contactPhone = body.customer?.phone || body.phone || "";
       totalAmount = parseFloat(body.total || body.amount || "0");
@@ -136,6 +169,37 @@ router.post("/:companyId", async (req: Request, res: Response): Promise<Response
       
       rawAddress = body.shipping_address || body.address || "";
       countryCode = body.customer?.country_code || body.country_code || "IN";
+
+    } else {
+      // ── Shape-based fallback (should not normally be reached) ───────────
+      if (body.total_price && body.customer) {
+        customerName = `${body.customer.first_name || ""} ${body.customer.last_name || ""}`.trim() || "Shopify Customer";
+        contactPhone = body.customer.phone || body.billing_address?.phone || body.shipping_address?.phone || "";
+        totalAmount = parseFloat(body.total_price);
+        const items = body.line_items || [];
+        orderDetails = `ordered ${items.map((i: any) => `${i.quantity}x ${i.title}`).join(", ")} (Total: ₹${totalAmount})`;
+        const sa = body.shipping_address || {};
+        rawAddress = [sa.address1, sa.address2, sa.city, sa.province, sa.zip, sa.country || "India"].filter(Boolean).join(", ");
+        countryCode = sa.country_code || body.billing_address?.country_code || "IN";
+      } else if (body.billing && body.line_items && body.total) {
+        customerName = `${body.billing.first_name || ""} ${body.billing.last_name || ""}`.trim() || "WooCommerce Customer";
+        contactPhone = body.billing.phone || "";
+        totalAmount = parseFloat(body.total);
+        const items = body.line_items || [];
+        orderDetails = `ordered ${items.map((i: any) => `${i.quantity}x ${i.name}`).join(", ")} (Total: ₹${totalAmount})`;
+        const sa = body.shipping || {};
+        rawAddress = [sa.address_1, sa.address_2, sa.city, sa.state, sa.postcode, sa.country || "India"].filter(Boolean).join(", ");
+        countryCode = sa.country || body.billing.country || "IN";
+      } else {
+        customerName = body.customer?.name || body.name || "Store Shopper";
+        contactPhone = body.customer?.phone || body.phone || "";
+        totalAmount = parseFloat(body.total || body.amount || "0");
+        const items = body.items || [];
+        const itemDescriptions = items.map((i: any) => `${i.quantity || 1}x ${i.name || i.title}`).join(", ");
+        orderDetails = itemDescriptions ? `ordered ${itemDescriptions} (Total: ₹${totalAmount})` : `placed an order (Total: ₹${totalAmount})`;
+        rawAddress = body.shipping_address || body.address || "";
+        countryCode = body.customer?.country_code || body.country_code || "IN";
+      }
     }
 
     // Clean and validate phone contact footprint with extracted countryCode metadata mapping
@@ -144,6 +208,7 @@ router.post("/:companyId", async (req: Request, res: Response): Promise<Response
     // Guard: website frames require at least a valid contact phone number to sync leads
     if (!sanitizedPhone || sanitizedPhone.length < 10) {
       console.warn(`⚠️ [Website Sink] Dropped order from ${customerName}: Missing or invalid contact phone number [${contactPhone}] for CRM sync.`);
+      await logDelivery(companyId, platform, "ignored", 200, "Missing phone", rawPayload, rawHeaders);
       return res.status(200).json({ status: "ignored", reason: "Missing phone contact details" });
     }
 
@@ -164,17 +229,19 @@ router.post("/:companyId", async (req: Request, res: Response): Promise<Response
       const boss = pgBossService.getBoss();
       await boss.send("webhook.process", standardizedFrame);
     } catch (queueError) {
-      // Log error heavily, but return an HTTP 202 to protect external platform webhook registration
-      console.error("🚨 [Queue Broker Injection Failure] Unable to enqueue frame to pg-boss natively:", queueError);
-      return res.status(202).json({ 
-        status: "accepted", 
-        message: "Payload received, pending asynchronous broker synchronization catch-up." 
+      console.error("🚨 [Queue Broker Injection Failure] Unable to enqueue frame to pg-boss:", queueError);
+      await logDelivery(companyId, platform, "error", 500, "Queue failure", rawPayload, rawHeaders);
+      return res.status(500).json({ 
+        status: "error", 
+        message: "Failed to enqueue webhook payload. Please retry." 
       });
     }
 
+    await logDelivery(companyId, platform, "accepted", 202, undefined, rawPayload, rawHeaders);
     return res.status(202).json({ status: "accepted", message: "Normalized website payload enqueued" });
   } catch (error: any) {
     console.error("❌ [Website Sink Fatal Crash] Failed to normalize website webhook:", error);
+    await logDelivery(companyId, platform, "error", 500, error.message?.slice(0, 500), rawPayload, rawHeaders);
     return res.status(500).json({ error: error.message });
   }
 });

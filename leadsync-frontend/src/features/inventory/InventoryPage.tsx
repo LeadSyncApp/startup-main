@@ -59,6 +59,7 @@ export function InventoryPage({ companyId, businessType }: InventoryPageProps) {
       hasVariants: product.hasVariants,
       imageUrl: product.imageUrl,
       images: product.images || [],
+      customFieldValues: product.customFieldValues || {},
     }]);
     setStep("confirm");
   };

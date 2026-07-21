@@ -7,6 +7,96 @@ const SARVAM_CHAT_URL = "https://api.sarvam.ai/v1/chat/completions";
 import { normalizeProductsArray, ProductData, ParsedData } from "./numeralConverter";
 
 /**
+ * Build BUSINESS TYPE RULES dynamically from a company's ProductFieldDefinition list.
+ * Falls back to hardcoded rules if no custom fields are defined.
+ */
+export function buildBusinessTypeRules(
+  businessType: string,
+  productFieldDefs: Array<{
+    fieldName: string;
+    fieldType: string;
+    appliesTo: string;
+    options: string[];
+  }>
+): string {
+  // If no custom fields defined, use hardcoded fallback rules
+  if (!productFieldDefs || productFieldDefs.length === 0) {
+    return `- RETAIL: Extract product_type (required), price_inr (required). Variants use attribute_name "Size" or "Color" (optional), with stock as a quantity number. Extract categories as a comma-separated list (e.g. "Sarees, Festive Wear").
+- RESTAURANT: Extract product_type (required), price_inr (required, price per portion/plate). Variants use attribute_name "Portion" or "Duration" (optional). Products are available by default (no stock concept — leave stock null). Extract categories as a comma-separated list (e.g. "Starters, Main Course").
+- SERVICES: Extract product_type (required), price_inr (required, price per duration). Variants use attribute_name "Duration" (e.g. "60 min", optional). Leave stock null. Extract categories as a comma-separated list (e.g. "Hair Services, Skin Care").`;
+  }
+
+  // Build dynamic rules from ProductFieldDefinition list
+  const productFields = productFieldDefs.filter(f => f.appliesTo === "product");
+  const variantFields = productFieldDefs.filter(f => f.appliesTo === "variant");
+
+  const rules: string[] = [];
+
+  // Core fields always present
+  rules.push(`- product_type (required): The product or service name.`);
+  rules.push(`- price_inr (required): The base price in INR.`);
+  rules.push(`- description (optional): Any descriptive attributes.`);
+  rules.push(`- categories (array): Category tags for the product.`);
+
+  // Dynamic product-level fields
+  for (const field of productFields) {
+    if (field.fieldName === "brand") {
+      rules.push(`- brand (optional): The brand or manufacturer name.`);
+    } else if (field.fieldType === "select" && field.options.length > 0) {
+      rules.push(`- ${field.fieldName} (optional): Extract from these options: ${field.options.join(", ")}.`);
+    } else if (field.fieldType === "boolean") {
+      rules.push(`- ${field.fieldName} (optional): true or false based on context.`);
+    } else {
+      rules.push(`- ${field.fieldName} (optional): Extract if mentioned in the text.`);
+    }
+  }
+
+  // Variant fields
+  if (variantFields.length > 0) {
+    const variantAttrNames = variantFields.map(f => `"${f.fieldName}"`).join(" or ");
+    rules.push(`- Variants use attribute_name ${variantAttrNames} (optional), with appropriate values.`);
+    rules.push(`- Stock is tracked as a quantity number for each variant.`);
+  } else {
+    rules.push(`- Variants use attribute_name "Size" or "Color" (optional), with stock as a quantity number.`);
+  }
+
+  return rules.join("\n");
+}
+
+/**
+ * Build field extraction instructions for the LLM based on a company's ProductFieldDefinitions.
+ * Generates a prompt block telling the LLM what custom fields to extract into customFieldValues.
+ * Returns empty string if no product-level fields are defined.
+ */
+export function buildFieldExtractionInstructions(
+  productFieldDefs: Array<{
+    fieldName: string;
+    fieldType: string;
+    appliesTo: string;
+    options: string[];
+  }>
+): string {
+  const productFields = productFieldDefs.filter(f => f.appliesTo === "product");
+
+  if (productFields.length === 0) {
+    return "";
+  }
+
+  const fieldList = productFields.map(f => {
+    if (f.fieldType === "select" && f.options.length > 0) {
+      return `${f.fieldName} (options: ${f.options.join(", ")})`;
+    }
+    return f.fieldName;
+  }).join(", ");
+
+  return `CUSTOM FIELDS EXTRACTION:
+The shop owner's business has defined these custom product fields: ${fieldList}.
+If any of these fields are mentioned in the input text, extract their values and place them in the "customFieldValues" object using the exact field name as the key.
+Example: If the text says "Otto brand cotton shirt" and "Brand" is a defined field, set customFieldValues: {"Brand": "Otto"}.
+If a field is not mentioned, do not include it in customFieldValues. Do not invent values.`;
+}
+
+/**
  * Shared parsing system prompt for product data extraction
  */
 export const PRODUCT_PARSING_PROMPT = `You are extracting structured product data from a shop owner's informal, free-text description. The text may mix languages, skip punctuation, and describe multiple products in one paragraph.
@@ -15,19 +105,17 @@ BUSINESS TYPE CONTEXT: {{BUSINESS_TYPE}}
 This business type determines which fields are relevant. Extract ONLY the fields that apply to this business type and follow its rules below. Do NOT invent fields that are not part of this business type's template.
 
 BUSINESS TYPE RULES:
-- RETAIL: Extract brand (optional), product_type (required), description (optional), price_inr (required). Variants use attribute_name "Size" or "Color" (optional), with stock as a quantity number. Extract categories as a comma-separated list (e.g. "Sarees, Festive Wear").
-- RESTAURANT: Do NOT extract brand (hide it). Extract product_type (required), description (optional), price_inr (required, price per portion/plate). Variants use attribute_name "Portion" or "Duration" (optional). Products are available by default (no stock concept — leave stock null). Extract categories as a comma-separated list (e.g. "Starters, Main Course").
-- SERVICES: Do NOT extract brand. Extract product_type (required), description (optional), price_inr (required, price per duration). Variants use attribute_name "Duration" (e.g. "60 min", optional). Leave stock null. Extract categories as a comma-separated list (e.g. "Hair Services, Skin Care").
+{{BUSINESS_TYPE_RULES}}
+
+{{FIELD_EXTRACTION_INSTRUCTIONS}}
 
 Return ONLY valid JSON, no preamble, no markdown fences. Schema:
 {
   "products": [
     {
-      "brand": string | null,
       "product_type": string,
-      "attribute_name": string | null,
-      "categories": string[],   // array of category strings, e.g. ["Sarees", "Festive Wear"]
-      "description": string | null,
+      "categories": string[],
+      "customFieldValues": {},
       "variants": [
         {
           "attribute_name": string,
@@ -73,14 +161,6 @@ VARIANT DETECTION RULES:
 - price_inr is the base price. If individual variants have different prices, set price_override on those variants.
 - stock is null for services or digital goods (no stock concept).
 
-DESCRIPTION FIELD RULE:
-- Use the "description" field to capture any descriptive attributes that do NOT match the primary variant type.
-- Example: "black shirt otto rs 300 size 32 xl" → description="black" (color is not the variant type; Size is)
-- Example: "red cotton saree 500" → description="red cotton" (both color and material are product-level descriptors)
-- If no such attributes exist, set description to null.
-- Do NOT repeat variant values in description.
-- Do NOT put the brand or product_type in description.
-
 SKU EXTRACTION RULE:
 - If the source text contains an explicit SKU, product code, or catalog number (e.g. "SKU: ABC-123", "code: TSHIRT-001", "ref# 456"), extract it into the "sku" field.
 - Only extract if it is clearly a product identifier. Do NOT invent SKUs.
@@ -91,6 +171,11 @@ Rules:
 - Keep variants attached to the correct product — do not let attributes from one product bleed into another.
 - If a fragment of text doesn't clearly belong to any product, put it in unparsed_notes instead of forcing a guess.
 - raw_source_fragment should be the exact substring this product was extracted from, for traceability.
+
+LANGUAGE OUTPUT RULE:
+- Return product_type and categories in {{LANGUAGE}}.
+- Return customFieldValues in {{LANGUAGE}}.
+- Keep all JSON keys, numbers, and the rest of the structure in English/unchanged.
 
 Input (business type: {{BUSINESS_TYPE}}):
 "{{OWNER_TEXT}}"`;
@@ -125,8 +210,12 @@ async function callGroqModel(
 ): Promise<ModelParseResult> {
   const startTime = Date.now();
   try {
+    // Use fallback rules for comparison testing (no custom fields available)
+    const fallbackRules = buildBusinessTypeRules("RETAIL", []);
     const userPrompt = PRODUCT_PARSING_PROMPT
       .replace("{{BUSINESS_TYPE}}", "RETAIL")
+      .replace("{{BUSINESS_TYPE_RULES}}", fallbackRules)
+      .replace("{{FIELD_EXTRACTION_INSTRUCTIONS}}", "")
       .replace("{{OWNER_TEXT}}", ownerText);
     
     const result = await groq.chat.completions.create({

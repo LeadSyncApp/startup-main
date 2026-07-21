@@ -14,7 +14,7 @@
  */
 
 import { prisma } from "../../lib/prisma";
-import { retrieveProductChunks } from "../knowledge/knowledgeRetriever.service";
+import { hybridSearch } from "../knowledge/knowledgeRetriever.service";
 import { LOW_STOCK_THRESHOLD } from "./inventory.service";
 
 export interface ProductMatchResult {
@@ -36,9 +36,10 @@ export interface ProductMatchResult {
   gap: number;
 }
 
-// Mirror the established auto-reply gap threshold.
+// RRF-score gap threshold (k=60 scale: max gap ~0.020, typical ~0.017).
+// Conservative default — log real production gaps to fine-tune.
 const CONFIDENCE_GAP_THRESHOLD = parseFloat(
-  process.env.CONFIDENCE_GAP_THRESHOLD || "0.04"
+  process.env.CONFIDENCE_GAP_THRESHOLD || "0.005"
 );
 
 // Minimum top-similarity required before a product is even considered a match.
@@ -49,6 +50,101 @@ const CONFIDENCE_GAP_THRESHOLD = parseFloat(
 const MIN_PRODUCT_SCORE = parseFloat(
   process.env.PRODUCT_MATCH_MIN_SCORE || "0.80"
 );
+
+// ── BGE-v2-m3 cross-encoder reranker configuration ──
+// Minimum reranker score required for a product to be considered a match.
+// BGE-v2-m3 produces 0-1 scores; direct queries score 0.97-0.99,
+// vague/informal queries score ~0.007. 0.80 is a conservative starting floor.
+const MIN_RERANK_SCORE = parseFloat(
+  process.env.MIN_RERANK_SCORE || "0.80"
+);
+
+// Reranker score gap threshold (log-only, does NOT suppress results — see
+// RERANKER_TOP_VS_RUNNERUP log). Records top1-vs-top2 delta for every query
+// to empirically determine the right threshold from real score distributions.
+// Final value chosen after reviewing Om Sai Silk Boutique test suite output.
+const RERANKER_GAP_THRESHOLD = parseFloat(
+  process.env.RERANKER_GAP_THRESHOLD || "0.05"
+);
+
+// ── BGE-v2-m3 cross-encoder reranker ──
+// Loads the ONNX-format BGE Reranker v2 m3 via @xenova/transformers.
+// Uses onnxruntime-web (WASM) backend — no native binary needed, works on
+// any platform where Node.js >=20.16.0 runs.
+//
+// Startup: ensureRerankerReady() is called during bootstrap so the server
+// crashes loudly (process.exit(1)) if the model can't load / download.
+import {
+  AutoTokenizer,
+  AutoModelForSequenceClassification,
+} from "@xenova/transformers";
+
+const RERANKER_MODEL = "onnx-community/bge-reranker-v2-m3-ONNX";
+
+let _tokenizer: any = null;
+let _model: any = null;
+
+async function getReranker() {
+  if (!_tokenizer || !_model) {
+    _tokenizer = await AutoTokenizer.from_pretrained(RERANKER_MODEL);
+    _model = await AutoModelForSequenceClassification.from_pretrained(
+      RERANKER_MODEL
+    );
+  }
+  return { tokenizer: _tokenizer, model: _model };
+}
+
+/**
+ * Called once at server startup.  If the BGE model cannot be loaded
+ * (e.g. missing network to download ONNX weights, filesystem full, etc.)
+ * this throws, and the bootstrap catch block calls process.exit(1).
+ *
+ * Never silence this in production — without the reranker every product
+ * match fails the 0.80 floor and the bot goes silent.
+ */
+export async function ensureRerankerReady(): Promise<void> {
+  try {
+    await getReranker();
+    console.log("[productMatch] BGE reranker loaded OK:", RERANKER_MODEL);
+  } catch (err: any) {
+    console.error(
+      "[productMatch] FATAL: BGE reranker failed to load — product matching will fail every query.",
+      { model: RERANKER_MODEL, error: err?.message, stack: err?.stack }
+    );
+    throw err;
+  }
+}
+
+function sigmoid(x: number): number {
+  if (x >= 0) {
+    return 1 / (1 + Math.exp(-x));
+  }
+  const z = Math.exp(x);
+  return z / (1 + z);
+}
+
+async function rerank(
+  query: string,
+  documents: { id: string; text: string }[]
+): Promise<{ id: string; score: number; text: string }[]> {
+  const { tokenizer, model } = await getReranker();
+  const results: { id: string; score: number; text: string }[] = [];
+
+  for (const doc of documents) {
+    const inputs = await tokenizer([query], {
+      text_pair: [doc.text],
+      padding: true,
+      truncation: true,
+    });
+    const output = await model(inputs);
+    const logits = output.logits.tolist();
+    const score = sigmoid(logits[0][0]);
+    results.push({ id: doc.id, score, text: doc.text });
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  return results;
+}
 
 /**
  * Run product matching against a customer message.
@@ -61,49 +157,111 @@ export async function matchProductForMessage(
   try {
     if (!messageText || !messageText.trim()) return null;
 
-    const productChunks = await retrieveProductChunks(companyId, messageText, 10);
-    if (productChunks.length === 0) {
-      console.log("[productMatch] No PRODUCT chunks found in top 10 similar chunks.", { messageText, companyId });
+    // Hybrid search: vector + FTS merged by RRF, returns raw cosine similarity
+    // alongside rrf_score on each chunk.
+    const hybridResults = await hybridSearch(companyId, messageText, "PRODUCT", 20);
+    if (hybridResults.length === 0) {
+      console.log("[productMatch] No PRODUCT chunks returned by hybridSearch.", { messageText, companyId });
       return null;
     }
 
-    // ── Debug: log all retrieved product chunks with similarity scores ──
-    console.log("[productMatch] Retrieved product chunks:", JSON.stringify({
+    // ── Debug: log all retrieved chunks with both scores ──
+    console.log("[productMatch] Hybrid search results:", JSON.stringify({
       messageText,
-      chunkCount: productChunks.length,
-      chunks: productChunks.map(c => ({
+      chunkCount: hybridResults.length,
+      chunks: hybridResults.map(c => ({
         sourceId: c.sourceId,
         content: c.content?.slice(0, 120),
         similarity: c.similarity,
+        rrf_score: c.rrf_score,
       })),
     }, null, 2));
 
-    const top = productChunks[0];
-    const runnerUp = productChunks.length >= 2 ? productChunks[1] : null;
-    const gap = runnerUp ? top.similarity - runnerUp.similarity : 1;
+    // ╔══════════════════════════════════════════════════════════════════════╗
+    // ║ OLD COSINE FLOOR + RRF RANKING (preserved for rollback)            ║
+    // ╚══════════════════════════════════════════════════════════════════════╝
+    // The original logic filtered by raw cosine similarity (MIN_PRODUCT_SCORE)
+    // then sorted survivors by rrf_score. Replaced by BGE-v2-m3 cross-encoder
+    // reranker which scores query-document relevance directly (0-1 scale).
+    // See git history for the full original block at old lines 85-138.
+    //
+    // const candidates = hybridResults.filter(c => c.similarity >= MIN_PRODUCT_SCORE);
+    // if (candidates.length === 0) { ... return null; }
+    // candidates.sort((a, b) => b.rrf_score - a.rrf_score);
+    // ...
 
-    console.log("[productMatch] Similarity check:", JSON.stringify({
-      topContent: top.content?.slice(0, 120),
-      topSimilarity: top.similarity,
-      runnerUpContent: runnerUp?.content?.slice(0, 120),
-      runnerUpSimilarity: runnerUp?.similarity,
+    // ═══════════════════════════════════════════════════════════════════════
+    // NEW: BGE-v2-m3 Cross-Encoder Reranker Stage
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Step 1: Run cross-encoder reranker on all hybrid search candidates
+    const docs = hybridResults.map(c => ({ id: c.sourceId ?? c.content, text: c.content }));
+    const ranked = await rerank(messageText, docs);
+
+    // Map reranker scores back to chunks
+    const rerankMap = new Map<string, number>(ranked.map((r: any) => [r.id, r.score]));
+    const scored = hybridResults.map(c => ({
+      ...c,
+      rerank_score: rerankMap.get(c.sourceId ?? c.content) ?? 0,
+    }));
+
+    // Step 2: Filter by reranker score floor
+    const candidates = scored.filter(c => c.rerank_score >= MIN_RERANK_SCORE);
+
+    if (candidates.length === 0) {
+      console.log("[productMatch] FAILED — no chunks pass MIN_RERANK_SCORE floor", {
+        minScore: MIN_RERANK_SCORE,
+        bestRerankScore: Math.max(...scored.map(c => c.rerank_score)),
+        bestContent: scored[0]?.content?.slice(0, 120),
+      });
+      return null;
+    }
+
+    // Step 3: Sort by reranker score
+    candidates.sort((a, b) => b.rerank_score - a.rerank_score);
+
+    const top = candidates[0];
+    const runnerUp = candidates.length >= 2 ? candidates[1] : null;
+    const gap = runnerUp ? top.rerank_score - runnerUp.rerank_score : 1;
+
+    // Step 4: Log reranker top-vs-runnerup delta for threshold tuning (log-only, no behavior change)
+    console.log("[productMatch] RERANKER_TOP_VS_RUNNERUP", {
       gap,
-      minScore: MIN_PRODUCT_SCORE,
-      minGap: CONFIDENCE_GAP_THRESHOLD,
-      passesScore: top.similarity >= MIN_PRODUCT_SCORE,
-      passesGap: gap >= CONFIDENCE_GAP_THRESHOLD,
-    }, null, 2));
+      threshold: RERANKER_GAP_THRESHOLD,
+      topScore: top.rerank_score,
+      runnerUpScore: runnerUp?.rerank_score,
+      belowThreshold: gap < RERANKER_GAP_THRESHOLD,
+    });
 
-    // Confidence requires BOTH a genuine relevance floor AND a clear gap over
-    // the runner-up (so we never force a low-confidence guess).
-    if (top.similarity < MIN_PRODUCT_SCORE) {
-      console.log("[productMatch] FAILED — top similarity below MIN_PRODUCT_SCORE", { topSimilarity: top.similarity, minScore: MIN_PRODUCT_SCORE });
-      return null;
+    // Step 5: Borderline query logging — top reranker score within 0.05 of floor
+    if (top.rerank_score < MIN_RERANK_SCORE + 0.05) {
+      console.log("[productMatch] BORDERLINE — top reranker score near floor:", {
+        messageText,
+        topRerankScore: top.rerank_score,
+        floor: MIN_RERANK_SCORE,
+        margin: top.rerank_score - MIN_RERANK_SCORE,
+      });
     }
-    if (gap < CONFIDENCE_GAP_THRESHOLD) {
-      console.log("[productMatch] FAILED — gap below CONFIDENCE_GAP_THRESHOLD", { gap, threshold: CONFIDENCE_GAP_THRESHOLD, topSimilarity: top.similarity, runnerUpSimilarity: runnerUp?.similarity });
-      return null;
-    }
+
+    // Step 6: Log all candidates with reranker scores for debugging
+    console.log("[productMatch] Reranker candidates:", JSON.stringify({
+      candidateCount: candidates.length,
+      totalScored: scored.length,
+      filteredOut: hybridResults.length - candidates.length,
+      top: {
+        content: top.content?.slice(0, 120),
+        rerankScore: top.rerank_score,
+        similarity: top.similarity,
+        rrfScore: top.rrf_score,
+      },
+      runnerUp: runnerUp ? {
+        content: runnerUp.content?.slice(0, 120),
+        rerankScore: runnerUp.rerank_score,
+        similarity: runnerUp.similarity,
+        rrfScore: runnerUp.rrf_score,
+      } : null,
+      gap,
+    }, null, 2));
 
     // Resolve the matched chunk to a live InventoryProduct. The sourceId is
     // normally the InventoryProduct UUID; fall back to a name match for
@@ -154,7 +312,7 @@ export async function matchProductForMessage(
       stock,
       stockStatus: stock === 0 ? "OUT_OF_STOCK" : stock > 0 && stock <= LOW_STOCK_THRESHOLD ? "LOW_STOCK" : "IN_STOCK",
       thumbnailUrl: product.imageUrl || "",
-      score: top.similarity,
+      score: top.rerank_score,
       gap,
     };
 

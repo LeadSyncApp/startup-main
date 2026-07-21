@@ -105,8 +105,7 @@ router.post("/:id/inventory/check-duplicates", async (req, res) => {
     const duplicates: Array<{ name: string; existingId: string }> = [];
 
     for (const product of products) {
-      const brand = (product.brand || "").trim();
-      const name = brand ? `${brand} ${product.product_type}`.trim() : product.product_type;
+      const name = product.product_type;
 
       const existing = await prisma.inventoryProduct.findUnique({
         where: { companyId_name: { companyId, name } },
@@ -133,7 +132,7 @@ router.post("/:id/inventory/check-duplicates", async (req, res) => {
  */
 router.post("/:id/inventory/parse", async (req, res) => {
   const { id: companyId } = req.params;
-  const { text } = req.body;
+  const { text, language } = req.body;
 
   if (!text || typeof text !== "string") {
     return res.status(400).json({
@@ -142,7 +141,7 @@ router.post("/:id/inventory/parse", async (req, res) => {
   }
 
   try {
-    const result = await parseInventoryText(companyId, text);
+    const result = await parseInventoryText(companyId, text, language || "English");
     res.json(result);
   } catch (error: any) {
     console.error("[InventoryRoutes] Parse error:", error);

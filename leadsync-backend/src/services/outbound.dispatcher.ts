@@ -64,39 +64,45 @@ export class OutboundDispatcher {
 const messageSender = payload.sender === "AGENT" ? MessageSender.AGENT 
   : payload.sender === "BOT" ? MessageSender.BOT 
   : MessageSender.SYSTEM;
-      const result = await prisma.$transaction(async (tx) => {
-        // Create the message with the exact delivery status 'SENT' or 'FAILED'
-        const messageData: any = {
-          companyId,
-          conversationId,
-          content: content.text,
-          sender: messageSender,
-          senderName: payload.senderName || senderName,
-          senderId: payload.senderId,
-          platform: platformMap[channel],
-          deliveryStatus,
-          ...(transportError?.message && { deliveryError: transportError.message }),
-        };
-        // Persist clientMessageId for idempotency if provided
-        if (clientMessageId) {
-          messageData.clientMessageId = clientMessageId;
-        }
-
-        const newMessage = await tx.message.create({
-          data: messageData,
-        });
-
-        // Update the Conversation summary & timestamp
-        await tx.conversation.update({
-          where: { id: conversationId, companyId },
-          data: {
-            updatedAt: new Date()
+      const result = await prisma.$transaction(
+        async (tx) => {
+          // Create the message with the exact delivery status 'SENT' or 'FAILED'
+          const messageData: any = {
+            companyId,
+            conversationId,
+            content: content.text,
+            sender: messageSender,
+            senderName: payload.senderName || senderName,
+            senderId: payload.senderId,
+            platform: platformMap[channel],
+            deliveryStatus,
+            ...(transportError?.message && { deliveryError: transportError.message }),
+          };
+          // Persist clientMessageId for idempotency if provided
+          if (clientMessageId) {
+            messageData.clientMessageId = clientMessageId;
           }
-        });
 
-        console.log(`📊 [OutboundDispatcher] Atomic ledger transaction completed for Message "${newMessage.id}". DeliveryStatus=${deliveryStatus}${clientMessageId ? ` clientMessageId=${clientMessageId}` : ''}`);
-        return newMessage;
-      });
+          const newMessage = await tx.message.create({
+            data: messageData,
+          });
+
+          // Update the Conversation summary & timestamp
+          await tx.conversation.update({
+            where: { id: conversationId, companyId },
+            data: {
+              updatedAt: new Date()
+            }
+          });
+
+          console.log(`📊 [OutboundDispatcher] Atomic ledger transaction completed for Message "${newMessage.id}". DeliveryStatus=${deliveryStatus}${clientMessageId ? ` clientMessageId=${clientMessageId}` : ''}`);
+          return newMessage;
+        },
+        {
+          timeout: 30000,
+          maxWait: 30000
+        }
+      );
       createdMessageId = result.id;
       createdMessage = result;
     } catch (dbError: any) {

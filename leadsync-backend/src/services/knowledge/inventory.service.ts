@@ -8,7 +8,11 @@
 import Groq from "groq-sdk";
 import { prisma } from "../../lib/prisma";
 import { embedText } from "../../utils/embedding";
-import { PRODUCT_PARSING_PROMPT } from "../ai/modelComparison.service";
+import {
+  PRODUCT_PARSING_PROMPT,
+  buildBusinessTypeRules,
+  buildFieldExtractionInstructions,
+} from "../ai/modelComparison.service";
 import { normalizeProductsArray, ProductData, ProductVariantData, ParsedData } from "../ai/numeralConverter";
 import { randomUUID } from "crypto";
 
@@ -51,7 +55,8 @@ export type { ProductData, ProductVariantData, ParsedData };
  */
 export async function parseInventoryText(
   companyId: string,
-  ownerText: string
+  ownerText: string,
+  language: string = "English"
 ): Promise<ParsedData> {
   const groqApiKey = process.env.GROQ_API_KEY;
   if (!groqApiKey) {
@@ -67,9 +72,44 @@ export async function parseInventoryText(
   });
   const businessType = company?.businessType || "RETAIL";
 
+  // Load product field definitions for dynamic rule building
+  const productFieldModel = (prisma as any).productFieldDefinition;
+  let productFieldDefs: Array<{
+    fieldName: string;
+    fieldType: string;
+    appliesTo: string;
+    options: string[];
+  }> = [];
+  
+  if (productFieldModel) {
+    try {
+      productFieldDefs = await productFieldModel.findMany({
+        where: { companyId },
+        select: {
+          fieldName: true,
+          fieldType: true,
+          appliesTo: true,
+          options: true,
+        },
+      });
+    } catch (err) {
+      // If model doesn't exist yet or query fails, use empty array (will trigger fallback rules)
+      productFieldDefs = [];
+    }
+  }
+
+  // Build dynamic business type rules
+  const businessTypeRules = buildBusinessTypeRules(businessType, productFieldDefs);
+
+  // Build field extraction instructions for dynamic custom fields
+  const fieldExtractionInstructions = buildFieldExtractionInstructions(productFieldDefs);
+
   try {
     const userPrompt = PRODUCT_PARSING_PROMPT
       .replace("{{BUSINESS_TYPE}}", businessType)
+      .replace("{{BUSINESS_TYPE_RULES}}", businessTypeRules)
+      .replace("{{FIELD_EXTRACTION_INSTRUCTIONS}}", fieldExtractionInstructions)
+      .replace("{{LANGUAGE}}", language)
       .replace("{{OWNER_TEXT}}", ownerText);
 
     const result = await groq.chat.completions.create({
@@ -102,10 +142,7 @@ export async function parseInventoryText(
  * Build a display name from brand + product_type
  */
 function buildProductName(product: ProductData): string {
-  const parts: string[] = [];
-  if (product.brand) parts.push(product.brand);
-  parts.push(product.product_type);
-  return parts.join(" ").trim();
+  return product.product_type || "Unknown Product";
 }
 
 /**
@@ -278,6 +315,7 @@ export async function confirmInventoryProducts(
           variantAttributeName: product.attribute_name,
           description: product.description ?? existing.description,
           isAvailable,
+          customFieldValues: product.customFieldValues ? JSON.parse(JSON.stringify(product.customFieldValues)) : existing.customFieldValues,
           ...(product.sku !== undefined ? { sku: product.sku } : {}),
           ...(product.categories !== undefined ? { categories: product.categories } : {}),
         }
@@ -298,6 +336,7 @@ export async function confirmInventoryProducts(
           isAvailable,
           sku: productSku,
           categories: product.categories || [],
+          customFieldValues: product.customFieldValues ? JSON.parse(JSON.stringify(product.customFieldValues)) : undefined,
         }
       });
       productId = newProduct.id;
@@ -352,7 +391,7 @@ export async function confirmInventoryProducts(
  * Used for deduplication via ON CONFLICT on KnowledgeChunk.
  */
 function generateProductSignature(product: ProductData): string {
-  const brand = (product.brand || "").toLowerCase().trim();
+  const brand = (String(product.customFieldValues?.Brand ?? "") || product.brand || "").toLowerCase().trim();
   
   if (!brand) {
     return randomUUID();
@@ -373,19 +412,48 @@ function formatProductForKnowledgeChunk(product: ProductData): string {
   const parts: string[] = [];
 
   if (product.sku) parts.push(`SKU: ${product.sku}`);
-  if (product.brand) parts.push(`Brand: ${product.brand}`);
-  if (product.description) parts.push(`Description: ${product.description}`);
   parts.push(`Product: ${product.product_type}`);
   if (product.categories && product.categories.length > 0) {
     parts.push(`Categories: ${product.categories.join(", ")}`);
   }
-  if (product.attribute_name && product.variants && product.variants.length > 0) {
-    const variantValues = product.variants.map(v => v.attribute_value).join(", ");
-    parts.push(`${product.attribute_name}: ${variantValues}`);
+  if (product.description) parts.push(`Description: ${product.description}`);
+  if (product.customFieldValues && typeof product.customFieldValues === "object") {
+    for (const [key, val] of Object.entries(product.customFieldValues)) {
+      if (val != null && val !== "") parts.push(`${key}: ${val}`);
+    }
+  }
+  if (product.variants && product.variants.length > 0) {
+    const variantLines = product.variants.map(v => {
+      const label = v.attribute_name || "Variant";
+      return `${label}: ${v.attribute_value}`;
+    });
+    parts.push(variantLines.join(", "));
   }
   if (product.price_inr !== null) parts.push(`Price: ₹${product.price_inr}`);
 
-  return parts.join(", ");
+  // Natural language enrichment: repeat field values in context for better
+  // FTS matching and embedding surface area
+  const fieldEntries = product.customFieldValues && typeof product.customFieldValues === "object"
+    ? Object.entries(product.customFieldValues).filter(([_, v]) => v != null && v !== "")
+    : [];
+
+  if (fieldEntries.length > 0) {
+    const phrases = fieldEntries.map(([key, val]) => {
+      const v = String(val);
+      const k = key.toLowerCase();
+      if (k.includes("fabric")) return `made of ${v} fabric`;
+      if (k.includes("color") || k.includes("colour")) return `${v} in color`;
+      if (k.includes("size")) return `size ${v}`;
+      if (k.includes("brand")) return `by ${v}`;
+      if (k.includes("material")) return `made from ${v}`;
+      if (k.includes("style")) return `${v} style`;
+      if (k.includes("type")) return `${v} type`;
+      return v;
+    });
+    parts.push(`This product is ${phrases.join(", ")}`);
+  }
+
+  return parts.join(". ");
 }
 
 /**

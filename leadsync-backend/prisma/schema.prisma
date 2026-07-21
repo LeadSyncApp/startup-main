@@ -16,8 +16,11 @@ model Company {
   telegramBotToken         String?
   telegramBotTokenHash     String?                 @unique
   telegramBotUsername      String?
-  telegramWebhookSecret    String?                 @unique
-  telegramConnected        Boolean                 @default(false)
+    telegramWebhookSecret    String?                 @unique
+    websiteWebhookSecret     String?
+    shopifyWebhookSecret     String?
+    wooCommerceWebhookSecret String?
+    telegramConnected        Boolean                 @default(false)
   botWelcomeMessage        String?
   businessAddress          String?
   businessName             String?
@@ -45,11 +48,11 @@ model Company {
   upiName                  String?
   updatedAt                DateTime                @updatedAt
   agentFeedPosts           AgentFeedPost[]
-  automationRules          AutomationRule[]
   botConfiguration         BotConfiguration?
   botKnowledge             BotKnowledge[]
   broadcasts               Broadcast[]
   ClaimLog                 ClaimLog[]
+  productFieldDefinitions  ProductFieldDefinition[]
   analyticsRollup          CompanyAnalyticsRollup?
   pollingLease             CompanyPollingLease?
   conversations            Conversation[]
@@ -73,6 +76,8 @@ model Company {
   ruleGroups               RuleGroup[]
   users                    User[]
   conversationActivities ConversationActivity[]
+  draftOrders              DraftOrder[]
+  webhookDeliveryLogs     WebhookDeliveryLog[]
 }
 
 model User {
@@ -155,6 +160,7 @@ model Lead {
   conversations           Conversation[]
   company                 Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   orders                  Order[]
+  draftOrders             DraftOrder[]
 
   @@unique([contact, channel, companyId])
   @@index([companyId])
@@ -214,6 +220,7 @@ model InventoryProduct {
   images                ProductImage[]
   priceHistory          PriceHistory[]
   stockHistory          StockHistory[]
+  customFieldValues     Json?
 
   @@unique([companyId, name])
   @@unique([companyId, sku])
@@ -234,6 +241,7 @@ model InventoryVariant {
   product        InventoryProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
   priceHistory   PriceHistory[]
   stockHistory   StockHistory[]
+  attributes     Json?
 
   @@unique([productId, attributeValue])
   @@index([productId])
@@ -407,6 +415,7 @@ model Conversation {
   orders                               Order[]
   RuleDecisionLog                      RuleDecisionLog[]
   activities                           ConversationActivity[]
+  draftOrders                          DraftOrder[]
 
   @@index([deletedAt])
   @@index([leadId])
@@ -461,42 +470,6 @@ model BotKnowledge {
 
   @@index([companyId])
   @@index([companyId, isActive])
-}
-
-model AutomationRule {
-  id                  String          @id @default(uuid())
-  companyId           String
-  name                String
-  isActive            Boolean         @default(true)
-  trigger             String
-  triggerDelayMinutes Int             @default(1440)
-  action              String
-  actionPayload       Json?
-  runCount            Int             @default(0)
-  lastRunAt           DateTime?
-  createdAt           DateTime        @default(now())
-  logs                AutomationLog[]
-  company             Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@index([companyId])
-  @@index([companyId, id])
-  @@index([companyId, isActive])
-}
-
-model AutomationLog {
-  id           String         @id @default(uuid())
-  ruleId       String
-  companyId    String
-  triggeredFor String
-  action       String
-  result       String
-  note         String?
-  createdAt    DateTime       @default(now())
-  rule         AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-
-  @@index([ruleId])
-  @@index([companyId])
-  @@index([createdAt])
 }
 
 model RuleGroup {
@@ -657,12 +630,13 @@ model MerchantFile {
 }
 
 model KnowledgeChunk {
-  id         String                 @id @default(uuid())
-  companyId  String
-  sourceType KnowledgeSourceType
-  sourceId   String?
-  content    String
-  embedding  Unsupported("vector")?
+  id          String                 @id @default(uuid())
+  companyId   String
+  sourceType  KnowledgeSourceType
+  sourceId    String?
+  content     String
+  contentTsv  Unsupported("tsvector")?
+  embedding   Unsupported("vector")?
   isActive   Boolean                @default(true)
   createdAt  DateTime               @default(now())
   updatedAt  DateTime               @updatedAt
@@ -705,6 +679,20 @@ model CustomFieldDefinition {
   @@unique([companyId, module, name])
   @@index([companyId])
   @@index([companyId, module])
+}
+
+model ProductFieldDefinition {
+  id        String   @id @default(uuid())
+  companyId String
+  fieldName String
+  fieldType String   // "text" | "number" | "boolean" | "select"
+  appliesTo String   // "product" | "variant"
+  options   String[] @default([])
+  sortOrder Int      @default(0)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([companyId, appliesTo])
 }
 
 model Invitation {
@@ -1090,4 +1078,52 @@ model StockHistory {
   @@index([variantId])
 }
 
+enum DraftOrderStatus {
+  DRAFTING
+  AWAITING_CONFIRMATION
+  CONFIRMED
+  ABANDONED
+}
+
+model DraftOrder {
+  id             String           @id @default(uuid())
+  companyId      String
+  conversationId String
+  leadId         String?
+  items          Json
+  totalAmount    Float            @default(0.0)
+  status         DraftOrderStatus @default(DRAFTING)
+  recipientName  String?
+  recipientPhone String?
+  shippingAddress Json?
+  expiresAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([conversationId])
+  @@index([conversationId, status])
+  @@index([updatedAt])
+}
+
+model WebhookDeliveryLog {
+  id          String   @id @default(uuid())
+  companyId   String
+  platform    String
+  outcome     String
+  reason      String?
+  rawPayload  String?
+  rawHeaders  String?
+  statusCode  Int?
+  createdAt   DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt(sort: Desc)])
+  @@index([outcome])
+}
 

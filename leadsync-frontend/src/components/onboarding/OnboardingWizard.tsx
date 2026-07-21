@@ -5,9 +5,10 @@ import {
   Utensils, ShoppingBag, Stethoscope, 
   Cake, Sparkles, User, 
   Target, Component, LineChart, Globe, ZapIcon,
-  Eye, EyeOff, AlertTriangle
+  Eye, EyeOff, AlertTriangle, Braces
 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { ProductFieldEditor, ProductField } from "../../features/inventory/ProductFieldEditor";
 
 interface OnboardingWizardProps {
   onComplete: (data: any) => void;
@@ -62,6 +63,7 @@ export function OnboardingWizard({
   const [businessScale, setBusinessScale] = useState<"HOME" | "SME">("HOME");
   const [businessType, setBusinessType] = useState("Fashion & Retail");
   const [currentWorkflow, setCurrentWorkflow] = useState<"PAPER" | "SPREADSHEET" | "CRM">("PAPER");
+  const [productFields, setProductFields] = useState<ProductField[]>([]);
 
   const handleNextStep1 = () => {
     if (!firstName.trim()) {
@@ -95,11 +97,16 @@ export function OnboardingWizard({
     setStep(3);
   };
 
+  const handleNextStep3 = () => {
+    setStep(4);
+  };
+
   const handleFinalize = () => {
     onComplete({
       businessScale,
       businessType,
       currentWorkflow,
+      productFields,
       dailyRevenueTarget: "5000",
       trackInventory: true,
       channels: { telegram: false, whatsapp: false }
@@ -164,6 +171,44 @@ export function OnboardingWizard({
           {step === 3 && (
              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
+                  <Braces className="w-3.5 h-3.5" /> Inventory Schema
+                </div>
+                <h1 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-[var(--app-text)]">
+                  What fields do<br/>your products have?
+                </h1>
+                <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
+                  Define custom fields like brand, color, size, or material. These fields will appear when you add products to your inventory.
+                </p>
+
+                {/* Live Preview Card */}
+                <div className="mt-8 rounded-2xl p-6 backdrop-blur-sm" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', borderWidth: 1 }}>
+                   <div className="flex flex-col gap-2 mb-4">
+                     <span className="text-xs font-bold uppercase tracking-widest text-[var(--app-text-muted)]">Example Fields</span>
+                     <span className="text-sm font-bold text-[var(--brand-saffron)]">
+                       {businessType === "Fashion & Retail" && "Brand, Size, Color, Material"}
+                       {businessType === "Bakery & Food" && "Flavor, Weight, Ingredients"}
+                       {businessType === "Client Agency" && "Service Type, Duration, Package"}
+                       {businessType === "Café & Food Outlet" && "Size, Temperature, Customization"}
+                     </span>
+                   </div>
+                   <div className="space-y-3">
+                     <div className="h-2 rounded-full w-3/4" style={{ backgroundColor: 'var(--app-surface-alt)' }} />
+                     <div className="h-2 rounded-full w-1/2" style={{ backgroundColor: 'var(--app-surface-alt)' }} />
+                     <div className="h-2 rounded-full w-5/6" style={{ backgroundColor: 'var(--app-surface-alt)' }} />
+                   </div>
+                   <div className="mt-6 pt-4 flex items-center gap-3" style={{ borderTopWidth: 1, borderTopColor: 'var(--app-border)' }}>
+                     <Globe className="h-5 w-5" style={{ color: 'var(--brand-saffron)' }} />
+                     <span className="text-sm font-medium text-[var(--app-text-muted)]">
+                       You can add more fields later in Settings.
+                     </span>
+                   </div>
+                </div>
+             </motion.div>
+          )}
+
+          {step === 4 && (
+             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
                   <LineChart className="w-3.5 h-3.5" /> Migration Path
                 </div>
                 <h1 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-[var(--app-text)]">
@@ -212,7 +257,7 @@ export function OnboardingWizard({
           {/* Header Progress for Mobile (Hidden on Desktop since left handles context, but good for progress) */}
           <div className="mb-12">
             <div className="flex gap-2 mb-4">
-              {[1, 2, 3].map((s) => (
+              {[1, 2, 3, 4].map((s) => (
                 <div 
                   key={s} 
                   className={`h-1.5 rounded-full transition-all duration-500 ease-out ${s <= step ? 'w-full' : 'w-full'}`}
@@ -220,7 +265,7 @@ export function OnboardingWizard({
                 />
               ))}
             </div>
-            <p className="text-xs font-black uppercase tracking-widest text-[var(--app-text-muted)]">Step {step} of 3</p>
+            <p className="text-xs font-black uppercase tracking-widest text-[var(--app-text-muted)]">Step {step} of 4</p>
           </div>
 
           <AnimatePresence mode="wait">
@@ -509,10 +554,50 @@ export function OnboardingWizard({
               </motion.div>
             )}
 
-            {/* STEP 3 */}
+            {/* STEP 3 - Product Fields */}
             {step === 3 && (
               <motion.div
                 key="step3"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-8"
+              >
+                <div className="space-y-2">
+                  <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">Product Fields</h2>
+                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">Define the fields your products need (brand, size, color, etc.).</p>
+                </div>
+
+                <ProductFieldEditor onFieldsChange={setProductFields} />
+
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={() => setStep(2)}
+                    className="px-6 py-4.5 rounded-2xl font-bold transition-all text-sm border cursor-pointer"
+                    style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-surface)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-bg-soft)'; }}
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={handleNextStep3}
+                    className="flex-1 py-4.5 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer text-sm"
+                    style={{ backgroundColor: 'var(--brand-saffron)', color: 'var(--app-bg)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-primary-strong)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--brand-saffron)'; }}
+                  >
+                    Continue <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* STEP 4 - Workflow */}
+            {step === 4 && (
+              <motion.div
+                key="step4"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
@@ -560,7 +645,7 @@ export function OnboardingWizard({
 
                 <div className="pt-4 flex gap-3">
                   <button 
-                    onClick={() => setStep(2)}
+                    onClick={() => setStep(3)}
                     className="px-6 py-4.5 rounded-2xl font-bold transition-all text-sm border cursor-pointer"
                     style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-surface)'; }}

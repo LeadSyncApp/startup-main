@@ -151,6 +151,7 @@ export interface ProductData {
   colors?: string[];
   sizes?: string[];
   categories?: string[];
+  customFieldValues?: Record<string, string | number | boolean>;
 }
 
 /**

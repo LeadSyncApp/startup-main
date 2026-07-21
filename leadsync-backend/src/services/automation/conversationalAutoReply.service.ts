@@ -65,6 +65,11 @@ export class ConversationalAutoReplyService {
   // Cache active rules per company (refreshed every 60s)
   private rulesCache = new Map<string, { rules: any[]; cachedAt: number }>();
   private readonly CACHE_TTL = 60_000; // 60 seconds
+
+  // Per-conversation rate limiter: suppresses rapid re-triggers within the cooldown window
+  private lastTriggerTimestamps = new Map<string, number>();
+  private readonly RATE_LIMIT_COOLDOWN_MS = parseInt(process.env.AUTO_REPLY_COOLDOWN_MS || "3000", 10);
+
   // Threshold for confident rule match (configurable via env)
   private readonly CONFIDENCE_GAP_THRESHOLD = parseFloat(process.env.CONFIDENCE_GAP_THRESHOLD || "0.04");
   private readonly SINGLE_RULE_MIN_SCORE = parseFloat(process.env.SINGLE_RULE_MIN_SCORE || "0.70");
@@ -352,7 +357,8 @@ export class ConversationalAutoReplyService {
   private async evaluateSimilarityMatch(
     companyId: string,
     messageText: string,
-    eligibleRules: any[]
+    eligibleRules: any[],
+    prefetchedChunks?: any[]
   ): Promise<{
     rule: any;
     topScore: number;
@@ -365,7 +371,8 @@ export class ConversationalAutoReplyService {
 
     // Get similar chunks (rules are embedded as KnowledgeChunks with sourceType='RULE')
     // Retrieve top 10 to have a wider pool for specificity comparison
-    const chunks = await retrieveSimilarChunks(companyId, messageText, 10, "RULE");
+    // Use prefetched chunks if available (avoids duplicate RAG call from evaluateMessage)
+    const chunks = prefetchedChunks ?? await retrieveSimilarChunks(companyId, messageText, 10, "RULE");
 
     // Filter chunks to only those matching eligible rules
     const eligibleChunks = chunks.filter(chunk => eligibleRuleIds.includes(chunk.sourceId));
@@ -413,11 +420,9 @@ export class ConversationalAutoReplyService {
       gap = topScore - secondScore!;
       isConfident = gap >= this.CONFIDENCE_GAP_THRESHOLD;
     } else {
-      // Single candidate: never confident on a lone match — the embedding similarity
-      // alone is not reliable enough to override AI intent classification.
-      // Keeping SINGLE_RULE_MIN_SCORE as a configurable floor for future use,
-      // but single-candidate paths intentionally fall through to AI.
-      isConfident = false;
+      // Single candidate: fire if its score meets the minimum threshold.
+      // SINGLE_RULE_MIN_SCORE is configurable via env (default 0.70).
+      isConfident = topScore >= this.SINGLE_RULE_MIN_SCORE;
       gap = undefined;
     }
 
@@ -447,7 +452,15 @@ export class ConversationalAutoReplyService {
    */
   async evaluateMessage(context: InboundMessageContext): Promise<RuleMatchResult> {
     const { companyId, messageText, conversationId } = context;
-    
+
+    // Per-conversation rate limiter: suppress rapid re-triggers from the same conversation
+    const rateLimitKey = `${companyId}:${conversationId}`;
+    const lastTrigger = this.lastTriggerTimestamps.get(rateLimitKey);
+    if (lastTrigger && Date.now() - lastTrigger < this.RATE_LIMIT_COOLDOWN_MS) {
+      return { matched: false, responseAlreadySent: false };
+    }
+    this.lastTriggerTimestamps.set(rateLimitKey, Date.now());
+
     // Load active rules
     const activeRules = await this.getActiveRules(companyId);
     if (activeRules.length === 0) {
@@ -526,7 +539,8 @@ export class ConversationalAutoReplyService {
     }
 
     // Try similarity-based match on ELIGIBLE rules only (with keyword specificity scoring)
-    const simMatch = await this.evaluateSimilarityMatch(companyId, messageText, eligibleRules);
+    // Pass allChunks to avoid duplicate retrieveSimilarChunks call inside evaluateSimilarityMatch
+    const simMatch = await this.evaluateSimilarityMatch(companyId, messageText, eligibleRules, allChunks);
 
     if (!simMatch) {
       // No confident match - log and return (will fall through to AI)
@@ -669,14 +683,15 @@ export class ConversationalAutoReplyService {
   private async generateResponse(rule: any, context: InboundMessageContext, skipAI = false): Promise<string> {
     let response = rule.templateBody || "";
 
-    // Replace template variables - support both {{var}} and {var} variants
+    // Replace template variables - case-insensitive matching for all variants
+    // Supported variables: customerName, shopName, brand, name
+    // Both {var} and {{var}} syntaxes are supported
     response = response
-      .replace(/\{\{customerName\}\}/g, context.customerName || "there")
-      .replace(/\{\{shopName\}\}/g, "")
-      .replace(/\{\{brand\}\}/g, "")
+      .replace(/\{\{customerName\}\}/gi, context.customerName || "there")
       .replace(/\{customerName\}/gi, context.customerName || "there")
-      .replace(/\{shopname\}/gi, "")
-      .replace(/\{shopName\}/g, "")
+      .replace(/\{\{shopName\}\}/gi, "")
+      .replace(/\{shopName\}/gi, "")
+      .replace(/\{\{brand\}\}/gi, "")
       .replace(/\{brand\}/gi, "")
       .replace(/\{name\}/gi, context.customerName || "there")
       .replace(/\{\{(\d+)\}\}/g, "Rs. $1");
@@ -811,10 +826,15 @@ export class ConversationalAutoReplyService {
   }
 
   /**
-   * Invalidate cache when rules are updated
+   * Invalidate cache when rules are updated, then warm it immediately
+   * so the next message evaluation does not pay a cold-start cost.
    */
   invalidateCache(companyId: string): void {
     this.rulesCache.delete(companyId);
+    // Fire-and-forget warmup
+    this.getActiveRules(companyId).catch((err) =>
+      console.warn(`[ConversationalAutoReply] Cache warmup failed for ${companyId}: ${err.message}`)
+    );
   }
 
   /**
@@ -844,14 +864,7 @@ export class ConversationalAutoReplyService {
 
   /**
    * Fire all active EVENT-type rules whose eventConfig.eventName matches.
-   * Replaces the deleted AutoReplyRule event pipeline (order/lead events).
-   *
-   * TODO(v2): eventConfig.delayMinutes is currently NOT honored — events fire
-   * synchronously. When delay support is added, schedule via setTimeout and at
-   * FIRE TIME re-fetch the rule to confirm it still exists and isEnabled === true
-   * (a rule toggled off / deleted during the delay window must not fire). Also
-   * re-validate eventConfig.eventName still matches. Do NOT trust the in-memory
-   * `rule` snapshot captured at schedule time.
+   * Events fire synchronously (delayMinutes is not supported).
    */
   async fireEventRules(
     eventName: string,
@@ -900,7 +913,16 @@ export class ConversationalAutoReplyService {
     context: InboundMessageContext
   ): Promise<boolean> {
     const rule = await prisma.conversationalRule.findUnique({ where: { id: ruleId } });
-    if (!rule || !rule.isEnabled) return false;
+    if (!rule || !rule.isEnabled) {
+      if (context.isCallback && context.callbackQueryId) {
+        await telegramSurfaceAdapter.answerCallbackQuery(
+          context.companyId,
+          context.callbackQueryId,
+          rule ? "This option is currently disabled." : "This option is no longer available."
+        ).catch(() => {});
+      }
+      return false;
+    }
 
     // Check if Category or Leaf by looking for active children
     const children = await telegramSurfaceAdapter.getActiveSurfacedRules(context.companyId, ruleId, "BUTTON");
@@ -980,22 +1002,52 @@ export class ConversationalAutoReplyService {
       throw new Error("Rule not found");
     }
 
-    const keywords = rule.triggerKeywords as string[];
-    const matchedKeywords = this.matchKeywordsForTest(sampleMessage.toLowerCase(), keywords);
-    const matched = matchedKeywords.length > 0;
+    // Build a mock context matching the production pipeline
+    const context: InboundMessageContext = {
+      companyId: rule.companyId,
+      conversationId: "test-conversation",
+      leadId: "test-lead",
+      messageText: sampleMessage,
+      customerName: "Test Customer",
+      channel: "TELEGRAM",
+      contact: "test-contact",
+    };
 
-    let response = rule.templateBody || "";
-    response = response
-      .replace(/\{\{customerName\}\}/g, "Test Customer")
-      .replace(/\{\{shopName\}\}/g, "")
-      .replace(/\{\{brand\}\}/g, "")
-      .replace(/\{customerName\}/gi, "Test Customer")
-      .replace(/\{shopname\}/gi, "")
-      .replace(/\{shopName\}/g, "")
-      .replace(/\{brand\}/gi, "")
-      .replace(/\{name\}/gi, "Test Customer")
-      .replace(/\{\{(\d+)\}\}/g, "Rs. $1");
+    // Fetch active rules (same as production pipeline)
+    const activeRules = await this.getActiveRules(rule.companyId);
+    const testedRule = activeRules.find(r => r.id === ruleId);
 
+    let matched = false;
+    let matchedKeywords: string[] = [];
+
+    if (testedRule) {
+      // Check eligibility as production does
+      const eligibility = this.checkRuleEligibility(testedRule, context);
+      if (eligibility.eligible && !testedRule.useAI) {
+        // Build eligible rules the same way evaluateMessage does
+        const eligibleRules = activeRules.filter(r => {
+          if (r.useAI) return false;
+          return this.checkRuleEligibility(r, context).eligible;
+        });
+
+        // Run the real RAG + keyword specificity pipeline
+        const simMatch = await this.evaluateSimilarityMatch(
+          rule.companyId,
+          sampleMessage,
+          eligibleRules
+        );
+
+        if (simMatch && simMatch.rule.id === ruleId) {
+          matched = true;
+          matchedKeywords = simMatch.candidates[0]?.matchedKeywords || [];
+        }
+      }
+    }
+
+    // Generate response using the real generateResponse method
+    let response = await this.generateResponse(rule, context);
+
+    // Apply AI enhancement if configured (same as production)
     if (rule.useAI) {
       try {
         const aiResult = await aiPersonalityService.generateMessage(
@@ -1019,31 +1071,6 @@ export class ConversationalAutoReplyService {
     }
 
     return { matched, matchedKeywords, response };
-  }
-
-  private matchKeywordsForTest(text: string, keywords: string[]): string[] {
-    const matched: string[] = [];
-    const words = text.split(/\s+/);
-
-    for (const keyword of keywords) {
-      const lowerKeyword = keyword.toLowerCase().trim();
-
-      if (text.includes(lowerKeyword)) {
-        matched.push(keyword);
-        continue;
-      }
-
-      for (const word of words) {
-        if (word.includes(lowerKeyword) || lowerKeyword.includes(word)) {
-          if (word.length > 2 || lowerKeyword.length > 2) {
-            matched.push(keyword);
-            break;
-          }
-        }
-      }
-    }
-
-    return [...new Set(matched)];
   }
 }
 

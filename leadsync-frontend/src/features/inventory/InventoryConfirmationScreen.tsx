@@ -1,12 +1,34 @@
 /**
- * Inventory Confirmation Screen - Editable product cards with flexible variants
- * Business-agnostic: works for retail, services, food, freelancers, salons, tutors, etc.
+ * Inventory Confirmation Screen - 2-Column Product Layout with Financial Summaries & Sectioned Cards
+ * Business-agnostic: supports Retail, Restaurant, Services, Salons, Freelancers, Tutors, etc.
  */
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, X, Save, ShoppingBag, Plus, Trash2, AlertTriangle, History, Image as ImageIcon, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import {
+  Check,
+  X,
+  Save,
+  ShoppingBag,
+  Plus,
+  Trash2,
+  AlertTriangle,
+  History,
+  Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  DollarSign,
+  Package,
+  Layers,
+  ArrowLeft,
+  Tag,
+  FileText,
+  Braces
+} from "lucide-react";
 import { ProductData, ProductVariantData } from "./InventoryIntakeScreen";
+import { ProductField } from "./ProductFieldEditor";
+import { useAuth } from "../auth-tenancy/AuthContext";
 
 interface InventoryConfirmationScreenProps {
   companyId?: string;
@@ -18,7 +40,7 @@ interface InventoryConfirmationScreenProps {
 
 const LOW_STOCK_THRESHOLD = 5;
 
-function getStockStatus(stock: number | null): string | null {
+function getStockStatus(stock: number | null): "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK" | null {
   if (stock === null) return null;
   if (stock === 0) return "OUT_OF_STOCK";
   if (stock <= LOW_STOCK_THRESHOLD) return "LOW_STOCK";
@@ -35,10 +57,11 @@ export function InventoryConfirmationScreen({
   const isRestaurant = businessType === "RESTAURANT";
   const isServices = businessType === "SERVICES";
   const variantLabelHint = isRestaurant
-    ? "Portion, Duration, etc."
+    ? "Portion, Size, etc."
     : isServices
-    ? "Duration, etc."
-    : "Size, Color, etc.";
+    ? "Duration, Tier, etc."
+    : "Size, Color, Material, etc.";
+
   const [products, setProducts] = useState<ProductData[]>(initialProducts);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -54,11 +77,159 @@ export function InventoryConfirmationScreen({
   const [historyOpenProductId, setHistoryOpenProductId] = useState<string | null>(null);
   const [histories, setHistories] = useState<Record<string, { priceHistory: any[], stockHistory: any[] }>>({});
   const [loadingHistoryId, setLoadingHistoryId] = useState<string | null>(null);
+  const [productFieldDefs, setProductFieldDefs] = useState<ProductField[]>([]);
+  const { token } = useAuth();
+
+  useEffect(() => {
+    setProducts(initialProducts);
+  }, [initialProducts]);
+
+  // Fetch existing categories for suggestions
+  useEffect(() => {
+    if (!companyId) return;
+    fetch(`/api/companies/${companyId}/inventory`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.products) {
+          const cats = [...new Set(data.products.flatMap((p: any) => p.categories || []))].sort() as string[];
+          setExistingCategories(cats);
+        }
+      })
+      .catch(() => {});
+  }, [companyId]);
+
+  // Fetch product field definitions
+  useEffect(() => {
+    if (!companyId) return;
+    fetch(`/api/companies/${companyId}/product-fields`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setProductFieldDefs(data || []))
+      .catch(() => {});
+  }, [companyId, token]);
+
+  // Financial Summary Computations across all products in queue
+  const totalProductsCount = products.length;
+  
+  const totalCombinedValue = products.reduce((acc, p) => {
+    if (p.hasVariants && p.variants && p.variants.length > 0) {
+      const variantValue = p.variants.reduce((vAcc, v) => {
+        const price = v.price_override ?? p.price_inr ?? 0;
+        const qty = v.stock ?? 1;
+        return vAcc + (price * qty);
+      }, 0);
+      return acc + variantValue;
+    } else {
+      const price = p.price_inr ?? 0;
+      return acc + price;
+    }
+  }, 0);
+
+  const avgUnitPrice = totalProductsCount > 0
+    ? Math.round(products.reduce((acc, p) => acc + (p.price_inr ?? 0), 0) / totalProductsCount)
+    : 0;
+
+  const totalVariantsCount = products.reduce((acc, p) => acc + (p.variants?.length || 0), 0);
+
+  const lowStockAlertCount = products.reduce((acc, p) => {
+    if (p.variants && p.variants.length > 0) {
+      const lowCount = p.variants.filter(v => v.stock !== null && v.stock <= LOW_STOCK_THRESHOLD).length;
+      return acc + lowCount;
+    }
+    return acc;
+  }, 0);
+
+  const updateProduct = (idx: number, updates: Partial<ProductData>) => {
+    const newProducts = [...products];
+    newProducts[idx] = { ...newProducts[idx], ...updates };
+    setProducts(newProducts);
+  };
+
+  const handleAvailabilityChange = (idx: number, isAvailable: boolean) => {
+    updateProduct(idx, { isAvailable });
+  };
+
+  const handleProductTypeChange = (idx: number, productType: string) => {
+    updateProduct(idx, { product_type: productType });
+  };
+
+  const handlePriceChange = (idx: number, price: string) => {
+    const priceNum = price === "" ? null : parseFloat(price) || null;
+    updateProduct(idx, { price_inr: priceNum });
+  };
+
+  const handleHasVariantsToggle = (idx: number) => {
+    const product = products[idx];
+    const newHasVariants = !product.hasVariants;
+    updateProduct(idx, {
+      hasVariants: newHasVariants,
+      attribute_name: newHasVariants ? (product.attribute_name || "") : null,
+      variants: newHasVariants ? product.variants : []
+    });
+  };
+
+  const handleAttributeNameChange = (idx: number, attrName: string) => {
+    updateProduct(idx, { attribute_name: attrName });
+  };
+
+  const addVariant = (idx: number) => {
+    const product = products[idx];
+    const newVariant: ProductVariantData = {
+      attribute_name: product.attribute_name || "",
+      attribute_value: "",
+      price_override: product.price_inr,
+      stock: null
+    };
+    updateProduct(idx, {
+      variants: [...product.variants, newVariant]
+    });
+  };
+
+  const updateVariant = (productIdx: number, variantIdx: number, updates: Partial<ProductVariantData>) => {
+    const product = products[productIdx];
+    const newVariants = [...product.variants];
+    newVariants[variantIdx] = { ...newVariants[variantIdx], ...updates };
+    updateProduct(productIdx, { variants: newVariants });
+  };
+
+  const removeVariant = (productIdx: number, variantIdx: number) => {
+    const product = products[productIdx];
+    const newVariants = product.variants.filter((_, i) => i !== variantIdx);
+    updateProduct(productIdx, { variants: newVariants });
+  };
+
+  const addCategory = (idx: number, cat: string) => {
+    const trimmed = cat.trim();
+    if (!trimmed) return;
+    const product = products[idx];
+    const current = product.categories || [];
+    if (current.includes(trimmed)) return;
+    updateProduct(idx, { categories: [...current, trimmed] });
+  };
+
+  const removeCategory = (idx: number, cat: string) => {
+    const product = products[idx];
+    updateProduct(idx, { categories: (product.categories || []).filter(c => c !== cat) });
+  };
+
+  const handleCategoryKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addCategory(idx, categoryInput);
+      setCategoryInput("");
+    }
+    if (e.key === "Backspace" && !categoryInput) {
+      const product = products[idx];
+      const cats = product.categories || [];
+      if (cats.length > 0) removeCategory(idx, cats[cats.length - 1]);
+    }
+  };
 
   const handleUploadImage = async (productIdx: number, file: File) => {
     const product = products[productIdx];
     if (!product || !product.id) {
-      alert("Please confirm/save the product first before adding gallery images.");
+      alert("Please save/confirm the basic details of this product first before uploading gallery images.");
       return;
     }
     
@@ -189,117 +360,8 @@ export function InventoryConfirmationScreen({
     }
   };
 
-
-  useEffect(() => {
-    setProducts(initialProducts);
-  }, [initialProducts]);
-
-  const updateProduct = (idx: number, updates: Partial<ProductData>) => {
-    const newProducts = [...products];
-    newProducts[idx] = { ...newProducts[idx], ...updates };
-    setProducts(newProducts);
-  };
-
-  const handleBrandChange = (idx: number, brand: string) => {
-    updateProduct(idx, { brand: brand || null });
-  };
-
-  const handleAvailabilityChange = (idx: number, isAvailable: boolean) => {
-    updateProduct(idx, { isAvailable });
-  };
-
-  const handleProductTypeChange = (idx: number, productType: string) => {
-    updateProduct(idx, { product_type: productType });
-  };
-
-  const handlePriceChange = (idx: number, price: string) => {
-    const priceNum = price === "" ? null : parseFloat(price) || null;
-    updateProduct(idx, { price_inr: priceNum });
-  };
-
-  const handleHasVariantsToggle = (idx: number) => {
-    const product = products[idx];
-    const newHasVariants = !product.hasVariants;
-    updateProduct(idx, {
-      hasVariants: newHasVariants,
-      attribute_name: newHasVariants ? (product.attribute_name || "") : null,
-      variants: newHasVariants ? product.variants : []
-    });
-  };
-
-  const handleAttributeNameChange = (idx: number, attrName: string) => {
-    updateProduct(idx, { attribute_name: attrName });
-  };
-
-  const addVariant = (idx: number) => {
-    const product = products[idx];
-    const newVariant: ProductVariantData = {
-      attribute_name: product.attribute_name || "",
-      attribute_value: "",
-      price_override: product.price_inr,
-      stock: null
-    };
-    updateProduct(idx, {
-      variants: [...product.variants, newVariant]
-    });
-  };
-
-  const updateVariant = (productIdx: number, variantIdx: number, updates: Partial<ProductVariantData>) => {
-    const product = products[productIdx];
-    const newVariants = [...product.variants];
-    newVariants[variantIdx] = { ...newVariants[variantIdx], ...updates };
-    updateProduct(productIdx, { variants: newVariants });
-  };
-
-  // Fetch existing categories for suggestions
-  useEffect(() => {
-    if (!companyId) return;
-    fetch(`/api/companies/${companyId}/inventory`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.products) {
-          const cats = [...new Set(data.products.flatMap((p: any) => p.categories || []))].sort() as string[];
-          setExistingCategories(cats);
-        }
-      })
-      .catch(() => {});
-  }, [companyId]);
-
-  const addCategory = (idx: number, cat: string) => {
-    const trimmed = cat.trim();
-    if (!trimmed) return;
-    const product = products[idx];
-    const current = product.categories || [];
-    if (current.includes(trimmed)) return;
-    updateProduct(idx, { categories: [...current, trimmed] });
-  };
-
-  const removeCategory = (idx: number, cat: string) => {
-    const product = products[idx];
-    updateProduct(idx, { categories: (product.categories || []).filter(c => c !== cat) });
-  };
-
-  const handleCategoryKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      addCategory(idx, categoryInput);
-      setCategoryInput("");
-    }
-    if (e.key === "Backspace" && !categoryInput) {
-      const product = products[idx];
-      const cats = product.categories || [];
-      if (cats.length > 0) removeCategory(idx, cats[cats.length - 1]);
-    }
-  };
-
-  const removeVariant = (productIdx: number, variantIdx: number) => {
-    const product = products[productIdx];
-    const newVariants = product.variants.filter((_, i) => i !== variantIdx);
-    updateProduct(productIdx, { variants: newVariants });
-  };
-
   const checkDuplicates = async () => {
-    if (!companyId) return;
+    if (!companyId) return false;
     try {
       const response = await fetch(`/api/companies/${companyId}/inventory/check-duplicates`, {
         method: "POST",
@@ -324,7 +386,6 @@ export function InventoryConfirmationScreen({
     setIsSaving(true);
     setSaveSuccess(false);
 
-    // Check for duplicates first
     await checkDuplicates();
 
     try {
@@ -347,536 +408,814 @@ export function InventoryConfirmationScreen({
 
   if (products.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="text-center py-12">
-          <ShoppingBag className="h-16 w-16 mx-auto mb-4 text-brand-saffron" />
-          <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--app-text)' }}>
+      <div className="max-w-4xl mx-auto p-8">
+        <div className="text-center py-16 p-8 rounded-2xl border space-y-4" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+          <div className="h-16 w-16 mx-auto rounded-2xl flex items-center justify-center" style={{ backgroundColor: 'rgba(211, 107, 70, 0.1)', color: 'var(--brand-saffron)' }}>
+            <ShoppingBag className="h-8 w-8" />
+          </div>
+          <h2 className="text-2xl font-bold" style={{ color: 'var(--app-text)' }}>
             No Products to Confirm
           </h2>
-          <p style={{ color: 'var(--app-text-muted)' }}>
-            Parse some inventory text first to see products here.
+          <p className="text-sm max-w-md mx-auto" style={{ color: 'var(--app-text-muted)' }}>
+            You don't have any items pending confirmation. Type your inventory in Step 1 or start a fresh entry.
           </p>
+          <button
+            onClick={onBack}
+            className="px-6 py-2.5 rounded-xl font-bold text-sm text-white inline-flex items-center gap-2 shadow cursor-pointer"
+            style={{ backgroundColor: 'var(--brand-saffron)' }}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Return to Intake</span>
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center">
-            <ShoppingBag className="h-5 w-5" />
-          </div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--app-text)' }}>
-            Confirm Your Products
-          </h1>
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+      {/* Header with Breadcrumb & Multi-Step Progress Tracker */}
+      <div className="rounded-2xl p-4 sm:p-6 border backdrop-blur-sm shadow-sm space-y-4" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--app-text-muted)' }}>
+          <span className="hover:underline cursor-pointer" onClick={onBack}>Inventory</span>
+          <span>/</span>
+          <span className="hover:underline cursor-pointer" onClick={onBack}>Intake</span>
+          <span>/</span>
+          <span className="font-bold text-brand-saffron">Product Confirmation</span>
         </div>
-        <button
-          onClick={onBack}
-          className="btn-ghost text-sm flex items-center gap-2"
-        >
-          <X className="h-4 w-4" />
-          Back
-        </button>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="p-2 rounded-xl border hover:bg-black/5 transition cursor-pointer"
+              style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+              title="Back to Intake"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight" style={{ color: 'var(--app-text)' }}>
+                Confirm & Fine-Tune Catalog Items
+              </h1>
+              <p className="text-xs sm:text-sm mt-0.5" style={{ color: 'var(--app-text-muted)' }}>
+                Review extracted details, set image galleries, customize variant prices, and adjust stock quantities.
+              </p>
+            </div>
+          </div>
+
+          {/* Stepper Visual Pills */}
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border opacity-60 cursor-pointer" onClick={onBack} style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text-muted)' }}>
+              <span className="h-5 w-5 rounded-full border flex items-center justify-center text-[10px] font-bold" style={{ borderColor: 'var(--app-border)' }}>1</span>
+              <span>Intake</span>
+            </div>
+            <span style={{ color: 'var(--app-border)' }}>—</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border font-bold" style={{ backgroundColor: 'rgba(211, 107, 70, 0.12)', borderColor: 'var(--brand-saffron)', color: 'var(--brand-saffron)' }}>
+              <span className="h-5 w-5 rounded-full bg-brand-saffron text-white flex items-center justify-center text-[10px] font-bold">2</span>
+              <span>Confirm</span>
+            </div>
+            <span style={{ color: 'var(--app-border)' }}>—</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border opacity-60" style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text-muted)' }}>
+              <span className="h-5 w-5 rounded-full border flex items-center justify-center text-[10px] font-bold" style={{ borderColor: 'var(--app-border)' }}>3</span>
+              <span>Save</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="space-y-4">
+      {/* Top Financial & Queue Summary Bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Metric 1: Queue Items */}
+        <div className="p-4 rounded-xl border flex items-center gap-3 shadow-sm" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+          <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(211, 107, 70, 0.1)', color: 'var(--brand-saffron)' }}>
+            <Package className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--app-text-muted)' }}>
+              Items to Save
+            </p>
+            <p className="text-xl font-extrabold" style={{ color: 'var(--app-text)' }}>
+              {totalProductsCount} {totalProductsCount === 1 ? 'Product' : 'Products'}
+            </p>
+          </div>
+        </div>
+
+        {/* Metric 2: Total Combined Value */}
+        <div className="p-4 rounded-xl border flex items-center gap-3 shadow-sm" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+          <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
+            <DollarSign className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--app-text-muted)' }}>
+              Est. Inventory Value
+            </p>
+            <p className="text-xl font-extrabold" style={{ color: 'var(--app-text)' }}>
+              ₹{totalCombinedValue.toLocaleString()}
+            </p>
+          </div>
+        </div>
+
+        {/* Metric 3: Avg Unit Price */}
+        <div className="p-4 rounded-xl border flex items-center gap-3 shadow-sm" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+          <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
+            <Tag className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--app-text-muted)' }}>
+              Avg Unit Price
+            </p>
+            <p className="text-xl font-extrabold" style={{ color: 'var(--app-text)' }}>
+              ₹{avgUnitPrice.toLocaleString()}
+            </p>
+          </div>
+        </div>
+
+        {/* Metric 4: Stock Health Alerts */}
+        <div className="p-4 rounded-xl border flex items-center gap-3 shadow-sm" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+          <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${lowStockAlertCount > 0 ? 'bg-amber-500/10 text-amber-600' : 'bg-emerald-500/10 text-emerald-600'}`}>
+            <Layers className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--app-text-muted)' }}>
+              Variant Rows / Alerts
+            </p>
+            <p className="text-xl font-extrabold flex items-center gap-1.5" style={{ color: 'var(--app-text)' }}>
+              <span>{totalVariantsCount} Rows</span>
+              {lowStockAlertCount > 0 && (
+                <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700">
+                  {lowStockAlertCount} Low
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Product Cards List */}
+      <div className="space-y-8">
         <AnimatePresence>
-          {products.map((product, idx) => (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="p-5 rounded-xl border"
-              style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Brand — only shown for RETAIL business type */}
-                {!isRestaurant && !isServices && (
-                  <div>
-                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--app-text-muted)' }}>
-                      Brand
-                    </label>
-                    <input
-                      type="text"
-                      value={product.brand || ""}
-                      onChange={(e) => handleBrandChange(idx, e.target.value)}
-                      placeholder="Optional — helps avoid duplicate listings"
-                      className="w-full px-3 py-2 text-sm rounded-lg border"
-                      style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                    />
+          {products.map((product, idx) => {
+            const productImages = (product as any).images || [];
+            const primaryImageUrl = productImages[0]?.url || product.imageUrl;
+
+            // Product stock summary computation
+            const variantCount = product.variants?.length || 0;
+            const totalStockCount = product.variants?.reduce((acc, v) => acc + (v.stock ?? 0), 0) ?? null;
+
+            return (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="p-6 sm:p-8 rounded-2xl border shadow-sm space-y-6"
+                style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}
+              >
+                {/* Product Header */}
+                <div className="flex items-center justify-between border-b pb-4" style={{ borderColor: 'var(--app-border)' }}>
+                  <div className="flex items-center gap-3">
+                    <span className="h-7 w-7 rounded-lg bg-brand-saffron text-white font-extrabold text-xs flex items-center justify-center shadow-sm">
+                      #{idx + 1}
+                    </span>
+                    <div>
+                      <h2 className="text-lg font-extrabold flex items-center gap-2" style={{ color: 'var(--app-text)' }}>
+                        {product.product_type || "Untitled Item"}
+                        {product.customFieldValues?.Brand && (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded uppercase" style={{ backgroundColor: 'rgba(211, 107, 70, 0.1)', color: 'var(--brand-saffron)' }}>
+                            {product.customFieldValues.Brand}
+                          </span>
+                        )}
+                      </h2>
+                    </div>
                   </div>
-                )}
-
-                {/* Product Type / Name */}
-                <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--app-text-muted)' }}>
-                    Product / Service Name
-                  </label>
-                  <input
-                    type="text"
-                    value={product.product_type}
-                    onChange={(e) => handleProductTypeChange(idx, e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-lg border"
-                    style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                  />
+                  {product.sku && (
+                    <span className="text-xs font-mono px-2.5 py-1 rounded border" style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text-muted)' }}>
+                      SKU: {product.sku}
+                    </span>
+                  )}
                 </div>
 
-                {/* Description */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--app-text-muted)' }}>
-                    Description / Attributes (color, material, etc.)
-                  </label>
-                  <input
-                    type="text"
-                    value={product.description || ""}
-                    onChange={(e) => updateProduct(idx, { description: e.target.value || null })}
-                    placeholder="e.g. black, cotton, embroidered"
-                    className="w-full px-3 py-2 text-sm rounded-lg border"
-                    style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                  />
-                </div>
+                {/* 2-Column Responsive Layout */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                  
+                  {/* LEFT COLUMN (4 Cols): Media Gallery & Financial Stats */}
+                  <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-6">
+                    {/* Media Gallery Card */}
+                    <div className="p-5 rounded-xl border space-y-4" style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)' }}>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--app-text)' }}>
+                          <ImageIcon className="h-4 w-4" style={{ color: 'var(--brand-saffron)' }} />
+                          Product Gallery ({productImages.length}/10)
+                        </h3>
+                        {primaryImageUrl && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                            Primary Set
+                          </span>
+                        )}
+                      </div>
 
-                {/* Categories */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--app-text-muted)' }}>
-                    Categories
-                  </label>
-                  <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-lg border min-h-[40px] cursor-text" style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)' }} onClick={() => categoryInputRef.current?.focus()}>
-                    {(product.categories || []).map((cat) => (
-                      <span key={cat} className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}>
-                        {cat}
-                        <button onClick={(e) => { e.stopPropagation(); removeCategory(idx, cat); }} className="cursor-pointer hover:opacity-70"><X className="h-3 w-3" /></button>
-                      </span>
-                    ))}
-                    <div className="relative flex-1 min-w-[120px]">
-                      <input
-                        ref={categoryInputRef}
-                        type="text"
-                        value={idx === categoryFocusIndex ? categoryInput : ""}
-                        onChange={(e) => { setCategoryFocusIndex(idx); setCategoryInput(e.target.value); setShowCategorySuggestions(true); }}
-                        onFocus={() => { setCategoryFocusIndex(idx); setShowCategorySuggestions(true); }}
-                        onBlur={() => setTimeout(() => setShowCategorySuggestions(false), 200)}
-                        onKeyDown={(e) => handleCategoryKeyDown(idx, e)}
-                        placeholder="Add category..."
-                        className="w-full bg-transparent text-sm outline-none" style={{ color: 'var(--app-text)' }}
-                      />
-                      {showCategorySuggestions && categoryFocusIndex === idx && existingCategories.length > 0 && (
-                        <div className="absolute top-full left-0 right-0 mt-1 max-h-32 overflow-y-auto rounded-lg border z-10" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
-                          {existingCategories
-                            .filter(c => !(product.categories || []).includes(c) && c.toLowerCase().includes(categoryInput.toLowerCase()))
-                            .slice(0, 10)
-                            .map((cat) => (
-                              <button
-                                key={cat}
-                                onMouseDown={(e) => { e.preventDefault(); addCategory(idx, cat); setCategoryInput(""); }}
-                                className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--app-bg-soft)] transition cursor-pointer"
-                                style={{ color: 'var(--app-text)' }}
-                              >
-                                {cat}
-                              </button>
-                            ))}
+                      {/* Primary Cover Image Preview */}
+                      <div className="relative aspect-square rounded-xl overflow-hidden border flex items-center justify-center group" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+                        {primaryImageUrl ? (
+                          <img src={primaryImageUrl} alt={product.product_type} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="text-center p-4 space-y-2" style={{ color: 'var(--app-text-muted)' }}>
+                            <ImageIcon className="h-10 w-10 mx-auto opacity-40" />
+                            <p className="text-xs font-medium">No cover image uploaded</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Thumbnails & Reorder Strip */}
+                      {product.id ? (
+                        <div className="flex flex-wrap gap-2 items-center">
+                          {productImages.map((img: any, imgIdx: number) => (
+                            <div key={img.id} className="relative group w-14 h-14 rounded-lg overflow-hidden border shrink-0" style={{ borderColor: 'var(--app-border)' }}>
+                              <img src={img.url} alt="" className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-0.5">
+                                <button
+                                  onClick={() => handleDeleteImage(idx, img.id)}
+                                  className="self-end p-0.5 bg-red-600 text-white rounded hover:bg-red-700 cursor-pointer"
+                                >
+                                  <Trash2 className="h-2.5 w-2.5" />
+                                </button>
+                                <div className="flex justify-between w-full">
+                                  <button
+                                    disabled={imgIdx === 0}
+                                    onClick={() => handleMoveImage(idx, imgIdx, "left")}
+                                    className="p-0.5 bg-white/80 hover:bg-white text-gray-800 rounded disabled:opacity-30 cursor-pointer"
+                                  >
+                                    <ChevronLeft className="h-2.5 w-2.5" />
+                                  </button>
+                                  <button
+                                    disabled={imgIdx === productImages.length - 1}
+                                    onClick={() => handleMoveImage(idx, imgIdx, "right")}
+                                    className="p-0.5 bg-white/80 hover:bg-white text-gray-800 rounded disabled:opacity-30 cursor-pointer"
+                                  >
+                                    <ChevronRight className="h-2.5 w-2.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              <span className="absolute top-0.5 left-0.5 bg-black/70 text-white text-[8px] font-bold px-1 rounded">
+                                #{imgIdx + 1}
+                              </span>
+                            </div>
+                          ))}
+
+                          {productImages.length < 10 && (
+                            <label className="flex flex-col items-center justify-center w-14 h-14 rounded-lg border border-dashed hover:bg-black/5 transition cursor-pointer shrink-0" style={{ borderColor: 'var(--app-border)' }}>
+                              {uploadingProductId === product.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-brand-saffron" />
+                              ) : (
+                                <>
+                                  <Plus className="h-4 w-4 opacity-50" />
+                                  <span className="text-[9px] opacity-70 mt-0.5">Add</span>
+                                </>
+                              )}
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                className="hidden"
+                                disabled={uploadingProductId !== null}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadImage(idx, file);
+                                }}
+                              />
+                            </label>
+                          )}
                         </div>
+                      ) : (
+                        <p className="text-[11px] italic" style={{ color: 'var(--app-text-muted)' }}>
+                          💡 Save products to enable high-resolution image gallery uploads.
+                        </p>
                       )}
                     </div>
+
+                    {/* Product Financial Quick Stat Card */}
+                    <div className="p-5 rounded-xl border space-y-3" style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)' }}>
+                      <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--app-text)' }}>
+                        <DollarSign className="h-4 w-4" style={{ color: 'var(--brand-saffron)' }} />
+                        Financial Overview
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-xs">
+                          <span style={{ color: 'var(--app-text-muted)' }}>Base Unit Price:</span>
+                          <span className="font-extrabold text-base text-brand-saffron">
+                            ₹{product.price_inr ?? 0}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                          <span style={{ color: 'var(--app-text-muted)' }}>Configured Variants:</span>
+                          <span className="font-bold">{variantCount} {variantCount === 1 ? 'row' : 'rows'}</span>
+                        </div>
+                        {totalStockCount !== null && (
+                          <div className="flex justify-between items-center text-xs">
+                            <span style={{ color: 'var(--app-text-muted)' }}>Total Stock Units:</span>
+                            <span className="font-bold">{totalStockCount} units</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                {/* SKU */}
-                <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--app-text-muted)' }}>
-                    SKU (auto-generated if empty)
-                  </label>
-                  <input
-                    type="text"
-                    value={product.sku || ""}
-                    onChange={(e) => updateProduct(idx, { sku: e.target.value || undefined })}
-                    placeholder="e.g. OTTO-SHIRT-BLK"
-                    className="w-full px-3 py-2 text-sm rounded-lg border font-mono"
-                    style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                  />
-                </div>
+                  {/* RIGHT COLUMN (8 Cols): Distinct Sectioned Visual Cards */}
+                  <div className="lg:col-span-8 space-y-6">
+                    
+                    {/* SECTION CARD 1: Basic Information */}
+                    <div className="p-5 rounded-xl border space-y-4" style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)' }}>
+                      <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: 'var(--app-border)' }}>
+                        <FileText className="h-4 w-4" style={{ color: 'var(--brand-saffron)' }} />
+                        <h3 className="text-sm font-extrabold uppercase tracking-wider" style={{ color: 'var(--app-text)' }}>
+                          1. Basic Information
+                        </h3>
+                      </div>
 
-                {/* Price */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--app-text-muted)' }}>
-                    Base Price (₹ INR)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold" style={{ color: 'var(--brand-saffron)' }}>
-                      ₹
-                    </span>
-                    <input
-                      type="number"
-                      value={product.price_inr ?? ""}
-                      onChange={(e) => handlePriceChange(idx, e.target.value)}
-                      placeholder="Enter base price"
-                      className="flex-1 px-4 py-3 text-2xl font-bold rounded-lg border-2 focus:border-brand-saffron transition-all"
-                      style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                    />
-                  </div>
-                </div>
-              </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Product / Service Name */}
+                        <div>
+                          <label className="block text-xs font-bold mb-1" style={{ color: 'var(--app-text)' }}>
+                            Product / Service Title *
+                          </label>
+                          <input
+                            type="text"
+                            value={product.product_type}
+                            onChange={(e) => handleProductTypeChange(idx, e.target.value)}
+                            placeholder="Product or service name"
+                            className="w-full px-3.5 py-2 text-sm rounded-lg border focus:ring-2 focus:ring-brand-saffron focus:outline-none transition-all"
+                            style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                          />
+                        </div>
 
-              {/* Availability toggle — only for RESTAURANT business type */}
-              {isRestaurant && (
-                <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--app-border)' }}>
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium" style={{ color: 'var(--app-text)' }}>
-                      Availability
-                    </label>
-                    <button
-                      onClick={() => handleAvailabilityChange(idx, !(product.isAvailable ?? true))}
-                      className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
-                        (product.isAvailable ?? true) ? 'bg-green-500' : 'bg-gray-300'
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                          (product.isAvailable ?? true) ? 'translate-x-5' : ''
-                        }`}
-                      />
-                    </button>
-                  </div>
-                  <p className="text-xs mt-1" style={{ color: 'var(--app-text-muted)' }}>
-                    {(product.isAvailable ?? true) ? "Available" : "Sold Out"}
-                  </p>
-                </div>
-              )}
+                        {/* Categories Manager */}
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-bold mb-1" style={{ color: 'var(--app-text)' }}>
+                            Categories & Tags
+                          </label>
+                          <div
+                            className="flex flex-wrap items-center gap-1.5 p-2.5 rounded-lg border min-h-[42px] cursor-text"
+                            style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}
+                            onClick={() => categoryInputRef.current?.focus()}
+                          >
+                            {(product.categories || []).map((cat) => (
+                              <span key={cat} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border" style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}>
+                                {cat}
+                                <button onClick={(e) => { e.stopPropagation(); removeCategory(idx, cat); }} className="cursor-pointer hover:opacity-70">
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </span>
+                            ))}
+                            <div className="relative flex-1 min-w-[130px]">
+                              <input
+                                ref={categoryInputRef}
+                                type="text"
+                                value={idx === categoryFocusIndex ? categoryInput : ""}
+                                onChange={(e) => { setCategoryFocusIndex(idx); setCategoryInput(e.target.value); setShowCategorySuggestions(true); }}
+                                onFocus={() => { setCategoryFocusIndex(idx); setShowCategorySuggestions(true); }}
+                                onBlur={() => setTimeout(() => setShowCategorySuggestions(false), 200)}
+                                onKeyDown={(e) => handleCategoryKeyDown(idx, e)}
+                                placeholder="Add category (press Enter)..."
+                                className="w-full bg-transparent text-xs outline-none"
+                                style={{ color: 'var(--app-text)' }}
+                              />
+                              {showCategorySuggestions && categoryFocusIndex === idx && existingCategories.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-1 max-h-32 overflow-y-auto rounded-lg border z-20 shadow-lg" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+                                  {existingCategories
+                                    .filter(c => !(product.categories || []).includes(c) && c.toLowerCase().includes(categoryInput.toLowerCase()))
+                                    .slice(0, 10)
+                                    .map((cat) => (
+                                      <button
+                                        key={cat}
+                                        onMouseDown={(e) => { e.preventDefault(); addCategory(idx, cat); setCategoryInput(""); }}
+                                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--app-bg)] transition cursor-pointer"
+                                        style={{ color: 'var(--app-text)' }}
+                                      >
+                                        + {cat}
+                                      </button>
+                                    ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
 
-              {/* Has Variants Toggle */}
-              <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--app-border)' }}>
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-sm font-medium" style={{ color: 'var(--app-text)' }}>
-                    Has Variants? ({variantLabelHint})
-                  </label>
-                  <button
-                    onClick={() => handleHasVariantsToggle(idx)}
-                    className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
-                      product.hasVariants ? 'bg-brand-saffron' : 'bg-gray-300'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                        product.hasVariants ? 'translate-x-5' : ''
-                      }`}
-                    />
-                  </button>
-                </div>
+                        {/* SKU */}
+                        <div>
+                          <label className="block text-xs font-bold mb-1" style={{ color: 'var(--app-text)' }}>
+                            SKU Code
+                          </label>
+                          <input
+                            type="text"
+                            value={product.sku || ""}
+                            onChange={(e) => updateProduct(idx, { sku: e.target.value || undefined })}
+                            placeholder="Auto-generated if empty"
+                            className="w-full px-3.5 py-2 text-sm rounded-lg border font-mono focus:ring-2 focus:ring-brand-saffron focus:outline-none transition-all"
+                            style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                          />
+                        </div>
 
-                {product.hasVariants && (
-                  <div className="space-y-3">
-                    {/* Attribute Name */}
-                    <div>
-                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--app-text-muted)' }}>
-                        What varies across these rows? (e.g. {variantLabelHint.split(',')[0]})
-                      </label>
-                      <input
-                        type="text"
-                        value={product.attribute_name || ""}
-                        onChange={(e) => handleAttributeNameChange(idx, e.target.value)}
-                        placeholder="e.g. Size, Color, Plates"
-                        className="w-full px-3 py-2 text-sm rounded-lg border"
-                        style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                      />
-                      <p className="text-[11px] mt-1" style={{ color: 'var(--app-text-muted)', lineHeight: '1.4' }}>
-                        All rows below use this same attribute (e.g. all are sizes or all are colors). For multiple attributes like Size AND Color, contact support.
-                      </p>
+                        {/* LEGACY - remove after cutover verified: Restaurant Availability Toggle */}
+                        {isRestaurant && (
+                          <div className="flex items-center justify-between p-3 rounded-lg border" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+                            <div>
+                              <span className="text-xs font-bold block" style={{ color: 'var(--app-text)' }}>
+                                Menu Item Availability <span className="text-[9px] font-normal opacity-50">(Legacy)</span>
+                              </span>
+                              <span className="text-[10px]" style={{ color: 'var(--app-text-muted)' }}>
+                                {(product.isAvailable ?? true) ? "Available for ordering" : "Currently sold out"}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => handleAvailabilityChange(idx, !(product.isAvailable ?? true))}
+                              className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                                (product.isAvailable ?? true) ? 'bg-emerald-500' : 'bg-gray-400'
+                              }`}
+                            >
+                              <span
+                                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                                  (product.isAvailable ?? true) ? 'translate-x-5' : ''
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
+                    {/* SECTION CARD 1b: Dynamic Product Fields (from ProductFieldDefinition) */}
+                    {productFieldDefs.filter(f => f.appliesTo === "product").length > 0 && (
+                      <div className="p-5 rounded-xl border space-y-4" style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)' }}>
+                        <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: 'var(--app-border)' }}>
+                          <Braces className="h-4 w-4" style={{ color: 'var(--brand-saffron)' }} />
+                          <h3 className="text-sm font-extrabold uppercase tracking-wider" style={{ color: 'var(--app-text)' }}>
+                            Custom Product Fields
+                          </h3>
+                        </div>
 
-                    {/* Variant Rows */}
-                    <div className="space-y-2">
-                      {product.variants.map((variant, vIdx) => (
-                        <div key={vIdx} className="flex items-center gap-2 p-2 rounded-lg bg-black/5">
-                          <div className="flex-1">
-                            <label className="block text-[10px] font-medium mb-0.5" style={{ color: 'var(--app-text-muted)' }}>
-                              {product.attribute_name || "Value"}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {productFieldDefs
+                            .filter(f => f.appliesTo === "product")
+                            .sort((a, b) => a.sortOrder - b.sortOrder)
+                            .map((field) => {
+                              const currentValues = (product as any).customFieldValues || {};
+                              const currentValue = currentValues[field.fieldName] || "";
+
+                              const handleCustomFieldChange = (value: string) => {
+                                const updatedValues = { ...currentValues, [field.fieldName]: value };
+                                updateProduct(idx, { customFieldValues: updatedValues } as any);
+                              };
+
+                              if (field.fieldType === "boolean") {
+                                return (
+                                  <div key={field.id} className="flex items-center justify-between p-3 rounded-lg border" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+                                    <span className="text-xs font-bold" style={{ color: 'var(--app-text)' }}>{field.fieldName}</span>
+                                    <button
+                                      onClick={() => handleCustomFieldChange(currentValue === "true" ? "false" : "true")}
+                                      className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                                        currentValue === "true" ? 'bg-emerald-500' : 'bg-gray-400'
+                                      }`}
+                                    >
+                                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                                        currentValue === "true" ? 'translate-x-5' : ''
+                                      }`} />
+                                    </button>
+                                  </div>
+                                );
+                              }
+
+                              if (field.fieldType === "select" && field.options.length > 0) {
+                                return (
+                                  <div key={field.id}>
+                                    <label className="block text-xs font-bold mb-1" style={{ color: 'var(--app-text)' }}>
+                                      {field.fieldName}
+                                    </label>
+                                    <select
+                                      value={currentValue}
+                                      onChange={(e) => handleCustomFieldChange(e.target.value)}
+                                      className="w-full px-3.5 py-2 text-sm rounded-lg border focus:ring-2 focus:ring-brand-saffron focus:outline-none transition-all"
+                                      style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                                    >
+                                      <option value="">Select...</option>
+                                      {field.options.map(opt => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div key={field.id}>
+                                  <label className="block text-xs font-bold mb-1" style={{ color: 'var(--app-text)' }}>
+                                    {field.fieldName}
+                                  </label>
+                                  <input
+                                    type={field.fieldType === "number" ? "number" : "text"}
+                                    value={currentValue}
+                                    onChange={(e) => handleCustomFieldChange(e.target.value)}
+                                    placeholder={`Enter ${field.fieldName}...`}
+                                    className="w-full px-3.5 py-2 text-sm rounded-lg border focus:ring-2 focus:ring-brand-saffron focus:outline-none transition-all"
+                                    style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                                  />
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SECTION CARD 2: Pricing & Variant Matrix */}
+                    <div className="p-5 rounded-xl border space-y-4" style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)' }}>
+                      <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--app-border)' }}>
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4" style={{ color: 'var(--brand-saffron)' }} />
+                          <h3 className="text-sm font-extrabold uppercase tracking-wider" style={{ color: 'var(--app-text)' }}>
+                            2. Pricing & Variants Matrix
+                          </h3>
+                        </div>
+                        
+                        {/* Has Variants Toggle */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold" style={{ color: 'var(--app-text)' }}>
+                            Has Variants?
+                          </span>
+                          <button
+                            onClick={() => handleHasVariantsToggle(idx)}
+                            className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                              product.hasVariants ? 'bg-brand-saffron' : 'bg-gray-400'
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                                product.hasVariants ? 'translate-x-5' : ''
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Base Price Field */}
+                      <div>
+                        <label className="block text-xs font-bold mb-1" style={{ color: 'var(--app-text)' }}>
+                          Base Price (₹ INR) *
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl font-extrabold" style={{ color: 'var(--brand-saffron)' }}>₹</span>
+                          <input
+                            type="number"
+                            value={product.price_inr ?? ""}
+                            onChange={(e) => handlePriceChange(idx, e.target.value)}
+                            placeholder="0.00"
+                            className="flex-1 px-4 py-2.5 text-xl font-extrabold rounded-lg border focus:ring-2 focus:ring-brand-saffron focus:outline-none transition-all"
+                            style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Variant Matrix Table */}
+                      {product.hasVariants && (
+                        <div className="space-y-4 pt-2 border-t" style={{ borderColor: 'var(--app-border)' }}>
+                          <div>
+                            <label className="block text-xs font-bold mb-1" style={{ color: 'var(--app-text)' }}>
+                              Variant Attribute Type (e.g. {variantLabelHint})
                             </label>
                             <input
                               type="text"
-                              value={variant.attribute_value}
-                              onChange={(e) => updateVariant(idx, vIdx, { attribute_value: e.target.value })}
-                              placeholder={`e.g. 32, M, Red`}
-                              className="w-full px-3 py-1.5 text-sm rounded border"
-                              style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                              value={product.attribute_name || ""}
+                              onChange={(e) => handleAttributeNameChange(idx, e.target.value)}
+                              placeholder="e.g. Size, Portion, Duration"
+                              className="w-full px-3.5 py-2 text-sm rounded-lg border focus:ring-2 focus:ring-brand-saffron focus:outline-none transition-all"
+                              style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                             />
                           </div>
-                          <div>
-                            <label className="block text-[10px] font-medium mb-0.5" style={{ color: 'var(--app-text-muted)' }}>
-                              Price
-                            </label>
-                            <input
-                              type="number"
-                              value={variant.price_override ?? ""}
-                              onChange={(e) => updateVariant(idx, vIdx, {
-                                price_override: e.target.value === "" ? null : parseFloat(e.target.value) || null
-                              })}
-                              placeholder="₹"
-                              className="w-24 px-3 py-1.5 text-sm rounded border"
-                              style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                            />
+
+                          <div className="space-y-2.5">
+                            {product.variants.map((variant, vIdx) => {
+                              const stockStatus = getStockStatus(variant.stock);
+                              return (
+                                <div key={vIdx} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 p-3 rounded-lg border" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+                                  <div className="flex-1">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: 'var(--app-text-muted)' }}>
+                                      {product.attribute_name || "Value"}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={variant.attribute_value}
+                                      onChange={(e) => updateVariant(idx, vIdx, { attribute_value: e.target.value })}
+                                      placeholder="e.g. Small, M, 30min"
+                                      className="w-full px-3 py-1.5 text-xs font-semibold rounded border"
+                                      style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                                    />
+                                  </div>
+
+                                  <div className="w-28">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: 'var(--app-text-muted)' }}>
+                                      Price (₹)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      value={variant.price_override ?? ""}
+                                      onChange={(e) => updateVariant(idx, vIdx, {
+                                        price_override: e.target.value === "" ? null : parseFloat(e.target.value) || null
+                                      })}
+                                      placeholder="₹"
+                                      className="w-full px-3 py-1.5 text-xs font-semibold rounded border"
+                                      style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                                    />
+                                  </div>
+
+                                  <div className="w-36">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: 'var(--app-text-muted)' }}>
+                                      Stock Qty
+                                    </label>
+                                    <div className="flex items-center gap-1.5">
+                                      <input
+                                        type="number"
+                                        value={variant.stock ?? ""}
+                                        onChange={(e) => updateVariant(idx, vIdx, {
+                                          stock: e.target.value === "" ? null : parseInt(e.target.value) || null
+                                        })}
+                                        placeholder="Qty"
+                                        className="w-full px-3 py-1.5 text-xs font-semibold rounded border"
+                                        style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                                      />
+                                      {stockStatus && (
+                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                                          stockStatus === "IN_STOCK" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
+                                          stockStatus === "LOW_STOCK" ? "bg-amber-500/10 text-amber-600 border-amber-500/20" :
+                                          "bg-red-500/10 text-red-600 border-red-500/20"
+                                        }`}>
+                                          {stockStatus === "IN_STOCK" ? "In Stock" : stockStatus === "LOW_STOCK" ? "Low Stock" : "Out"}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    onClick={() => removeVariant(idx, vIdx)}
+                                    className="self-end sm:self-center p-2 text-red-400 hover:text-red-600 cursor-pointer"
+                                    title="Delete Variant"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
-                          <div>
-                            <label className="block text-[10px] font-medium mb-0.5" style={{ color: 'var(--app-text-muted)' }}>
-                              Stock
-                            </label>
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                type="number"
-                                value={variant.stock ?? ""}
-                                onChange={(e) => updateVariant(idx, vIdx, {
-                                  stock: e.target.value === "" ? null : parseInt(e.target.value) || null
-                                })}
-                                placeholder="#"
-                                className="w-20 px-3 py-1.5 text-sm rounded border"
-                                style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                              />
-                              {(() => {
-                                const status = getStockStatus(variant.stock);
-                                if (!status) return null;
-                                const colors: Record<string, { bg: string; text: string; border: string }> = {
-                                  IN_STOCK: { bg: "rgba(16, 185, 129, 0.15)", text: "#10b981", border: "rgba(16, 185, 129, 0.3)" },
-                                  LOW_STOCK: { bg: "rgba(245, 158, 11, 0.15)", text: "#d97706", border: "rgba(245, 158, 11, 0.3)" },
-                                  OUT_OF_STOCK: { bg: "rgba(239, 68, 68, 0.15)", text: "#dc2626", border: "rgba(239, 68, 68, 0.3)" },
-                                };
-                                const c = colors[status];
+
+                          <button
+                            onClick={() => addVariant(idx)}
+                            className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-lg border border-dashed transition-all hover:border-brand-saffron cursor-pointer"
+                            style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                          >
+                            <Plus className="h-4 w-4 text-brand-saffron" />
+                            <span>Add {product.attribute_name || "Variant Row"}</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* SECTION CARD 3: Audit & History Timeline Log (for saved items) */}
+                    {product.id && (
+                      <div className="p-5 rounded-xl border space-y-3" style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)' }}>
+                        <button
+                          onClick={() => handleToggleHistory(product.id!)}
+                          className="w-full flex items-center justify-between text-xs font-extrabold uppercase tracking-wider cursor-pointer"
+                          style={{ color: 'var(--app-text)' }}
+                        >
+                          <span className="flex items-center gap-2">
+                            <History className="h-4 w-4" style={{ color: 'var(--brand-saffron)' }} />
+                            Audit & Activity Log
+                          </span>
+                          <span className="text-xs text-brand-saffron underline">
+                            {historyOpenProductId === product.id ? "Hide Log" : "View Log"}
+                          </span>
+                        </button>
+
+                        {historyOpenProductId === product.id && (
+                          <div className="mt-3 pl-4 border-l-2 border-dashed ml-2 space-y-3 pt-2" style={{ borderColor: 'var(--app-border)' }}>
+                            {loadingHistoryId === product.id ? (
+                              <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--app-text-muted)' }}>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-saffron" />
+                                <span>Fetching timeline...</span>
+                              </div>
+                            ) : (() => {
+                              const productHistory = histories[product.id!];
+                              if (!productHistory) return null;
+
+                              const events = [
+                                ...(productHistory.priceHistory || []).map(p => ({
+                                  type: 'price',
+                                  date: new Date(p.changedAt),
+                                  content: `Price updated from ₹${p.oldPrice} to ₹${p.newPrice}`,
+                                  actor: p.actorName || 'System'
+                                })),
+                                ...(productHistory.stockHistory || []).map(s => ({
+                                  type: 'stock',
+                                  date: new Date(s.changedAt),
+                                  content: `Stock updated from ${s.oldStock ?? 'none'} to ${s.newStock}`,
+                                  actor: s.actorName || 'System'
+                                }))
+                              ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+                              if (events.length === 0) {
                                 return (
-                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap" style={{ backgroundColor: c.bg, color: c.text, borderColor: c.border }}>
-                                    {status === "IN_STOCK" ? "In Stock" : status === "LOW_STOCK" ? "Low Stock" : "Out of Stock"}
-                                  </span>
+                                  <p className="text-xs italic" style={{ color: 'var(--app-text-muted)' }}>
+                                    No changes recorded yet for this product.
+                                  </p>
                                 );
-                              })()}
-                            </div>
+                              }
+
+                              return events.map((event, evIdx) => (
+                                <div key={evIdx} className="relative flex flex-col space-y-0.5">
+                                  <div className="absolute -left-[21px] top-1 w-2 h-2 rounded-full bg-brand-saffron" />
+                                  <p className="text-xs font-semibold" style={{ color: 'var(--app-text)' }}>
+                                    {event.content}
+                                  </p>
+                                  <div className="flex items-center gap-1.5 text-[10px]" style={{ color: 'var(--app-text-muted)' }}>
+                                    <span>{event.date.toLocaleString()}</span>
+                                    <span>•</span>
+                                    <span>By: {event.actor}</span>
+                                  </div>
+                                </div>
+                              ));
+                            })()}
                           </div>
-                          <button
-                            onClick={() => removeVariant(idx, vIdx)}
-                            className="p-1.5 text-red-400 hover:text-red-600 transition cursor-pointer"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Add Variant Button */}
-                    <button
-                      onClick={() => addVariant(idx)}
-                      className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg border border-dashed hover:bg-black/5 transition cursor-pointer"
-                      style={{ borderColor: 'var(--app-border)', color: 'var(--app-text-muted)' }}
-                    >
-                      <Plus className="h-3 w-3" />
-                      Add {product.attribute_name || "Variant"}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Product Gallery & Upload (relational) */}
-              {product.id && (
-                <div className="mt-6 pt-6 border-t" style={{ borderColor: 'var(--app-border)' }}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <ImageIcon className="h-4 w-4 text-brand-saffron" />
-                    <h4 className="text-sm font-semibold" style={{ color: 'var(--app-text)' }}>
-                      Product Images Gallery
-                    </h4>
-                    <span className="text-xs" style={{ color: 'var(--app-text-muted)' }}>
-                      ({((product as any).images || []).length}/10)
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap gap-3 items-center">
-                    {/* Thumbnails */}
-                    {((product as any).images || []).map((img: any, imgIdx: number) => (
-                      <div key={img.id} className="relative group w-20 h-20 rounded-lg overflow-hidden border" style={{ borderColor: 'var(--app-border)' }}>
-                        <img src={img.url} alt="" className="w-full h-full object-cover" />
-                        
-                        {/* Hover Overlay Actions */}
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1">
-                          <button
-                            onClick={() => handleDeleteImage(idx, img.id)}
-                            className="self-end p-0.5 bg-red-600 text-white rounded hover:bg-red-700 cursor-pointer transition"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                          <div className="flex justify-between w-full">
-                            <button
-                              disabled={imgIdx === 0}
-                              onClick={() => handleMoveImage(idx, imgIdx, "left")}
-                              className="p-0.5 bg-white/80 hover:bg-white text-gray-800 rounded disabled:opacity-40 cursor-pointer transition"
-                            >
-                              <ChevronLeft className="h-3 w-3" />
-                            </button>
-                            <button
-                              disabled={imgIdx === ((product as any).images || []).length - 1}
-                              onClick={() => handleMoveImage(idx, imgIdx, "right")}
-                              className="p-0.5 bg-white/80 hover:bg-white text-gray-800 rounded disabled:opacity-40 cursor-pointer transition"
-                            >
-                              <ChevronRight className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Order Badge */}
-                        <div className="absolute top-0.5 left-0.5 bg-black/60 text-white text-[9px] font-bold px-1 rounded">
-                          {imgIdx + 1}
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Upload Box */}
-                    {((product as any).images || []).length < 10 && (
-                      <label className="flex flex-col items-center justify-center w-20 h-20 rounded-lg border border-dashed hover:bg-black/5 transition cursor-pointer" style={{ borderColor: 'var(--app-border)' }}>
-                        {uploadingProductId === product.id ? (
-                          <Loader2 className="h-5 w-5 animate-spin text-brand-saffron" />
-                        ) : (
-                          <>
-                            <Plus className="h-5 w-5 text-gray-400" />
-                            <span className="text-[10px] text-gray-400 mt-1">Upload</span>
-                          </>
                         )}
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          className="hidden"
-                          disabled={uploadingProductId !== null}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleUploadImage(idx, file);
-                          }}
-                        />
-                      </label>
+                      </div>
                     )}
+
+                    {/* SECTION CARD 4: Raw AI Fragment */}
+                    <div className="p-4 rounded-xl border" style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)' }}>
+                      <p className="text-xs font-medium" style={{ color: 'var(--app-text-muted)' }}>
+                        <span className="font-bold text-brand-saffron mr-1">Raw AI Source Fragment:</span>
+                        "{product.raw_source_fragment}"
+                      </p>
+                    </div>
+
                   </div>
                 </div>
-              )}
-
-              {/* History Timeline */}
-              {product.id && (
-                <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--app-border)' }}>
-                  <button
-                    onClick={() => handleToggleHistory(product.id!)}
-                    className="flex items-center gap-2 text-xs font-semibold hover:opacity-80 transition cursor-pointer"
-                    style={{ color: 'var(--app-text)' }}
-                  >
-                    <History className="h-3.5 w-3.5 text-brand-saffron" />
-                    <span>{historyOpenProductId === product.id ? "Hide History Log" : "View Price & Stock History"}</span>
-                  </button>
-
-                  {historyOpenProductId === product.id && (
-                    <div className="mt-3 pl-5 border-l-2 border-dashed ml-1.5 space-y-3 pt-1" style={{ borderColor: 'var(--app-border)' }}>
-                      {loadingHistoryId === product.id ? (
-                        <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--app-text-muted)' }}>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-saffron" />
-                          <span>Loading history...</span>
-                        </div>
-                      ) : (() => {
-                        const productHistory = histories[product.id!];
-                        if (!productHistory) return null;
-
-                        const events = [
-                          ...(productHistory.priceHistory || []).map(p => ({
-                            type: 'price',
-                            date: new Date(p.changedAt),
-                            content: `Price updated from ₹${p.oldPrice} to ₹${p.newPrice}`,
-                            actor: p.actorName || 'System'
-                          })),
-                          ...(productHistory.stockHistory || []).map(s => ({
-                            type: 'stock',
-                            date: new Date(s.changedAt),
-                            content: `Stock updated from ${s.oldStock ?? 'none'} to ${s.newStock}`,
-                            actor: s.actorName || 'System'
-                          }))
-                        ].sort((a, b) => b.date.getTime() - a.date.getTime());
-
-                        if (events.length === 0) {
-                          return (
-                            <p className="text-xs italic" style={{ color: 'var(--app-text-muted)' }}>
-                              No changes recorded yet.
-                            </p>
-                          );
-                        }
-
-                        return events.map((event, evIdx) => (
-                          <div key={evIdx} className="relative flex flex-col space-y-0.5">
-                            {/* Dot on the timeline */}
-                            <div className="absolute -left-[27px] top-1 w-2 h-2 rounded-full bg-brand-saffron" />
-                            
-                            <p className="text-xs font-medium" style={{ color: 'var(--app-text)' }}>
-                              {event.content}
-                            </p>
-                            <div className="flex items-center gap-1.5 text-[10px]" style={{ color: 'var(--app-text-muted)' }}>
-                              <span>{event.date.toLocaleString()}</span>
-                              <span>•</span>
-                              <span>By: {event.actor}</span>
-                            </div>
-                          </div>
-                        ));
-                      })()}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Raw source fragment */}
-              <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--app-border)' }}>
-                <p className="text-xs" style={{ color: 'var(--app-text-muted)' }}>
-                  <span className="font-medium">Source:</span> "{product.raw_source_fragment}"
-                </p>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </AnimatePresence>
       </div>
 
-      {/* Duplicate Warning */}
+      {/* Duplicate Warning Banner */}
       {showDuplicateWarning && duplicates.length > 0 && (
-        <div className="flex items-start gap-3 p-4 rounded-lg border" style={{ backgroundColor: 'rgba(251, 191, 36, 0.1)', borderColor: 'rgba(251, 191, 36, 0.3)' }}>
-          <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-amber-700">
-              {duplicates.length} product(s) already exist and will be updated:
+        <div className="flex items-start gap-3 p-4 rounded-xl border" style={{ backgroundColor: 'rgba(251, 191, 36, 0.1)', borderColor: 'rgba(251, 191, 36, 0.3)' }}>
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-bold text-amber-800">
+              {duplicates.length} product(s) already exist in catalog and will be updated:
             </p>
-            <ul className="mt-1 text-xs text-amber-600">
+            <ul className="mt-1 text-xs text-amber-700 list-disc list-inside">
               {duplicates.map((d, i) => (
                 <li key={i}>{d.name}</li>
               ))}
             </ul>
           </div>
-          <button
-            onClick={() => setShowDuplicateWarning(false)}
-            className="ml-auto text-amber-500 hover:text-amber-700 cursor-pointer"
-          >
+          <button onClick={() => setShowDuplicateWarning(false)} className="text-amber-600 hover:text-amber-800 cursor-pointer">
             <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
-      {/* Save Button */}
-      <div className="flex justify-end pt-4">
+      {/* Bottom Save Action Bar */}
+      <div className="rounded-2xl p-4 sm:p-6 border backdrop-blur-sm shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+        <button
+          onClick={onBack}
+          className="w-full sm:w-auto px-6 py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+          style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back to Intake</span>
+        </button>
+
         <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
           onClick={handleSave}
           disabled={isSaving}
-          className="btn-primary flex items-center gap-2 text-lg px-6 py-3"
+          className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm text-white shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+          style={{ backgroundColor: 'var(--brand-saffron)' }}
         >
           {isSaving ? (
             <>
-              <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white" />
-              Saving...
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Saving Products to Catalog...</span>
             </>
           ) : saveSuccess ? (
             <>
-              <Check className="h-5 w-5" />
-              Saved!
+              <Check className="h-4 w-4" />
+              <span>Saved Successfully!</span>
             </>
           ) : (
             <>
-              <Save className="h-5 w-5" />
-              Confirm & Save Products
+              <Save className="h-4 w-4" />
+              <span>Confirm & Save {products.length} {products.length === 1 ? 'Product' : 'Products'}</span>
             </>
           )}
         </motion.button>

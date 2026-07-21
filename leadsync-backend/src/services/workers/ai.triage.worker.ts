@@ -14,21 +14,28 @@ export async function processAiTriageJob(job: { id: string, data: { conversation
         where: { id: conversationId },
         include: {
            messages: {
-              orderBy: { createdAt: "asc" },
-              take: 5
+              orderBy: { createdAt: "desc" },
+              take: 10
            }
         }
      });
 
      if (!conversation) return;
 
-      const chatHistory = conversation.messages.map(m => m.content).join("\n");
-     const { intent, summary } = await triageConversation(chatHistory);
+     const chronologicalMessages = [...conversation.messages].reverse();
+     const chatHistory = chronologicalMessages.map(m => m.content).join("\n");
+     const { intent: rawIntent, summary } = await triageConversation(chatHistory);
+
+     // Strictly validate and map rawIntent to ConversationIntent Prisma enum
+     const validIntents = ["BROWSING", "ORDERING", "SUPPORT", "COMPLAINT"];
+     let mappedIntent = (rawIntent || "").toUpperCase().trim();
+     if (mappedIntent === "SALES" || mappedIntent === "PURCHASE" || mappedIntent === "ORDER") mappedIntent = "ORDERING";
+     if (!validIntents.includes(mappedIntent)) mappedIntent = "BROWSING";
 
      // Compute a product match for the customer's most recent message once,
      // and cache it on the conversation so the unclaimed leads list doesn't
      // re-run embeddings on every poll.
-     const lastCustomerMessage = [...conversation.messages]
+     const lastCustomerMessage = chronologicalMessages
        .reverse()
        .find((m: any) => m.sender !== "SYSTEM" && m.sender !== "BOT");
      const matchedProduct = lastCustomerMessage
@@ -38,10 +45,12 @@ export async function processAiTriageJob(job: { id: string, data: { conversation
      const updated = await (tenantPrisma.conversation as any).update({
         where: { id: conversationId },
         data: {
+           intent: mappedIntent as any,
            sessionState: {
               ...((conversation as any).sessionState || {}),
-              aiIntent: intent,
+              aiIntent: mappedIntent,
               aiSummary: summary,
+              lastTriagedAt: new Date().toISOString(),
            },
            matchedProduct: matchedProduct as any,
            matchedProductAt: matchedProduct ? new Date() : null,

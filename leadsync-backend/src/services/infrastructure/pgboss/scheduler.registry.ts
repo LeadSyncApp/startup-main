@@ -2,11 +2,8 @@ import { pgBossService } from './pgboss.service';
 import {
   CLEANUP_IDEMPOTENCY_JOB_NAME,
   CLEANUP_WEBHOOKS_JOB_NAME,
-  CLEANUP_AUTOMATION_LOGS_JOB_NAME,
   RECOVER_WEBHOOK_JOB_NAME
 } from './jobs/cleanup.job';
-import { AUTOMATION_JOB_NAME } from './jobs/automation.job';
-
 export class SchedulerRegistry {
   private static isRegistered = false;
 
@@ -24,7 +21,6 @@ export class SchedulerRegistry {
         singletonSeconds: 3000 // Don't allow overlaps if it takes long
       }); 
       await boss.schedule(CLEANUP_WEBHOOKS_JOB_NAME, '0 0 * * *'); // Every midnight
-      await boss.schedule(CLEANUP_AUTOMATION_LOGS_JOB_NAME, '0 2 * * *'); // 2 AM
       await boss.schedule(RECOVER_WEBHOOK_JOB_NAME, '*/15 * * * *'); // Every 15 minutes
 
       this.isRegistered = true;

@@ -31,7 +31,7 @@ interface ConversationalRule {
   triggerType?: string;
   isEnabled: boolean;
   surfaceConfig?: SurfaceConfig | null;
-  eventConfig?: { eventName?: string; delayMinutes?: number } | null;
+  eventConfig?: { eventName?: string } | null;
   templateBody?: string;
   useAI?: boolean;
   brandVoice?: string;
@@ -272,19 +272,17 @@ export function AutoRepliesPage() {
     const showAsButton = !!draft.showAsButton;
     const showAsCommand = !!draft.showAsCommand;
 
-    if (showAsButton || showAsCommand) {
-      if (!draft.buttonLabel.trim()) {
-        toast.error("Button label is required when surfacing a rule");
-        return;
-      }
-      if (!commandSeemsValid(draft.command)) {
-        toast.error("Command must start with '/' and use lowercase letters, numbers, or underscores (no spaces)");
-        return;
-      }
-      if (showAsButton && atCap(ruleId, draft.parentRuleId)) {
-        toast.error(`Surfaced rule button limit reached (${constants.maxSurfacedRules}). Disable another surfaced button in this menu first.`);
-        return;
-      }
+    if (showAsButton && !draft.buttonLabel.trim()) {
+      toast.error("Button label is required when 'Show as inline button' is checked.");
+      return;
+    }
+    if (showAsCommand && !commandSeemsValid(draft.command)) {
+      toast.error("Command must start with '/' and use lowercase letters, numbers, or underscores (no spaces)");
+      return;
+    }
+    if (showAsButton && atCap(ruleId, draft.parentRuleId)) {
+      toast.error(`Surfaced rule button limit reached (${constants.maxSurfacedRules}). Disable another surfaced button in this menu first.`);
+      return;
     }
 
     if (!draftUseAI && !draftTemplateBody.trim()) {
@@ -1431,7 +1429,7 @@ function SurfaceEditor({
             placeholder="Enter the fixed response message..."
             className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-purple-500 transition-all font-medium resize-none"
           />
-          <p className="text-[9px] text-slate-400 mt-1">Always sent exactly as written when tapped or typed. Supported variables: <code className="bg-slate-100 px-1 rounded font-mono">{`{customerName}`}</code>.</p>
+          <p className="text-[9px] text-slate-400 mt-1">Always sent exactly as written when tapped or typed. Supported variables: <code className="bg-slate-100 px-1 rounded font-mono">{`{customerName}`}</code> <code className="bg-slate-100 px-1 rounded font-mono">{`{shopName}`}</code> <code className="bg-slate-100 px-1 rounded font-mono">{`{brand}`}</code> <code className="bg-slate-100 px-1 rounded font-mono">{`{name}`}</code>. All variables are case-insensitive.</p>
         </div>
 
         <div>
@@ -1468,7 +1466,7 @@ function SurfaceEditor({
           <div className="space-y-3 pt-2 border-t border-slate-100">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Button Label <span className="text-red-500">*</span></label>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Button Label {draft.showAsButton && <span className="text-red-500">*</span>}</label>
                 <input
                   type="text"
                   value={draft.buttonLabel}
@@ -1479,7 +1477,7 @@ function SurfaceEditor({
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Command <span className="text-red-500">*</span></label>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Command {draft.showAsCommand && <span className="text-red-500">*</span>}</label>
                 <input
                   type="text"
                   value={draft.command}

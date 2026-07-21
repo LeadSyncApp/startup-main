@@ -31,14 +31,15 @@ import broadcastRoutes from "./routes/core/broadcast.routes";
 import ordersRoutes from "./routes/orders/orders.routes";
 import newOrderArrivalsRoutes from "./routes/orders/newOrderArrivals.routes";
 
-import automationRoutes from "./routes/bot/automation.routes";
 import botKnowledgeRoutes from "./routes/bot/bot-knowledge.routes";
 import conversationalRulesRoutes from "./routes/automation/conversationalRules.routes";
 import ruleGroupsRoutes from "./routes/automation/ruleGroups.routes";
 
 import webhookRoutes from "./routes/webhooks/webhook.routes";
+import websiteRoutes from "./routes/webhooks/website.routes";
 import telegramWebhookRoutes from "./routes/webhooks/telegram.routes";
 import { metadataRoutes } from "./routes/crm/metadata.routes";
+import { productFieldsRoutes } from "./routes/crm/product-fields.routes";
 
 console.log("🔥 app.ts loaded");
 
@@ -140,10 +141,9 @@ app.use("/api/automation/rule-groups", authMiddleware, ruleGroupsRoutes);
 app.use("/api/automation/conversational-rules", authMiddleware, conversationalRulesRoutes);
 
 app.use("/api/webhook", webhookRoutes);
+app.use("/api/webhook", websiteRoutes);
 app.use("/api/webhook/telegram", telegramWebhookRoutes);
 app.use("/api/bot-knowledge", botKnowledgeRoutes);
-app.use("/api/automation", automationRoutes);
-app.use("/api/bot/automation", automationRoutes);
 
 // 🆕 Add New Order Arrivals routes
 app.use("/api/newOrderArrivals", newOrderArrivalsRoutes);
@@ -151,6 +151,7 @@ app.use("/api/newOrderArrivals", newOrderArrivalsRoutes);
 // CRM Routes
 app.use("/api/metadata", metadataRoutes);
 app.use("/api/crm/metadata", metadataRoutes);
+app.use("/api", productFieldsRoutes);
 
 /* 👥 TEAM ROUTES */
 import teamRoutes from "./routes/team/team.routes";

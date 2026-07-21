@@ -115,17 +115,6 @@ router.post("/signup", async (req, res) => {
         }
       });
 
-      await tx.automationRule.create({
-        data: {
-          companyId: company.id,
-          name: "Default Greeting Rule",
-          isActive: false,
-          trigger: "NEW_CONVERSATION",
-          action: "SEND_MESSAGE",
-          actionPayload: { text: "Hello! How can we help?" }
-        }
-      });
-
       await tx.customFieldDefinition.create({
         data: {
           companyId: company.id,
