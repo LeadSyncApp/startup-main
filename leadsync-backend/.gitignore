@@ -9,4 +9,8 @@ node_modules
 /src/generated/prisma
 .ngrok/
 .orphaned-test-companies.json
+*.log
+task-*.log
+scratch/
+
 
