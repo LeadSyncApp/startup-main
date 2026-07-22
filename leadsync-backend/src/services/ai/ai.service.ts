@@ -430,16 +430,15 @@ If the customer has not supplied a valid, clean 6-digit pincode or clear landmar
   customer that the item is currently unavailable.
 - If <MatchedProduct> says "No matched product.":
   - The customer asked for something that does NOT exist in this catalog.
-  - You MUST respond with ONLY: "Sorry, [item they asked about] is not available
-    in our current catalog."
-  - You MUST NOT list, suggest, or refer to ANY products from the
-    <ActiveMerchantMenuSnapshot>, even if that section lists available products.
-    Listing alternatives when the specific item wasn't found is misleading.
-  - Example of a VIOLATION: Customer asks "silk saree", matches nothing. Wrong
-    reply: "We don't have silk sarees but we have STS shirts and cotton pants."
-    Correct reply: "Sorry, silk sarees are not available in our current catalog."
-    - The <ActiveMerchantMenuSnapshot> section may still list other products
-      for separate queries; for this turn, ignore it if MatchedProduct is empty.
+  - Politely state that the specific item is not available.
+  - THEN, if the <ActiveMerchantMenuSnapshot> lists other available products,
+    briefly offer them as alternatives to keep the customer engaged:
+    "We don't have [item], but we do carry [product1] and [product2]. Would you
+    like to know more about those?"
+  - Do NOT fabricate or invent products — only list products explicitly present
+    in the <ActiveMerchantMenuSnapshot>.
+  - Keep the alternative suggestion to 1-2 sentences. The primary message is
+    "not available" — alternatives are secondary.
 
 # STRUCTURED DRAFT ORDER & CONVERSATIONAL MEMORY RULES
 - The active transactional state of the customer's order is provided in <ActiveDraftOrder> tags.
@@ -457,6 +456,8 @@ If the customer has not supplied a valid, clean 6-digit pincode or clear landmar
  * Securely enforces LLM response matching while guarding the context space against prompt injections.
  */
 export async function generateShopReply(payload: any): Promise<UnifiedShopResponse> {
+    const DEBUG_LOG = 'D:\\startup-backup\\startup-new\\startup\\leadsync-backend\\debug-groq.log';
+    try { require('fs').appendFileSync(DEBUG_LOG, new Date().toISOString() + ' generateShopReply CALLED\n'); } catch(e2) {}
     const context = getTenantContext();
     
     // Securely envelop dynamic client payloads inside clear XML-style tag delimiters.
@@ -531,6 +532,7 @@ ${escapeHtmlBrackets(payload.activeRules || "No custom conversational rules acti
 `.trim();
 
   try {
+    require('fs').appendFileSync('D:\\startup-backup\\startup-new\\startup\\leadsync-backend\\debug-groq.log', new Date().toISOString() + ' TRY block entered\n');
     const groq = getGroq();
     const systemPrompt = `
 ${compileDynamicOmniPrompt(ruleSegment, heuristicSegment)}
@@ -618,7 +620,9 @@ CHAT MESSAGE SENT BY CUSTOMER: "${payload.user_message}"
       errorData: err?.error || err?.data || null,
       stack: err?.stack?.split("\n").slice(0, 3).join("\n") || "no stack",
     };
-    console.error("❌ [Groq Hub] Enterprise Single-Turn Routine crashed:", JSON.stringify(groqError, null, 2));
+    const groqErrorStr = JSON.stringify(groqError);
+    console.error("❌ [Groq Hub] Enterprise Single-Turn Routine crashed:", groqErrorStr);
+    try { require('fs').appendFileSync('D:\\startup-backup\\startup-new\\startup\\leadsync-backend\\debug-groq.log', new Date().toISOString() + ' CATCH: ' + groqErrorStr + '\n'); } catch(e2) {}
     return {
       intent_type: "Support",
       tool_call: null,

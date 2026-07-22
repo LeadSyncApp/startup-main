@@ -834,20 +834,32 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     }));
 
     // ⚡ FAST PATH: Skip expensive LLM call for non-commerce queries
-    // Greeting queries can be answered instantly without LLM inference
+    // Greeting queries use a language-aware template (no LLM inference)
+    const GREETING_TEMPLATES: Record<string, string> = {
+      "hi": "Namaste! Main aapki kaise madad kar sakta hoon?",
+      "mr": "Namaskar! Mi tumhala kashi madat karu shakto?",
+      "ta": "Vanakkam! Naangal ungalukku eppadi udhavi mudiyum?",
+      "te": "Namaskaram! Memu meeku ela sahayam cheyagalamu?",
+      "bn": "Nomoshkar! Ami apnake ki bhabe sahajjo korte pari?",
+      "gu": "Namaste! Hu tamari kem madad kari shaku?",
+      "kn": "Namaskara! Naanu nimagenu sahayavagabahudu?",
+      "ml": "Namaskaram! Enikku ningalkku engane sahayikkane?",
+      "pa": "Sat sri akal! Main tuhadi ki madad kar sakda han?",
+    };
     let aiTurnResult: UnifiedShopResponse;
     const tLlmStart = performance.now();
     if (classification.intent === "Greeting/SmallTalk") {
+      const greetingText = GREETING_TEMPLATES[detectedLanguage] || "Hello! How can I help you today?";
       aiTurnResult = {
         intent_type: "Query",
         tool_call: null,
-        replyText: "Hello! How can I help you today?",
+        replyText: greetingText,
         thread_summary: "Greeting — fast path, no LLM inference.",
         suggested_human_response: "",
         detected_meta: { language: detectedLanguage || "en", sentiment: "POSITIVE", confidence: 1.0 },
         extracted_order: { items: [], total_amount: 0, recipient_name: null, recipient_phone: null, address_details: { raw_input: "", house_or_plot: "", street_or_gully: "", landmark: "", city: "", state: "", pincode: "" }, needs_follow_up: false, follow_up_reason: null }
       };
-      console.log(`⚡ [Orchestrator] Greeting fast-path: ~0ms LLM (saved ~10s)`);
+      console.log(`⚡ [Orchestrator] Greeting fast-path: lang=${detectedLanguage}, reply="${greetingText}"`);
     } else {
       aiTurnResult = await generateShopReply({
         tenant_id: companyId,
