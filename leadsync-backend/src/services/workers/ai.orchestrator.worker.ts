@@ -6,7 +6,7 @@ import { outboundDispatcherService } from "../outbound.dispatcher";
 import { TelegramTransportService } from "../transport/telegramTransport.service";
 import { decryptSecret } from "../../utils/encryption";
 import { Channel, MessageSender, ConversationStatus } from "@prisma/client";
-import { generateShopReply, classifyMessageIntentWithTimeout, PreFlightClassification, UnifiedShopResponse } from "../ai/ai.service";
+import { generateShopReply, generateFastReply, classifyMessageIntentWithTimeout, PreFlightClassification, UnifiedShopResponse } from "../ai/ai.service";
 import { retrieveSimilarChunks } from "../knowledge/knowledgeRetriever.service";
 import { matchProductForMessage } from "../knowledge/productMatch.service";
 import { StandardMessageFrame } from "../../interfaces/messaging.interface";
@@ -730,6 +730,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     const [recentMessagesDesc, activeDraftOrder] = await messagesDraftPromise;
     P("Promise.all messages+draft done");
 
+    let classification: PreFlightClassification | null = null;
     if (processingText) {
       // 1. Build thread history for classification context (most recent 6 messages, chronological)
       let threadHistoryStr = "";
@@ -746,11 +747,11 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       // 2. Run pre-flight classifier
       P("before intent classification");
       const startClassificationTime = Date.now();
-      const classification = await classifyMessageIntentWithTimeout(processingText, threadHistoryStr, 2000);
+      classification = await classifyMessageIntentWithTimeout(processingText, threadHistoryStr, 2000);
       classificationTime = Date.now() - startClassificationTime;
 
-      P(`after intent classification (${classification.intent}, ${classification.inquiryType || "N/A"})`);
-      console.log(`⚙️ [Orchestrator Intent] "${processingText}" → Classified as: ${classification.intent} (${classification.inquiryType || "N/A"})`);
+      P(`after intent classification (${classification!.intent}, ${classification!.inquiryType || "N/A"})`);
+      console.log(`⚙️ [Orchestrator Intent] "${processingText}" → Classified as: ${classification!.intent} (${classification!.inquiryType || "N/A"})`);
 
       // 3. Conditional context injection based on classified intent
       P("before RAG context retrieval");
@@ -833,33 +834,29 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       content: m.content
     }));
 
-    // ⚡ FAST PATH: Skip expensive LLM call for non-commerce queries
-    // Greeting queries use a language-aware template (no LLM inference)
-    const GREETING_TEMPLATES: Record<string, string> = {
-      "hi": "Namaste! Main aapki kaise madad kar sakta hoon?",
-      "mr": "Namaskar! Mi tumhala kashi madat karu shakto?",
-      "ta": "Vanakkam! Naangal ungalukku eppadi udhavi mudiyum?",
-      "te": "Namaskaram! Memu meeku ela sahayam cheyagalamu?",
-      "bn": "Nomoshkar! Ami apnake ki bhabe sahajjo korte pari?",
-      "gu": "Namaste! Hu tamari kem madad kari shaku?",
-      "kn": "Namaskara! Naanu nimagenu sahayavagabahudu?",
-      "ml": "Namaskaram! Enikku ningalkku engane sahayikkane?",
-      "pa": "Sat sri akal! Main tuhadi ki madad kar sakda han?",
-    };
+    // ⚡ FAST PATH: Lightweight model for non-commerce queries
+    // Uses llama-3.1-8b-instant instead of the full 70B commerce prompt.
+    // This keeps latency low (~500ms-2s vs 10s) while remaining contextual
+    // — it handles the customer's actual language, business personality,
+    // and mixed messages like "hi, are you open?" correctly.
     let aiTurnResult: UnifiedShopResponse;
     const tLlmStart = performance.now();
     if (classification.intent === "Greeting/SmallTalk") {
-      const greetingText = GREETING_TEMPLATES[detectedLanguage] || "Hello! How can I help you today?";
+      const fastReply = await generateFastReply({
+        user_message: processingText,
+        detected_language: detectedLanguage || "en",
+        business_name: companyContext?.name || "our store",
+      });
       aiTurnResult = {
-        intent_type: "Query",
+        intent_type: fastReply.intent_type as any || "Query",
         tool_call: null,
-        replyText: greetingText,
-        thread_summary: "Greeting — fast path, no LLM inference.",
+        replyText: fastReply.replyText || "Hello! How can I help you today?",
+        thread_summary: "Greeting — fast path (llama-3.1-8b-instant).",
         suggested_human_response: "",
         detected_meta: { language: detectedLanguage || "en", sentiment: "POSITIVE", confidence: 1.0 },
         extracted_order: { items: [], total_amount: 0, recipient_name: null, recipient_phone: null, address_details: { raw_input: "", house_or_plot: "", street_or_gully: "", landmark: "", city: "", state: "", pincode: "" }, needs_follow_up: false, follow_up_reason: null }
       };
-      console.log(`⚡ [Orchestrator] Greeting fast-path: lang=${detectedLanguage}, reply="${greetingText}"`);
+      console.log(`⚡ [Orchestrator] Greeting fast-path: lang=${detectedLanguage}, reply="${fastReply.replyText}"`);
     } else {
       aiTurnResult = await generateShopReply({
         tenant_id: companyId,

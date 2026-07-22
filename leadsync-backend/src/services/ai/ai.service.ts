@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import Groq from "groq-sdk";
+import nodeFetch from "node-fetch";
 import dotenv from "dotenv";
 import path from "path";
 import { getTenantContext } from "../context/tenantContext.provider";
@@ -30,7 +31,19 @@ export function getGroq(): Groq {
     if (!apiKey) {
       throw new Error("GROQ_API_KEY environment variable is required");
     }
-    groqClient = new Groq({ apiKey });
+    groqClient = new Groq({
+      apiKey,
+      fetch: async (url: any, init?: any) => {
+        const response = await nodeFetch(url, init);
+        const remaining = response.headers.get("x-ratelimit-remaining-tokens");
+        const limit = response.headers.get("x-ratelimit-limit-tokens");
+        const reset = response.headers.get("x-ratelimit-reset-tokens");
+        if (remaining !== null || limit !== null || reset !== null) {
+          console.log(`[GROQ-QUOTA] remaining=${remaining} limit=${limit} reset=${reset}`);
+        }
+        return response;
+      },
+    });
   }
   return groqClient;
 }
@@ -456,8 +469,6 @@ If the customer has not supplied a valid, clean 6-digit pincode or clear landmar
  * Securely enforces LLM response matching while guarding the context space against prompt injections.
  */
 export async function generateShopReply(payload: any): Promise<UnifiedShopResponse> {
-    const DEBUG_LOG = 'D:\\startup-backup\\startup-new\\startup\\leadsync-backend\\debug-groq.log';
-    try { require('fs').appendFileSync(DEBUG_LOG, new Date().toISOString() + ' generateShopReply CALLED\n'); } catch(e2) {}
     const context = getTenantContext();
     
     // Securely envelop dynamic client payloads inside clear XML-style tag delimiters.
@@ -532,7 +543,6 @@ ${escapeHtmlBrackets(payload.activeRules || "No custom conversational rules acti
 `.trim();
 
   try {
-    require('fs').appendFileSync('D:\\startup-backup\\startup-new\\startup\\leadsync-backend\\debug-groq.log', new Date().toISOString() + ' TRY block entered\n');
     const groq = getGroq();
     const systemPrompt = `
 ${compileDynamicOmniPrompt(ruleSegment, heuristicSegment)}
@@ -620,9 +630,7 @@ CHAT MESSAGE SENT BY CUSTOMER: "${payload.user_message}"
       errorData: err?.error || err?.data || null,
       stack: err?.stack?.split("\n").slice(0, 3).join("\n") || "no stack",
     };
-    const groqErrorStr = JSON.stringify(groqError);
-    console.error("❌ [Groq Hub] Enterprise Single-Turn Routine crashed:", groqErrorStr);
-    try { require('fs').appendFileSync('D:\\startup-backup\\startup-new\\startup\\leadsync-backend\\debug-groq.log', new Date().toISOString() + ' CATCH: ' + groqErrorStr + '\n'); } catch(e2) {}
+    console.error("❌ [Groq Hub] Enterprise Single-Turn Routine crashed:", JSON.stringify(groqError, null, 2));
     return {
       intent_type: "Support",
       tool_call: null,
@@ -632,6 +640,49 @@ CHAT MESSAGE SENT BY CUSTOMER: "${payload.user_message}"
       detected_meta: { language: "hi-IN", sentiment: "NEUTRAL", confidence: 0 },
       extracted_order: { items: [], total_amount: 0, needs_follow_up: false }
     };
+  }
+}
+
+/**
+ * ⚡ LIGHTWEIGHT FAST-PATH REPLY GENERATOR (model tiering)
+ * Uses llama-3.1-8b-instant (fast/cheap) for Greeting/SmallTalk intents.
+ * Avoids the 10s overhead of the full 70B commerce prompt for simple messages.
+ * Still generates real, contextual responses — not static templates.
+ */
+export async function generateFastReply(payload: {
+  user_message: string;
+  detected_language: string;
+  business_name: string;
+}): Promise<{ replyText: string; intent_type: string }> {
+  const groq = getGroq();
+  const langPrompt = payload.detected_language && payload.detected_language !== "en"
+    ? `The customer's language is "${payload.detected_language}". Reply in their language.`
+    : "Reply in English.";
+
+  const systemPrompt = `You are a friendly conversational commerce assistant for ${payload.business_name}.
+Keep replies short, warm, and natural — 1-2 sentences max.
+Do NOT mention products, orders, or pricing unless the customer asks about them.
+${langPrompt}
+
+Return a JSON object: { "replyText": "your reply here", "intent_type": "Query" | "Support" | "Checkout" }`;
+
+  const userPrompt = `Customer message: "${payload.user_message}"`;
+
+  try {
+    const result = await groq.chat.completions.create({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      model: "llama-3.1-8b-instant",
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+    });
+    const text = result.choices[0]?.message?.content || "{}";
+    return JSON.parse(text);
+  } catch (err: any) {
+    console.error("❌ [FastPath] Lightweight reply failed:", err?.message || String(err));
+    return { replyText: "Hello! How can I help you today?", intent_type: "Query" };
   }
 }
 
