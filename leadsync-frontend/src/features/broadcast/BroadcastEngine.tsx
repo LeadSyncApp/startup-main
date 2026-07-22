@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
+import { authedFetch } from '../../api/client';
 
 interface Broadcast {
   id: string;
@@ -36,11 +37,7 @@ export const BroadcastEngine: React.FC = () => {
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/broadcasts', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await authedFetch('/api/broadcasts');
       if (response.ok) {
         const data = await response.json();
         setBroadcasts(data);
@@ -67,11 +64,10 @@ export const BroadcastEngine: React.FC = () => {
 
     setSending(true);
     try {
-      const response = await fetch('/api/broadcasts', {
+      const response = await authedFetch('/api/broadcasts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
           title: title || 'Quick Update',

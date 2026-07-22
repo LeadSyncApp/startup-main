@@ -18,6 +18,7 @@ import {
   Check,
   FileText
 } from "lucide-react";
+import { authedFetch } from "../../api/client";
 
 export interface ProductVariantData {
   attribute_name: string;
@@ -43,6 +44,7 @@ export interface ProductData {
   categories?: string[];
   imageUrl?: string | null;
   images?: any[];
+  customFieldValues?: Record<string, any>;
 }
 
 interface IntakeResponse {
@@ -77,7 +79,7 @@ export function InventoryIntakeScreen({ companyId, onProceedToConfirm }: Invento
     setError(null);
 
     try {
-      const response = await fetch(`/api/companies/${companyId}/inventory/parse`, {
+      const response = await authedFetch(`/api/companies/${companyId}/inventory/parse`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, language })

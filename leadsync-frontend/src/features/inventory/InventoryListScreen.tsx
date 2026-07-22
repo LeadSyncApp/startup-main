@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { InventoryStatsHeader } from "./components/InventoryStatsHeader";
 import { ProductDetailModal } from "./components/ProductDetailModal";
+import { authedFetch } from "../../api/client";
 
 interface ProductVariant {
   id: string;
@@ -146,7 +147,7 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
     setError(null);
 
     try {
-      const response = await fetch(`/api/companies/${companyId}/inventory`);
+      const response = await authedFetch(`/api/companies/${companyId}/inventory`);
       if (!response.ok) throw new Error("Failed to fetch products");
       const data: InventoryListResponse = await response.json();
       setProducts(data.products);
@@ -161,7 +162,7 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
   const handleDeleteProduct = async (productId: string) => {
     setIsDeleting(true);
     try {
-      const response = await fetch(`/api/companies/${companyId}/inventory/${productId}`, {
+      const response = await authedFetch(`/api/companies/${companyId}/inventory/${productId}`, {
         method: "DELETE",
       });
       if (!response.ok) {
