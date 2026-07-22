@@ -3,9 +3,12 @@ import { pgBossService } from "../infrastructure/pgboss/pgboss.service";
 import { prisma, getTenantPrismaContext } from "../../lib/prisma";
 import { ConcurrencyLock } from "../../utils/concurrencyLock";
 import { outboundDispatcherService } from "../outbound.dispatcher";
+import { TelegramTransportService } from "../transport/telegramTransport.service";
+import { decryptSecret } from "../../utils/encryption";
 import { Channel, MessageSender, ConversationStatus } from "@prisma/client";
 import { generateShopReply, classifyMessageIntentWithTimeout, PreFlightClassification } from "../ai/ai.service";
-import { retrieveProductChunks, retrieveSimilarChunks, RetrievedChunk } from "../knowledge/knowledgeRetriever.service";
+import { retrieveSimilarChunks } from "../knowledge/knowledgeRetriever.service";
+import { matchProductForMessage } from "../knowledge/productMatch.service";
 import { StandardMessageFrame } from "../../interfaces/messaging.interface";
 import { tenantContextStorage, TenantContext } from "../context/tenantContext.provider";
 import { safeEmitConversationUpdate, emitToConversation, getIO } from "../../lib/socket";
@@ -16,6 +19,12 @@ import { ChannelType } from "../../interfaces/outbound.interface";
 import { reapGhostsForCompany } from "../infrastructure/ghostReaper.service";
 import { newOrderArrivalService } from "../workflow/newOrderArrival.service";
 import { getActiveDraftOrder, syncDraftOrderFromAi, confirmActiveDraftOrder, syncLeadPendingOrderState } from "../draftOrder/draftOrder.service";
+
+// TEMP: Profiling — log elapsed from entry at each major boundary
+let PROFILE_START = 0;
+function P(label: string): void {
+  console.log(`[Profiler] ${label}: +${Date.now() - PROFILE_START}ms`);
+}
 
 export function evaluateTenantPriorityRules(aiOutput: any, rules: TenantContext["priorityRules"]): string {
   if (!rules || rules.length === 0) {
@@ -32,7 +41,159 @@ export function evaluateTenantPriorityRules(aiOutput: any, rules: TenantContext[
   return "STANDARD";
 }
 
+// In-memory lock map to prevent race conditions during first-touch lead/conversation creation
+const firstTouchLeadLocks = new Map<string, Promise<any>>();
+
+async function resolveOrCreateLeadAndConversation(
+  companyId: string,
+  contact: string,
+  channel: Channel,
+  contactName: string,
+  existingLead: any,
+  tenantPrisma: any
+): Promise<{ lead: any; conversation: any }> {
+  P("fast-path resolveOrCreate: entry");
+  // Fast Path: Existing lead with an active conversation (99%+ of messages)
+  if (existingLead) {
+    P("fast-path resolveOrCreate: existingLead check entered");
+    const activeConv = (existingLead.conversations || []).find(
+      (c: any) => c.lifecycleStatus === "active" || !c.lifecycleStatus
+    );
+    P(`fast-path resolveOrCreate: existingLead conversations length=${existingLead.conversations?.length ?? 0}, activeConv found=${!!activeConv}`);
+    if (activeConv) {
+      P("fast-path resolveOrCreate: returning early with activeConv from existingLead");
+      return { lead: existingLead, conversation: activeConv };
+    }
+  }
+
+  P("fast-path resolveOrCreate: checking firstTouchLeadLocks");
+  // First-touch or returning customer needing conversation thread creation
+  const lockKey = `first-touch:${companyId}:${contact}:${channel}`;
+  if (firstTouchLeadLocks.has(lockKey)) {
+    P("fast-path resolveOrCreate: lock hit, awaiting existing promise");
+    return await firstTouchLeadLocks.get(lockKey);
+  }
+
+  P("fast-path resolveOrCreate: creating resolvePromise");
+  const resolvePromise = (async () => {
+    try {
+      P("fast-path resolveOrCreate: resolvePromise start - before prisma.lead.findUnique");
+      // Re-check DB inside lock to guarantee no concurrent creation
+      let lead = await prisma.lead.findUnique({
+        where: { contact_channel_companyId: { contact, channel, companyId } },
+        include: {
+          conversations: { where: { companyId, deletedAt: null }, orderBy: { updatedAt: "desc" }, take: 5 }
+        }
+      });
+      P(`fast-path resolveOrCreate: after prisma.lead.findUnique (lead exists=${!!lead})`);
+
+      P("fast-path resolveOrCreate: finding activeConv and hasArchivedHistory");
+      const activeConv = (lead?.conversations || []).find(
+        (c: any) => c.lifecycleStatus === "active" || !c.lifecycleStatus
+      );
+      const hasArchivedHistory = (lead?.conversations || []).some(
+        (c: any) => c.lifecycleStatus === "archived"
+      );
+      P(`fast-path resolveOrCreate: activeConv=${!!activeConv}, hasArchivedHistory=${hasArchivedHistory}`);
+
+      if (!lead) {
+        P("fast-path resolveOrCreate: before tenantPrisma.lead.create");
+        try {
+          lead = await tenantPrisma.lead.create({
+            data: { companyId, contact, channel, name: contactName || "User" }
+          });
+        } catch (createErr: any) {
+          if (createErr.code === "P2002") {
+            console.warn(`⚠️ [Orchestrator] P2002 race on lead create (${contact}:${channel}:${companyId}) — re-fetching`);
+            lead = await prisma.lead.findUnique({
+              where: { contact_channel_companyId: { contact, channel, companyId } },
+              include: {
+                conversations: { where: { companyId, deletedAt: null }, orderBy: { updatedAt: "desc" }, take: 5 }
+              }
+            });
+            if (!lead) throw createErr;
+          } else {
+            throw createErr;
+          }
+        }
+        P("fast-path resolveOrCreate: after tenantPrisma.lead.create");
+      } else if (contactName && lead.name !== contactName) {
+        P("fast-path resolveOrCreate: before tenantPrisma.lead.update");
+        lead = await tenantPrisma.lead.update({
+          where: { id: lead.id },
+          data: { name: contactName }
+        });
+        P("fast-path resolveOrCreate: after tenantPrisma.lead.update");
+      } else {
+        P("fast-path resolveOrCreate: lead exists and name matches");
+      }
+
+      let conversation = activeConv || null;
+      if (!conversation) {
+        // Re-check DB for an active conversation created by a concurrent process
+        const freshActive = await tenantPrisma.conversation.findFirst({
+          where: { leadId: lead!.id, companyId, deletedAt: null, lifecycleStatus: "active" },
+          orderBy: { updatedAt: "desc" },
+          include: { lead: true }
+        });
+        if (freshActive) {
+          conversation = freshActive;
+          P("fast-path resolveOrCreate: found active conversation created by concurrent process");
+        } else {
+          P("fast-path resolveOrCreate: before tenantPrisma.conversation.create");
+          conversation = await tenantPrisma.conversation.create({
+            data: {
+              channel,
+              companyId,
+              status: ConversationStatus.OPEN,
+              leadId: lead!.id,
+              isReturningCustomer: hasArchivedHistory
+            },
+            include: { lead: true }
+          });
+          P("fast-path resolveOrCreate: after tenantPrisma.conversation.create");
+
+          P("fast-path resolveOrCreate: before pgboss ai-triage-job send");
+          try {
+            pgBossService.getBoss().send(
+              "ai-triage-job",
+              { conversationId: conversation!.id, companyId },
+              { startAfter: 5 }
+            ).catch(() => {});
+          } catch (err) {}
+          P("fast-path resolveOrCreate: after pgboss ai-triage-job send");
+
+          P("fast-path resolveOrCreate: before socket io emit");
+          try {
+            const io = getIO();
+            if (io) {
+              io.to(`company:${companyId}`).emit("conversation:new", {
+                conversationId: conversation!.id,
+                isReturningCustomer: hasArchivedHistory
+              });
+            }
+          } catch (err) {}
+          P("fast-path resolveOrCreate: after socket io emit");
+        }
+      }
+
+      P("fast-path resolveOrCreate: resolvePromise end");
+      return { lead, conversation };
+    } finally {
+      P("fast-path resolveOrCreate: finally cleaning up lock map key");
+      firstTouchLeadLocks.delete(lockKey);
+    }
+  })();
+
+  firstTouchLeadLocks.set(lockKey, resolvePromise);
+  P("fast-path resolveOrCreate: awaiting resolvePromise");
+  const res = await resolvePromise;
+  P("fast-path resolveOrCreate: resolvePromise returned");
+  return res;
+}
+
 export async function processWebhookJob(job: { id: string; data: StandardMessageFrame }) {
+  PROFILE_START = Date.now();
   const incomingId = job.id;
   const frame = job.data;
   const companyId = frame.companyId;
@@ -42,6 +203,136 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
   if (!companyId || typeof companyId !== "string" || companyId.trim() === "") {
     console.error(`🚨 [Security Exception] Webhook ${incomingId} execution aborted: Lacks a valid bound companyId.`);
     throw new Error("Multi-Tenant Security Exception: Missing active tenant binding.");
+  }
+
+  const rawInputText = (frame.isCallback ? (frame.callbackData || "") : (frame.text || "")).trim();
+
+  // ⚡ Fast-path short circuit for simple messages (greetings, acknowledgments, farewells, yes/no)
+  // Evaluated at entry before heavy DB joins or locks. Completely skips ConcurrencyLock.
+  const FAST_PATH_PATTERNS = [
+    { pattern: /^(hi|hello|hey|hey there|helloo|howdy|good morning|good afternoon|good evening)$/i, category: "greeting" },
+    { pattern: /^(ok|okay|k|got it|sure|thanks|thank you|ty|thx|thankyou|okie|okies)$/i, category: "acknowledgment" },
+    { pattern: /^(bye|goodbye|cya|see you|see ya|take care|talk later|gotta go)$/i, category: "farewell" },
+    { pattern: /^(yes|no|yeah|nope|yep|nah|yup|nahi|haan|haa)$/i, category: "yesno" },
+  ];
+  const FAST_PATH_RESPONSES: Record<string, string[]> = {
+    greeting: ["Hello! How can I help you today?", "Hi there! What can I do for you?", "Hey! How can I assist you?"],
+    acknowledgment: ["You're welcome! Let me know if you need anything else.", "Happy to help! Anything else?", "Got it! Feel free to ask if you have more questions."],
+    farewell: ["Goodbye! Have a great day!", "Take care! Reach out anytime.", "Bye! See you next time!"],
+    yesno: ["I see. Could you tell me more about what you'd like to order?", "Alright! Let me know how I can help.", "Thanks for letting me know! Can I help with anything else?"],
+  };
+
+  let fastPathCategory: string | null = null;
+  let fastPathResponse: string | null = null;
+  for (const entry of FAST_PATH_PATTERNS) {
+    if (entry.pattern.test(rawInputText)) {
+      fastPathCategory = entry.category;
+      const responses = FAST_PATH_RESPONSES[entry.category];
+      fastPathResponse = responses[Math.floor(Math.random() * responses.length)];
+      break;
+    }
+  }
+
+  if (fastPathResponse) {
+    P("fast-path matched");
+    console.log(`[Orchestrator] ⚡ Fast path triggered (${fastPathCategory}): "${rawInputText}"`);
+
+    const contact = frame.externalChatId.trim();
+    const tenantPrisma = getTenantPrismaContext(companyId);
+
+    P("fast-path starting lead lookup");
+    const tStartLead = performance.now();
+
+    const existingLead = await prisma.lead.findUnique({
+      where: {
+        contact_channel_companyId: {
+          contact,
+          channel: frame.channel,
+          companyId
+        }
+      },
+      select: {
+        id: true,
+        name: true,
+        conversations: {
+          where: { companyId, deletedAt: null },
+          select: { id: true, mode: true, lifecycleStatus: true },
+          orderBy: { updatedAt: "desc" },
+          take: 1
+        }
+      }
+    });
+
+    const tEndLead = performance.now();
+    console.log(`[Profiler] Single-roundtrip lead+conv query duration: ${Math.round(tEndLead - tStartLead)}ms`);
+
+    P("fast-path existingLead query done");
+
+    P("fast-path before calling resolveOrCreateLeadAndConversation");
+    const { lead, conversation } = await resolveOrCreateLeadAndConversation(
+      companyId,
+      contact,
+      frame.channel,
+      frame.contactName || "User",
+      existingLead,
+      tenantPrisma
+    );
+    P("fast-path after calling resolveOrCreateLeadAndConversation");
+
+    P("fast-path conv ready");
+
+    if ((conversation as any).mode === "HUMAN") {
+      console.log(`🤚 [Orchestrator] Conversation ${conversation.id} is in HUMAN mode — skipping fast-path auto-reply.`);
+      const clientMsg = await tenantPrisma.message.create({
+        data: { companyId, conversationId: conversation.id, content: rawInputText, sender: MessageSender.CLIENT }
+      });
+      emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
+      return { skipped: true, reason: "HUMAN_MODE" };
+    }
+
+    P("fast-path dispatching");
+
+    const activeContext: TenantContext = {
+      companyId,
+      currencyCode: "USD",
+      currencySymbol: "$",
+      timezone: "UTC",
+      priorityRules: null,
+      templates: {},
+      aiModelTarget: "llama-3.3-70b-versatile",
+      outputProtocolSchema: "JSON_ONLY",
+      intentMatrix: undefined,
+      localizedHeuristics: undefined,
+      businessRulesSchema: undefined
+    };
+
+    // 1. Create client inbound message record
+    const clientMsg = await tenantPrisma.message.create({
+      data: { companyId, conversationId: conversation.id, content: rawInputText, sender: MessageSender.CLIENT }
+    });
+
+    // 2. Dispatch outbound reply to external channel asynchronously (does not block job completion on network RTT)
+    tenantContextStorage.run(activeContext, () => {
+      outboundDispatcherService.sendMessageFrame(
+        frame.channel as any,
+        frame.externalChatId,
+        conversation.id,
+        { bodyText: fastPathResponse, interactivePayload: null, replyMarkup: undefined },
+        "BOT"
+      ).catch((err) => console.error(`[Orchestrator] Fast-path dispatch failed for ${conversation.id}:`, err));
+    });
+
+    P("fast-path dispatch done");
+
+    emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
+    safeEmitConversationUpdate(conversation, "conversation_updated", {
+      conversationId: conversation.id,
+      lastContent: fastPathResponse,
+      updatedAt: new Date().toISOString(),
+    });
+
+    P("fast-path complete");
+    return { fast_path: true, category: fastPathCategory, response: fastPathResponse } as any;
   }
 
   const [companyContext, existingLead] = await Promise.all([
@@ -57,7 +348,41 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     })
   ]);
 
+  P("company+lead Promise.all done");
   if (!companyContext) throw new Error(`Routing Exception: No tenant registered for ID ${companyId}`);
+
+  // Pre-warm bot token cache from company data so dispatch doesn't need another DB call
+  if ((companyContext as any).telegramBotToken) {
+    const decryptedBotToken = decryptSecret((companyContext as any).telegramBotToken);
+    if (decryptedBotToken) {
+      TelegramTransportService.preWarmBotToken(companyId, decryptedBotToken);
+    }
+  }
+
+  // Start rules loading NOW — in parallel with lead resolution — instead of waiting
+  const rulesLoadPromise = (async (): Promise<any[]> => {
+    const rulesCacheKey = `rules:${companyId}`;
+    const cachedRules = rulesCache.get(rulesCacheKey);
+    if (cachedRules && Date.now() - cachedRules.cachedAt < RULES_CACHE_TTL) {
+      return cachedRules.rules;
+    }
+    const rules = await prisma.conversationalRule.findMany({
+      where: {
+        companyId,
+        isEnabled: true,
+        AND: [
+          { OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }] },
+          { OR: [{ groupId: null }, { group: { isEnabled: true } }] },
+        ],
+      },
+      select: {
+        id: true, name: true, triggerKeywords: true, triggerType: true, conditions: true,
+        templateBody: true, useAI: true, brandVoice: true, targetLanguage: true, sourcePrompt: true,
+      },
+    });
+    rulesCache.set(rulesCacheKey, { rules, cachedAt: Date.now() });
+    return rules;
+  })();
 
   const config = (companyContext.botConfiguration as any) || {};
   const activeContext: TenantContext = {
@@ -79,107 +404,37 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     const channel = frame.channel;
     const text = (frame.text || "").trim();
 
-    // 🧹 Realtime ghost sweep — fire-and-forget. Any ghost conversations in
-    // this tenant (orphan / null-name lead, zero messages, stale) are
-    // soft-deleted before this webhook can interact with them. The 15m
-    // interval sweep is the safety net for tenants with no inbound traffic.
+    // 🧹 Realtime ghost sweep — fire-and-forget.
     reapGhostsForCompany(companyContext.id).catch((err) =>
       console.error("[Orchestrator] Ghost sweep failed:", err)
     );
 
-    // Returning customer logic: if the lead has any archived conversation, the
-    // new inbound message should start a fresh thread rather than reusing an
-    // already-completed conversation. Active conversations are still reused.
-    //
-    // Concurrency: this block MUST run under a lock keyed by the lead. Two
-    // near-simultaneous inbound messages for the same returning lead can
-    // otherwise both pass the `if (!conversation)` check and create duplicate
-    // threads. The per-conversation locks used later in this worker cannot
-    // protect the create path because the conversation ID does not exist
-    // until after `conversation.create`. We therefore key the lock on the
-    // lead ID (or a deterministic placeholder for first-touch leads) and
-    // re-check inside the lock whether a concurrent webhook just created
-    // the lead or an active conversation while we were waiting.
     const contact = frame.externalChatId.trim();
-    const leadLockKey = existingLead?.id
-      ? `lead:${existingLead.id}`
-      : `lead-pending:${companyContext.id}:${contact}:${frame.channel}`;
 
-    let conversation: any = null;
-    let lead: any = existingLead;
+    // ⚡ Fast, protected Lead & Conversation resolution
+    const { lead, conversation: initialConversation } = await resolveOrCreateLeadAndConversation(
+      companyContext.id,
+      contact,
+      channel,
+      frame.contactName || "User",
+      existingLead,
+      tenantPrisma
+    );
 
-    await ConcurrencyLock.withConversationLock(leadLockKey, async () => {
-      let freshExistingLead: any = null;
-      try {
-        freshExistingLead = await prisma.lead.findFirst({
-          where: { companyId: companyContext.id, contact, channel },
-          include: {
-            conversations: { where: { companyId, deletedAt: null }, orderBy: { updatedAt: "desc" }, take: 5 },
-          },
-        });
-      } catch (err) {
-        console.error("[Orchestrator] lead re-check inside lock failed:", err);
-      }
+    let conversation: any = initialConversation;
 
-      const localActiveConv = (freshExistingLead?.conversations || []).find(
-        (c: any) => c.lifecycleStatus === "active" || !c.lifecycleStatus
-      ) as any | undefined;
-      const localHasArchivedHistory = (freshExistingLead?.conversations || []).some(
-        (c: any) => c.lifecycleStatus === "archived"
-      );
+    // Start messages + draft order fetch immediately after conversation ID is known
+    // (parallel with surface bypass, rules, and language detection)
+    const messagesDraftPromise = Promise.all([
+      tenantPrisma.message.findMany({
+        where: { conversationId: conversation.id },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+      getActiveDraftOrder(companyId, conversation.id),
+    ]);
 
-      let localConversation: any = localActiveConv || null;
-      let localLead: any = freshExistingLead;
-
-      if (!localConversation) {
-        let newLead = freshExistingLead;
-        if (!newLead) {
-          newLead = await tenantPrisma.lead.create({
-            data: { companyId: companyContext.id, contact, channel, name: frame.contactName || "User" },
-          });
-        } else if (frame.contactName) {
-          newLead = await tenantPrisma.lead.update({ where: { id: newLead.id }, data: { name: frame.contactName } });
-        }
-        localLead = newLead;
-        localConversation = await tenantPrisma.conversation.create({
-          data: {
-            channel: frame.channel,
-            companyId: companyContext.id,
-            status: ConversationStatus.OPEN,
-            leadId: newLead.id,
-            isReturningCustomer: localHasArchivedHistory,
-          },
-          include: { lead: true },
-        });
-
-        pgBossService.getBoss().send(
-          "ai-triage-job",
-          { conversationId: localConversation.id, companyId: companyContext.id },
-          { startAfter: 5 }
-        );
-
-        try {
-          const io = getIO();
-          if (io) {
-            io.to(`company:${companyContext.id}`).emit("conversation:new", {
-              conversationId: localConversation.id,
-              isReturningCustomer: localHasArchivedHistory,
-            });
-          }
-        } catch (err) {
-          console.error("[Orchestrator] Failed to emit conversation:new:", err);
-        }
-      } else if (localHasArchivedHistory && !localConversation.isReturningCustomer) {
-        await tenantPrisma.conversation.update({
-          where: { id: localConversation.id },
-          data: { isReturningCustomer: true },
-        });
-      }
-
-      conversation = localConversation;
-      lead = localLead;
-    });
-
+    P("lead lock RELEASED (conv ready)");
     // Note: Platform-native command handling was removed — no StandardMessageFrame
     // construction site ever populated isPlatformCommand/rawPayload.
 
@@ -192,15 +447,18 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     const complaintKeywords = ["cancel", "refund", "complaint", "angry", "wrong", "terrible", "bad", "stop", "ridiculous", "issue", "problem"];
     const isComplaintSignal = complaintKeywords.some(kw => (processingText || "").toLowerCase().includes(kw));
 
+    P("mode check passed (BOT)");
     if (!isRecentlyTriaged || isComplaintSignal) {
       console.log(`[Orchestrator] 🧠 Triggering ai-triage-job (recentlyTriaged=${!!isRecentlyTriaged}, isComplaintSignal=${isComplaintSignal})`);
-      pgBossService.getBoss().send(
-        "ai-triage-job",
-        { conversationId: conversation.id, companyId: companyContext.id },
-        isComplaintSignal
-          ? { startAfter: 1 }
-          : { startAfter: 2, singletonKey: `triage-${conversation.id}`, singletonSeconds: 30 }
-      );
+      try {
+        pgBossService.getBoss().send(
+          "ai-triage-job",
+          { conversationId: conversation.id, companyId: companyContext.id },
+          isComplaintSignal
+            ? { startAfter: 1 }
+            : { startAfter: 2, singletonKey: `triage-${conversation.id}`, singletonSeconds: 30 }
+        ).catch(() => {});
+      } catch (err) {}
     }
 
     // ✅ AI gate: only auto-reply when the conversation is in BOT mode.
@@ -232,21 +490,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       return { skipped: true, reason: "HUMAN_MODE" };
     }
 
-    // 🧠 Phase 2: Evaluate conversational smart rules against the inbound message
-    // Always re-load latest assignment state before any socket/inbox updates.
-    // Keep strict-null-safety: `findFirst` can return null.
-    const freshConversation = await tenantPrisma.conversation.findFirst({
-      where: { id: conversation.id, companyId, deletedAt: null },
-      select: { id: true, companyId: true, claimedById: true },
-    });
-
-    if (!freshConversation) {
-      console.error(`[OrchestratorWorker] Conversation missing or soft-deleted after reload: ${conversation.id}`);
-      return { skipped: true, reason: "CONVERSATION_SOFT_DELETED" };
-    }
-
-    conversation = freshConversation as any;
-
+    P("conversation already resolved (no reload needed)");
     // ── Phase 1.5: Tapped-button / slash-command bypass ──
     // A tapped inline button (callback_query) carries the rule id in callback_data.
     // A typed "/command" resolves to a surfaced rule. Either way we execute the
@@ -406,42 +650,10 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       }
     }
 
-    // Load active rules to use for BOTH rule matching AND AI context
-    const activeConversationalRules = await prisma.conversationalRule.findMany({
-      where: {
-        companyId,
-        isEnabled: true,
-        AND: [
-          {
-            OR: [
-              { expiresAt: null },
-              { expiresAt: { gte: new Date() } },
-            ],
-          },
-          {
-            // Cascading disable: skip rules whose flow (RuleGroup) is disabled.
-            OR: [
-              { groupId: null },
-              { group: { isEnabled: true } },
-            ],
-          },
-        ],
-      },
-      select: {
-        id: true,
-        name: true,
-        triggerKeywords: true,
-        triggerType: true,
-        conditions: true,
-        templateBody: true,
-        useAI: true,
-        brandVoice: true,
-        targetLanguage: true,
-        sourcePrompt: true,
-      },
-    });
+    // Rules were loaded in parallel with lead resolution — just await the promise
+    const activeConversationalRules = await rulesLoadPromise;
 
-    // Build a text summary of active rules to feed to the main AI as context
+    P("rules loaded");
     const rulesAsContext = activeConversationalRules.length > 0
       ? activeConversationalRules.map(r => {
           if (r.useAI) {
@@ -451,56 +663,6 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
           }
         }).join("\n")
       : "No custom conversational rules active.";
-
-    // ⚡ Fast-path: short-circuit simple messages (greetings, acknowledgments, farewells, yes/no)
-    // Precise anchored regexes avoid false positives on longer messages that merely contain these words.
-    const FAST_PATH_PATTERNS = [
-      { pattern: /^(hi|hello|hey|hey there|helloo|howdy|good morning|good afternoon|good evening)$/i, category: "greeting" },
-      { pattern: /^(ok|okay|k|got it|sure|thanks|thank you|ty|thx|thankyou|okie|okies)$/i, category: "acknowledgment" },
-      { pattern: /^(bye|goodbye|cya|see you|see ya|take care|talk later|gotta go)$/i, category: "farewell" },
-      { pattern: /^(yes|no|yeah|nope|yep|nah|yup|nahi|haan|haa)$/i, category: "yesno" },
-    ];
-    const FAST_PATH_RESPONSES: Record<string, string[]> = {
-      greeting: ["Hello! How can I help you today?", "Hi there! What can I do for you?", "Hey! How can I assist you?"],
-      acknowledgment: ["You're welcome! Let me know if you need anything else.", "Happy to help! Anything else?", "Got it! Feel free to ask if you have more questions."],
-      farewell: ["Goodbye! Have a great day!", "Take care! Reach out anytime.", "Bye! See you next time!"],
-      yesno: ["I see. Could you tell me more about what you'd like to order?", "Alright! Let me know how I can help.", "Thanks for letting me know! Can I help with anything else?"],
-    };
-    const trimmedInput = (processingText || "").trim();
-    let fastPathCategory: string | null = null;
-    let fastPathResponse: string | null = null;
-    for (const entry of FAST_PATH_PATTERNS) {
-      if (entry.pattern.test(trimmedInput)) {
-        fastPathCategory = entry.category;
-        const responses = FAST_PATH_RESPONSES[entry.category];
-        fastPathResponse = responses[Math.floor(Math.random() * responses.length)];
-        break;
-      }
-    }
-    if (fastPathResponse) {
-      console.log(`[Orchestrator] ⚡ Fast path triggered (${fastPathCategory}): "${trimmedInput}"`);
-      await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
-        const clientMsg = await tx.message.create({
-          data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
-        });
-        emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
-        await tx.lead.update({ where: { id: lead.id }, data: { lastActiveAt: new Date() } });
-        await tx.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } });
-      });
-      await outboundDispatcherService.sendMessageFrame(
-        frame.channel as any,
-        frame.externalChatId,
-        conversation.id,
-        { bodyText: fastPathResponse, interactivePayload: null, replyMarkup: undefined },
-        "BOT"
-      );
-      safeEmitConversationUpdate(conversation, "conversation_updated", {
-        conversationId: conversation.id,
-        lastContent: fastPathResponse,
-        updatedAt: new Date().toISOString(),
-      });
-      return { fast_path: true, category: fastPathCategory, response: fastPathResponse } as any;
-    }
 
     // Phase 2a: Start language detection in parallel with rule matching (both only need processingText)
     // detectLanguage always returns a result (never throws — falls back to Unicode on API failure)
@@ -525,8 +687,8 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
           console.log(`[Orchestrator] ✅ Rule matched: "${ruleResult.ruleName}" — AI reply skipped, rule response sent.`);
           ruleMatched = true;
 
+          P("rule evaluation matched");
           // Still log the customer message and update conversation state
-          // But DON'T send a second AI reply — the rule already handled it
           await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
             const clientMsg = await tx.message.create({
               data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
@@ -538,6 +700,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
               data: { updatedAt: new Date() }
             });
           });
+          P("rule-matched msg persistence done");
 
           safeEmitConversationUpdate(conversation, "conversation_updated", {
             conversationId: conversation.id,
@@ -550,25 +713,22 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         console.error(`[Orchestrator] Conversational rule evaluation failed: ${err.message}`);
         // Fall through to main AI if rule evaluation errors
       }
+      P("rule evaluation done (no match or fall through)");
     }
 
     // Phase 2b: Await language detection (started in parallel with rule matching, likely already resolved)
     const detectedLanguage = (await langPromise).language;
+    P("lang detection awaited");
 
     // Retrieve product chunks or policy chunks based on pre-flight intent classification
     let menuSnapshotForAi = config?.botStructuredMenu;
+    let triageMatchedProduct: any = null;
     const totalPipelineStart = Date.now();
     let classificationTime = 0;
 
-    // Parallel fetch: messages (shared by classification + conversation history) and draft order (independent)
-    const [recentMessagesDesc, activeDraftOrder] = await Promise.all([
-      tenantPrisma.message.findMany({
-        where: { conversationId: conversation.id },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      }),
-      getActiveDraftOrder(companyId, conversation.id),
-    ]);
+    // Messages + draft order were fetched in parallel with surface bypass / rules — await
+    const [recentMessagesDesc, activeDraftOrder] = await messagesDraftPromise;
+    P("Promise.all messages+draft done");
 
     if (processingText) {
       // 1. Build thread history for classification context (most recent 6 messages, chronological)
@@ -584,25 +744,30 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       }
 
       // 2. Run pre-flight classifier
+      P("before intent classification");
       const startClassificationTime = Date.now();
       const classification = await classifyMessageIntentWithTimeout(processingText, threadHistoryStr, 2000);
       classificationTime = Date.now() - startClassificationTime;
 
+      P(`after intent classification (${classification.intent}, ${classification.inquiryType || "N/A"})`);
       console.log(`⚙️ [Orchestrator Intent] "${processingText}" → Classified as: ${classification.intent} (${classification.inquiryType || "N/A"})`);
 
       // 3. Conditional context injection based on classified intent
+      P("before RAG context retrieval");
       if (classification.intent === "ProductInquiry") {
         if (classification.inquiryType === "specific") {
-          // Specific Query -> narrow RAG semantic match
-          const matchingProducts = await retrieveProductChunks(companyId, processingText, 5);
-          console.log(`[Orchestrator RAG] Narrow retrieval match size: ${matchingProducts.length}`);
-          if (matchingProducts.length > 0) {
-            menuSnapshotForAi = "Available products:\n" + matchingProducts.map((p) => `- ${p.content}`).join("\n");
+          triageMatchedProduct = await matchProductForMessage(companyId, processingText);
+          if (triageMatchedProduct) {
+            const tier = triageMatchedProduct.confidenceTier;
+            const stockNote = triageMatchedProduct.stockStatus === "OUT_OF_STOCK" ? " (OUT OF STOCK)" : triageMatchedProduct.stockStatus === "LOW_STOCK" ? " (LOW STOCK)" : "";
+            const tierNote = tier === "LOW" ? " (UNVERIFIED — ask customer to confirm)" : "";
+            menuSnapshotForAi = `Matched Product: ${triageMatchedProduct.name}${triageMatchedProduct.variant ? ` (${triageMatchedProduct.variant})` : ""} — Confidence: ${tier}${tierNote}${stockNote}`;
+            console.log(`[Orchestrator RAG] Specific match: ${triageMatchedProduct.name} (${tier})`);
           } else {
             menuSnapshotForAi = "No matching products found.";
+            console.log(`[Orchestrator RAG] Specific match: none (null)`);
           }
         } else {
-          // General Query -> broader DB lookup (cached 60s) showing multiple relevant active products
           try {
             const cached = productMenuCache.get(companyId);
             if (cached && Date.now() - cached.cachedAt < PRODUCT_MENU_CACHE_TTL) {
@@ -638,7 +803,6 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
           }
         }
       } else if (classification.intent === "Support/Policy") {
-        // Support/Policy Query -> policy-only lookup
         try {
           const policyChunks = await retrieveSimilarChunks(companyId, processingText, 5, "POLICY");
           console.log(`[Orchestrator RAG] Policy retrieval size: ${policyChunks.length}`);
@@ -652,13 +816,11 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
           menuSnapshotForAi = config?.botPolicies || "No specific policy guidelines registered.";
         }
       } else {
-        // Greeting/SmallTalk, OrderRelated, Other -> zero product catalog injection
         menuSnapshotForAi = "";
         console.log(`[Orchestrator RAG] Skipping product catalog lookup for intent "${classification.intent}"`);
       }
+      P("after RAG context retrieval");
     }
-
-
 
     // Conversation memory window from shared 10-message fetch (chronological order)
     const conversationHistory = [...recentMessagesDesc].reverse().map((m: any) => ({
@@ -666,19 +828,25 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       content: m.content
     }));
 
+    P("before generateShopReply LLM call");
+    const tLlmStart = performance.now();
     const aiTurnResult = await generateShopReply({
       tenant_id: companyId,
       user_message: processingText,
       session_state: (conversation as any)?.sessionState || {},
       menu_snapshot: menuSnapshotForAi,
+      matched_product: triageMatchedProduct,
       detected_language: detectedLanguage,
       activeRules: rulesAsContext,
       conversation_history: conversationHistory,
       active_draft_order: activeDraftOrder,
     });
+    const tLlmEnd = performance.now();
+    P(`after generateShopReply LLM call (took ${Math.round(tLlmEnd - tLlmStart)}ms)`);
 
     const totalPipelineDuration = Date.now() - totalPipelineStart;
     console.log(`⏱️ [Pipeline Latency] Intent classifier: ${classificationTime}ms, Total: ${totalPipelineDuration}ms (including main generation)`);
+    P("AI gen done — Pipeline Latency logged");
 
     const sessionStateObj: any = (conversation as any)?.sessionState || {};
     const cartItemsCount = sessionStateObj.cart?.items?.length || 0;
@@ -690,89 +858,128 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     const sentimentScoreMap: Record<string, number> = { "POSITIVE": 1, "NEUTRAL": 0, "NEGATIVE": -1 };
     const resolvedScore = sentimentScoreMap[detected_meta?.sentiment] ?? 0;
 
-    // 🛒 Sync / Update DraftOrder from AI extracted order output
-    let syncedDraft: any = null;
-    if (aiTurnResult?.extracted_order && Array.isArray(aiTurnResult.extracted_order.items) && aiTurnResult.extracted_order.items.length > 0) {
-      syncedDraft = await syncDraftOrderFromAi({
-        companyId,
-        conversationId: conversation.id,
-        leadId: lead.id,
-        extractedOrder: aiTurnResult.extracted_order,
-        rawUserMessage: processingText
-      });
-      console.log(`📝 [Orchestrator] Synced DraftOrder ${syncedDraft?.id} status=${syncedDraft?.status} totalAmount=₹${syncedDraft?.totalAmount}`);
-    }
+    P("session state processed");
 
-    // 🛒 [INTERCEPT] Confirm active DraftOrder when intent is OrderConfirmed OR customer uses explicit confirmation phrase
-    const confirmationPhrases = [
-      "confirm", "confirm order", "confirm my order", "yes confirm",
-      "book it", "confirm it", "yes book it", "confirm order please"
-    ];
-    const isExplicitConfirmation = confirmationPhrases.includes(processingText.trim().toLowerCase());
-    const isOrderConfirmed = intent_type === "OrderConfirmed" || isExplicitConfirmation;
-
-    if (isOrderConfirmed) {
-      console.log(`🛒 [Orchestrator] Intercepted OrderConfirmed intent/phrase. Confirming active DraftOrder...`);
-      const confirmResult = await confirmActiveDraftOrder(companyId, conversation.id);
-      if (confirmResult.order) {
-        console.log(`✅ [Orchestrator] Successfully confirmed Order ${confirmResult.order.id} via DraftOrder status lifecycle.`);
-      } else {
-        console.log(`🛡️ [Orchestrator] DraftOrder confirmation skipped (reason: ${confirmResult.reason}). No duplicate order created.`);
-      }
-    }
-
-    // 🔄 Sync lead pending order state and conversation intent immediately
-    await syncLeadPendingOrderState(companyId, lead.id, conversation.id);
-
-    // 🛡️ PRE-SEND GUARD: re-fetch conversation.mode fresh from the database.
-    // The mode gate at the top of the BOT path (≈line 219) used a value loaded
-    // earlier in the pipeline (and the mid-pipeline reload selects only id/
-    // companyId/claimedById, NOT mode). If staff toggled this conversation to
-    // HUMAN between that gate and now, we must NOT dispatch the already-
-    // drafted AI reply to the customer. Abort silently (log only, no throw)
-    // and persist no message row for the aborted AI reply.
-    // CRITICAL: The customer message persistence and conversation updates below
-    // ALWAYS run — the guard only conditionally skips the outbound sendMessageFrame.
-    const preSendConv = await (prisma.conversation as any).findUnique({
+    // 🛡️ PRE-SEND GUARD: Last-millisecond DB check — single PK lookup (~3ms)
+    // guarantees mode is fresh even if another process changed it during LLM gen
+    const currentConv = await tenantPrisma.conversation.findUnique({
       where: { id: conversation.id },
-      select: { mode: true },
+      select: { mode: true }
     });
-    const modeIsBot = !!preSendConv && (preSendConv as any).mode === "BOT";
+    const modeIsBot = currentConv?.mode === "BOT";
+    P("pre-send guard done");
 
-    // Customer message persistence and conversation updates ALWAYS run
-    await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
-      const clientMsg = await tx.message.create({
-        data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
-      });
-      emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
-      await tx.lead.update({ where: { id: lead.id }, data: { aiPriority: priority === "URGENT" ? "HIGH" : priority === "HIGH" ? "MEDIUM" : "LOW" } });
+    // ⚡ STEP 1: IMMEDIATE OUTBOUND TELEGRAM DISPATCH (< 300ms) - Zero DB Blocking
+    let dispatchStatus: "SENT" | "FAILED" = "SENT";
+    let dispatchError: string | undefined = undefined;
 
-      await tx.conversation.update({
-        where: { id: conversation.id },
-        data: { updatedAt: new Date() },
-      });
-    });
-
-    // Add the outbound dispatcher ONLY if mode is still BOT
     if (modeIsBot) {
-      // NOTE: Root-level surfaced buttons MUST NOT attach to ordinary AI-generated
-      // replies during live free-text conversation. They only attach to explicit menu navigation
-      // (e.g. /start or back_root or menu button taps).
+      P("before outboundDispatcherService.sendTransportOnlyFrame");
       let replyMarkup: any = undefined;
-      await outboundDispatcherService.sendMessageFrame(
+      const dispatchResult = await outboundDispatcherService.sendTransportOnlyFrame(
         frame.channel as any,
         frame.externalChatId,
-        conversation.id,
-        { bodyText: replyText, interactivePayload: tool_call ? JSON.parse(JSON.stringify(tool_call)) : null, replyMarkup },
-        "BOT"
+        { bodyText: replyText, interactivePayload: tool_call ? JSON.parse(JSON.stringify(tool_call)) : null, replyMarkup }
       );
+      dispatchStatus = dispatchResult.deliveryStatus;
+      dispatchError = dispatchResult.transportError;
+      P("transport dispatch done");
     } else {
       console.log(
-        `🛡️ [Orchestrator] Conversation ${conversation.id} mode is "${(preSendConv as any)?.mode}" at send time — aborting AI reply dispatch (no message persisted).`
+        `🛡️ [Orchestrator] Conversation ${conversation.id} mode is "${currentConv?.mode}" at send time — aborting AI reply dispatch.`
       );
     }
 
-    safeEmitConversationUpdate(conversation, "conversation_updated", { conversationId: conversation.id, lastContent: replyText, updatedAt: new Date().toISOString() });
+    // ⚡ STEP 2: ASYNCHRONOUS BACKGROUND DB BOOKKEEPING & ORDER SYNCS (Non-blocking)
+    setImmediate(async () => {
+      try {
+        // 🛒 1. Sync / Update DraftOrder from AI extracted order output
+        if (aiTurnResult?.extracted_order && Array.isArray(aiTurnResult.extracted_order.items) && aiTurnResult.extracted_order.items.length > 0) {
+          const syncedDraft = await syncDraftOrderFromAi({
+            companyId,
+            conversationId: conversation.id,
+            leadId: lead.id,
+            extractedOrder: aiTurnResult.extracted_order,
+            rawUserMessage: processingText
+          }).catch((e) => console.error("[Orchestrator] Background draft order sync failed:", e.message));
+          if (syncedDraft) {
+            console.log(`📝 [Orchestrator] Synced DraftOrder ${syncedDraft.id} status=${syncedDraft.status}`);
+          }
+        }
+
+        // 🛒 2. Confirm active DraftOrder when intent is OrderConfirmed
+        const confirmationPhrases = [
+          "confirm", "confirm order", "confirm my order", "yes confirm",
+          "book it", "confirm it", "yes book it", "confirm order please"
+        ];
+        const isExplicitConfirmation = confirmationPhrases.includes(processingText.trim().toLowerCase());
+        const isOrderConfirmed = intent_type === "OrderConfirmed" || isExplicitConfirmation;
+
+        if (isOrderConfirmed) {
+          console.log(`🛒 [Orchestrator] Confirming active DraftOrder...`);
+          await confirmActiveDraftOrder(companyId, conversation.id).catch((e) =>
+            console.error("[Orchestrator] Background order confirmation failed:", e.message)
+          );
+        }
+
+        // 🔄 3. Sync lead pending order state
+        await syncLeadPendingOrderState(companyId, lead.id, conversation.id).catch(() => {});
+
+        // 💾 4. Atomic Client & Bot Message Persistence & Lead Priority / Conversation timestamp update
+        // Wrapped in ConcurrencyLock to prevent races on aiPriority across concurrent jobs for same conversation
+        const { clientMsg, botMsg } = await ConcurrencyLock.withConversationLock(
+          conversation.id,
+          async (tx) => {
+            const clientMsg = await tx.message.create({
+              data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
+            });
+            const botMsg = modeIsBot
+              ? await tx.message.create({
+                  data: {
+                    companyId,
+                    conversationId: conversation.id,
+                    content: replyText,
+                    sender: MessageSender.BOT,
+                    platform: (frame.channel === "TELEGRAM" ? Channel.TELEGRAM : frame.channel === "WHATSAPP" ? Channel.WHATSAPP : Channel.INSTAGRAM) as Channel,
+                    deliveryStatus: dispatchStatus,
+                    ...(dispatchError && { deliveryError: dispatchError })
+                  }
+                })
+              : null;
+
+            await tx.lead.update({
+              where: { id: lead.id },
+              data: {
+                aiPriority: priority === "URGENT" ? "HIGH" : priority === "HIGH" ? "MEDIUM" : "LOW",
+                lastActiveAt: new Date()
+              }
+            });
+            await tx.conversation.update({
+              where: { id: conversation.id },
+              data: { updatedAt: new Date() }
+            });
+            return { clientMsg, botMsg };
+          }
+        );
+
+        // 📡 5. Emit Socket Updates for real-time CRM Dashboard UI
+        emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
+        if (botMsg) {
+          emitToConversation(conversation.id, "new_message", { ...botMsg, conversationId: conversation.id });
+        }
+        safeEmitConversationUpdate(conversation, "conversation_updated", {
+          conversationId: conversation.id,
+          lastContent: replyText,
+          updatedAt: new Date().toISOString()
+        });
+        P("socket emit done");
+
+      } catch (bgErr: any) {
+        console.error("⚠️ [Orchestrator] Background persistence error:", bgErr.message);
+      }
+    });
+
+    P("FULL PIPELINE EXIT");
     return aiTurnResult;
   });
 }
@@ -786,6 +993,12 @@ const processedJobIds = new Set<string>();
 // this is an accepted latency-vs-consistency tradeoff for a ~1.2s query.
 const productMenuCache = new Map<string, { snapshot: string; cachedAt: number }>();
 const PRODUCT_MENU_CACHE_TTL = 60_000;
+
+// Cache for active conversational rules (admin UI updates push new rules, but
+// a 30s staleness window is acceptable given the ~967ms query cost per message).
+const rulesCache = new Map<string, { rules: any[]; cachedAt: number }>();
+const RULES_CACHE_TTL = 30_000;
+
 const JOB_ID_CLEANUP_INTERVAL = 3600_000; // 1 hour
 
 // Periodically trim the processed-job Set to prevent unbounded memory growth.

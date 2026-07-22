@@ -32,7 +32,8 @@ export async function retrieveSimilarChunks(
 ): Promise<RetrievedChunk[]> {
   try {
     // Step 1: Embed the message text to get its 384-dim vector
-    const embedding = await embedText(messageText);
+    // E5 models require "query: " prefix for search inputs to align with passage embeddings
+    const embedding = await embedText("query: " + messageText);
 
     // Convert embedding array to PostgreSQL vector literal format
     const embeddingLiteral = `[${embedding.join(",")}]`;

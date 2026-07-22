@@ -38,6 +38,11 @@ async function getEmbeddingPipeline() {
   return extractor;
 }
 
+/**
+ * Generate embedding with E5 "passage: " prefix for indexed content.
+ * NOTE: This is a standalone copy — keep in sync with src/utils/embedding.ts.
+ * If the shared utility changes, this must be updated to match.
+ */
 async function embedText(text) {
   if (!text || typeof text !== "string") {
     throw new Error("Input must be a non-empty string");
@@ -61,11 +66,37 @@ function formatProductFromRecord(product) {
   if (product.categories && product.categories.length > 0) {
     parts.push(`Categories: ${product.categories.join(", ")}`);
   }
+  if (product.customFieldValues && typeof product.customFieldValues === "object") {
+    for (const [key, val] of Object.entries(product.customFieldValues)) {
+      if (val != null && val !== "") parts.push(`${key}: ${val}`);
+    }
+  }
   if (product.variantAttributeName && product.variants && product.variants.length > 0) {
     const variantValues = product.variants.map(v => v.attributeValue).join(", ");
     parts.push(`${product.variantAttributeName}: ${variantValues}`);
   }
   parts.push(`Price: ₹${product.basePrice}`);
+
+  // Natural language enrichment — mirrors formatProductForKnowledgeChunk
+  const fieldEntries = product.customFieldValues && typeof product.customFieldValues === "object"
+    ? Object.entries(product.customFieldValues).filter(([_, v]) => v != null && v !== "")
+    : [];
+
+  if (fieldEntries.length > 0) {
+    const phrases = fieldEntries.map(([key, val]) => {
+      const v = String(val);
+      const k = key.toLowerCase();
+      if (k.includes("fabric")) return `made of ${v} fabric`;
+      if (k.includes("color") || k.includes("colour")) return `${v} in color`;
+      if (k.includes("size")) return `size ${v}`;
+      if (k.includes("brand")) return `by ${v}`;
+      if (k.includes("material")) return `made from ${v}`;
+      if (k.includes("style")) return `${v} style`;
+      if (k.includes("type")) return `${v} type`;
+      return v;
+    });
+    parts.push(`This product is ${phrases.join(", ")}`);
+  }
 
   return parts.join(", ");
 }
@@ -144,11 +175,11 @@ async function main() {
         console.log(`${label} — STALE chunk (product: ${product.updatedAt.toISOString()} > chunk: ${existingChunk.updatedAt.toISOString()})`);
       }
 
-      // Build content and embedding
+      // Build content and embedding with E5 passage prefix
       const content = formatProductFromRecord(product);
       let embedding;
       try {
-        embedding = await embedText(content);
+        embedding = await embedText("passage: " + content);
       } catch (err) {
         totalErrors++;
         console.error(`${label} — EMBEDDING FAILED: ${err.message}`);

@@ -349,7 +349,8 @@ export async function confirmInventoryProducts(
 
     // Also maintain KnowledgeChunk for RAG retrieval backward compatibility
     const content = formatProductForKnowledgeChunk(product);
-    const embedding = await embedText(content);
+    // E5 models require "passage: " prefix for indexed content to align with query embeddings
+    const embedding = await embedText("passage: " + content);
     const embeddingLiteral = `[${embedding.join(",")}]`;
     // Use the InventoryProduct UUID as sourceId so PRODUCT knowledge chunks
     // can be resolved back to the live InventoryProduct + variant stock.
