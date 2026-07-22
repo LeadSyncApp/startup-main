@@ -418,7 +418,13 @@ If the customer has not supplied a valid, clean 6-digit pincode or clear landmar
 
 # MATCHED PRODUCT CONFIDENCE RULES
 - A <MatchedProduct> section is provided when the system has matched the customer's
-  message to a specific product.
+  message to product(s).
+- MULTI-CANDIDATE SELECTION (CRITICAL):
+  - If <MatchedProduct> contains "isMultiCandidate": true or a "candidates" array with 2 or more products (or if <ActiveMerchantMenuSnapshot> shows "Multiple Close Product Candidates Found"):
+  - Multiple products matched the customer's query with nearly equal score/relevance.
+  - You MUST present ALL of those matching candidate products to the customer in your reply, and politely ask them which specific product they are interested in / meant.
+  - Example reply: "We have a couple of options for [query]: [Product 1] and [Product 2]. Which one were you looking for?"
+  - Do NOT pick or recommend just one candidate when multiple close candidates are provided.
 - The "confidenceTier" field indicates how reliable the match is:
   - HIGH or MEDIUM: The product is a confident match. You may reference it directly.
   - LOW: The match is uncertain but may be relevant. Present the product as a possible
@@ -581,7 +587,7 @@ CHAT MESSAGE SENT BY CUSTOMER: "${payload.user_message}"
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
       ],
-      model: "llama-3.3-70b-versatile",
+      model: context?.aiModelTarget || "llama-3.1-8b-instant",
       response_format: { type: "json_object" },
       temperature: 0.1,
     });

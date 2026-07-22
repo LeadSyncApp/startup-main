@@ -195,9 +195,19 @@ async function resolveOrCreateLeadAndConversation(
 
 export async function processWebhookJob(job: { id: string; data: StandardMessageFrame }) {
   PROFILE_START = Date.now();
+  const t_worker_pickup = Date.now();
   const incomingId = job.id;
   const frame = job.data;
   const companyId = frame.companyId;
+
+  const t_enqueued = (frame as any)._enqueuedAt || ((job as any).createdOn ? new Date((job as any).createdOn).getTime() : t_worker_pickup);
+  const queue_delay = Math.max(0, t_worker_pickup - t_enqueued);
+  (job as any)._latencyMetrics = { t_worker_pickup, queue_delay };
+
+  if (process.env.DEBUG_LATENCY === "true") {
+    console.log(`⏱️ [LATENCY DEBUG] Stage 7 (pg-boss Queue Delay): ${queue_delay} ms`);
+    console.log(`⏱️ [LATENCY DEBUG] Worker picked up job at: ${t_worker_pickup}`);
+  }
 
   console.log(`👷 [OrchestratorWorker] Initiating loop frame for Webhook ${incomingId}`);
 
@@ -747,26 +757,45 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
 
       // 2. Run pre-flight classifier
       P("before intent classification");
+      const metrics = (job as any)._latencyMetrics || {};
+      metrics.t_intent_start = Date.now();
+      metrics.stage2a_msg_to_intent_start = metrics.t_intent_start - (metrics.t_worker_pickup || metrics.t_intent_start);
+
       const startClassificationTime = Date.now();
       classification = await classifyMessageIntentWithTimeout(processingText, threadHistoryStr, 2000);
-      classificationTime = Date.now() - startClassificationTime;
+      metrics.t_intent_end = Date.now();
+      classificationTime = metrics.t_intent_end - metrics.t_intent_start;
+      metrics.stage2b_intent_duration = classificationTime;
 
       P(`after intent classification (${classification!.intent}, ${classification!.inquiryType || "N/A"})`);
       console.log(`⚙️ [Orchestrator Intent] "${processingText}" → Classified as: ${classification!.intent} (${classification!.inquiryType || "N/A"})`);
 
       // 3. Conditional context injection based on classified intent
       P("before RAG context retrieval");
+      metrics.t_rag_start = Date.now();
+      metrics.stage3a_intent_to_rag_start = metrics.t_rag_start - metrics.t_intent_end;
+
       if (classification.intent === "ProductInquiry") {
         // Always run semantic product matching, regardless of specific/general.
         // The matcher's null return is the actual signal for "no product found" —
         // not the classifier's inquiryType label.
         triageMatchedProduct = await matchProductForMessage(companyId, processingText);
         if (triageMatchedProduct) {
-          const tier = triageMatchedProduct.confidenceTier;
-          const stockNote = triageMatchedProduct.stockStatus === "OUT_OF_STOCK" ? " (OUT OF STOCK)" : triageMatchedProduct.stockStatus === "LOW_STOCK" ? " (LOW STOCK)" : "";
-          const tierNote = tier === "LOW" ? " (UNVERIFIED — ask customer to confirm)" : "";
-          menuSnapshotForAi = `Matched Product: ${triageMatchedProduct.name}${triageMatchedProduct.variant ? ` (${triageMatchedProduct.variant})` : ""} — Confidence: ${tier}${tierNote}${stockNote}`;
-          console.log(`[Orchestrator RAG] Semantic match: ${triageMatchedProduct.name} (${tier})`);
+          if (triageMatchedProduct.candidates && triageMatchedProduct.candidates.length > 1) {
+            const candidateLines = triageMatchedProduct.candidates.map((c: any, idx: number) => {
+              const stockNote = c.stockStatus === "OUT_OF_STOCK" ? " (OUT OF STOCK)" : c.stockStatus === "LOW_STOCK" ? " (LOW STOCK)" : "";
+              const tierNote = c.confidenceTier === "LOW" ? " (UNVERIFIED)" : "";
+              return `${idx + 1}. ${c.name}${c.variant ? ` (${c.variant})` : ""} — Confidence: ${c.confidenceTier}${tierNote}${stockNote}`;
+            }).join("\n");
+            menuSnapshotForAi = `Multiple Close Product Candidates Found (scores are very close — present all options to customer and ask which one they meant):\n${candidateLines}`;
+            console.log(`[Orchestrator RAG] Semantic multi-candidate match (${triageMatchedProduct.candidates.length} options):`, triageMatchedProduct.candidates.map((c: any) => c.name).join(", "));
+          } else {
+            const tier = triageMatchedProduct.confidenceTier;
+            const stockNote = triageMatchedProduct.stockStatus === "OUT_OF_STOCK" ? " (OUT OF STOCK)" : triageMatchedProduct.stockStatus === "LOW_STOCK" ? " (LOW STOCK)" : "";
+            const tierNote = tier === "LOW" ? " (UNVERIFIED — ask customer to confirm)" : "";
+            menuSnapshotForAi = `Matched Product: ${triageMatchedProduct.name}${triageMatchedProduct.variant ? ` (${triageMatchedProduct.variant})` : ""} — Confidence: ${tier}${tierNote}${stockNote}`;
+            console.log(`[Orchestrator RAG] Semantic match: ${triageMatchedProduct.name} (${tier})`);
+          }
         } else if (classification.inquiryType === "general") {
           // Semantic matcher returned null — genuine catalog-browsing query
           // (e.g. "what do you have?", "show me the menu").
@@ -826,6 +855,8 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         menuSnapshotForAi = "";
         console.log(`[Orchestrator RAG] Skipping product catalog lookup for intent "${classification.intent}"`);
       }
+      metrics.t_rag_end = Date.now();
+      metrics.stage3b_rag_duration = metrics.t_rag_end - metrics.t_rag_start;
       P("after RAG context retrieval");
     }
 
@@ -835,6 +866,10 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       content: m.content
     }));
 
+    const metrics = (job as any)._latencyMetrics || {};
+    metrics.t_ai_call_start = Date.now();
+    metrics.stage4_rag_done_to_ai_start = metrics.t_ai_call_start - (metrics.t_rag_end || metrics.t_intent_end || metrics.t_intent_start || metrics.t_worker_pickup);
+
     // ⚡ FAST PATH: Lightweight model for non-commerce queries
     // Uses llama-3.1-8b-instant instead of the full 70B commerce prompt.
     // This keeps latency low (~500ms-2s vs 10s) while remaining contextual
@@ -842,7 +877,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     // and mixed messages like "hi, are you open?" correctly.
     let aiTurnResult: UnifiedShopResponse;
     const tLlmStart = performance.now();
-    if (classification.intent === "Greeting/SmallTalk") {
+    if (classification?.intent === "Greeting/SmallTalk") {
       const fastReply = await generateFastReply({
         user_message: processingText,
         detected_language: detectedLanguage || "en",
@@ -855,7 +890,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         thread_summary: "Greeting — fast path (llama-3.1-8b-instant).",
         suggested_human_response: "",
         detected_meta: { language: detectedLanguage || "en", sentiment: "POSITIVE", confidence: 1.0 },
-        extracted_order: { items: [], total_amount: 0, recipient_name: null, recipient_phone: null, address_details: { raw_input: "", house_or_plot: "", street_or_gully: "", landmark: "", city: "", state: "", pincode: "" }, needs_follow_up: false, follow_up_reason: null }
+        extracted_order: { items: [], total_amount: 0, recipient_name: undefined, recipient_phone: undefined, address_details: { raw_input: "", house_or_plot: "", street_or_gully: "", landmark: "", city: "", state: "", pincode: "" }, needs_follow_up: false, follow_up_reason: undefined }
       };
       console.log(`⚡ [Orchestrator] Greeting fast-path: lang=${detectedLanguage}, reply="${fastReply.replyText}"`);
     } else {
@@ -872,6 +907,9 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       });
     }
     const tLlmEnd = performance.now();
+    metrics.t_ai_call_end = Date.now();
+    metrics.ai_call_duration = Math.round(tLlmEnd - tLlmStart);
+
     P(`after generateShopReply LLM call (took ${Math.round(tLlmEnd - tLlmStart)}ms)`);
 
     const totalPipelineDuration = Date.now() - totalPipelineStart;
@@ -975,7 +1013,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
           let clientMsg;
           try {
             clientMsg = await tx.message.create({
-              data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT, dedupKey }
+              data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
             });
           } catch (createErr: any) {
             if (createErr.code === "P2002" && createErr.meta?.target?.includes("dedupKey")) {
@@ -1019,6 +1057,8 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       }
 
       persistedBotMsg = botMsg;
+      metrics.t_db_write_done = Date.now();
+      metrics.stage5_ai_end_to_db_write = metrics.t_db_write_done - (metrics.t_ai_call_end || metrics.t_db_write_done);
 
       // 📡 5. Emit Socket Updates for real-time CRM Dashboard UI
       emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
@@ -1030,6 +1070,36 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         lastContent: replyText,
         updatedAt: new Date().toISOString()
       });
+      metrics.t_socket_emit_done = Date.now();
+      metrics.stage6_db_write_to_socket_emit = metrics.t_socket_emit_done - metrics.t_db_write_done;
+
+      if (process.env.DEBUG_LATENCY === "true") {
+        const totalNonAi = (metrics.stage2a_msg_to_intent_start || 0) + 
+                           (metrics.stage2b_intent_duration || 0) + 
+                           (metrics.stage3a_intent_to_rag_start || 0) + 
+                           (metrics.stage3b_rag_duration || 0) + 
+                           (metrics.stage4_rag_done_to_ai_start || 0) + 
+                           (metrics.stage5_ai_end_to_db_write || 0) + 
+                           (metrics.stage6_db_write_to_socket_emit || 0) + 
+                           (metrics.queue_delay || 0);
+
+        console.log(`
+===================== LATENCY BENCHMARK REPORT =====================
+Stage 1: Telegram polling delay                     | ~1500 ms (setTimeout loop)
+Stage 2a: Msg received -> Intent classification start | ${metrics.stage2a_msg_to_intent_start || 0} ms
+Stage 2b: Intent classification duration             | ${metrics.stage2b_intent_duration || 0} ms
+Stage 3a: Intent classified -> RAG retrieval start   | ${metrics.stage3a_intent_to_rag_start || 0} ms
+Stage 3b: RAG retrieval duration                     | ${metrics.stage3b_rag_duration || 0} ms
+Stage 4: RAG done -> AI model call START             | ${metrics.stage4_rag_done_to_ai_start || 0} ms
+[AI Model Call Execution Time (EXCLUDED)]            | ${metrics.ai_call_duration || 0} ms
+Stage 5: AI model call END -> DB write of reply      | ${metrics.stage5_ai_end_to_db_write || 0} ms
+Stage 6: DB write -> Socket.IO emit                  | ${metrics.stage6_db_write_to_socket_emit || 0} ms
+Stage 7: pg-boss queue (enqueued -> picked up)       | ${metrics.queue_delay || 0} ms
+================================================================────
+Total Non-AI Pipeline Latency: ${totalNonAi} ms (excluding polling delay)
+================================================================────
+        `);
+      }
       P("socket emit done");
 
     } catch (bgErr: any) {

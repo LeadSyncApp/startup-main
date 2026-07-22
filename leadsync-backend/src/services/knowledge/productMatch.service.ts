@@ -20,6 +20,27 @@ import { hybridSearch } from "../knowledge/knowledgeRetriever.service";
 import { LOW_STOCK_THRESHOLD } from "./inventory.service";
 import { getGroq } from "../ai/ai.service";
 
+export interface ProductMatchCandidate {
+  /** InventoryProduct UUID */
+  productId: string;
+  /** Display product name */
+  name: string;
+  /** Resolved variant/attribute value if the product has variants, else "" */
+  variant: string;
+  /** Live stock count (sum across variants, or 0 if none) */
+  stock: number;
+  /** Computed stock status: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK" | null */
+  stockStatus: string | null;
+  /** Product image URL if available */
+  thumbnailUrl: string;
+  /** Similarity score of the candidate match (0..1) */
+  score: number;
+  /** Confidence tier from the reranker score band */
+  confidenceTier: "HIGH" | "MEDIUM" | "LOW" | "NONE";
+  /** Human-readable explanation of why the product matched */
+  matchReason: string;
+}
+
 export interface ProductMatchResult {
   /** InventoryProduct UUID */
   productId: string;
@@ -42,7 +63,17 @@ export interface ProductMatchResult {
   /** Human-readable explanation of why the product matched, extracted from the
       enriched chunk content (e.g. "This product is made of polyester fabric") */
   matchReason: string;
+  /** Flag indicating whether this result contains multiple close candidates */
+  isMultiCandidate?: boolean;
+  /** Array of close candidate products when 2 or more candidates score within threshold */
+  candidates?: ProductMatchCandidate[];
 }
+
+// Multi-candidate close score ratio threshold (runner-up score >= 60-70% of top candidate score).
+// Easy to tune via environment variable or constant.
+const CLOSE_CANDIDATE_RATIO = parseFloat(
+  process.env.PRODUCT_MATCH_CLOSE_RATIO || "0.60"
+);
 
 // RRF-score gap threshold (k=60 scale: max gap ~0.020, typical ~0.017).
 // Conservative default — log real production gaps to fine-tune.
@@ -345,46 +376,90 @@ export async function matchProductForMessage(
     // Step 2: Sort all scored chunks by reranker score (highest first)
     scored.sort((a, b) => b.rerank_score - a.rerank_score);
 
-    const top = scored[0];
-    const runnerUp = scored.length >= 2 ? scored[1] : null;
-    const gap = runnerUp ? top.rerank_score - runnerUp.rerank_score : 1;
-    const bestScore = top.rerank_score;
+    // Step 3: Resolve scored chunks to distinct candidate products
+    const candidateProducts: ProductMatchCandidate[] = [];
+    const seenProductIds = new Set<string>();
 
-    // Step 3: Assign confidence tier — controls whether the match is returned
-    //         and how downstream (the orchestrator / LLM) handles it.
-    //
-    //   HIGH   (≥ 0.90):  Confident match. Return normally.
-    //   MEDIUM (≥ 0.80):  Passable match. Return with tier; LLM may qualify.
-    //   LOW    (≥ 0.05):  Weak match. LLM judges whether it's a genuine match.
-    //   NONE   (< 0.05):  True no-match. Return null.
-    let confidenceTier: "HIGH" | "MEDIUM" | "LOW" | "NONE";
+    for (const chunk of scored) {
+      const sourceId = chunk.sourceId;
+      let product: any = null;
 
-    if (bestScore >= HIGH_CONFIDENCE_SCORE) {
-      confidenceTier = "HIGH";
-    } else if (bestScore >= MIN_RERANK_SCORE) {
-      confidenceTier = "MEDIUM";
-    } else if (bestScore >= MIN_CONFIDENCE_THRESHOLD) {
-      confidenceTier = "LOW";
-    } else {
-      confidenceTier = "NONE";
+      if (sourceId && !seenProductIds.has(sourceId)) {
+        product = await prisma.inventoryProduct.findFirst({
+          where: { id: sourceId, companyId, isActive: true },
+          include: {
+            variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } },
+          },
+        });
+      }
+
+      if (!product) {
+        const nameFromContent = parseProductNameFromContent(chunk.content);
+        if (nameFromContent) {
+          product = await prisma.inventoryProduct.findFirst({
+            where: { name: nameFromContent, companyId, isActive: true },
+            include: {
+              variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } },
+            },
+          });
+        }
+      }
+
+      if (product && !seenProductIds.has(product.id)) {
+        seenProductIds.add(product.id);
+
+        const variant = resolveMentionedVariant(messageText, product.variants);
+        const stock = product.variants.reduce(
+          (sum: number, v: any) => sum + (v.stock ?? 0),
+          0
+        );
+        const chunkScore = chunk.rerank_score;
+
+        let candidateTier: "HIGH" | "MEDIUM" | "LOW" | "NONE";
+        if (chunkScore >= HIGH_CONFIDENCE_SCORE) candidateTier = "HIGH";
+        else if (chunkScore >= MIN_RERANK_SCORE) candidateTier = "MEDIUM";
+        else if (chunkScore >= MIN_CONFIDENCE_THRESHOLD) candidateTier = "LOW";
+        else candidateTier = "NONE";
+
+        candidateProducts.push({
+          productId: product.id,
+          name: product.name,
+          variant,
+          stock,
+          stockStatus: stock === 0 ? "OUT_OF_STOCK" : stock > 0 && stock <= LOW_STOCK_THRESHOLD ? "LOW_STOCK" : "IN_STOCK",
+          thumbnailUrl: product.imageUrl || "",
+          score: chunkScore,
+          confidenceTier: candidateTier,
+          matchReason: extractMatchReason(chunk.content, messageText),
+        });
+      }
     }
 
-    // Step 4: LLM judgment for uncertain candidates
-    // Fire the judge in two cases:
-    //   1. LOW tier (0.05-0.80): reranker isn't confident, LLM decides.
-    //   2. NONE tier (< 0.05) BUT hybrid similarity ≥ 0.80: BGE completely
-    //      failed, but vector/FTS still found a relevant product. Rescue
-    //      these cases instead of silently dropping genuine matches.
-    // HIGH/MEDIUM tiers skip this call entirely — they're already confident.
+    if (candidateProducts.length === 0) {
+      console.log("[productMatch] FAILED — could not resolve any candidate products from scored chunks");
+      return null;
+    }
+
+    const topCandidate = candidateProducts[0];
+    const runnerUpCandidate = candidateProducts.length >= 2 ? candidateProducts[1] : null;
+    const gap = runnerUpCandidate ? topCandidate.score - runnerUpCandidate.score : 1;
+    const bestScore = topCandidate.score;
+    const topChunk = scored[0];
+
+    // Step 4: Assign confidence tier for top match
+    let confidenceTier = topCandidate.confidenceTier;
+
+    // Step 5: LLM judgment for uncertain candidates
     const shouldJudge =
       confidenceTier === "LOW" ||
-      (confidenceTier === "NONE" && top.similarity >= NONE_RESCUE_SIMILARITY_THRESHOLD);
+      (confidenceTier === "NONE" && topChunk?.similarity >= NONE_RESCUE_SIMILARITY_THRESHOLD);
 
     if (shouldJudge) {
-      const judge = await judgeProductMatch(messageText, top.content || "");
+      const judge = await judgeProductMatch(messageText, topChunk?.content || "");
       if (judge.isMatch) {
         const from = confidenceTier;
         confidenceTier = confidenceTier === "NONE" ? "LOW" : "MEDIUM";
+        topCandidate.confidenceTier = confidenceTier;
         console.log("[productMatch] JUDGE_BOOST:", { from, to: confidenceTier, reason: judge.reason, confidence: judge.confidence });
       } else {
         console.log("[productMatch] JUDGE_CONFIRM:", { tier: confidenceTier, reason: judge.reason });
@@ -392,24 +467,33 @@ export async function matchProductForMessage(
     }
 
     if (confidenceTier === "NONE") {
-      console.log("[productMatch] FAILED — no chunks above MIN_CONFIDENCE_THRESHOLD", {
+      console.log("[productMatch] FAILED — top candidate score below MIN_CONFIDENCE_THRESHOLD", {
         minScore: MIN_CONFIDENCE_THRESHOLD,
         bestRerankScore: bestScore,
-        bestContent: top?.content?.slice(0, 120),
+        bestContent: topChunk?.content?.slice(0, 120),
       });
       return null;
     }
 
-    // Log reranker top-vs-runnerup delta for threshold tuning (log-only, no behavior change)
+    // Step 6: Multi-candidate evaluation
+    // Filter close candidates: score >= CLOSE_CANDIDATE_RATIO * topCandidate.score
+    const closeCandidates = candidateProducts.filter(
+      cand => cand.score >= CLOSE_CANDIDATE_RATIO * topCandidate.score
+    );
+    const isMultiCandidate = closeCandidates.length >= 2;
+
+    // Log reranker top-vs-runnerup delta for threshold tuning
     console.log("[productMatch] RERANKER_TOP_VS_RUNNERUP", {
       gap,
       threshold: RERANKER_GAP_THRESHOLD,
       topScore: bestScore,
-      runnerUpScore: runnerUp?.rerank_score,
+      runnerUpScore: runnerUpCandidate?.score,
       belowThreshold: gap < RERANKER_GAP_THRESHOLD,
+      isMultiCandidate,
+      closeCandidatesCount: closeCandidates.length,
+      closeRatioThreshold: CLOSE_CANDIDATE_RATIO,
     });
 
-    // Log if top score is within 0.05 of the MEDIUM floor
     if (bestScore < MIN_RERANK_SCORE + 0.05) {
       console.log("[productMatch] BORDERLINE — top reranker score near confidence floor:", {
         messageText,
@@ -420,78 +504,34 @@ export async function matchProductForMessage(
       });
     }
 
-    // Log all scored chunks with reranker scores for debugging
     console.log("[productMatch] Reranker candidates:", JSON.stringify({
       totalScored: scored.length,
+      totalCandidates: candidateProducts.length,
+      closeCandidatesCount: closeCandidates.length,
+      isMultiCandidate,
       confidenceTier,
-      top: {
-        content: top.content?.slice(0, 120),
-        rerankScore: bestScore,
-        similarity: top.similarity,
-        rrfScore: top.rrf_score,
-      },
-      runnerUp: runnerUp ? {
-        content: runnerUp.content?.slice(0, 120),
-        rerankScore: runnerUp.rerank_score,
-        similarity: runnerUp.similarity,
-        rrfScore: runnerUp.rrf_score,
-      } : null,
+      candidates: closeCandidates.map(c => ({
+        name: c.name,
+        score: c.score,
+        tier: c.confidenceTier,
+        stock: c.stockStatus,
+      })),
       gap,
     }, null, 2));
 
-    // Resolve the matched chunk to a live InventoryProduct. The sourceId is
-    // normally the InventoryProduct UUID; fall back to a name match for
-    // older PRODUCT chunks indexed before that convention was adopted.
-    const productId = top.sourceId;
-    if (!productId) {
-      console.log("[productMatch] FAILED — top chunk has no sourceId", { topContent: top.content?.slice(0, 120) });
-      return null;
-    }
-
-    let product = await prisma.inventoryProduct.findFirst({
-      where: { id: productId, companyId, isActive: true },
-      include: {
-        variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } },
-      },
-    });
-
-    if (!product) {
-      const nameFromContent = parseProductNameFromContent(top.content);
-      if (nameFromContent) {
-        product = await prisma.inventoryProduct.findFirst({
-          where: { name: nameFromContent, companyId, isActive: true },
-          include: {
-            variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } },
-          },
-        });
-      }
-      if (!product) {
-        console.log("[productMatch] FAILED — could not resolve product by sourceId or name", { sourceId: productId, nameFromContent });
-      }
-    }
-
-    if (!product) return null;
-
-    // Determine the most relevant variant implied by the message, if any.
-    const variant = resolveMentionedVariant(messageText, product.variants);
-
-    // Live stock: sum of in-stock variants, or 0 if product has none tracked.
-    const stock = product.variants.reduce(
-      (sum, v) => sum + (v.stock ?? 0),
-      0
-    );
-
     const result: ProductMatchResult = {
-      productId: product.id,
-      name: product.name,
-      variant,
-      stock,
-      stockStatus: stock === 0 ? "OUT_OF_STOCK" : stock > 0 && stock <= LOW_STOCK_THRESHOLD ? "LOW_STOCK" : "IN_STOCK",
-      thumbnailUrl: product.imageUrl || "",
-      score: bestScore,
+      productId: topCandidate.productId,
+      name: topCandidate.name,
+      variant: topCandidate.variant,
+      stock: topCandidate.stock,
+      stockStatus: topCandidate.stockStatus,
+      thumbnailUrl: topCandidate.thumbnailUrl,
+      score: topCandidate.score,
       gap,
       confidenceTier,
-      matchReason: extractMatchReason(top.content, messageText),
+      matchReason: topCandidate.matchReason,
+      isMultiCandidate,
+      candidates: isMultiCandidate ? closeCandidates : undefined,
     };
 
     console.log("[productMatch] SUCCESS — product matched:", JSON.stringify(result, null, 2));

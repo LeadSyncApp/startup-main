@@ -17,6 +17,7 @@ const QUERIES = [
   { label: "HINGLISH (silk saree hai kya)", text: "silk saree hai kya aapke paas" },
   { label: "NO-MATCH (international delivery)", text: "do you deliver internationally" },
   { label: "GROUND-TRUTH (cotton pants)", text: "do you have cotton pants?" },
+  { label: "MULTI-CANDIDATE (branded pants)", text: "Do u have any branded pants" },
 ];
 
 async function main() {
@@ -35,7 +36,7 @@ async function main() {
     timezone: (companyContext as any).timezone || "UTC",
     priorityRules: config.priority_rules || null,
     templates: config.templates || {},
-    aiModelTarget: config.ai_model_target || "llama-3.3-70b-versatile",
+    aiModelTarget: "llama-3.1-8b-instant",
     outputProtocolSchema: config.output_protocol_schema || "JSON_ONLY",
     intentMatrix: config.intent_matrix,
     localizedHeuristics: config.localizedHeuristics,
@@ -57,10 +58,19 @@ async function main() {
       // Build the same menuSnapshotForAi the orchestrator builds
       let menuSnapshotForAi: string;
       if (matchedProduct) {
-        const tier = matchedProduct.confidenceTier;
-        const stockNote = matchedProduct.stockStatus === "OUT_OF_STOCK" ? " (OUT OF STOCK)" : matchedProduct.stockStatus === "LOW_STOCK" ? " (LOW STOCK)" : "";
-        const tierNote = tier === "LOW" ? " (UNVERIFIED — ask customer to confirm)" : "";
-        menuSnapshotForAi = `Matched Product: ${matchedProduct.name}${matchedProduct.variant ? ` (${matchedProduct.variant})` : ""} — Confidence: ${tier}${tierNote}${stockNote}`;
+        if (matchedProduct.candidates && matchedProduct.candidates.length > 1) {
+          const candidateLines = matchedProduct.candidates.map((c, idx) => {
+            const stockNote = c.stockStatus === "OUT_OF_STOCK" ? " (OUT OF STOCK)" : c.stockStatus === "LOW_STOCK" ? " (LOW STOCK)" : "";
+            const tierNote = c.confidenceTier === "LOW" ? " (UNVERIFIED)" : "";
+            return `${idx + 1}. ${c.name}${c.variant ? ` (${c.variant})` : ""} — Confidence: ${c.confidenceTier}${tierNote}${stockNote}`;
+          }).join("\n");
+          menuSnapshotForAi = `Multiple Close Product Candidates Found (scores are very close — present all options to customer and ask which one they meant):\n${candidateLines}`;
+        } else {
+          const tier = matchedProduct.confidenceTier;
+          const stockNote = matchedProduct.stockStatus === "OUT_OF_STOCK" ? " (OUT OF STOCK)" : matchedProduct.stockStatus === "LOW_STOCK" ? " (LOW STOCK)" : "";
+          const tierNote = tier === "LOW" ? " (UNVERIFIED — ask customer to confirm)" : "";
+          menuSnapshotForAi = `Matched Product: ${matchedProduct.name}${matchedProduct.variant ? ` (${matchedProduct.variant})` : ""} — Confidence: ${tier}${tierNote}${stockNote}`;
+        }
       } else {
         menuSnapshotForAi = "No matching products found.";
       }
