@@ -410,10 +410,16 @@ If the customer has not supplied a valid, clean 6-digit pincode or clear landmar
   - HIGH or MEDIUM: The product is a confident match. You may reference it directly.
   - LOW: The match is uncertain but may be relevant. Present the product as a possible
     match the customer might want to confirm.
-    - Do NOT hedge or soften factual attributes. If the data says the product IS
-      polyester, say "is polyester" — never say "similar to polyester" or "might be".
-      The attributes in the data are factual; confidence is about whether the product
-      matches the customer's intent, not about whether the attributes are true.
+    - FACTUAL ATTRIBUTE ACCURACY (CRITICAL — DO NOT SOFTEN):
+      The matchReason field contains the EXACT factual attribute connection.
+      You MUST copy the attribute fact VERBATIM into your reply. Never hedge.
+      Example: matchReason="made of polyester fabric" for a product called
+      "cotton pants". Customer asks "anything in polyester?".
+      CORRECT: "We have cotton pants which ARE made of polyester fabric."
+      WRONG:   "We have cotton pants which are SIMILAR to polyester fabric."
+      WRONG:   "We have cotton pants made of A SIMILAR fabric."
+      The product name and attribute fact can differ (e.g. name=cotton pants,
+      fabric=polyester). State the fact exactly — never soften it.
     - Use the "matchReason" field to explain the connection to the customer's query.
       Frame the reply around what the customer asked: "You asked about [X] — we have
       [product], which [matchReason]. Is that what you're looking for?"
@@ -422,10 +428,18 @@ If the customer has not supplied a valid, clean 6-digit pincode or clear landmar
       product as a possible match without forcing an irrelevant explanation.
 - The "stockStatus" field shows current availability. If OUT_OF_STOCK, inform the
   customer that the item is currently unavailable.
-- If no <MatchedProduct> section is present OR its content is "No matched product.",
-  the system has confirmed there is no matching product in the catalog. You MUST
-  NOT mention or imply any specific product. Plainly state that the item is not
-  available — do NOT guess, suggest, or fabricate products.
+- If <MatchedProduct> says "No matched product.":
+  - The customer asked for something that does NOT exist in this catalog.
+  - You MUST respond with ONLY: "Sorry, [item they asked about] is not available
+    in our current catalog."
+  - You MUST NOT list, suggest, or refer to ANY products from the
+    <ActiveMerchantMenuSnapshot>, even if that section lists available products.
+    Listing alternatives when the specific item wasn't found is misleading.
+  - Example of a VIOLATION: Customer asks "silk saree", matches nothing. Wrong
+    reply: "We don't have silk sarees but we have STS shirts and cotton pants."
+    Correct reply: "Sorry, silk sarees are not available in our current catalog."
+    - The <ActiveMerchantMenuSnapshot> section may still list other products
+      for separate queries; for this turn, ignore it if MatchedProduct is empty.
 
 # STRUCTURED DRAFT ORDER & CONVERSATIONAL MEMORY RULES
 - The active transactional state of the customer's order is provided in <ActiveDraftOrder> tags.
@@ -598,13 +612,19 @@ CHAT MESSAGE SENT BY CUSTOMER: "${payload.user_message}"
 
     return parsedResponse;
   } catch (err: any) {
-    console.error("❌ [Groq Hub] Enterprise Single-Turn Routine crashed:", err);
+    const groqError = {
+      message: err?.message || "Unknown",
+      status: err?.status || (err instanceof TypeError ? "NETWORK" : "UNKNOWN"),
+      errorData: err?.error || err?.data || null,
+      stack: err?.stack?.split("\n").slice(0, 3).join("\n") || "no stack",
+    };
+    console.error("❌ [Groq Hub] Enterprise Single-Turn Routine crashed:", JSON.stringify(groqError, null, 2));
     return {
       intent_type: "Support",
       tool_call: null,
       replyText: "Aapka message mil gaya hai. Hamaare agent jaldi hi reply karenge!",
-      thread_summary: "Parsing fallback executing under model error.",
-      suggested_human_response: "System error: fallback triggered.",
+      thread_summary: `Groq error: ${groqError.message} (status=${groqError.status})`,
+      suggested_human_response: `Groq error: ${groqError.message}`,
       detected_meta: { language: "hi-IN", sentiment: "NEUTRAL", confidence: 0 },
       extracted_order: { items: [], total_amount: 0, needs_follow_up: false }
     };
@@ -1060,11 +1080,12 @@ CURRENT CUSTOMER MESSAGE: "${messageText}"
     console.log(`⏱️ [PreFlight Classification] Completed in ${Date.now() - startTime}ms. Result:`, JSON.stringify(parsed));
     return parsed;
   } catch (err: any) {
-    console.error("❌ [PreFlight Classification] Failed, falling back:", err.message);
+    const e = { message: err?.message, status: err?.status, body: err?.error?.message || null, stack: err?.stack?.split("\n").slice(0,2).join(";") };
+    console.error("❌ [PreFlight] Classification crashed:", JSON.stringify(e));
     return {
       intent: "ProductInquiry",
       inquiryType: "specific",
-      reasoning: "Fallback due to classification failure"
+      reasoning: `Fallback due to classification failure: ${e.message}`
     };
   }
 }

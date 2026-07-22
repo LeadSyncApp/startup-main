@@ -1,12 +1,12 @@
 import PgBoss from "pg-boss";
 import { pgBossService } from "../infrastructure/pgboss/pgboss.service";
-import { prisma, getTenantPrismaContext } from "../../lib/prisma";
+import { prisma, directPrisma, getTenantPrismaContext } from "../../lib/prisma";
 import { ConcurrencyLock } from "../../utils/concurrencyLock";
 import { outboundDispatcherService } from "../outbound.dispatcher";
 import { TelegramTransportService } from "../transport/telegramTransport.service";
 import { decryptSecret } from "../../utils/encryption";
 import { Channel, MessageSender, ConversationStatus } from "@prisma/client";
-import { generateShopReply, classifyMessageIntentWithTimeout, PreFlightClassification } from "../ai/ai.service";
+import { generateShopReply, classifyMessageIntentWithTimeout, PreFlightClassification, UnifiedShopResponse } from "../ai/ai.service";
 import { retrieveSimilarChunks } from "../knowledge/knowledgeRetriever.service";
 import { matchProductForMessage } from "../knowledge/productMatch.service";
 import { StandardMessageFrame } from "../../interfaces/messaging.interface";
@@ -755,19 +755,20 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       // 3. Conditional context injection based on classified intent
       P("before RAG context retrieval");
       if (classification.intent === "ProductInquiry") {
-        if (classification.inquiryType === "specific") {
-          triageMatchedProduct = await matchProductForMessage(companyId, processingText);
-          if (triageMatchedProduct) {
-            const tier = triageMatchedProduct.confidenceTier;
-            const stockNote = triageMatchedProduct.stockStatus === "OUT_OF_STOCK" ? " (OUT OF STOCK)" : triageMatchedProduct.stockStatus === "LOW_STOCK" ? " (LOW STOCK)" : "";
-            const tierNote = tier === "LOW" ? " (UNVERIFIED — ask customer to confirm)" : "";
-            menuSnapshotForAi = `Matched Product: ${triageMatchedProduct.name}${triageMatchedProduct.variant ? ` (${triageMatchedProduct.variant})` : ""} — Confidence: ${tier}${tierNote}${stockNote}`;
-            console.log(`[Orchestrator RAG] Specific match: ${triageMatchedProduct.name} (${tier})`);
-          } else {
-            menuSnapshotForAi = "No matching products found.";
-            console.log(`[Orchestrator RAG] Specific match: none (null)`);
-          }
-        } else {
+        // Always run semantic product matching, regardless of specific/general.
+        // The matcher's null return is the actual signal for "no product found" —
+        // not the classifier's inquiryType label.
+        triageMatchedProduct = await matchProductForMessage(companyId, processingText);
+        if (triageMatchedProduct) {
+          const tier = triageMatchedProduct.confidenceTier;
+          const stockNote = triageMatchedProduct.stockStatus === "OUT_OF_STOCK" ? " (OUT OF STOCK)" : triageMatchedProduct.stockStatus === "LOW_STOCK" ? " (LOW STOCK)" : "";
+          const tierNote = tier === "LOW" ? " (UNVERIFIED — ask customer to confirm)" : "";
+          menuSnapshotForAi = `Matched Product: ${triageMatchedProduct.name}${triageMatchedProduct.variant ? ` (${triageMatchedProduct.variant})` : ""} — Confidence: ${tier}${tierNote}${stockNote}`;
+          console.log(`[Orchestrator RAG] Semantic match: ${triageMatchedProduct.name} (${tier})`);
+        } else if (classification.inquiryType === "general") {
+          // Semantic matcher returned null — genuine catalog-browsing query
+          // (e.g. "what do you have?", "show me the menu").
+          // Return broad product list as fallback.
           try {
             const cached = productMenuCache.get(companyId);
             if (cached && Date.now() - cached.cachedAt < PRODUCT_MENU_CACHE_TTL) {
@@ -801,6 +802,10 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
             console.error("[Orchestrator] Fallback broad inventory query failed:", dbErr.message);
             menuSnapshotForAi = config?.botStructuredMenu || "No products currently available.";
           }
+        } else {
+          // Specific inquiry with no match — clean "not found" message
+          menuSnapshotForAi = "No matching products found.";
+          console.log(`[Orchestrator RAG] Semantic match: none (null)`);
         }
       } else if (classification.intent === "Support/Policy") {
         try {
@@ -828,19 +833,34 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       content: m.content
     }));
 
-    P("before generateShopReply LLM call");
+    // ⚡ FAST PATH: Skip expensive LLM call for non-commerce queries
+    // Greeting queries can be answered instantly without LLM inference
+    let aiTurnResult: UnifiedShopResponse;
     const tLlmStart = performance.now();
-    const aiTurnResult = await generateShopReply({
-      tenant_id: companyId,
-      user_message: processingText,
-      session_state: (conversation as any)?.sessionState || {},
-      menu_snapshot: menuSnapshotForAi,
-      matched_product: triageMatchedProduct,
-      detected_language: detectedLanguage,
-      activeRules: rulesAsContext,
-      conversation_history: conversationHistory,
-      active_draft_order: activeDraftOrder,
-    });
+    if (classification.intent === "Greeting/SmallTalk") {
+      aiTurnResult = {
+        intent_type: "Query",
+        tool_call: null,
+        replyText: "Hello! How can I help you today?",
+        thread_summary: "Greeting — fast path, no LLM inference.",
+        suggested_human_response: "",
+        detected_meta: { language: detectedLanguage || "en", sentiment: "POSITIVE", confidence: 1.0 },
+        extracted_order: { items: [], total_amount: 0, recipient_name: null, recipient_phone: null, address_details: { raw_input: "", house_or_plot: "", street_or_gully: "", landmark: "", city: "", state: "", pincode: "" }, needs_follow_up: false, follow_up_reason: null }
+      };
+      console.log(`⚡ [Orchestrator] Greeting fast-path: ~0ms LLM (saved ~10s)`);
+    } else {
+      aiTurnResult = await generateShopReply({
+        tenant_id: companyId,
+        user_message: processingText,
+        session_state: (conversation as any)?.sessionState || {},
+        menu_snapshot: menuSnapshotForAi,
+        matched_product: triageMatchedProduct,
+        detected_language: detectedLanguage,
+        activeRules: rulesAsContext,
+        conversation_history: conversationHistory,
+        active_draft_order: activeDraftOrder,
+      });
+    }
     const tLlmEnd = performance.now();
     P(`after generateShopReply LLM call (took ${Math.round(tLlmEnd - tLlmStart)}ms)`);
 
@@ -860,13 +880,29 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
 
     P("session state processed");
 
-    // 🛡️ PRE-SEND GUARD: Last-millisecond DB check — single PK lookup (~3ms)
-    // guarantees mode is fresh even if another process changed it during LLM gen
-    const currentConv = await tenantPrisma.conversation.findUnique({
-      where: { id: conversation.id },
-      select: { mode: true }
-    });
-    const modeIsBot = currentConv?.mode === "BOT";
+    // 🛡️ PRE-SEND GUARD: Fresh PK lookup with fail-closed fallback.
+    // Uses directPrisma (bypasses PgBouncer). The connection pool stays
+    // alive for the life of the process (no PgBouncer idle timeout), so
+    // this query completes in ~300ms (includes network RTT to Supabase
+    // ap-northeast-2). On a cold-start first message, the initial
+    // connection takes ~1500ms. If the query fails, dispatch is skipped.
+    let modeIsBot = false;
+    let guardMode: string | null = null;
+    try {
+      P("guard: before findUnique");
+      const guardConv = await directPrisma.conversation.findUnique({
+        where: { id: conversation.id, companyId },
+        select: { mode: true }
+      });
+      P("guard: after findUnique");
+      if (guardConv) {
+        guardMode = guardConv.mode;
+        modeIsBot = guardMode === "BOT";
+      }
+    } catch (guardErr: any) {
+      console.error(`🛡️ [Orchestrator] Pre-send guard query failed for conversation ${conversation.id}: ${guardErr?.message || String(guardErr)}`);
+      // modeIsBot stays false → dispatch skipped (fail closed)
+    }
     P("pre-send guard done");
 
     // ⚡ STEP 1: IMMEDIATE OUTBOUND TELEGRAM DISPATCH (< 300ms) - Zero DB Blocking
@@ -886,7 +922,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       P("transport dispatch done");
     } else {
       console.log(
-        `🛡️ [Orchestrator] Conversation ${conversation.id} mode is "${currentConv?.mode}" at send time — aborting AI reply dispatch.`
+        `🛡️ [Orchestrator] Conversation ${conversation.id} mode is "${guardMode ?? "UNKNOWN"}" at send time — aborting AI reply dispatch.`
       );
     }
 

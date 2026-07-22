@@ -9,6 +9,7 @@ if (!DATABASE_URL) {
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  directPrisma: PrismaClient | undefined;
 };
 
 const createPrismaClient = () => {
@@ -58,11 +59,31 @@ async function executeQueryWithTransientRetry<T>(queryFn: () => Promise<T>): Pro
   }
 }
 
-// Base unextended Prisma Client instance
+// Base unextended Prisma Client instance (via PgBouncer pooled connection)
 export const basePrisma = globalForPrisma.prisma || createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = basePrisma;
+}
+
+// Dedicated direct-connection Prisma client (bypasses PgBouncer entirely).
+// Direct connections don't have an idle timeout — the TCP connection stays
+// open indefinitely, avoiding the ~800ms reconnect cost on every query.
+// Used by the pre-send guard for a reliable ~3ms PK lookup.
+const createDirectPrismaClient = () => {
+  const directUrl = process.env.DIRECT_URL;
+  if (!directUrl) throw new Error("FATAL: DIRECT_URL is not defined.");
+  sysLog.info("🔌 [Prisma] Instantiating direct-connection PrismaClient (no PgBouncer)...");
+  return new PrismaClient({
+    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    datasources: { db: { url: directUrl } },
+  });
+};
+
+export const directPrisma = globalForPrisma.directPrisma || createDirectPrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.directPrisma = directPrisma;
 }
 
 /**
