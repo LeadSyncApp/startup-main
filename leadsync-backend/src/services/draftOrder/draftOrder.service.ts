@@ -84,14 +84,16 @@ export async function syncLeadPendingOrderState(
       });
     }
     // Re-triage conversation using actual recent messages instead of hardcoding BROWSING
-    try {
-      await processAiTriageJob({
-        id: `triage-reset-${conversationId}-${Date.now()}`,
-        data: { conversationId, companyId }
-      });
-    } catch (err: any) {
+    // Fire-and-forget: triage was already triggered at the top of the orchestrator
+    // worker (line ~210). This is a safety net for the edge case where the
+    // conversation had no draft at pipeline entry but acquired (then lost) one
+    // mid-pipeline. We don't block the dispatch on it.
+    processAiTriageJob({
+      id: `triage-reset-${conversationId}-${Date.now()}`,
+      data: { conversationId, companyId }
+    }).catch((err: any) => {
       console.error(`[DraftOrder] Failed to re-triage conversation ${conversationId} after draft clear:`, err.message);
-    }
+    });
   }
 }
 

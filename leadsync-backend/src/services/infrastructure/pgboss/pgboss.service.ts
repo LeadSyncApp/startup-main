@@ -85,7 +85,7 @@ class PgBossService {
       // Disable automatic retries on webhook.process — all pipeline errors are
       // permanent (bad channel, bad payload, auth failure). Retries only produce
       // duplicate side effects (Sarvam calls, Groq calls, outbound messages).
-      await this.boss.updateQueue('webhook.process', { retryLimit: 0 }).catch(e => {
+      await this.boss.updateQueue('webhook.process', { retryLimit: 0 }).catch((e: any) => {
         console.error('⚠️ [PgBoss] Failed to set retryLimit=0 on webhook.process:', e.message);
       });
       console.log('✅ [PgBoss] Queue registration/verifications complete.');

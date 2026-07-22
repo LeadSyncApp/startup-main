@@ -15,4 +15,5 @@ export interface StandardMessageFrame {
   callbackQueryId?: string;
   callbackMessageId?: string;
   companyId: string;
+  _enqueuedAt?: number;
 }
