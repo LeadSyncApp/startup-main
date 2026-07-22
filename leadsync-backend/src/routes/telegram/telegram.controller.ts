@@ -5,6 +5,7 @@ import { pgBossService } from "../../services/infrastructure/pgboss/pgboss.servi
 import { Channel } from "../../interfaces/messaging.interface";
 import { decryptSecret } from "../../utils/encryption";
 import { webhookPersistenceService } from "../../services/infrastructure/webhookPersistence.service";
+import { FastPathService } from "../../services/messaging/fastPath.service";
 
 const router = Router();
 
@@ -38,6 +39,8 @@ router.post("/webhook/telegram/:companyId", async (req: Request, res: Response) 
       return res.status(200).json({ status: "unauthorized", message: "Authentication validation dropped." });
     }
 
+
+
     const adapter = ProviderAdapterFactory.getAdapter("telegram");
     const standardizedFrame = adapter.normalizePayload(req.body);
 
@@ -47,17 +50,13 @@ router.post("/webhook/telegram/:companyId", async (req: Request, res: Response) 
 
     standardizedFrame.companyId = company.id;
 
-    // Persist webhook payload in database
-    try {
-      await webhookPersistenceService.persist(
-        "TELEGRAM",
-        company.id,
-        req.body?.update_id ? String(req.body.update_id) : null,
-        req.body || {}
-      );
-    } catch (e) {
-      console.warn("Failed to persist webhook metadata:", e);
-    }
+    // Persist webhook payload in database asynchronously
+    webhookPersistenceService.persist(
+      "TELEGRAM",
+      company.id,
+      req.body?.update_id ? String(req.body.update_id) : null,
+      req.body || {}
+    ).catch((e) => console.warn("Failed to persist webhook metadata:", e));
 
     // Direct O(1) queueing to the background worker layer
     const boss = pgBossService.getBoss();
@@ -100,6 +99,8 @@ router.post("/webhook/:companyId", async (req: Request, res: Response) => {
       return res.status(200).json({ status: "unauthorized", message: "Authentication validation dropped." });
     }
 
+
+
     const adapter = ProviderAdapterFactory.getAdapter("telegram");
     const standardizedFrame = adapter.normalizePayload(req.body);
 
@@ -109,17 +110,13 @@ router.post("/webhook/:companyId", async (req: Request, res: Response) => {
 
     standardizedFrame.companyId = company.id;
 
-    // Persist webhook payload in database
-    try {
-      await webhookPersistenceService.persist(
-        "TELEGRAM",
-        company.id,
-        req.body?.update_id ? String(req.body.update_id) : null,
-        req.body || {}
-      );
-    } catch (e) {
-      console.warn("Failed to persist webhook metadata:", e);
-    }
+    // Persist webhook payload in database asynchronously
+    webhookPersistenceService.persist(
+      "TELEGRAM",
+      company.id,
+      req.body?.update_id ? String(req.body.update_id) : null,
+      req.body || {}
+    ).catch((e) => console.warn("Failed to persist webhook metadata:", e));
 
     const boss = pgBossService.getBoss();
     await boss.send("webhook.process", standardizedFrame);

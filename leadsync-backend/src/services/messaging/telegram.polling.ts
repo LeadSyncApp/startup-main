@@ -6,6 +6,7 @@ import { taskTracker } from "../infrastructure/taskTracker";
 import { webhookPersistenceService } from "../infrastructure/webhookPersistence.service";
 import { pgBossService } from "../infrastructure/pgboss/pgboss.service";
 import { decryptSecret } from "../../utils/encryption";
+import { idempotencyService } from "../infrastructure/idempotency.service";
 
 declare global {
   var isTelegramPollingStarted: boolean | undefined;
@@ -112,9 +113,9 @@ export async function startTelegramPolling() {
         // 1. Delete webhook if we haven't done so for this session
         if (offsets[token] === undefined) {
           try {
-            console.log(`🧹 Deleting webhook for bot @${company.telegramBotUsername || "bot"} to enable polling (preserving updates)...`);
+            console.log(`🧹 Deleting webhook for bot @${company.telegramBotUsername || "bot"} to enable polling (dropping stale pending updates)...`);
             await axios.post(`https://api.telegram.org/bot${token}/deleteWebhook`, {
-              drop_pending_updates: false
+              drop_pending_updates: true
             });
             offsets[token] = 0; // initialize offset
             // Safety delay to let Telegram process webhook deletion
@@ -151,6 +152,15 @@ export async function startTelegramPolling() {
             const updates = res.data.result;
 
             for (const update of updates) {
+              const updateId = String(update.update_id);
+              const lockKey = `telegram:update:${company.id}:${updateId}`;
+              const acquired = await idempotencyService.acquireProcessingLock(lockKey, 86400).catch(() => true);
+              if (!acquired) {
+                console.log(`🛡️ [Polling Telegram] Skipping duplicate/stale update_id ${updateId} for bot @${company.telegramBotUsername || "bot"}`);
+                offsets[token] = update.update_id + 1;
+                continue;
+              }
+
               console.log(`📥 [Polling Telegram Update] received update_id: ${update.update_id} for bot @${company.telegramBotUsername || "bot"}`);
               
               // Process update using existing adapter logic
@@ -171,6 +181,11 @@ export async function startTelegramPolling() {
                     standardizedFrame.companyId = company.id;
                     standardizedFrame.contactName = update.message?.from?.first_name || update.callback_query?.from?.first_name || "User";
                     standardizedFrame.callbackData = update.callback_query?.data;
+
+                    if (process.env.DEBUG_LATENCY === "true") {
+                      standardizedFrame._enqueuedAt = Date.now();
+                      console.log(`⏱️ [DEBUG_LATENCY Stage 7] Telegram update ${update.update_id} enqueued at ${standardizedFrame._enqueuedAt}`);
+                    }
 
                     const boss = pgBossService.getBoss();
                     await boss.send("webhook.process", standardizedFrame);

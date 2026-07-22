@@ -38,6 +38,10 @@ export async function registerTelegramWebhook(
 }
 
 export async function initializeTelegramWebhooks() {
+  if (process.env.TELEGRAM_POLLING === "true") {
+    console.log("ℹ️ [Telegram Webhooks] TELEGRAM_POLLING=true. Skipping webhook registration to enforce single delivery mode.");
+    return;
+  }
   console.log("⚙️ [Telegram Webhooks] Initializing event-driven webhooks for all connected bots...");
 
   try {
