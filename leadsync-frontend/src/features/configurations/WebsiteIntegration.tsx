@@ -123,9 +123,10 @@ fetch("${webhookUrl}", {
 /* ── Main Component ────────────────────────────────────────────────── */
 
 export function WebsiteIntegration() {
-  const { company } = useAuth();
+  const { user, company } = useAuth();
   const companyId = company?.id || "";
   const webhookUrl = `${window.location.origin}/api/webhook/${companyId}`;
+  const isOwner = user?.role === "OWNER";
 
   // Secret state
   const [secretStatus, setSecretStatus] = useState<"set" | "unset" | "loading">("loading");
@@ -309,24 +310,26 @@ export function WebsiteIntegration() {
                 Webhook Secret
               </p>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                HMAC-SHA256 key for signature verification
+                {isOwner ? "HMAC-SHA256 key for signature verification" : "Only the Owner can manage the webhook secret"}
               </p>
             </div>
           </div>
-          <Button
-            variant={secretStatus === "set" ? "secondary" : "primary"}
-            onClick={handleRotate}
-            disabled={isRotating}
-            className="px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl"
-          >
-            {isRotating ? (
-              <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Generating...</>
-            ) : secretStatus === "set" ? (
-              <><RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Rotate Secret</>
-            ) : (
-              <><Key className="h-3.5 w-3.5 mr-1.5" /> Generate Secret</>
-            )}
-          </Button>
+          {isOwner && (
+            <Button
+              variant={secretStatus === "set" ? "secondary" : "primary"}
+              onClick={handleRotate}
+              disabled={isRotating}
+              className="px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl"
+            >
+              {isRotating ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Generating...</>
+              ) : secretStatus === "set" ? (
+                <><RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Rotate Secret</>
+              ) : (
+                <><Key className="h-3.5 w-3.5 mr-1.5" /> Generate Secret</>
+              )}
+            </Button>
+          )}
         </div>
       </Card>
 
@@ -420,7 +423,8 @@ export function WebsiteIntegration() {
         </AnimatePresence>
       </Card>
 
-      {/* ─── Section 3: Delivery Logs ─── */}
+      {/* ─── Section 3: Delivery Logs (OWNER only) ─── */}
+      {isOwner && (
       <Card className="p-8 space-y-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -587,6 +591,7 @@ export function WebsiteIntegration() {
           </div>
         )}
       </Card>
+      )}
 
       {/* ─── Secret Revealed Warning Modal ─── */}
       <AnimatePresence>
