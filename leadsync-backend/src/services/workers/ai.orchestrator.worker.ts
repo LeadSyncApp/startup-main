@@ -19,6 +19,7 @@ import { ChannelType } from "../../interfaces/outbound.interface";
 import { reapGhostsForCompany } from "../infrastructure/ghostReaper.service";
 import { newOrderArrivalService } from "../workflow/newOrderArrival.service";
 import { getActiveDraftOrder, syncDraftOrderFromAi, confirmActiveDraftOrder, syncLeadPendingOrderState } from "../draftOrder/draftOrder.service";
+import crypto from "crypto";
 
 // TEMP: Profiling — log elapsed from entry at each major boundary
 let PROFILE_START = 0;
@@ -890,11 +891,6 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     P("session state processed");
 
     // 🛡️ PRE-SEND GUARD: Fresh PK lookup with fail-closed fallback.
-    // Uses directPrisma (bypasses PgBouncer). The connection pool stays
-    // alive for the life of the process (no PgBouncer idle timeout), so
-    // this query completes in ~300ms (includes network RTT to Supabase
-    // ap-northeast-2). On a cold-start first message, the initial
-    // connection takes ~1500ms. If the query fails, dispatch is skipped.
     let modeIsBot = false;
     let guardMode: string | null = null;
     try {
@@ -914,10 +910,134 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     }
     P("pre-send guard done");
 
-    // ⚡ STEP 1: IMMEDIATE OUTBOUND TELEGRAM DISPATCH (< 300ms) - Zero DB Blocking
     let dispatchStatus: "SENT" | "FAILED" = "SENT";
     let dispatchError: string | undefined = undefined;
+    let persistedBotMsg: any = null;
 
+    // ⚡ STEP 1: DB BOOKKEEPING, ORDER SYNCS & PERSISTENCE (Synchronous & Blocking)
+    try {
+      // 🛒 1. Sync / Update DraftOrder from AI extracted order output
+      if (aiTurnResult?.extracted_order && Array.isArray(aiTurnResult.extracted_order.items) && aiTurnResult.extracted_order.items.length > 0) {
+        const syncedDraft = await syncDraftOrderFromAi({
+          companyId,
+          conversationId: conversation.id,
+          leadId: lead.id,
+          extractedOrder: aiTurnResult.extracted_order,
+          rawUserMessage: processingText
+        }).catch((e) => console.error("[Orchestrator] Draft order sync failed:", e.message));
+        if (syncedDraft) {
+          console.log(`📝 [Orchestrator] Synced DraftOrder ${syncedDraft.id} status=${syncedDraft.status}`);
+        }
+      }
+
+      // 🛒 2. Confirm active DraftOrder when intent is OrderConfirmed
+      const confirmationPhrases = [
+        "confirm", "confirm order", "confirm my order", "yes confirm",
+        "book it", "confirm it", "yes book it", "confirm order please"
+      ];
+      const isExplicitConfirmation = confirmationPhrases.includes(processingText.trim().toLowerCase());
+      const isOrderConfirmed = intent_type === "OrderConfirmed" || isExplicitConfirmation;
+
+      if (isOrderConfirmed) {
+        console.log(`🛒 [Orchestrator] Confirming active DraftOrder...`);
+        await confirmActiveDraftOrder(companyId, conversation.id).catch((e) =>
+          console.error("[Orchestrator] Order confirmation failed:", e.message)
+        );
+      }
+
+      // 🔄 3. Sync lead pending order state
+      await syncLeadPendingOrderState(companyId, lead.id, conversation.id).catch(() => {});
+
+      // 💾 4. Atomic Client & Bot Message Persistence & Lead Priority / Conversation timestamp update
+      // Wrapped in ConcurrencyLock to prevent races on aiPriority across concurrent jobs for same conversation
+
+      // 🛡️ DEDUP CHECK (app-level): Skip if identical CLIENT message created in last 60 seconds
+      const sixtySecondsAgo = new Date(Date.now() - 60000);
+      const recentDuplicate = await tenantPrisma.message.findFirst({
+        where: {
+          conversationId: conversation.id,
+          content: text,
+          sender: MessageSender.CLIENT,
+          createdAt: { gte: sixtySecondsAgo }
+        },
+        select: { id: true }
+      });
+      if (recentDuplicate) {
+        console.log(`⏭️ [Orchestrator] Duplicate webhook detected for conversation ${conversation.id} — skipping (existing msg ${recentDuplicate.id})`);
+        return { status: "duplicate_ignored" };
+      }
+
+      const timeBucket = Math.floor(Date.now() / 60000).toString();
+      const dedupKey = crypto.createHash("sha256").update(`${conversation.id}:${text}:${timeBucket}`).digest("hex");
+      const { clientMsg, botMsg } = await ConcurrencyLock.withConversationLock(
+        conversation.id,
+        async (tx) => {
+          let clientMsg;
+          try {
+            clientMsg = await tx.message.create({
+              data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT, dedupKey }
+            });
+          } catch (createErr: any) {
+            if (createErr.code === "P2002" && createErr.meta?.target?.includes("dedupKey")) {
+              return { clientMsg: null, botMsg: null };
+            }
+            throw createErr;
+          }
+          const botMsg = modeIsBot
+            ? await tx.message.create({
+                data: {
+                  companyId,
+                  conversationId: conversation.id,
+                  content: replyText,
+                  sender: MessageSender.BOT,
+                  platform: (frame.channel === "TELEGRAM" ? Channel.TELEGRAM : frame.channel === "WHATSAPP" ? Channel.WHATSAPP : Channel.INSTAGRAM) as Channel,
+                  deliveryStatus: dispatchStatus,
+                  ...(dispatchError && { deliveryError: dispatchError })
+                }
+              })
+            : null;
+
+          await tx.lead.update({
+            where: { id: lead.id },
+            data: {
+              aiPriority: priority === "URGENT" ? "HIGH" : priority === "HIGH" ? "MEDIUM" : "LOW",
+              lastActiveAt: new Date()
+            }
+          });
+          await tx.conversation.update({
+            where: { id: conversation.id },
+            data: { updatedAt: new Date() }
+          });
+          return { clientMsg, botMsg };
+        }
+      );
+
+      // 🛡️ DB-level dedup caught the race
+      if (!clientMsg) {
+        console.log(`⏭️ [Orchestrator] DB-level dedup caught race for conversation ${conversation.id} — ignoring`);
+        return { status: "duplicate_ignored" };
+      }
+
+      persistedBotMsg = botMsg;
+
+      // 📡 5. Emit Socket Updates for real-time CRM Dashboard UI
+      emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
+      if (botMsg) {
+        emitToConversation(conversation.id, "new_message", { ...botMsg, conversationId: conversation.id });
+      }
+      safeEmitConversationUpdate(conversation, "conversation_updated", {
+        conversationId: conversation.id,
+        lastContent: replyText,
+        updatedAt: new Date().toISOString()
+      });
+      P("socket emit done");
+
+    } catch (bgErr: any) {
+      console.error("⚠️ [Orchestrator] Persistence error:", bgErr.message);
+      return aiTurnResult;
+    }
+
+    // ⚡ STEP 2: OUTBOUND TELEGRAM DISPATCH — Only after successful persistence
     if (modeIsBot) {
       P("before outboundDispatcherService.sendTransportOnlyFrame");
       let replyMarkup: any = undefined;
@@ -929,100 +1049,21 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       dispatchStatus = dispatchResult.deliveryStatus;
       dispatchError = dispatchResult.transportError;
       P("transport dispatch done");
+
+      if (persistedBotMsg?.id) {
+        await prisma.message.update({
+          where: { id: persistedBotMsg.id },
+          data: {
+            deliveryStatus: dispatchStatus,
+            ...(dispatchError ? { deliveryError: dispatchError } : { deliveryError: null })
+          }
+        }).catch((err: any) => console.error(`[Orchestrator] Delivery status update failed for message ${persistedBotMsg.id}:`, err.message));
+      }
     } else {
       console.log(
         `🛡️ [Orchestrator] Conversation ${conversation.id} mode is "${guardMode ?? "UNKNOWN"}" at send time — aborting AI reply dispatch.`
       );
     }
-
-    // ⚡ STEP 2: ASYNCHRONOUS BACKGROUND DB BOOKKEEPING & ORDER SYNCS (Non-blocking)
-    setImmediate(async () => {
-      try {
-        // 🛒 1. Sync / Update DraftOrder from AI extracted order output
-        if (aiTurnResult?.extracted_order && Array.isArray(aiTurnResult.extracted_order.items) && aiTurnResult.extracted_order.items.length > 0) {
-          const syncedDraft = await syncDraftOrderFromAi({
-            companyId,
-            conversationId: conversation.id,
-            leadId: lead.id,
-            extractedOrder: aiTurnResult.extracted_order,
-            rawUserMessage: processingText
-          }).catch((e) => console.error("[Orchestrator] Background draft order sync failed:", e.message));
-          if (syncedDraft) {
-            console.log(`📝 [Orchestrator] Synced DraftOrder ${syncedDraft.id} status=${syncedDraft.status}`);
-          }
-        }
-
-        // 🛒 2. Confirm active DraftOrder when intent is OrderConfirmed
-        const confirmationPhrases = [
-          "confirm", "confirm order", "confirm my order", "yes confirm",
-          "book it", "confirm it", "yes book it", "confirm order please"
-        ];
-        const isExplicitConfirmation = confirmationPhrases.includes(processingText.trim().toLowerCase());
-        const isOrderConfirmed = intent_type === "OrderConfirmed" || isExplicitConfirmation;
-
-        if (isOrderConfirmed) {
-          console.log(`🛒 [Orchestrator] Confirming active DraftOrder...`);
-          await confirmActiveDraftOrder(companyId, conversation.id).catch((e) =>
-            console.error("[Orchestrator] Background order confirmation failed:", e.message)
-          );
-        }
-
-        // 🔄 3. Sync lead pending order state
-        await syncLeadPendingOrderState(companyId, lead.id, conversation.id).catch(() => {});
-
-        // 💾 4. Atomic Client & Bot Message Persistence & Lead Priority / Conversation timestamp update
-        // Wrapped in ConcurrencyLock to prevent races on aiPriority across concurrent jobs for same conversation
-        const { clientMsg, botMsg } = await ConcurrencyLock.withConversationLock(
-          conversation.id,
-          async (tx) => {
-            const clientMsg = await tx.message.create({
-              data: { companyId, conversationId: conversation.id, content: text, sender: MessageSender.CLIENT }
-            });
-            const botMsg = modeIsBot
-              ? await tx.message.create({
-                  data: {
-                    companyId,
-                    conversationId: conversation.id,
-                    content: replyText,
-                    sender: MessageSender.BOT,
-                    platform: (frame.channel === "TELEGRAM" ? Channel.TELEGRAM : frame.channel === "WHATSAPP" ? Channel.WHATSAPP : Channel.INSTAGRAM) as Channel,
-                    deliveryStatus: dispatchStatus,
-                    ...(dispatchError && { deliveryError: dispatchError })
-                  }
-                })
-              : null;
-
-            await tx.lead.update({
-              where: { id: lead.id },
-              data: {
-                aiPriority: priority === "URGENT" ? "HIGH" : priority === "HIGH" ? "MEDIUM" : "LOW",
-                lastActiveAt: new Date()
-              }
-            });
-            await tx.conversation.update({
-              where: { id: conversation.id },
-              data: { updatedAt: new Date() }
-            });
-            return { clientMsg, botMsg };
-          }
-        );
-
-        // 📡 5. Emit Socket Updates for real-time CRM Dashboard UI
-        emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
-        if (botMsg) {
-          emitToConversation(conversation.id, "new_message", { ...botMsg, conversationId: conversation.id });
-        }
-        safeEmitConversationUpdate(conversation, "conversation_updated", {
-          conversationId: conversation.id,
-          lastContent: replyText,
-          updatedAt: new Date().toISOString()
-        });
-        P("socket emit done");
-
-      } catch (bgErr: any) {
-        console.error("⚠️ [Orchestrator] Background persistence error:", bgErr.message);
-      }
-    });
 
     P("FULL PIPELINE EXIT");
     return aiTurnResult;
