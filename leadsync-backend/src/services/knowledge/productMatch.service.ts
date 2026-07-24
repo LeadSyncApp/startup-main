@@ -19,6 +19,7 @@ import { prisma } from "../../lib/prisma";
 import { hybridSearch } from "../knowledge/knowledgeRetriever.service";
 import { LOW_STOCK_THRESHOLD } from "./inventory.service";
 import { getGroq } from "../ai/ai.service";
+import { stepProfiler } from "../../utils/stepProfiler";
 
 export interface ProductMatchCandidate {
   /** InventoryProduct UUID */
@@ -134,84 +135,52 @@ const MIN_CONFIDENCE_THRESHOLD = parseFloat(
 // Empirically validated: failures sit at 0.809-0.833, correct NULLs at 0.769-0.796.
 const NONE_RESCUE_SIMILARITY_THRESHOLD = 0.80;
 
-// ── BGE-v2-m3 cross-encoder reranker ──
-// Loads the ONNX-format BGE Reranker v2 m3 via @xenova/transformers.
-// Uses onnxruntime-web (WASM) backend — no native binary needed, works on
-// any platform where Node.js >=20.16.0 runs.
-//
-// Startup: ensureRerankerReady() is called during bootstrap so the server
-// crashes loudly (process.exit(1)) if the model can't load / download.
-import {
-  AutoTokenizer,
-  AutoModelForSequenceClassification,
-} from "@xenova/transformers";
-
-const RERANKER_MODEL = "onnx-community/bge-reranker-v2-m3-ONNX";
-
-let _tokenizer: any = null;
-let _model: any = null;
-
-async function getReranker() {
-  if (!_tokenizer || !_model) {
-    _tokenizer = await AutoTokenizer.from_pretrained(RERANKER_MODEL);
-    _model = await AutoModelForSequenceClassification.from_pretrained(
-      RERANKER_MODEL
-    );
-  }
-  return { tokenizer: _tokenizer, model: _model };
-}
+// ── BGE-v2-m3 cross-encoder reranker (offloaded to ONNX Worker Pool) ──
+import { onnxWorkerPool } from "../../utils/onnxWorkerPool";
 
 /**
- * Called once at server startup.  If the BGE model cannot be loaded
- * (e.g. missing network to download ONNX weights, filesystem full, etc.)
- * this throws, and the bootstrap catch block calls process.exit(1).
- *
- * Never silence this in production — without the reranker every product
- * match fails the 0.80 floor and the bot goes silent.
+ * Called once at server startup. Initializes and pre-warms models in the ONNX worker pool.
+ * If worker pool initialization fails, server startup throws to alert operators immediately.
  */
 export async function ensureRerankerReady(): Promise<void> {
   try {
-    await getReranker();
-    console.log("[productMatch] BGE reranker loaded OK:", RERANKER_MODEL);
+    await onnxWorkerPool.init();
+    console.log("[productMatch] BGE reranker worker pool pre-warmed OK");
   } catch (err: any) {
     console.error(
-      "[productMatch] FATAL: BGE reranker failed to load — product matching will fail every query.",
-      { model: RERANKER_MODEL, error: err?.message, stack: err?.stack }
+      "[productMatch] FATAL: BGE reranker worker pool failed to initialize — product matching will fail every query.",
+      { error: err?.message, stack: err?.stack }
     );
     throw err;
   }
-}
-
-function sigmoid(x: number): number {
-  if (x >= 0) {
-    return 1 / (1 + Math.exp(-x));
-  }
-  const z = Math.exp(x);
-  return z / (1 + z);
 }
 
 async function rerank(
   query: string,
   documents: { id: string; text: string }[]
 ): Promise<{ id: string; score: number; text: string }[]> {
-  const { tokenizer, model } = await getReranker();
-  const results: { id: string; score: number; text: string }[] = [];
+  return await stepProfiler.time(
+    "BGE-reranker-v2-m3 ONNX inference",
+    "productMatch.service.ts:193",
+    "In-process compute",
+    `BGE Reranker scoring ${documents.length} document pairs (offloaded to worker pool)`,
+    false,
+    async () => {
+      const docTexts = documents.map((d) => d.text);
+      const scores: number[] = await onnxWorkerPool.rerank(query, docTexts);
 
-  for (const doc of documents) {
-    const inputs = await tokenizer([query], {
-      text_pair: [doc.text],
-      padding: true,
-      truncation: true,
-    });
-    const output = await model(inputs);
-    const logits = output.logits.tolist();
-    const score = sigmoid(logits[0][0]);
-    results.push({ id: doc.id, score, text: doc.text });
-  }
+      const results = documents.map((doc, idx) => ({
+        id: doc.id,
+        score: scores[idx],
+        text: doc.text,
+      }));
 
-  results.sort((a, b) => b.score - a.score);
-  return results;
+      results.sort((a, b) => b.score - a.score);
+      return results;
+    }
+  );
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LLM-Based Product Match Judgment
@@ -257,36 +226,44 @@ async function judgeProductMatch(
   customerMessage: string,
   productContent: string
 ): Promise<JudgeResult> {
-  const start = Date.now();
-  try {
-    const groq = getGroq();
-    const truncated = productContent.length > 400
-      ? productContent.slice(0, 400) + "..."
-      : productContent;
+  return await stepProfiler.time(
+    "judgeProductMatch LLM call (llama-3.1-8b-instant)",
+    "productMatch.service.ts:257",
+    "External call",
+    "Groq chat.completions API call for product match judgment",
+    false,
+    async () => {
+      try {
+        const groq = getGroq();
+        const truncated = productContent.length > 400
+          ? productContent.slice(0, 400) + "..."
+          : productContent;
 
-    const result = await Promise.race([
-      groq.chat.completions.create({
-        messages: [
-          { role: "system", content: JUDGE_SYSTEM_PROMPT },
-          { role: "user", content: `CUSTOMER MESSAGE: "${customerMessage}"\n\nPRODUCT DESCRIPTION:\n${truncated}` },
-        ],
-        model: JUDGE_MODEL,
-        response_format: { type: "json_object" },
-        temperature: 0.0,
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("judge timeout")), 3000)
-      ),
-    ]);
+        const result = await Promise.race([
+          groq.chat.completions.create({
+            messages: [
+              { role: "system", content: JUDGE_SYSTEM_PROMPT },
+              { role: "user", content: `CUSTOMER MESSAGE: "${customerMessage}"\n\nPRODUCT DESCRIPTION:\n${truncated}` },
+            ],
+            model: JUDGE_MODEL,
+            response_format: { type: "json_object" },
+            temperature: 0.0,
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("judge timeout")), 3000)
+          ),
+        ]);
 
-    const text = result.choices[0]?.message?.content || "{}";
-    const parsed = JSON.parse(text) as JudgeResult;
-    console.log(`[productMatch] JUDGE: ${Date.now() - start}ms — isMatch=${parsed.isMatch} conf=${parsed.confidence} — ${parsed.reason}`);
-    return parsed;
-  } catch (err: any) {
-    console.warn(`[productMatch] JUDGE failed (${err.message}), falling back to isMatch=false`);
-    return { isMatch: false, reason: `Judge unavailable: ${err.message}`, confidence: "low" };
-  }
+        const text = result.choices[0]?.message?.content || "{}";
+        const parsed = JSON.parse(text) as JudgeResult;
+        console.log(`[productMatch] JUDGE: isMatch=${parsed.isMatch} conf=${parsed.confidence} — ${parsed.reason}`);
+        return parsed;
+      } catch (err: any) {
+        console.warn(`[productMatch] JUDGE failed (${err.message}), falling back to isMatch=false`);
+        return { isMatch: false, reason: `Judge unavailable: ${err.message}`, confidence: "low" };
+      }
+    }
+  );
 }
 
 /**
