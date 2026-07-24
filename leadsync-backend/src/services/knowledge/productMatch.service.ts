@@ -423,23 +423,35 @@ export async function matchProductForMessage(
     const bestScore = topCandidate.score;
     const topChunk = scored[0];
 
-    // Step 4: Assign confidence tier for top match
+    // Step 4 & 5: Extreme bypasses and LLM judgment for mid-range / rescue candidates
     let confidenceTier = topCandidate.confidenceTier;
 
-    // Step 5: LLM judgment for uncertain candidates
-    const shouldJudge =
-      confidenceTier === "LOW" ||
-      (confidenceTier === "NONE" && topChunk?.similarity >= NONE_RESCUE_SIMILARITY_THRESHOLD);
+    if (bestScore >= 0.75) {
+      // Safe Extreme 1: High confidence score (>= 0.75) -> skip judge, promote directly
+      confidenceTier = bestScore >= HIGH_CONFIDENCE_SCORE ? "HIGH" : "MEDIUM";
+      topCandidate.confidenceTier = confidenceTier;
+      console.log("[productMatch] EXTREME_PROMOTION: Bypassing judge (score >= 0.75)", { bestScore, confidenceTier });
+    } else if (bestScore < 0.25 && (topChunk?.similarity ?? 0) < NONE_RESCUE_SIMILARITY_THRESHOLD) {
+      // Safe Extreme 2: Low reranker score AND low vector similarity -> skip judge, mark as NONE
+      confidenceTier = "NONE";
+      topCandidate.confidenceTier = "NONE";
+      console.log("[productMatch] EXTREME_REJECTION: Bypassing judge (score < 0.25, sim < 0.80)", { bestScore, similarity: topChunk?.similarity });
+    } else {
+      // Mid-range [0.25, 0.75) or Vector Rescue (similarity >= 0.80) -> judge runs as normal
+      const shouldJudge =
+        confidenceTier === "LOW" ||
+        (confidenceTier === "NONE" && topChunk?.similarity >= NONE_RESCUE_SIMILARITY_THRESHOLD);
 
-    if (shouldJudge) {
-      const judge = await judgeProductMatch(messageText, topChunk?.content || "");
-      if (judge.isMatch) {
-        const from = confidenceTier;
-        confidenceTier = confidenceTier === "NONE" ? "LOW" : "MEDIUM";
-        topCandidate.confidenceTier = confidenceTier;
-        console.log("[productMatch] JUDGE_BOOST:", { from, to: confidenceTier, reason: judge.reason, confidence: judge.confidence });
-      } else {
-        console.log("[productMatch] JUDGE_CONFIRM:", { tier: confidenceTier, reason: judge.reason });
+      if (shouldJudge) {
+        const judge = await judgeProductMatch(messageText, topChunk?.content || "");
+        if (judge.isMatch) {
+          const from = confidenceTier;
+          confidenceTier = confidenceTier === "NONE" ? "LOW" : "MEDIUM";
+          topCandidate.confidenceTier = confidenceTier;
+          console.log("[productMatch] JUDGE_BOOST:", { from, to: confidenceTier, reason: judge.reason, confidence: judge.confidence });
+        } else {
+          console.log("[productMatch] JUDGE_CONFIRM:", { tier: confidenceTier, reason: judge.reason });
+        }
       }
     }
 

@@ -958,7 +958,7 @@ Return ONLY a JSON object matching this structure:
 
     const result = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
-      model: "llama-3.3-70b-versatile",
+      model: "llama-3.1-8b-instant",
       response_format: { type: "json_object" },
       temperature: 0.1,
     });
@@ -1127,10 +1127,77 @@ export interface PreFlightClassification {
   reasoning?: string;
 }
 
+export interface PreFlightBypassContext {
+  activeDraftOrder?: any | null;
+  lastBotMessage?: string | null;
+}
+
+export function checkPreFlightBypassRules(
+  messageText: string,
+  context?: PreFlightBypassContext
+): PreFlightClassification | null {
+  if (!messageText || !messageText.trim()) return null;
+  const trimmed = messageText.trim().toLowerCase();
+
+  // 1. Standalone Greetings ONLY (exact match against single greeting phrase, no extra text)
+  const STANDALONE_GREETINGS = new Set([
+    "hi", "hello", "hey", "hii", "hiii", "heyy", "heyyy",
+    "good morning", "good afternoon", "good evening",
+    "namaste", "greetings", "hola"
+  ]);
+  if (STANDALONE_GREETINGS.has(trimmed)) {
+    return {
+      intent: "Greeting/SmallTalk",
+      inquiryType: null,
+      reasoning: "Pre-flight rule bypass: Standalone greeting word"
+    };
+  }
+
+  // 2. Exact Numeric Menu Selection (ONLY when context confirms a menu/options step is active)
+  if (/^(#?[1-9]\.?)$/.test(trimmed)) {
+    const isAwaitingMenu = !!(
+      context?.activeDraftOrder?.status === "AWAITING_CONFIRMATION" ||
+      context?.activeDraftOrder?.status === "DRAFTING" ||
+      (context?.lastBotMessage && (
+        /1\.\s+.*\n\s*2\./.test(context.lastBotMessage) ||
+        /which one/i.test(context.lastBotMessage) ||
+        /choose an option/i.test(context.lastBotMessage) ||
+        /select from/i.test(context.lastBotMessage)
+      ))
+    );
+
+    if (isAwaitingMenu) {
+      return {
+        intent: "ProductInquiry",
+        inquiryType: "specific",
+        reasoning: "Pre-flight rule bypass: Numeric menu selection during active menu step"
+      };
+    }
+  }
+
+  // 3. Valid 6-digit Indian PIN Code (exact 6 digits starting with 1-9)
+  if (/^[1-9]\d{5}$/.test(trimmed)) {
+    return {
+      intent: "OrderRelated",
+      inquiryType: null,
+      reasoning: "Pre-flight rule bypass: 6-digit Indian PIN code"
+    };
+  }
+
+  return null;
+}
+
 export async function classifyMessageIntent(
   messageText: string,
-  threadHistory?: string
+  threadHistory?: string,
+  bypassContext?: PreFlightBypassContext
 ): Promise<PreFlightClassification> {
+  const bypass = checkPreFlightBypassRules(messageText, bypassContext);
+  if (bypass) {
+    console.log(`⚡ [PreFlight Bypass] Triggered:`, JSON.stringify(bypass));
+    return bypass;
+  }
+
   return await stepProfiler.time(
     "classifyMessageIntent LLM call (llama-3.1-8b-instant)",
     "ai.service.ts:1115",
@@ -1200,7 +1267,8 @@ CURRENT CUSTOMER MESSAGE: "${messageText}"
 export async function classifyMessageIntentWithTimeout(
   messageText: string,
   threadHistory?: string,
-  timeoutMs: number = 2000
+  timeoutMs: number = 2000,
+  bypassContext?: PreFlightBypassContext
 ): Promise<PreFlightClassification> {
   const fallback: PreFlightClassification = {
     intent: "ProductInquiry",
@@ -1216,7 +1284,7 @@ export async function classifyMessageIntentWithTimeout(
   );
 
   return Promise.race([
-    classifyMessageIntent(messageText, threadHistory),
+    classifyMessageIntent(messageText, threadHistory, bypassContext),
     timeoutPromise
   ]);
 }
