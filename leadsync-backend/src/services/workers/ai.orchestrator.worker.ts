@@ -737,7 +737,11 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     if (processingText) {
       // 1. Build thread history for classification context (most recent 6 messages, chronological)
       let threadHistoryStr = "";
+      let lastBotMsg: string | null = null;
       try {
+        const botMsgObj = recentMessagesDesc.find((m: any) => m.sender === "BOT" || m.sender === "AGENT");
+        if (botMsgObj && botMsgObj.content) lastBotMsg = botMsgObj.content;
+
         threadHistoryStr = recentMessagesDesc
           .slice(0, 6)
           .reverse()
@@ -747,31 +751,38 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         console.error("[Orchestrator] Error building thread history for classification:", err.message);
       }
 
-      // 2. Run pre-flight classifier
-      P("before intent classification");
+      const bypassContext = {
+        activeDraftOrder,
+        lastBotMessage: lastBotMsg,
+      };
+
+      // 2. Run pre-flight classifier and RAG product match in parallel
+      P("before intent classification & RAG search");
       const metrics = (job as any)._latencyMetrics || {};
       metrics.t_intent_start = Date.now();
+      metrics.t_rag_start = metrics.t_intent_start;
       metrics.stage2a_msg_to_intent_start = metrics.t_intent_start - (metrics.t_worker_pickup || metrics.t_intent_start);
 
       const startClassificationTime = Date.now();
-      classification = await classifyMessageIntentWithTimeout(processingText, threadHistoryStr, 2000);
+      const [classificationRes, precomputedProductMatch] = await Promise.all([
+        classifyMessageIntentWithTimeout(processingText, threadHistoryStr, 2000, bypassContext),
+        matchProductForMessage(companyId, processingText),
+      ]);
+
+      classification = classificationRes;
       metrics.t_intent_end = Date.now();
+      metrics.t_rag_end = metrics.t_intent_end;
       classificationTime = metrics.t_intent_end - metrics.t_intent_start;
       metrics.stage2b_intent_duration = classificationTime;
+      metrics.stage3a_intent_to_rag_start = 0;
 
-      P(`after intent classification (${classification!.intent}, ${classification!.inquiryType || "N/A"})`);
-      console.log(`⚙️ [Orchestrator Intent] "${processingText}" → Classified as: ${classification!.intent} (${classification!.inquiryType || "N/A"})`);
+      P(`after intent classification & RAG search (${classification!.intent}, ${classification!.inquiryType || "N/A"})`);
+      console.log(`⚙️ [Orchestrator Intent & RAG] "${processingText}" → Classified as: ${classification!.intent} (${classification!.inquiryType || "N/A"})`);
 
       // 3. Conditional context injection based on classified intent
-      P("before RAG context retrieval");
-      metrics.t_rag_start = Date.now();
-      metrics.stage3a_intent_to_rag_start = metrics.t_rag_start - metrics.t_intent_end;
-
       if (classification.intent === "ProductInquiry") {
-        // Always run semantic product matching, regardless of specific/general.
-        // The matcher's null return is the actual signal for "no product found" —
-        // not the classifier's inquiryType label.
-        triageMatchedProduct = await matchProductForMessage(companyId, processingText);
+        // Semantic product matching result computed in parallel
+        triageMatchedProduct = precomputedProductMatch;
         if (triageMatchedProduct) {
           if (triageMatchedProduct.candidates && triageMatchedProduct.candidates.length > 1) {
             const candidateLines = triageMatchedProduct.candidates.map((c: any, idx: number) => {
