@@ -6,7 +6,7 @@
  */
 
 import Groq from "groq-sdk";
-import { prisma } from "../../lib/prisma";
+import { prisma, directPrisma } from "../../lib/prisma";
 import { embedText } from "../../utils/embedding";
 import {
   PRODUCT_PARSING_PROMPT,
@@ -511,76 +511,86 @@ export async function getInventoryProducts(companyId: string, categoriesFilter?:
  * Skips variant-less products (no `stock` field on the product itself).
  */
 export async function decrementStockForOrder(orderId: string, companyId: string): Promise<void> {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { orderItems: true }
-  });
-  if (!order || !order.orderItems.length) return;
-
-  for (const item of order.orderItems) {
-    let product = item.sku
-      ? await (prisma.inventoryProduct as any).findFirst({
-          where: { companyId, sku: item.sku, isActive: true }
-        })
-      : null;
-
-    if (!product) {
-      product = await (prisma.inventoryProduct as any).findFirst({
-        where: { companyId, name: { equals: item.name, mode: "insensitive" }, isActive: true }
-      });
-    }
-
-    if (!product || !product.hasVariants) continue;
-
-    const allVariants: any[] = await (prisma.inventoryVariant as any).findMany({
-      where: { productId: product.id, isActive: true }
+  await (directPrisma || prisma).$transaction(async (tx) => {
+    // 1. Atomic Idempotency Check: set stockDecremented = true only if it is currently false
+    const updated = await tx.order.updateMany({
+      where: { id: orderId, stockDecremented: false },
+      data: { stockDecremented: true }
     });
-    if (!allVariants.length) continue;
 
-    let targetVariant: any = null;
-
-    // 1. Direct variant ID match (payment-request stores variant.id in item.sku)
-    if (item.sku) {
-      targetVariant = allVariants.find((v: any) => v.id === item.sku);
+    if (updated.count === 0) {
+      console.log(`ℹ️ [StockDecrement] Order ${orderId} stock was already decremented. Skipping.`);
+      return;
     }
 
-    // 2. Attribute value as whole word in item name (word-boundary, avoids false positives)
-    if (!targetVariant) {
-      targetVariant = allVariants.find((v: any) => {
-        const escaped = v.attributeValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        return new RegExp(`\\b${escaped}\\b`, "i").test(item.name);
-      });
-    }
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { orderItems: true }
+    });
+    if (!order || !order.orderItems.length) return;
 
-    // 3. Fallback: pick variant with same price as OrderItem (if unique)
-    if (!targetVariant) {
-      const samePrice = allVariants.filter((v: any) => v.price === item.price);
-      if (samePrice.length === 1) {
-        targetVariant = samePrice[0];
+    for (const item of order.orderItems) {
+      let product = item.sku
+        ? await (tx.inventoryProduct as any).findFirst({
+            where: { companyId, sku: item.sku, isActive: true }
+          })
+        : null;
+
+      if (!product) {
+        product = await (tx.inventoryProduct as any).findFirst({
+          where: { companyId, name: { equals: item.name, mode: "insensitive" }, isActive: true }
+        });
       }
-    }
 
-    // 4. Last resort: most-stocked variant (triggers only when all above fail)
-    if (!targetVariant) {
-      targetVariant = allVariants.sort((a: any, b: any) => (b.stock ?? -1) - (a.stock ?? -1))[0];
-      console.warn(`⚠️ [StockDecrement] FALLBACK: No variant match for order ${orderId}, item "${item.name}" (qty ${item.quantity}). Using most-stocked variant "${targetVariant?.attributeValue}" (id: ${targetVariant?.id}). Product "${product.name}" has ${allVariants.length} variants: [${allVariants.map((v: any) => v.attributeValue).join(", ")}].`);
-    }
+      if (!product || !product.hasVariants) continue;
 
-    if (!targetVariant || targetVariant.stock === null || targetVariant.stock === undefined) continue;
+      const allVariants: any[] = await (tx.inventoryVariant as any).findMany({
+        where: { productId: product.id, isActive: true }
+      });
+      if (!allVariants.length) continue;
 
-    let success = false;
-    let actualNewStock = 0;
-    let actualOldStock = 0;
+      let targetVariant: any = null;
 
-    try {
-      success = await prisma.$transaction(async (tx) => {
+      // 1. Direct variant ID match (payment-request stores variant.id in item.sku)
+      if (item.sku) {
+        targetVariant = allVariants.find((v: any) => v.id === item.sku);
+      }
+
+      // 2. Attribute value as whole word in item name (word-boundary, avoids false positives)
+      if (!targetVariant) {
+        targetVariant = allVariants.find((v: any) => {
+          const escaped = v.attributeValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          return new RegExp(`\\b${escaped}\\b`, "i").test(item.name);
+        });
+      }
+
+      // 3. Fallback: pick variant with same price as OrderItem (if unique)
+      if (!targetVariant) {
+        const samePrice = allVariants.filter((v: any) => v.price === item.price);
+        if (samePrice.length === 1) {
+          targetVariant = samePrice[0];
+        }
+      }
+
+      // 4. Last resort: most-stocked variant (triggers only when all above fail)
+      if (!targetVariant) {
+        targetVariant = allVariants.sort((a: any, b: any) => (b.stock ?? -1) - (a.stock ?? -1))[0];
+        console.warn(`⚠️ [StockDecrement] FALLBACK: No variant match for order ${orderId}, item "${item.name}" (qty ${item.quantity}). Using most-stocked variant "${targetVariant?.attributeValue}" (id: ${targetVariant?.id}). Product "${product.name}" has ${allVariants.length} variants: [${allVariants.map((v: any) => v.attributeValue).join(", ")}].`);
+      }
+
+      if (!targetVariant || targetVariant.stock === null || targetVariant.stock === undefined) continue;
+
+      let actualNewStock = 0;
+      let actualOldStock = 0;
+
+      try {
         const result = await tx.$queryRaw<{ stock: number }[]>`
           UPDATE "InventoryVariant"
           SET "stock" = "stock" - ${item.quantity}
           WHERE "id" = ${targetVariant.id} AND "stock" >= ${item.quantity}
           RETURNING "stock"
         `;
-        if (!result.length) return false;
+        if (!result.length) continue;
 
         actualNewStock = result[0].stock;
         actualOldStock = actualNewStock + item.quantity;
@@ -595,15 +605,11 @@ export async function decrementStockForOrder(orderId: string, companyId: string)
           }
         });
 
-        return true;
-      });
-    } catch (historyErr) {
-      console.error("❌ [StockDecrement] Failed to write StockHistory row:", historyErr);
-      continue;
+        console.log(`📦 [StockDecrement] Variant ${targetVariant.id} ("${targetVariant.attributeValue}"): ${actualOldStock} → ${actualNewStock} (ordered ${item.quantity})`);
+      } catch (historyErr) {
+        console.error("❌ [StockDecrement] Failed to write StockHistory row:", historyErr);
+        continue;
+      }
     }
-
-    if (!success) continue;
-
-    console.log(`📦 [StockDecrement] Variant ${targetVariant.id} ("${targetVariant.attributeValue}"): ${actualOldStock} → ${actualNewStock} (ordered ${item.quantity})`);
-  }
+  }, { maxWait: 10000, timeout: 20000 });
 }
