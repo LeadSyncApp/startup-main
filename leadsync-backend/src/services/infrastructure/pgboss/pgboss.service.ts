@@ -13,6 +13,7 @@ class PgBossService {
   // Complete list of all operational queues your application workers/schedules depend on
   private readonly requiredQueues = [
     'webhook.process',
+    'ai-triage-job',
     'GENERATE_PDF',
     'SEND_EMAIL',
     'RECOVER_WEBHOOK',

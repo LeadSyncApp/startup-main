@@ -6,6 +6,7 @@ import path from "path";
 import { getTenantContext } from "../context/tenantContext.provider";
 import { prisma } from "../../lib/prisma";
 import { retrieveProductChunks, RetrievedChunk } from "../knowledge/knowledgeRetriever.service";
+import { stepProfiler } from "../../utils/stepProfiler";
 
 // Ensure environment variables are loaded
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
@@ -46,6 +47,18 @@ export function getGroq(): Groq {
     });
   }
   return groqClient;
+}
+
+// ⚡ In-memory cache for merchant categories lookup (5 min TTL)
+const categoriesCache = new Map<string, { categories: string[]; cachedAt: number }>();
+const CATEGORIES_CACHE_TTL_MS = 5 * 60 * 1000;
+
+export function invalidateCategoriesCache(companyId?: string) {
+  if (companyId) {
+    categoriesCache.delete(companyId);
+  } else {
+    categoriesCache.clear();
+  }
 }
 
 /**
@@ -482,12 +495,30 @@ export async function generateShopReply(payload: any): Promise<UnifiedShopRespon
     const ruleSegment = context.businessRulesSchema || "No custom business parameters enregistered.";
     const heuristicSegment = context.localizedHeuristics || "Standard Indian localized dialect patterns.";
 
-    // Fetch distinct product categories for the merchant
-    const categoryRows = await prisma.inventoryProduct.findMany({
-      where: { companyId: context.companyId, isActive: true },
-      select: { categories: true },
-    });
-    const allCategories = [...new Set(categoryRows.flatMap(r => r.categories))].sort();
+    // Fetch distinct product categories for the merchant (with 60s per-tenant in-memory cache)
+    let allCategories: string[];
+    const now = Date.now();
+    const cachedCategories = categoriesCache.get(context.companyId);
+
+    if (cachedCategories && (now - cachedCategories.cachedAt) < CATEGORIES_CACHE_TTL_MS) {
+      console.log(`⚡ [CategoriesCache] HIT for companyId: ${context.companyId}`);
+      allCategories = cachedCategories.categories;
+    } else {
+      console.log(`📦 [CategoriesCache] MISS for companyId: ${context.companyId} — fetching fresh from DB`);
+      const categoryRows = await stepProfiler.time(
+        "generateShopReply DB categories query",
+        "ai.service.ts:486",
+        "DB query",
+        `SELECT categories FROM InventoryProduct WHERE companyId=${context.companyId} AND isActive=true`,
+        false,
+        () => prisma.inventoryProduct.findMany({
+          where: { companyId: context.companyId, isActive: true },
+          select: { categories: true },
+        })
+      );
+      allCategories = [...new Set(categoryRows.flatMap(r => r.categories))].sort();
+      categoriesCache.set(context.companyId, { categories: allCategories, cachedAt: now });
+    }
 
     const historyText = Array.isArray(payload.conversation_history) && payload.conversation_history.length > 0
       ? payload.conversation_history.map((m: any) => `${m.sender === "CLIENT" ? "Customer" : "Assistant"}: ${m.content}`).join("\n")
@@ -582,15 +613,22 @@ ${contextBoundaryBlock}
 CHAT MESSAGE SENT BY CUSTOMER: "${payload.user_message}"
 `.trim();
 
-    const result = await groq.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      model: context?.aiModelTarget || "llama-3.1-8b-instant",
-      response_format: { type: "json_object" },
-      temperature: 0.1,
-    });
+    const result = await stepProfiler.time(
+      "generateShopReply main Groq LLM generation call",
+      "ai.service.ts:585",
+      "External call",
+      `Groq chat.completions API call (${context?.aiModelTarget || "llama-3.1-8b-instant"})`,
+      false,
+      () => groq.chat.completions.create({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        model: context?.aiModelTarget || "llama-3.1-8b-instant",
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+      })
+    );
 
     const text = result.choices[0]?.message?.content || "{}";
     const parsedResponse: UnifiedShopResponse = JSON.parse(text);
@@ -1093,10 +1131,16 @@ export async function classifyMessageIntent(
   messageText: string,
   threadHistory?: string
 ): Promise<PreFlightClassification> {
-  const startTime = Date.now();
-  try {
-    const groq = getGroq();
-    const systemPrompt = `
+  return await stepProfiler.time(
+    "classifyMessageIntent LLM call (llama-3.1-8b-instant)",
+    "ai.service.ts:1115",
+    "External call",
+    "Groq chat.completions API call for intent pre-flight classification",
+    false,
+    async () => {
+      try {
+        const groq = getGroq();
+        const systemPrompt = `
 You are a high-speed message classification router for an AI ecommerce assistant.
 Analyze the user's message and determine their primary intent and, if applicable, the specificity of their inquiry.
 
@@ -1121,34 +1165,36 @@ You MUST return a valid JSON object matching this structure:
 }
 `.trim();
 
-    const userPrompt = `
+        const userPrompt = `
 ${threadHistory ? `RECENT THREAD HISTORY:\n${threadHistory}\n\n` : ""}
 CURRENT CUSTOMER MESSAGE: "${messageText}"
 `.trim();
 
-    const result = await groq.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      model: "llama-3.1-8b-instant",
-      response_format: { type: "json_object" },
-      temperature: 0.0,
-    });
+        const result = await groq.chat.completions.create({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          model: "llama-3.1-8b-instant",
+          response_format: { type: "json_object" },
+          temperature: 0.0,
+        });
 
-    const text = result.choices[0]?.message?.content || "{}";
-    const parsed: PreFlightClassification = JSON.parse(text);
-    console.log(`⏱️ [PreFlight Classification] Completed in ${Date.now() - startTime}ms. Result:`, JSON.stringify(parsed));
-    return parsed;
-  } catch (err: any) {
-    const e = { message: err?.message, status: err?.status, body: err?.error?.message || null, stack: err?.stack?.split("\n").slice(0,2).join(";") };
-    console.error("❌ [PreFlight] Classification crashed:", JSON.stringify(e));
-    return {
-      intent: "ProductInquiry",
-      inquiryType: "specific",
-      reasoning: `Fallback due to classification failure: ${e.message}`
-    };
-  }
+        const text = result.choices[0]?.message?.content || "{}";
+        const parsed: PreFlightClassification = JSON.parse(text);
+        console.log(`⏱️ [PreFlight Classification] Result:`, JSON.stringify(parsed));
+        return parsed;
+      } catch (err: any) {
+        const e = { message: err?.message, status: err?.status, body: err?.error?.message || null, stack: err?.stack?.split("\n").slice(0,2).join(";") };
+        console.error("❌ [PreFlight] Classification crashed:", JSON.stringify(e));
+        return {
+          intent: "ProductInquiry",
+          inquiryType: "specific",
+          reasoning: `Fallback due to classification failure: ${e.message}`
+        };
+      }
+    }
+  );
 }
 
 export async function classifyMessageIntentWithTimeout(
