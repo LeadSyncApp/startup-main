@@ -272,6 +272,7 @@ model Order {
   predictedValue Float?
   priorityScore  Int                 @default(0)
   version        Int                 @default(1)
+  stockDecremented Boolean           @default(false)
   invoice        Invoice?
   company        Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
