@@ -265,6 +265,115 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
 });
 
 /* ================================
+   GET /analytics/top-products
+   Ranked product performance based on existing order items
+ ================================ */
+router.get("/top-products", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const companyId = req.user!.companyId;
+
+        const orderItems = await prisma.orderItem.findMany({
+            where: {
+                companyId,
+                order: {
+                    companyId,
+                    isDeleted: false,
+                    status: { in: ["DELIVERED", "PAID"] }
+                }
+            },
+            select: {
+                name: true,
+                quantity: true,
+                price: true,
+                productId: true,
+                sku: true,
+            }
+        });
+
+        const aggregate = new Map<string, { name: string; units: number; revenue: number; sku?: string | null; productId?: string | null }>();
+
+        orderItems.forEach((item: any) => {
+            const key = item.productId || item.sku || item.name;
+            const existing = aggregate.get(key) || { name: item.name, units: 0, revenue: 0, sku: item.sku, productId: item.productId };
+            existing.units += Number(item.quantity || 1);
+            existing.revenue += Number(item.price || 0) * Number(item.quantity || 1);
+            aggregate.set(key, existing);
+        });
+
+        const topProducts = Array.from(aggregate.values())
+            .sort((a, b) => b.units - a.units || b.revenue - a.revenue)
+            .slice(0, 6)
+            .map((item) => ({
+                name: item.name,
+                units: item.units,
+                revenue: Number(item.revenue || 0),
+                sku: item.sku,
+                productId: item.productId,
+            }));
+
+        const totalUnits = topProducts.reduce((sum, item) => sum + item.units, 0);
+        const enriched = topProducts.map((item) => ({
+            ...item,
+            share: totalUnits > 0 ? Math.round((item.units / totalUnits) * 100) : 0,
+        }));
+
+        res.json({ topProducts: enriched, totalUnits });
+    } catch (error) {
+        console.error("Top Products Analytics Error:", error);
+        res.status(500).json({ message: "Failed to fetch top products" });
+    }
+});
+
+/* ================================
+   GET /analytics/channel-contributions
+   Revenue contribution by channel using existing lead/order fields
+ ================================ */
+router.get("/channel-contributions", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const companyId = req.user!.companyId;
+
+        const orders = await prisma.order.findMany({
+            where: {
+                companyId,
+                isDeleted: false,
+                status: { in: ["DELIVERED", "PAID"] }
+            },
+            select: {
+                amount: true,
+                lead: { select: { channel: true } },
+                sourceChannel: true,
+            }
+        });
+
+        const channelMap: Record<string, { revenue: number; orders: number }> = {};
+
+        orders.forEach((order: any) => {
+            const channel = (order.lead?.channel as string) || (order.sourceChannel as string) || "UNKNOWN";
+            if (!channelMap[channel]) {
+                channelMap[channel] = { revenue: 0, orders: 0 };
+            }
+            channelMap[channel].revenue += Number(order.amount || 0);
+            channelMap[channel].orders += 1;
+        });
+
+        const totalRevenue = Object.values(channelMap).reduce((sum, item) => sum + item.revenue, 0);
+        const channelContributions = Object.entries(channelMap)
+            .map(([channel, data]) => ({
+                channel,
+                revenue: data.revenue,
+                orders: data.orders,
+                percentage: totalRevenue > 0 ? Math.round((data.revenue / totalRevenue) * 100) : 0,
+            }))
+            .sort((a, b) => b.revenue - a.revenue);
+
+        res.json({ channelContributions, totalRevenue });
+    } catch (error) {
+        console.error("Channel Contributions Error:", error);
+        res.status(500).json({ message: "Failed to fetch channel contributions" });
+    }
+});
+
+/* ================================
    GET /analytics/crm
    CRM Pipeline and Deal Analytics
  ================================ */

@@ -20,6 +20,10 @@ import InboxSplitView from "./features/inbox/InboxSplitView";
 import { InventoryPage } from "./features/inventory/InventoryPage";
 import { DailyCollectionStats } from "./features/dashboard/DailyCollectionStats";
 import { DailyPulseAdaptiveWidget } from "./features/dashboard/DailyPulseAdaptiveWidget";
+import { LiveActivityFeed } from "./features/dashboard/LiveActivityFeed";
+import { RevenueTrendChart } from "./features/dashboard/RevenueTrendChart";
+import { TopProductsCard } from "./features/dashboard/TopProductsCard";
+import { ChannelMixCard } from "./features/dashboard/ChannelMixCard";
 import { ConfigurationsPage } from "./features/configurations/ConfigurationsPage";
 import { AcceptInvitePage } from "./features/team/AcceptInvitePage";
 import { activityToast as activityToast } from "./features/activity-ledger/useActivityStore";
@@ -282,19 +286,15 @@ export default function App() {
           subtitle="Real-time updates from your shop"
         />
         <DailyPulseAdaptiveWidget dailyRevenueTarget={dailyRevenueTarget}>
-          <div className="h-40 flex items-end gap-3 justify-between mt-4">
-            {[40, 70, 45, 90, 65, 80, 50, 40].map((h, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
-                <div
-                  className="w-full bg-[var(--app-bg-soft)] rounded-lg group-hover:bg-[var(--brand-saffron-soft)] transition-all"
-                  style={{ height: `${h}%` }}
-                />
-                <span className="text-2xs" style={{ color: 'var(--text-secondary)' }}>{i+9}:05</span>
-              </div>
-            ))}
-          </div>
+          <LiveActivityFeed />
         </DailyPulseAdaptiveWidget>
       </Card>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <RevenueTrendChart />
+        <TopProductsCard />
+        <ChannelMixCard />
+      </div>
 
       {/* Migration / Getting Started Card */}
       <Card padding="lg" data-tour="getting-started" className="!bg-[var(--tile-bg)] !border-[var(--tile-border)] backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
