@@ -17,7 +17,7 @@ const createPrismaClient = () => {
   const dbUrl = new URL(DATABASE_URL);
   // Increase connection pool to handle concurrent Telegram polling + staff requests
   if (!dbUrl.searchParams.has("connection_limit")) {
-    dbUrl.searchParams.set("connection_limit", "15");
+    dbUrl.searchParams.set("connection_limit", "30");
   }
   if (!dbUrl.searchParams.has("pool_timeout")) {
     dbUrl.searchParams.set("pool_timeout", "10");
