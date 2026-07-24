@@ -13,20 +13,16 @@ class PgBossService {
   // Complete list of all operational queues your application workers/schedules depend on
   private readonly requiredQueues = [
     'webhook.process',
+    'ai-triage-job',
     'GENERATE_PDF',
     'SEND_EMAIL',
     'RECOVER_WEBHOOK',
     'CLEANUP_IDEMPOTENCY',
     'PROCESS_AI_TASK',
     'CLEANUP_WEBHOOKS',
-    'RUN_AUTOMATION',
-    'CLEANUP_AUTOMATION_LOGS',
-    'automation_runner',
     'menu.restructure.job',
     'knowledge.train.job',
-    'voice.process.job',
-    'delayed_auto_reply',  // 🛑 FIX: Persistent delayed auto-reply queue (replaces setTimeout)
-    'LEAD_FOLLOWUP'        // ⏰ Lead follow-up cron queue
+    'voice.process.job'
   ];
 
   private constructor() {}
@@ -87,6 +83,12 @@ class PgBossService {
       for (const queue of this.requiredQueues) {
         await this.boss.createQueue(queue);
       }
+      // Disable automatic retries on webhook.process — all pipeline errors are
+      // permanent (bad channel, bad payload, auth failure). Retries only produce
+      // duplicate side effects (Sarvam calls, Groq calls, outbound messages).
+      await this.boss.updateQueue('webhook.process', { retryLimit: 0 }).catch((e: any) => {
+        console.error('⚠️ [PgBoss] Failed to set retryLimit=0 on webhook.process:', e.message);
+      });
       console.log('✅ [PgBoss] Queue registration/verifications complete.');
     } catch (apiErr) {
       console.error('⚠️ Client-side queue verification failed:', apiErr);

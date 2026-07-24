@@ -10,6 +10,7 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import {
   parseInventoryText,
   confirmInventoryProducts,
@@ -19,19 +20,57 @@ import {
 } from "../../services/knowledge/inventory.service";
 import { prisma } from "../../lib/prisma";
 import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
+import multer from "multer";
+import { supabase } from "../../lib/supabase";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only JPEG, PNG, and WebP are allowed."));
+    }
+  }
+});
 
 const router = Router();
+
+// ==========================================
+// VALIDATION SCHEMAS
+// ==========================================
+
+const confirmVariantSchema = z.object({
+  price_override: z.number().nonnegative().nullable().optional(),
+  stock: z.number().int().nonnegative().nullable(),
+}).passthrough();
+
+const confirmProductSchema = z.object({
+  product_type: z.string().trim().min(1, "Product type is required"),
+  price_inr: z.number().nonnegative("Price must not be negative").nullable(),
+  variants: z.array(confirmVariantSchema).default([]),
+  categories: z.array(z.string().min(1, "Category cannot be empty")).optional(),
+}).passthrough();
 
 /**
  * GET /companies/:id/inventory
  * 
  * Returns all active InventoryProduct records with nested variants.
+ * Optional query param: ?categories=X,Y — filter by any of the given categories (AND logic for array overlap).
  */
-router.get("/:id/inventory", async (req, res) => {
+router.get("/:id/inventory", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
+  const { categories } = req.query;
 
   try {
-    const products = await getInventoryProducts(companyId);
+    const products = await getInventoryProducts(companyId, categories as string | undefined);
     res.json({ products, count: products.length });
   } catch (error: any) {
     console.error("[InventoryRoutes] List error:", error);
@@ -47,8 +86,11 @@ router.get("/:id/inventory", async (req, res) => {
  * 
  * Search products by name or category for the in-chat product picker.
  */
-router.get("/:id/inventory/search", async (req, res) => {
+router.get("/:id/inventory/search", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { q } = req.query;
   const searchTerm = (q as string || "").trim();
 
@@ -73,8 +115,11 @@ router.get("/:id/inventory/search", async (req, res) => {
  * 
  * Check if any of the submitted products already exist (by name).
  */
-router.post("/:id/inventory/check-duplicates", async (req, res) => {
+router.post("/:id/inventory/check-duplicates", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { products } = req.body;
 
   if (!Array.isArray(products)) {
@@ -85,8 +130,7 @@ router.post("/:id/inventory/check-duplicates", async (req, res) => {
     const duplicates: Array<{ name: string; existingId: string }> = [];
 
     for (const product of products) {
-      const brand = (product.brand || "").trim();
-      const name = brand ? `${brand} ${product.product_type}`.trim() : product.product_type;
+      const name = product.product_type;
 
       const existing = await prisma.inventoryProduct.findUnique({
         where: { companyId_name: { companyId, name } },
@@ -111,9 +155,12 @@ router.post("/:id/inventory/check-duplicates", async (req, res) => {
  * Groq-based parsing of free-text inventory descriptions.
  * Returns structured products array without persisting.
  */
-router.post("/:id/inventory/parse", async (req, res) => {
+router.post("/:id/inventory/parse", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
-  const { text } = req.body;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
+  const { text, language } = req.body;
 
   if (!text || typeof text !== "string") {
     return res.status(400).json({
@@ -122,7 +169,7 @@ router.post("/:id/inventory/parse", async (req, res) => {
   }
 
   try {
-    const result = await parseInventoryText(companyId, text);
+    const result = await parseInventoryText(companyId, text, language || "English");
     res.json(result);
   } catch (error: any) {
     console.error("[InventoryRoutes] Parse error:", error);
@@ -140,14 +187,31 @@ router.post("/:id/inventory/parse", async (req, res) => {
  * Also maintains KnowledgeChunk for RAG backward compatibility.
  * Deduplicates by product name.
  */
-router.post("/:id/inventory/confirm", async (req, res) => {
+router.post("/:id/inventory/confirm", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { products } = req.body;
 
   if (!Array.isArray(products)) {
     return res.status(400).json({
       error: "Invalid request: 'products' field must be an array"
     });
+  }
+
+  for (const [index, product] of products.entries()) {
+    const parsed = confirmProductSchema.safeParse(product);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Product validation failed",
+        details: parsed.error.issues.map(issue => ({
+          productIndex: index,
+          field: issue.path.join("."),
+          message: issue.message
+        }))
+      });
+    }
   }
 
   try {
@@ -181,7 +245,18 @@ router.get("/search", authMiddleware, async (req: AuthRequest, res) => {
   }
 
   if (!searchTerm) {
-    return res.json({ products: [] });
+    try {
+      const products = await prisma.inventoryProduct.findMany({
+        where: { companyId, isActive: true },
+        include: { variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } } },
+        orderBy: { createdAt: "desc" },
+        take: 20
+      });
+      return res.json({ products });
+    } catch (error: any) {
+      console.error("[InventoryRoutes] Default load error:", error);
+      return res.status(500).json({ error: "Failed to load default products" });
+    }
   }
 
   try {
@@ -196,4 +271,281 @@ router.get("/search", authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+/**
+ * DELETE /companies/:id/inventory/:productId
+ * 
+ * Soft-deletes a product by setting isActive = false, and also deactivates 
+ * the corresponding KnowledgeChunk (sourceType = 'PRODUCT') so it's removed from RAG search.
+ */
+router.delete("/:id/inventory/:productId", authMiddleware, async (req: AuthRequest, res) => {
+  const { id: companyId, productId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
+
+  try {
+    // 1. Verify product belongs to the requested company (tenant check)
+    const existingProduct = await prisma.inventoryProduct.findFirst({
+      where: { id: productId, companyId }
+    });
+
+    if (!existingProduct) {
+      return res.status(404).json({ error: "Product not found or access denied" });
+    }
+
+    // 2. Soft-delete the product
+    await prisma.inventoryProduct.update({
+      where: { id: productId },
+      data: { isActive: false }
+    });
+
+    // 3. Deactivate associated KnowledgeChunks
+    await prisma.knowledgeChunk.updateMany({
+      where: {
+        companyId,
+        sourceType: "PRODUCT",
+        sourceId: productId
+      },
+      data: { isActive: false }
+    });
+
+    res.json({ success: true, message: "Product deleted successfully" });
+  } catch (error: any) {
+    console.error("[InventoryRoutes] Delete error:", error);
+    res.status(500).json({
+      error: "Failed to delete product",
+      details: error.message
+    });
+  }
+});
+
+/**
+ * POST /companies/:id/inventory/:productId/images
+ * Upload an image for a product
+ */
+router.post(
+  "/:id/inventory/:productId/images",
+  authMiddleware,
+  upload.single("image"),
+  async (req: AuthRequest, res) => {
+    const { id: companyId, productId } = req.params;
+    const userCompanyId = req.user?.companyId;
+    if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+    if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: "No image file provided" });
+    }
+
+    try {
+      const product = await prisma.inventoryProduct.findFirst({
+        where: { id: productId, companyId }
+      });
+      if (!product) {
+        return res.status(404).json({ error: "Product not found or access denied" });
+      }
+
+      const existingCount = await prisma.productImage.count({
+        where: { productId }
+      });
+      if (existingCount >= 10) {
+        return res.status(400).json({ error: "Maximum limit of 10 images reached" });
+      }
+
+      if (!supabase) {
+        return res.status(500).json({ error: "Storage client not initialized" });
+      }
+
+      try {
+        const { data: buckets } = await supabase.storage.listBuckets();
+        const exists = buckets?.some(b => b.name === "product-images");
+        if (!exists) {
+          await supabase.storage.createBucket("product-images", { public: true });
+        }
+      } catch (err) {
+        console.error("Failed to check/create bucket:", err);
+      }
+
+      const fileName = `${Date.now()}_${file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const filePath = `products/${companyId}/${productId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("product-images")
+        .upload(filePath, file.buffer, {
+          contentType: file.mimetype,
+          upsert: true
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(filePath);
+
+      const nextOrder = existingCount;
+      const newImage = await prisma.productImage.create({
+        data: {
+          productId,
+          url: publicUrl,
+          order: nextOrder
+        }
+      });
+
+      if (nextOrder === 0) {
+        await prisma.inventoryProduct.update({
+          where: { id: productId },
+          data: { imageUrl: publicUrl }
+        });
+      }
+
+      res.status(201).json({ image: newImage });
+    } catch (error: any) {
+      console.error("[InventoryRoutes] Image upload error:", error);
+      res.status(500).json({ error: "Failed to upload image", details: error.message });
+    }
+  }
+);
+
+/**
+ * DELETE /companies/:id/inventory/:productId/images/:imageId
+ * Delete an image
+ */
+router.delete("/:id/inventory/:productId/images/:imageId", authMiddleware, async (req: AuthRequest, res) => {
+  const { id: companyId, productId, imageId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
+
+  try {
+    const image = await prisma.productImage.findFirst({
+      where: { id: imageId, productId, product: { companyId } }
+    });
+    if (!image) {
+      return res.status(404).json({ error: "Image not found or access denied" });
+    }
+
+    if (supabase) {
+      const urlParts = image.url.split("/product-images/");
+      if (urlParts.length > 1) {
+        const filePath = urlParts[1];
+        await supabase.storage.from("product-images").remove([filePath]);
+      }
+    }
+
+    await prisma.productImage.delete({ where: { id: imageId } });
+
+    const remainingImages = await prisma.productImage.findMany({
+      where: { productId },
+      orderBy: { order: "asc" }
+    });
+
+    let newImageUrl: string | null = null;
+    for (let i = 0; i < remainingImages.length; i++) {
+      const img = remainingImages[i];
+      await prisma.productImage.update({
+        where: { id: img.id },
+        data: { order: i }
+      });
+      if (i === 0) {
+        newImageUrl = img.url;
+      }
+    }
+
+    await prisma.inventoryProduct.update({
+      where: { id: productId },
+      data: { imageUrl: newImageUrl }
+    });
+
+    res.json({ success: true, message: "Image deleted successfully" });
+  } catch (error: any) {
+    console.error("[InventoryRoutes] Image delete error:", error);
+    res.status(500).json({ error: "Failed to delete image", details: error.message });
+  }
+});
+
+/**
+ * POST /companies/:id/inventory/:productId/images/reorder
+ * Reorder image gallery
+ */
+router.post("/:id/inventory/:productId/images/reorder", authMiddleware, async (req: AuthRequest, res) => {
+  const { id: companyId, productId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
+  const { imageIds } = req.body;
+
+  if (!Array.isArray(imageIds)) {
+    return res.status(400).json({ error: "imageIds must be an array of strings" });
+  }
+
+  try {
+    const product = await prisma.inventoryProduct.findFirst({
+      where: { id: productId, companyId }
+    });
+    if (!product) {
+      return res.status(404).json({ error: "Product not found or access denied" });
+    }
+
+    await prisma.$transaction(
+      imageIds.map((id, index) =>
+        prisma.productImage.update({
+          where: { id, productId },
+          data: { order: index }
+        })
+      )
+    );
+
+    const primaryImage = await prisma.productImage.findFirst({
+      where: { productId, order: 0 },
+      select: { url: true }
+    });
+    await prisma.inventoryProduct.update({
+      where: { id: productId },
+      data: { imageUrl: primaryImage?.url || null }
+    });
+
+    res.json({ success: true, message: "Images reordered successfully" });
+  } catch (error: any) {
+    console.error("[InventoryRoutes] Image reorder error:", error);
+    res.status(500).json({ error: "Failed to reorder images", details: error.message });
+  }
+});
+
+/**
+ * GET /companies/:id/inventory/:productId/history
+ * Fetch price and stock history logs for a product
+ */
+router.get("/:id/inventory/:productId/history", authMiddleware, async (req: AuthRequest, res) => {
+  const { id: companyId, productId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
+
+  try {
+    const product = await prisma.inventoryProduct.findFirst({
+      where: { id: productId, companyId }
+    });
+    if (!product) {
+      return res.status(404).json({ error: "Product not found or access denied" });
+    }
+
+    const priceHistory = await prisma.priceHistory.findMany({
+      where: { productId },
+      orderBy: { changedAt: "desc" }
+    });
+
+    const stockHistory = await prisma.stockHistory.findMany({
+      where: { productId },
+      orderBy: { changedAt: "desc" }
+    });
+
+    res.json({ priceHistory, stockHistory });
+  } catch (error: any) {
+    console.error("[InventoryRoutes] Get history error:", error);
+    res.status(500).json({ error: "Failed to fetch history", details: error.message });
+  }
+});
+
 export default router;
+

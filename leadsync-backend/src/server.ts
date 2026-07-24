@@ -13,7 +13,9 @@ import { SchedulerRegistry } from "./services/infrastructure/pgboss/scheduler.re
 import { sysLog } from "./lib/logger";
 import { startOrchestratorWorker } from "./services/workers/ai.orchestrator.worker";
 import { startAiTriageWorker } from "./services/workers/ai.triage.worker";
+import { ensureRerankerReady } from "./services/knowledge/productMatch.service";
 import { reapGhostsForCompany } from "./services/infrastructure/ghostReaper.service";
+import { onnxWorkerPool } from "./utils/onnxWorkerPool";
 
 const PROCESS_PROFILE = process.env.PROCESS_PROFILE || "COMBINED";
 const PORT = 4000;
@@ -48,15 +50,19 @@ const gracefulShutdown = async (signal: string) => {
     sysLog.info("🌐 [Shutdown] Safely draining resources...");
     try {
       // 1. Drain active tracked tasks (such as active webhook operations)
-      sysLog.info("⏳ [Shutdown] Phase 1/3: Waiting for active tracked tasks to finish...");
+      sysLog.info("⏳ [Shutdown] Phase 1/4: Waiting for active tracked tasks to finish...");
       await taskTracker.waitForCompletion(15000);
 
       // 2. Shut down PgBoss Queue Client & Workers
-      sysLog.info("⏳ [Shutdown] Phase 2/3: Stopping PgBoss service and queue listeners...");
+      sysLog.info("⏳ [Shutdown] Phase 2/4: Stopping PgBoss service and queue listeners...");
       await pgBossService.stop();
 
-      // 3. Close the Prisma client pool
-      sysLog.info("⏳ [Shutdown] Phase 3/3: Disconnecting Prisma database connections...");
+      // 3. Shut down ONNX worker pool
+      sysLog.info("⏳ [Shutdown] Phase 3/4: Shutting down ONNX worker pool...");
+      await onnxWorkerPool.shutdown();
+
+      // 4. Close the Prisma client pool
+      sysLog.info("⏳ [Shutdown] Phase 4/4: Disconnecting Prisma database connections...");
       await prisma.$disconnect();
 
       sysLog.info("🔌 [Shutdown] Resource cleanup completed successfully. Process exiting.");
@@ -90,6 +96,11 @@ async function bootstrap() {
   try {
     sysLog.info(`🚀 [Bootstrap] Starting application instance with profile: ${PROCESS_PROFILE}`);
 
+    // Pre-warm ONNX worker pool (loads E5 & BGE models in worker thread)
+    sysLog.info("🧠 [Bootstrap] Initializing & pre-warming ONNX worker pool...");
+    await onnxWorkerPool.init();
+    sysLog.info("🧠 [Bootstrap] ONNX worker pool initialized and pre-warmed OK.");
+
     // Ensure database connection pool is established
     await prisma.$connect();
     sysLog.info("🔌 [Bootstrap] Database connectivity successfully verified.");
@@ -110,6 +121,13 @@ async function bootstrap() {
     // Initialize the PgBoss service client (always required so database schema is synchronized or jobs can be queued)
     await pgBossService.initialize();
     sysLog.info("📦 [Bootstrap] PgBoss queue service successfully initialized.");
+
+    // Verify the BGE reranker can load before accepting any work.
+    // If it fails, crash hard — product matching silently returning null
+    // for every query is worse than a startup failure that gets noticed.
+    sysLog.info("🧠 [Bootstrap] Loading BGE reranker (first load downloads ~571 MB from HuggingFace)...");
+    await ensureRerankerReady();
+    sysLog.info("🧠 [Bootstrap] BGE reranker loaded OK.");
 
     // Execution path for background WORKER profiles
     if (PROCESS_PROFILE === "WORKER" || PROCESS_PROFILE === "COMBINED") {

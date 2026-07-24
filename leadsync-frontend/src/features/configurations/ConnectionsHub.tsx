@@ -10,6 +10,7 @@ import { apiClient } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 
 export function ConnectionsHub() {
   const { user, company, updateCompany } = useAuth();
@@ -21,6 +22,7 @@ export function ConnectionsHub() {
 
   // Modals
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
+  const [isDisconnectConfirmOpen, setIsDisconnectConfirmOpen] = useState(false);
   const [telegramToken, setTelegramToken] = useState("");
   const [isWidgetModalOpen, setIsWidgetModalOpen] = useState(false);
   const [isMetaStubModalOpen, setIsMetaStubModalOpen] = useState(false);
@@ -28,11 +30,32 @@ export function ConnectionsHub() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    let active = true;
+    const fetchStatus = async () => {
+      try {
+        const response = await apiClient.get("/integrations/status");
+        if (active && response.data) {
+          const { telegram } = response.data;
+          setTelegramConnected(!!telegram.connected);
+          setTelegramBotUsername(telegram.username || "");
+          updateCompany({
+            telegramConnected: !!telegram.connected,
+            telegramBotUsername: telegram.username || ""
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching integration status:", err);
+      }
+    };
+
     if (company) {
-      setTelegramConnected(!!company.telegramConnected);
-      setTelegramBotUsername(company.telegramBotUsername || "");
       setWhatsAppConnected(!!company.businessType);
+      fetchStatus();
     }
+
+    return () => {
+      active = false;
+    };
   }, [company?.id]);
 
   const handleConnectTelegram = async (e: React.FormEvent) => {
@@ -63,12 +86,7 @@ export function ConnectionsHub() {
     }
   };
 
-  const handleDisconnectTelegram = async () => {
-    if (user?.role !== 'OWNER' && user?.role !== 'MANAGER') {
-      toast.error("You don't have permission to disconnect the bot.");
-      return;
-    }
-    if (!window.confirm("Are you sure you want to disconnect this Telegram bot?")) return;
+  const triggerDisconnectTelegram = async () => {
     setIsLoadingBot(true);
     try {
       const response = await apiClient.post("/integrations/telegram/disconnect");
@@ -82,6 +100,14 @@ export function ConnectionsHub() {
     } finally {
       setIsLoadingBot(false);
     }
+  };
+
+  const handleDisconnectTelegram = () => {
+    if (user?.role !== 'OWNER' && user?.role !== 'MANAGER') {
+      toast.error("You don't have permission to disconnect the bot.");
+      return;
+    }
+    setIsDisconnectConfirmOpen(true);
   };
 
   const openMetaStubDialog = (platform: string) => {
@@ -563,6 +589,17 @@ export function ConnectionsHub() {
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        isOpen={isDisconnectConfirmOpen}
+        onClose={() => setIsDisconnectConfirmOpen(false)}
+        onConfirm={triggerDisconnectTelegram}
+        title="Disconnect Bot"
+        message="Are you sure you want to disconnect this Telegram bot? This will clear the bot token and stop automatic message routing."
+        confirmLabel="Disconnect"
+        cancelLabel="Cancel"
+        isDestructive={true}
+      />
     </div>
   );
 }

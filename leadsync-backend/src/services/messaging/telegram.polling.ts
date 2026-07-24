@@ -1,11 +1,12 @@
 import { prisma } from "../../lib/prisma";
 import { ProviderAdapterFactory } from "../../adapters/provider.factory";
-import { TelegramLeaseService, MY_ROLE, INSTANCE_ID } from "./telegramSelector.service";
+import { TelegramLeaseService, MY_ROLE, INSTANCE_ID, IS_LOCAL } from "./telegramSelector.service";
 import axios from "axios";
 import { taskTracker } from "../infrastructure/taskTracker";
 import { webhookPersistenceService } from "../infrastructure/webhookPersistence.service";
 import { pgBossService } from "../infrastructure/pgboss/pgboss.service";
 import { decryptSecret } from "../../utils/encryption";
+import { idempotencyService } from "../infrastructure/idempotency.service";
 
 declare global {
   var isTelegramPollingStarted: boolean | undefined;
@@ -34,24 +35,69 @@ export async function startTelegramPolling() {
   // Run the polling query in a loop
   const poll = async () => {
     try {
-      // Find all companies with connected Telegram bots
+      // Fail-safe: if local dev and MY_BOT_USERNAME is not configured, poll nothing.
+      if (IS_LOCAL && !process.env.MY_BOT_USERNAME) {
+        setTimeout(poll, 1500);
+        return;
+      }
+
+      // Find all companies with connected Telegram bots for this polling instance
       const companies = await prisma.company.findMany({
         where: {
           telegramBotToken: { not: null },
-          telegramConnected: true
+          telegramConnected: true,
+          ...(IS_LOCAL ? { telegramBotUsername: process.env.MY_BOT_USERNAME } : {})
         },
         select: {
-            id: true,
-            telegramBotToken: true,
-            telegramBotUsername: true,
-            telegramConnected: true
+          id: true,
+          telegramBotToken: true,
+          telegramBotUsername: true,
+          telegramConnected: true
         }
       });
+
+      // Safeguard: Check for duplicate bot tokens across the targeted environment to prevent misrouting
+      const allActiveBots = await prisma.company.findMany({
+        where: {
+          telegramBotToken: { not: null },
+          telegramConnected: true,
+          ...(IS_LOCAL ? { telegramBotUsername: process.env.MY_BOT_USERNAME } : {})
+        },
+        select: {
+          id: true,
+          name: true,
+          telegramBotToken: true,
+          telegramBotUsername: true
+        }
+      });
+
+      const tokenToCompanies: { [decryptedToken: string]: typeof allActiveBots } = {};
+      const duplicateCompanyIds = new Set<string>();
+
+      for (const bot of allActiveBots) {
+        const decrypted = decryptSecret(bot.telegramBotToken);
+        if (decrypted) {
+          if (!tokenToCompanies[decrypted]) {
+            tokenToCompanies[decrypted] = [];
+          }
+          tokenToCompanies[decrypted].push(bot);
+        }
+      }
+
+      for (const [_, bots] of Object.entries(tokenToCompanies)) {
+        if (bots.length > 1) {
+          const companyList = bots.map(b => `'${b.name}' (${b.id})`).join(", ");
+          console.error(`🚨 [CRITICAL CONFIGURATION ERROR] Telegram bot token is configured across MULTIPLE companies: ${companyList}. Polling for these companies is disabled to prevent message misrouting.`);
+          bots.forEach(b => duplicateCompanyIds.add(b.id));
+        }
+      }
+
+      const activeCompanies = companies.filter(c => !duplicateCompanyIds.has(c.id));
 
       // 🛑 FIX: Parallelize polling across all companies instead of sequential.
       // Each company's poll cycle runs independently via Promise.all.
       // This eliminates the N*(1s webhook cleanup + fetch + process) bottleneck.
-      await Promise.all(companies.map(async (company) => {
+      await Promise.all(activeCompanies.map(async (company) => {
         // Enforce centralized primary/passive consumer selection lease
         const authorized = await TelegramLeaseService.isAuthorizedToConsume(company.id);
         if (!authorized) {
@@ -67,14 +113,23 @@ export async function startTelegramPolling() {
         // 1. Delete webhook if we haven't done so for this session
         if (offsets[token] === undefined) {
           try {
-            console.log(`🧹 Deleting webhook for bot @${company.telegramBotUsername || "bot"} to enable polling (preserving updates)...`);
+            console.log(`🧹 Deleting webhook for bot @${company.telegramBotUsername || "bot"} to enable polling (dropping stale pending updates)...`);
             await axios.post(`https://api.telegram.org/bot${token}/deleteWebhook`, {
-              drop_pending_updates: false
+              drop_pending_updates: true
             });
             offsets[token] = 0; // initialize offset
             // Safety delay to let Telegram process webhook deletion
             await new Promise(resolve => setTimeout(resolve, 1000));
           } catch (err: any) {
+            const is401 = err.response?.status === 401 || err.response?.data?.error_code === 401 || err.message?.includes("401");
+            if (is401) {
+              await prisma.company.update({
+                where: { id: company.id },
+                data: { telegramConnected: false }
+              }).catch(() => {});
+              console.warn(`⚠️ Bot token for ${company.telegramBotUsername || company.id} was rejected by Telegram (401) — marking telegramConnected: false. Reconnect via the UI with a valid token to restore.`);
+              return;
+            }
             console.error(`⚠️ Failed to delete webhook for bot @${company.telegramBotUsername || "bot"}:`, err.message);
             return;
           }
@@ -97,6 +152,15 @@ export async function startTelegramPolling() {
             const updates = res.data.result;
 
             for (const update of updates) {
+              const updateId = String(update.update_id);
+              const lockKey = `telegram:update:${company.id}:${updateId}`;
+              const acquired = await idempotencyService.acquireProcessingLock(lockKey, 86400).catch(() => true);
+              if (!acquired) {
+                console.log(`🛡️ [Polling Telegram] Skipping duplicate/stale update_id ${updateId} for bot @${company.telegramBotUsername || "bot"}`);
+                offsets[token] = update.update_id + 1;
+                continue;
+              }
+
               console.log(`📥 [Polling Telegram Update] received update_id: ${update.update_id} for bot @${company.telegramBotUsername || "bot"}`);
               
               // Process update using existing adapter logic
@@ -117,6 +181,11 @@ export async function startTelegramPolling() {
                     standardizedFrame.companyId = company.id;
                     standardizedFrame.contactName = update.message?.from?.first_name || update.callback_query?.from?.first_name || "User";
                     standardizedFrame.callbackData = update.callback_query?.data;
+
+                    if (process.env.DEBUG_LATENCY === "true") {
+                      standardizedFrame._enqueuedAt = Date.now();
+                      console.log(`⏱️ [DEBUG_LATENCY Stage 7] Telegram update ${update.update_id} enqueued at ${standardizedFrame._enqueuedAt}`);
+                    }
 
                     const boss = pgBossService.getBoss();
                     await boss.send("webhook.process", standardizedFrame);
@@ -140,6 +209,15 @@ export async function startTelegramPolling() {
             }
           }
         } catch (fetchErr: any) {
+          const is401 = fetchErr.response?.status === 401 || fetchErr.response?.data?.error_code === 401 || fetchErr.message?.includes("401");
+          if (is401) {
+            await prisma.company.update({
+              where: { id: company.id },
+              data: { telegramConnected: false }
+            }).catch(() => {});
+            console.warn(`⚠️ Bot token for ${company.telegramBotUsername || company.id} was rejected by Telegram (401) — marking telegramConnected: false. Reconnect via the UI with a valid token to restore.`);
+            return;
+          }
           if (fetchErr.code !== "ECONNABORTED") {
             const isConflict = fetchErr.response?.status === 409;
             if (isConflict) {

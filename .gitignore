@@ -41,3 +41,12 @@ stream-triage-screenshot.png
 current message page.jpg
 current-state.png
 tsconfig.tsbuildinfo
+
+# Debug / scratch scripts
+leadsync-backend/check_rule.cjs
+leadsync-backend/enqueue_msg.cjs
+leadsync-backend/last_msgs.cjs
+leadsync-backend/scripts/duplicate_webhook_test.ts
+leadsync-backend/scripts/query_webhook_results.ts
+leadsync-backend/scripts/set_webhook_secret.ts
+

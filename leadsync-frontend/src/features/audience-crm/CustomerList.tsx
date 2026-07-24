@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
+import { authedFetch } from '../../api/client';
 
 interface Lead {
   id: string;
@@ -56,11 +57,7 @@ export const CustomerList: React.FC = () => {
         ...(segmentFilter && { segment: segmentFilter }),
       });
 
-      const response = await fetch(`/api/leads/audience?${params.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await authedFetch(`/api/leads/audience?${params.toString()}`);
       const result = await response.json();
       
       if (response.ok) {
@@ -103,11 +100,10 @@ export const CustomerList: React.FC = () => {
   const bulkTag = async (tag: string) => {
     if (selectedLeads.length === 0) return;
     try {
-      const response = await fetch('/api/leads/bulk-tag', {
+      const response = await authedFetch('/api/leads/bulk-tag', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({ ids: selectedLeads, tag, action: 'ADD' })
       });

@@ -29,10 +29,6 @@ router.get("/metrics", authMiddleware, getMerchantMetricsDashboard as any);
 async function formatCompanyResponse(company: any) {
   if (!company) return null;
 
-  const products = company.products || await prisma.product.findMany({
-    where: { companyId: company.id, isActive: true },
-    orderBy: { name: "asc" }
-  });
 
   const structuredMenu = getMenuSnapshot(
     company.botConfiguration?.botStructuredMenu?.categories || []

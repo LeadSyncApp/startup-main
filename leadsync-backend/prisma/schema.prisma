@@ -16,8 +16,11 @@ model Company {
   telegramBotToken         String?
   telegramBotTokenHash     String?                 @unique
   telegramBotUsername      String?
-  telegramWebhookSecret    String?                 @unique
-  telegramConnected        Boolean                 @default(false)
+    telegramWebhookSecret    String?                 @unique
+    websiteWebhookSecret     String?
+    shopifyWebhookSecret     String?
+    wooCommerceWebhookSecret String?
+    telegramConnected        Boolean                 @default(false)
   botWelcomeMessage        String?
   businessAddress          String?
   businessName             String?
@@ -35,6 +38,7 @@ model Company {
   businessEndHour          Int                     @default(22)
   customOooMessage         String                  @default("Hello! Our human team is currently offline. Your message has been pinned right at the top of our workbench queue, and we will message you as soon as our shift begins! ☀️")
   isArchived               Boolean                 @default(false)
+  isTest                   Boolean                 @default(false)
   currencySymbol           String                  @default("₹")
   currencyCode             String                  @default("INR")
   timezone                 String                  @default("Asia/Kolkata")
@@ -44,14 +48,13 @@ model Company {
   upiName                  String?
   updatedAt                DateTime                @updatedAt
   agentFeedPosts           AgentFeedPost[]
-  autoReplyLogs            AutoReplyLog[]
-  autoReplyRules           AutoReplyRule[]
-  automationRules          AutomationRule[]
   botConfiguration         BotConfiguration?
   botKnowledge             BotKnowledge[]
   broadcasts               Broadcast[]
   ClaimLog                 ClaimLog[]
+  productFieldDefinitions  ProductFieldDefinition[]
   analyticsRollup          CompanyAnalyticsRollup?
+  pollingLease             CompanyPollingLease?
   conversations            Conversation[]
   conversationalRules      ConversationalRule[]
   conversationalRuleLogs   ConversationalRuleLog[]
@@ -73,6 +76,8 @@ model Company {
   ruleGroups               RuleGroup[]
   users                    User[]
   conversationActivities ConversationActivity[]
+  draftOrders              DraftOrder[]
+  webhookDeliveryLogs     WebhookDeliveryLog[]
 }
 
 model User {
@@ -155,6 +160,7 @@ model Lead {
   conversations           Conversation[]
   company                 Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   orders                  Order[]
+  draftOrders             DraftOrder[]
 
   @@unique([contact, channel, companyId])
   @@index([companyId])
@@ -199,7 +205,8 @@ model InventoryProduct {
   companyId             String
   name                  String
   description           String?
-  category              String?
+  categories            String[]            @default([])
+  sku                   String?
   basePrice             Float
   imageUrl              String?
   hasVariants           Boolean             @default(false)
@@ -210,8 +217,13 @@ model InventoryProduct {
   updatedAt             DateTime            @updatedAt
   variants              InventoryVariant[]
   company               Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  images                ProductImage[]
+  priceHistory          PriceHistory[]
+  stockHistory          StockHistory[]
+  customFieldValues     Json?
 
   @@unique([companyId, name])
+  @@unique([companyId, sku])
   @@index([companyId])
   @@index([companyId, isActive])
 }
@@ -220,16 +232,21 @@ model InventoryVariant {
   id             String           @id @default(uuid())
   productId      String
   attributeValue String
+  sku            String?
   price          Float
   stock          Int?
   isActive       Boolean          @default(true)
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   product        InventoryProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  priceHistory   PriceHistory[]
+  stockHistory   StockHistory[]
+  attributes     Json?
 
   @@unique([productId, attributeValue])
   @@index([productId])
 }
+
 
 model Order {
   id             String              @id @default(uuid())
@@ -255,6 +272,7 @@ model Order {
   predictedValue Float?
   priorityScore  Int                 @default(0)
   version        Int                 @default(1)
+  stockDecremented Boolean           @default(false)
   invoice        Invoice?
   company        Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -398,6 +416,7 @@ model Conversation {
   orders                               Order[]
   RuleDecisionLog                      RuleDecisionLog[]
   activities                           ConversationActivity[]
+  draftOrders                          DraftOrder[]
 
   @@index([deletedAt])
   @@index([leadId])
@@ -431,6 +450,7 @@ model Message {
   isRead            Boolean       @default(false)
   deliveryError     String?
   clientMessageId   String?
+  dedupKey          String?       @unique
   Company           Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversation      Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -452,84 +472,6 @@ model BotKnowledge {
 
   @@index([companyId])
   @@index([companyId, isActive])
-}
-
-model AutomationRule {
-  id                  String          @id @default(uuid())
-  companyId           String
-  name                String
-  isActive            Boolean         @default(true)
-  trigger             String
-  triggerDelayMinutes Int             @default(1440)
-  action              String
-  actionPayload       Json?
-  runCount            Int             @default(0)
-  lastRunAt           DateTime?
-  createdAt           DateTime        @default(now())
-  logs                AutomationLog[]
-  company             Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@index([companyId])
-  @@index([companyId, id])
-  @@index([companyId, isActive])
-}
-
-model AutomationLog {
-  id           String         @id @default(uuid())
-  ruleId       String
-  companyId    String
-  triggeredFor String
-  action       String
-  result       String
-  note         String?
-  createdAt    DateTime       @default(now())
-  rule         AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-
-  @@index([ruleId])
-  @@index([companyId])
-  @@index([createdAt])
-}
-
-model AutoReplyRule {
-  id             String         @id @default(uuid())
-  companyId      String
-  eventKey       String
-  isEnabled      Boolean        @default(true)
-  messageBody    String
-  delayMinutes   Int            @default(0)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  useAI          Boolean        @default(false)
-  brandVoice     String?        @default("friendly")
-  targetLanguage String?        @default("en")
-  logs           AutoReplyLog[]
-  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@unique([companyId, eventKey])
-  @@index([companyId])
-  @@index([eventKey])
-  @@index([isEnabled])
-}
-
-model AutoReplyLog {
-  id           String         @id @default(uuid())
-  companyId    String
-  ruleId       String?
-  eventKey     String
-  triggeredFor String
-  recipient    String
-  channel      String
-  messageBody  String
-  status       String         @default("SENT")
-  error        String?
-  sentAt       DateTime       @default(now())
-  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  rule         AutoReplyRule? @relation(fields: [ruleId], references: [id])
-
-  @@index([companyId])
-  @@index([ruleId])
-  @@index([sentAt])
-  @@index([status])
 }
 
 model RuleGroup {
@@ -555,7 +497,9 @@ model ConversationalRule {
   name            String
   isEnabled       Boolean                 @default(true)
   triggerKeywords String[]                @default([])
-  triggerType     String                  @default("KEYWORD")
+  triggerType     String                  @default("TEXT_MATCH") // TEXT_MATCH | EVENT
+  surfaceConfig   Json?                   // Telegram button/command surfacing (orthogonal to triggerType)
+  eventConfig     Json?                   // Only when triggerType = EVENT
   conditions      Json?
   templateBody    String                  @default("")
   useAI           Boolean                 @default(false)
@@ -581,6 +525,7 @@ model ConversationalRule {
   @@index([triggerKeywords])
   @@index([groupId])
   @@index([companyId, ruleType])
+  @@index([triggerType])
   @@index([dateRange], type: Gin)
   @@index([hourRange], type: Gin)
 }
@@ -687,12 +632,13 @@ model MerchantFile {
 }
 
 model KnowledgeChunk {
-  id         String                 @id @default(uuid())
-  companyId  String
-  sourceType KnowledgeSourceType
-  sourceId   String?
-  content    String
-  embedding  Unsupported("vector")?
+  id          String                 @id @default(uuid())
+  companyId   String
+  sourceType  KnowledgeSourceType
+  sourceId    String?
+  content     String
+  contentTsv  Unsupported("tsvector")?
+  embedding   Unsupported("vector")?
   isActive   Boolean                @default(true)
   createdAt  DateTime               @default(now())
   updatedAt  DateTime               @updatedAt
@@ -735,6 +681,20 @@ model CustomFieldDefinition {
   @@unique([companyId, module, name])
   @@index([companyId])
   @@index([companyId, module])
+}
+
+model ProductFieldDefinition {
+  id        String   @id @default(uuid())
+  companyId String
+  fieldName String
+  fieldType String   // "text" | "number" | "boolean" | "select"
+  appliesTo String   // "product" | "variant"
+  options   String[] @default([])
+  sortOrder Int      @default(0)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([companyId, appliesTo])
 }
 
 model Invitation {
@@ -1062,3 +1022,110 @@ enum PendingOrderState {
   PENDING_APPROVAL
   CLAIMED_FOR_APPROVAL
 }
+
+model CompanyPollingLease {
+  companyId        String   @id
+  holderInstanceId String
+  lastHeartbeat    DateTime @default(now())
+  expiresAt        DateTime
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([holderInstanceId])
+  @@index([holderInstanceId, expiresAt])
+}
+
+model ProductImage {
+  id        String           @id @default(uuid())
+  productId String
+  url       String
+  order     Int              @default(0)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  product   InventoryProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([productId, order])
+}
+
+model PriceHistory {
+  id         String            @id @default(uuid())
+  productId  String
+  variantId  String?
+  oldPrice   Float
+  newPrice   Float
+  changedAt  DateTime          @default(now())
+  changedBy  String?
+  actorName  String            @default("System")
+  product    InventoryProduct  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant    InventoryVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([variantId])
+}
+
+model StockHistory {
+  id         String            @id @default(uuid())
+  productId  String
+  variantId  String?
+  oldStock   Int?
+  newStock   Int?
+  changedAt  DateTime          @default(now())
+  changedBy  String?
+  actorName  String            @default("System")
+  product    InventoryProduct  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant    InventoryVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([variantId])
+}
+
+enum DraftOrderStatus {
+  DRAFTING
+  AWAITING_CONFIRMATION
+  CONFIRMED
+  ABANDONED
+}
+
+model DraftOrder {
+  id             String           @id @default(uuid())
+  companyId      String
+  conversationId String
+  leadId         String?
+  items          Json
+  totalAmount    Float            @default(0.0)
+  status         DraftOrderStatus @default(DRAFTING)
+  recipientName  String?
+  recipientPhone String?
+  shippingAddress Json?
+  expiresAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([conversationId])
+  @@index([conversationId, status])
+  @@index([updatedAt])
+}
+
+model WebhookDeliveryLog {
+  id          String   @id @default(uuid())
+  companyId   String
+  platform    String
+  outcome     String
+  reason      String?
+  rawPayload  String?
+  rawHeaders  String?
+  statusCode  Int?
+  createdAt   DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt(sort: Desc)])
+  @@index([outcome])
+}
+

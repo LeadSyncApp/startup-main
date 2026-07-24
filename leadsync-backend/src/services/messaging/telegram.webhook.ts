@@ -1,7 +1,7 @@
 import { prisma } from "../../lib/prisma";
 import axios from "axios";
 import crypto from "crypto";
-import { decryptSecret } from "../../utils/encryption";
+import { encrypt, decryptSecret } from "../../utils/encryption";
 
 export async function registerTelegramWebhook(
   botToken: string,
@@ -38,6 +38,10 @@ export async function registerTelegramWebhook(
 }
 
 export async function initializeTelegramWebhooks() {
+  if (process.env.TELEGRAM_POLLING === "true") {
+    console.log("ℹ️ [Telegram Webhooks] TELEGRAM_POLLING=true. Skipping webhook registration to enforce single delivery mode.");
+    return;
+  }
   console.log("⚙️ [Telegram Webhooks] Initializing event-driven webhooks for all connected bots...");
 
   try {
@@ -58,19 +62,14 @@ export async function initializeTelegramWebhooks() {
       }
       const token = decryptedToken;
 
-      const decryptedSecret = decryptSecret(company.telegramWebhookSecret);
-      if (!decryptedSecret) {
-        console.error(`❌ Failed to decrypt webhook secret for company: ${company.name}. Skipping.`);
-        continue;
-      }
-      let secret = decryptedSecret;
+      let secret = decryptSecret(company.telegramWebhookSecret);
 
       // Ensure secret exists
       if (!secret) {
         secret = crypto.randomBytes(32).toString("hex");
         await prisma.company.update({
           where: { id: company.id },
-          data: { telegramWebhookSecret: secret }
+          data: { telegramWebhookSecret: encrypt(secret) }
         });
         console.log(`🔑 Generated new telegramWebhookSecret for company: ${company.name}`);
       }
@@ -106,7 +105,16 @@ export async function initializeTelegramWebhooks() {
         });
 
       } catch (botErr: any) {
-        console.error(`❌ Failed to register/sync bot @${company.telegramBotUsername || "bot"}:`, botErr.message);
+        const is401 = botErr.response?.status === 401 || botErr.response?.data?.error_code === 401 || botErr.message?.includes("401");
+        if (is401) {
+          await prisma.company.update({
+            where: { id: company.id },
+            data: { telegramConnected: false }
+          }).catch(() => {});
+          console.warn(`⚠️ Bot token for ${company.name} was rejected by Telegram (401) — marking telegramConnected: false. Reconnect via the UI with a valid token to restore.`);
+        } else {
+          console.error(`❌ Failed to register/sync bot @${company.telegramBotUsername || "bot"}:`, botErr.message);
+        }
       }
     }
   } catch (err: any) {

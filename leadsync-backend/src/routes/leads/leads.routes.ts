@@ -10,6 +10,7 @@ import { ConversationStatus, ConversationMode, MessageSender, Channel as PrismaC
 import { outboundDispatcherService } from "../../services/outbound.dispatcher";
 import { escalateToHuman, resolveConversation } from "../../services";
 import { generateReplySuggestion } from "../../services/ai/ai.service";
+import { LOW_STOCK_THRESHOLD, getStockStatus } from "../../services/knowledge/inventory.service";
 
 const router = Router();
 
@@ -26,6 +27,7 @@ async function resolveMatchedProduct(conversation: any, companyId: string): Prom
   name: string;
   variant: string;
   stock: number;
+  stockStatus: string | null;
   thumbnailUrl: string;
 } | null> {
   const cached = conversation?.matchedProduct as
@@ -59,6 +61,7 @@ async function resolveMatchedProduct(conversation: any, companyId: string): Prom
       name: cached.name || product.name,
       variant: cached.variant || "",
       stock,
+      stockStatus: getStockStatus(stock),
       thumbnailUrl: cached.thumbnailUrl || product.imageUrl || "",
     };
   } catch (err: any) {
@@ -228,10 +231,29 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
          }
        }
 
-       // isUnread: true if lastActiveAt > lastViewedAt OR lastViewedAt is null
-       const isUnread = conversation?.lastViewedAt
-         ? new Date(lead.lastActiveAt) > new Date(conversation.lastViewedAt)
-         : true;
+        // isUnread: true if lastActiveAt > lastViewedAt OR lastViewedAt is null
+        const isUnread = conversation?.lastViewedAt
+          ? new Date(lead.lastActiveAt) > new Date(conversation.lastViewedAt)
+          : true;
+
+        // unreadCount: number of customer messages the staff hasn't seen yet.
+        // When lastViewedAt is null (never opened), every customer message is unread.
+        // Otherwise, count only customer-origin messages after lastViewedAt.
+        // Customer-origin = CLIENT and BOT (inbound); AGENT/SYSTEM are staff/bot replies.
+        const unreadCount = conversation?.lastViewedAt
+          ? await prisma.message.count({
+              where: {
+                conversationId: conversation.id,
+                createdAt: { gt: conversation.lastViewedAt },
+                sender: { in: [MessageSender.CLIENT, MessageSender.BOT] },
+              },
+            })
+          : await prisma.message.count({
+              where: {
+                conversationId: conversation.id,
+                sender: { in: [MessageSender.CLIENT, MessageSender.BOT] },
+              },
+            });
 
       return {
         id: lead.id,
@@ -286,6 +308,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 
           // 🆕 Unread indicator
           isUnread,
+          unreadCount,
 
           // Stream Triage fields
           pastOrders: lead.orderCount || 0,
@@ -1340,6 +1363,59 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
   } catch (error) {
     console.error("Fetch messages error:", error);
     return res.status(500).json({ message: "Failed to fetch messages" });
+  }
+});
+
+/* =========================================
+   POST /api/leads/:id/read
+   Mark a conversation as read by setting lastViewedAt = now().
+   This clears the per-chat unread status + unread count so the sidebar
+   badge and chat-list indicators update in real time via socket.
+   Multi-tenant safe — verifies lead + conversation ownership.
+   ========================================= */
+router.post("/:id/read", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { companyId, userId } = req.user!;
+    const { id } = req.params;
+
+    const lead = await prisma.lead.findFirst({
+      where: { id, companyId },
+      select: {
+        id: true,
+        conversations: {
+          select: { id: true, status: true, claimedById: true, companyId: true },
+          take: 1,
+          orderBy: { updatedAt: "desc" },
+        },
+      },
+    });
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    const conversation = lead.conversations[0];
+    if (!conversation) {
+      return res.status(404).json({ message: "No conversation found for this lead" });
+    }
+
+    await prisma.conversation.update({
+      where: { id: conversation.id, companyId },
+      data: { lastViewedAt: new Date() },
+    });
+
+    // Emit so the chat list + sidebar badge refresh without a page reload.
+    emitToCompany(companyId, "conversation_updated", {
+      conversationId: conversation.id,
+      leadId: lead.id,
+      lastViewedAt: new Date().toISOString(),
+      viewedBy: userId,
+    });
+
+    return res.json({ conversationId: conversation.id, lastViewedAt: new Date().toISOString() });
+  } catch (error) {
+    console.error("Mark as read error:", error);
+    return res.status(500).json({ message: "Failed to mark conversation as read" });
   }
 });
 

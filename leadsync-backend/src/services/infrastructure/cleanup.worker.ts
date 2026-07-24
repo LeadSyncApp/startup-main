@@ -102,49 +102,4 @@ export async function cleanupWebhooks(): Promise<number> {
   return totalDeleted;
 }
 
-/**
- * Cleanup automation execution logs older than 30 days retention window
- */
-export async function cleanupAutomationLogs(): Promise<number> {
-  const batchSize = 1000;
-  let totalDeleted = 0;
-  let hasMore = true;
 
-  console.log("🧹 [Cleanup:AutomationLogs] Starting safe batched deletion of logs (>30 days old)...");
-
-  while (hasMore) {
-    const records: { id: string }[] = await prisma.$queryRaw`
-      SELECT id FROM "AutomationLog"
-      WHERE "createdAt" < NOW() - INTERVAL '30 days'
-      LIMIT ${batchSize}
-    `;
-
-    if (records.length === 0) {
-      hasMore = false;
-      break;
-    }
-
-    const ids = records.map((r: any) => r.id);
-
-    // Safely delete using Prisma's native, parameterized deleteMany API
-    const deleteResult = await prisma.automationLog.deleteMany({
-      where: {
-        id: { in: ids }
-      }
-    });
-
-    const count = deleteResult.count;
-    totalDeleted += count;
-    console.log(`🧹 [Cleanup:AutomationLogs] Deleted batch of ${count} logs.`);
-
-    if (ids.length < batchSize) {
-      hasMore = false;
-    } else {
-      // Small, non-blocking delay between batches to reduce WAL and VACUUM contention under load
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    }
-  }
-
-  console.log(`🧹 [Cleanup:AutomationLogs] Finished. Total deleted: ${totalDeleted}`);
-  return totalDeleted;
-}

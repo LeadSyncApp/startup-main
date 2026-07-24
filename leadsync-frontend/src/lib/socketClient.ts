@@ -5,6 +5,10 @@ let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 let notificationListener: ((notification: any) => void) | null = null;
 let connectedUserId: string | null = null;
 
+// Registry of generic event listeners so components can subscribe even before
+// the socket is connected. Handlers are (re)attached on every (re)connection.
+const eventListeners: Map<string, Set<(payload: any) => void>> = new Map();
+
 const HEARTBEAT_INTERVAL_MS = 30_000; // 30s
 
 /**
@@ -30,6 +34,11 @@ export function connectSocket(userId: string, companyId: string, token: string, 
 
   socket.on("connect", () => {
     console.log("[Socket] Connected:", socket!.id);
+
+    // (Re)attach any generic listeners registered before connect.
+    eventListeners.forEach((handlers, event) => {
+      handlers.forEach((handler) => socket!.on(event, handler));
+    });
 
     // 1. Register user — joins user:{userId} room, starts online tracking
     //    The server derives userId from the verified JWT, ignoring our payload.
@@ -93,4 +102,28 @@ export function disconnectSocket() {
  */
 export function getSocket() {
   return socket;
+}
+
+/**
+ * Subscribe to a socket event. Safe to call before the socket is connected:
+ * the handler is stored and (re)attached automatically on connect/reconnect.
+ * Returns an unsubscribe function.
+ */
+export function onEvent(event: string, handler: (payload: any) => void): () => void {
+  if (!eventListeners.has(event)) eventListeners.set(event, new Set());
+  eventListeners.get(event)!.add(handler);
+  if (socket) socket.on(event, handler);
+  return () => offEvent(event, handler);
+}
+
+/**
+ * Unsubscribe a previously registered socket event handler.
+ */
+export function offEvent(event: string, handler: (payload: any) => void) {
+  const handlers = eventListeners.get(event);
+  if (handlers) {
+    handlers.delete(handler);
+    if (handlers.size === 0) eventListeners.delete(event);
+  }
+  if (socket) socket.off(event, handler);
 }

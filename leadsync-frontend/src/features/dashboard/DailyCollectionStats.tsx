@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { IndianRupee, TrendingUp, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { CountUp } from '../../components/ui';
+import { authedFetch } from '../../api/client';
 
 export const DailyCollectionStats: React.FC = () => {
   const [stats, setStats] = useState({
@@ -15,9 +16,7 @@ export const DailyCollectionStats: React.FC = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch('/api/orders', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
+        const response = await authedFetch('/api/orders');
         if (response.ok) {
           const orders = await response.json();
           const today = new Date().toISOString().split('T')[0];

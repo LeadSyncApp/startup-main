@@ -2,8 +2,6 @@ import { Router } from 'express'
 import { prisma } from '../../lib/prisma'
 import { Channel, MessageSender } from '@prisma/client'
 import { queueProvider } from '../../services/infrastructure/queue-provider/queue-provider.factory'
-import { autoReplyService } from '../../services/automation/autoReply.service'
-import { triggerLeadWelcome } from '../../services/automation/autoReplyEventListeners'
 import { PDF_JOB_NAME } from '../../services/infrastructure/pgboss/jobs/pdf.job'
 
 const router = Router()
@@ -54,13 +52,6 @@ router.post('/leads', async (req, res) => {
         conversations: true,
       },
     })
-
-    // Seed default auto-reply rules for this company (idempotent)
-    const companyName = await prisma.company.findUnique({ where: { id: company.id }, select: { name: true } });
-    await autoReplyService.seedDefaults(company.id, companyName?.name || "our store");
-
-    // Trigger welcome auto-reply for this new lead
-    await triggerLeadWelcome(lead.id, company.id);
 
     res.json({ success: true, leadId: lead.id })
   } catch (err) {

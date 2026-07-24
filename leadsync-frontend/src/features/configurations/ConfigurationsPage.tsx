@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  AppWindow, Store, Users
+  AppWindow, Store, Users, Braces, Webhook
 } from "lucide-react";
 import { useAuth } from "../auth-tenancy/AuthContext";
 import { ConnectionsHub } from "./ConnectionsHub";
 import { ShopProfilePage } from "./ShopProfilePage";
 import { TeamMembersPage } from "../team/TeamMembersPage";
+import { ProductFieldEditor } from "../inventory/ProductFieldEditor";
+import { WebsiteIntegration } from "./WebsiteIntegration";
 
-export type SettingsTab = "connections" | "team" | "profile";
+export type SettingsTab = "connections" | "team" | "profile" | "product-fields" | "website-integration";
 
 export function ConfigurationsPage() {
   const { user } = useAuth();
@@ -94,6 +96,44 @@ export function ConfigurationsPage() {
             />
           )}
         </button>
+
+        <button
+          onClick={() => setActiveSettingsTab("product-fields")}
+          className={`pb-4 px-6 font-bold text-sm tracking-tight relative transition-all duration-200 cursor-pointer whitespace-nowrap`}
+          style={{ color: activeSettingsTab === "product-fields" ? 'var(--brand-saffron)' : 'var(--text-secondary)' }}
+        >
+          <div className="flex items-center gap-2">
+            <Braces className="h-4.5 w-4.5" />
+            <span>Product Fields</span>
+          </div>
+          {activeSettingsTab === "product-fields" && (
+            <motion.div
+              layoutId="settingsTabUnderline"
+              className="absolute bottom-0 left-0 right-0 h-0.5"
+              style={{ backgroundColor: 'var(--brand-saffron)' }}
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            />
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveSettingsTab("website-integration")}
+          className={`pb-4 px-6 font-bold text-sm tracking-tight relative transition-all duration-200 cursor-pointer whitespace-nowrap`}
+          style={{ color: activeSettingsTab === "website-integration" ? 'var(--brand-saffron)' : 'var(--text-secondary)' }}
+        >
+          <div className="flex items-center gap-2">
+            <Webhook className="h-4.5 w-4.5" />
+            <span>Website Integration</span>
+          </div>
+          {activeSettingsTab === "website-integration" && (
+            <motion.div
+              layoutId="settingsTabUnderline"
+              className="absolute bottom-0 left-0 right-0 h-0.5"
+              style={{ backgroundColor: 'var(--brand-saffron)' }}
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            />
+          )}
+        </button>
       </div>
 
       <AnimatePresence mode="wait">
@@ -130,6 +170,28 @@ export function ConfigurationsPage() {
             <ShopProfilePage />
           </motion.div>
         )}
+          {activeSettingsTab === "product-fields" && (
+            <motion.div
+              key="product-fields"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ProductFieldEditor />
+            </motion.div>
+          )}
+          {activeSettingsTab === "website-integration" && (
+            <motion.div
+              key="website-integration"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.2 }}
+            >
+              <WebsiteIntegration />
+            </motion.div>
+          )}
       </AnimatePresence>
     </div>
   );

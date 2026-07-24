@@ -13,7 +13,7 @@ import {
 import { sendTelegramMessage } from "../../bot/telegram.sender";
 import { safeEmitConversationUpdate, emitToCompany, emitToAgent } from "../../lib/socket";
 import { recalculateLeadCRM } from "../../services/integrations/crm.service";
-import { triggerLeadWelcome } from "../../services/automation/autoReplyEventListeners";
+import { decrementStockForOrder } from "../../services/knowledge/inventory.service";
 
 const router = Router();
 
@@ -22,46 +22,77 @@ const router = Router();
 ================================== */
 router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { conversationId, products, note } = req.body;
+    const { conversationId, products, note, customAmount } = req.body;
     const { companyId } = req.user!;
 
-    if (!conversationId || !products || !Array.isArray(products) || products.length === 0) {
-      return res.status(400).json({ message: "Conversation ID and a list of products are required" });
+    if (!conversationId) {
+      return res.status(400).json({ message: "Conversation ID is required" });
+    }
+    
+    const hasProducts = products && Array.isArray(products) && products.length > 0;
+    
+    if (!hasProducts && !customAmount) {
+      return res.status(400).json({ message: "Either a list of products or a custom amount is required" });
     }
 
-    // 1. Fetch real product data to prevent price tampering
-    const productIds = products.map((p: any) => p.productId);
-    const dbProducts = await prisma.product.findMany({
-      where: { 
-        id: { in: productIds },
-        companyId 
-      }
-    });
-
-    if (dbProducts.length === 0) {
-      return res.status(400).json({ message: "No valid products found in catalog" });
-    }
-
-    // 2. Calculate real total and prepare items
+    // 1. Fetch real product data to prevent price tampering (if products exist)
     let totalAmount = 0;
-    const orderItemsData = products.map((p: any) => {
-      const dbProduct = dbProducts.find(dp => dp.id === p.productId);
-      if (!dbProduct) return null;
+    let orderItemsData: any[] = [];
+    
+    if (hasProducts) {
+      const productIds = products.map((p: any) => p.productId);
+      const dbProducts = await (prisma.inventoryProduct as any).findMany({
+        where: { 
+          id: { in: productIds },
+          companyId 
+        },
+        include: {
+          variants: true
+        }
+      });
 
-      const qty = parseInt(p.quantity) || 1;
-      const price = dbProduct.price;
-      totalAmount += price * qty;
+      if (dbProducts.length === 0) {
+        return res.status(400).json({ message: "No valid products found in catalog" });
+      }
 
-      return {
+      orderItemsData = products.map((p: any) => {
+        const dbProduct = dbProducts.find((dp: any) => dp.id === p.productId);
+        if (!dbProduct) return null;
+
+        const qty = parseInt(p.quantity) || 1;
+        let price = dbProduct.basePrice;
+        let variantAttr: string | null = null;
+        
+        if (p.variantId) {
+          const variant = dbProduct.variants.find((v: any) => v.id === p.variantId);
+          if (variant) {
+            if (variant.price !== null) price = variant.price;
+            variantAttr = variant.attributeValue;
+          }
+        }
+        
+        totalAmount += price * qty;
+
+        return {
+          companyId,
+          productId: null,
+          sku: p.variantId || null,
+          name: variantAttr ? `${dbProduct.name} - ${variantAttr}` : dbProduct.name,
+          quantity: qty,
+          price: price,
+          cogs: 0
+        };
+      }).filter(Boolean);
+    } else if (customAmount) {
+      totalAmount = parseFloat(customAmount);
+      orderItemsData = [{
         companyId,
-        productId: dbProduct.id,
-        sku: dbProduct.sku,
-        name: dbProduct.name,
-        quantity: qty,
-        price: price,
-        cogs: dbProduct.cogs
-      };
-    }).filter(Boolean);
+        name: "Custom Payment",
+        quantity: 1,
+        price: totalAmount,
+        cogs: 0
+      }];
+    }
 
     const company = await prisma.company.findUnique({ where: { id: companyId } });
     if (!company) return res.status(404).json({ message: "Company not found" });
@@ -79,7 +110,6 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
         }
       });
     }
-    if (lead) await triggerLeadWelcome(lead.id, companyId).catch(() => {});
 
     const upiId = "business@bank";
     const upiName = "business@bank";
@@ -87,31 +117,36 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
     const cleanNote = note || `Payment for order from ${conv?.company?.name || "store"}`;
     const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(upiName)}&am=${totalAmount}&cu=INR&tn=${encodeURIComponent(cleanNote)}`;
 
-    // 3. Create the Order and its items in a transaction
-    const order = await prisma.$transaction(async (tx) => {
-      const newOrder = await tx.order.create({
-        data: {
-          companyId,
-          leadId: lead!.id,
-          amount: totalAmount,
-          status: OrderStatus.PENDING,
-          summary: note || `Order for ${dbProducts.length} item(s)`,
-          source: "MANUAL",
-          metadata: {
-            upiLink,
-            isPaymentRequest: true,
-            catalogBased: true
-          },
-          orderItems: {
-            create: orderItemsData as any
-          }
+    // 3. Create the Order and its items
+    const order = await prisma.order.create({
+      data: {
+        companyId,
+        conversationId,
+        leadId: lead!.id,
+        amount: totalAmount,
+        status: OrderStatus.PENDING,
+        summary: note || `Order for ${orderItemsData.length} item(s)`,
+        source: "MANUAL",
+        metadata: {
+          upiLink,
+          isPaymentRequest: true,
+          catalogBased: hasProducts
         },
-        include: {
-          orderItems: true
+        orderItems: {
+          create: orderItemsData as any
         }
-      });
-      return newOrder;
+      },
+      include: {
+        orderItems: true
+      }
     });
+
+    // Decrement stock for catalog-based orders with real products
+    if (hasProducts) {
+      decrementStockForOrder(order.id, companyId).catch(err =>
+        console.error(`❌ [StockDecrement] Failed for order ${order.id}:`, err)
+      );
+    }
 
     res.json({
       message: "Catalog-based payment request generated",
@@ -265,8 +300,6 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
           }
         });
 
-        // Trigger welcome auto-reply for new manually created lead
-        await triggerLeadWelcome(lead!.id, companyId).catch(() => {});
       } else {
         // Update client name if specified
         lead = await prisma.lead.update({

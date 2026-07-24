@@ -10,6 +10,7 @@ import { notificationService } from "../../services/infrastructure/notification.
 import { eventBus, Events } from "../../services/infrastructure/eventBus";
 import { recalculateLeadCRM } from "../integrations/crm.service";
 import { AnalyticsRollupService } from "../analytics/analyticsRollup.service";
+import { decrementStockForOrder } from "../knowledge/inventory.service";
 
 /**
  * Unified New Order Intake / Allocation Service
@@ -84,7 +85,16 @@ export class NewOrderArrivalService {
                     amount,
                     totalCogs,
                     netProfit,
-                    items: items ?? undefined,
+                    orderItems: items && items.length > 0 ? {
+                        create: items.map((item: any) => ({
+                            companyId,
+                            name: item.name || "Unknown Item",
+                            quantity: item.quantity || 1,
+                            price: item.price || 0,
+                            sku: item.sku || null,
+                            productId: item.productId || null
+                        }))
+                    } : undefined,
                     status: initialStatus,
                     source: source || OrderSource.BOT_DETECTED,
                     priority: priority || (amount > 0 ? OrderPriority.URGENT : OrderPriority.NORMAL),
@@ -138,6 +148,11 @@ export class NewOrderArrivalService {
         }).catch(err => console.error("💥 [AnalyticsRollup] Failed to increment metrics:", err));
 
         console.log(`✅ [NewOrderArrival] Order ${order.id} processed - Status: ${initialStatus} - Customer: ${customerHistory.isExistingCustomer ? 'Existing' : 'New'}`);
+
+        // Decrement InventoryVariant.stock for each ordered item
+        decrementStockForOrder(order.id, companyId).catch(err =>
+            console.error(`❌ [StockDecrement] Failed for order ${order.id}:`, err)
+        );
 
         return {
             order,

@@ -28,7 +28,8 @@ export async function embedRuleToKnowledgeChunk(rule: RuleForEmbedding): Promise
     const content = `${rule.name} ${rule.triggerKeywords.join(" ")} ${rule.templateBody}`.trim();
 
     // Generate the embedding
-    const embedding = await embedText(content);
+    // E5 models require "passage: " prefix for indexed content to align with query embeddings
+    const embedding = await embedText("passage: " + content);
 
     // Convert embedding array to PostgreSQL vector literal format
     const embeddingLiteral = `[${embedding.join(",")}]`;

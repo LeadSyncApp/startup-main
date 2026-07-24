@@ -265,7 +265,7 @@ export async function deleteSmartRule(ruleId: string) {
  * Test a conversational rule against a sample message
  * Backend expects: POST /api/automation/conversational-rules/test with { ruleId, sampleMessage }
  */
-export async function testSmartRule(ruleId: string, sampleMessage: string) {
+export async function testConversationalRule(ruleId: string, sampleMessage: string) {
   const res = await authedFetch("/api/automation/conversational-rules/test", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -275,44 +275,16 @@ export async function testSmartRule(ruleId: string, sampleMessage: string) {
   return res.json();
 }
 
-/**
- * Get logs for a conversational rule
- * Backend expects: GET /api/automation/conversational-rules/logs/:companyId
- */
-export async function getSmartRuleLogs() {
-  const companyId = getCompanyId();
-  const res = await authedFetch(`/api/automation/conversational-rules/logs/${companyId}`);
-  if (!res.ok) throw new Error("Failed to get logs");
-  return res.json();
-}
-
-// ── AI Instruction Testing API ────────────────────────────────────
+// Alias for backwards compatibility
+export const testSmartRule = testConversationalRule;
 
 /**
- * Test an AI instruction with a custom message
- * Returns the AI-generated response based on the instruction
+ * Fetch surfacing + event catalog constants from the backend so the rule editor
+ * cannot drift from backend truth (cap, event names).
  */
-export async function testInstruction(instruction: string, testMessage: string) {
-  const res = await authedFetch("/api/auto-reply/test-instruction", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instruction, testMessage }),
-  });
-  if (!res.ok) throw new Error("Failed to test instruction");
-  return res.json();
-}
-
-/**
- * Generate an example conversation for an instruction
- * Returns { customerMessage, botResponse }
- */
-export async function generateExample(instruction: string) {
-  const res = await authedFetch("/api/auto-reply/generate-example", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instruction }),
-  });
-  if (!res.ok) throw new Error("Failed to generate example");
+export async function getRuleConstants() {
+  const res = await authedFetch("/api/automation/conversational-rules/constants");
+  if (!res.ok) throw new Error("Failed to load rule constants");
   return res.json();
 }
 

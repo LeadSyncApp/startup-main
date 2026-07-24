@@ -1,115 +1,139 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Brain, Sparkles, Zap, RefreshCw, Play, StopCircle,
-  Trash2, Plus, Edit3, Clock, Save, Globe
+  Brain, Sparkles, RefreshCw, Play, StopCircle,
+  Trash2, Plus, Save, Command as CommandIcon, AlertTriangle
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { authedFetch, generateSmartRules, listSmartRules, updateSmartRule, deleteSmartRule, createRuleGroup, listRuleGroups, deleteRuleGroup, updateRuleGroup, testInstruction, generateExample, createSmartRule } from "../../api/client";
+import { generateSmartRules, listSmartRules, updateSmartRule, deleteSmartRule, createRuleGroup, listRuleGroups, deleteRuleGroup, updateRuleGroup, createSmartRule, getRuleConstants, testConversationalRule } from "../../api/client";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 
 /* ──────────────────────────────────────────────────────────────
    Types
    ────────────────────────────────────────────────────────────── */
 
-interface AutoReplyRule {
+interface SurfaceConfig {
+  enabled: boolean;
+  showAsButton?: boolean;
+  showAsCommand?: boolean;
+  channel: "TELEGRAM";
+  buttonLabel: string;
+  command: string;
+  menuPosition: number;
+  parentRuleId?: string | null;
+}
+
+interface ConversationalRule {
   id: string;
-  eventKey: string;
+  name: string;
+  sourcePrompt?: string;
+  triggerKeywords?: string[];
+  triggerType?: string;
   isEnabled: boolean;
-  messageBody: string;
-  delayMinutes: number;
-  useAI: boolean;
+  surfaceConfig?: SurfaceConfig | null;
+  eventConfig?: { eventName?: string } | null;
+  templateBody?: string;
+  useAI?: boolean;
+  brandVoice?: string;
 }
 
-interface AutoReplyEventMeta {
-  label: string;
-  description: string;
-  icon: string;
-  category: "order" | "lead";
+interface RuleConstants {
+  maxSurfacedRules: number;
+  orderEventPrefix: string;
+  knownEvents: { value: string; label: string }[];
 }
 
-const EVENT_METADATA: Record<string, AutoReplyEventMeta> = {
-  "order.placed":    { label: "New Order Placed",    description: "Customer places a new order",                 icon: "🛒", category: "order" },
-  "order.confirmed": { label: "Order Confirmed",     description: "You confirm the customer's order",           icon: "✅", category: "order" },
-  "order.preparing": { label: "Preparing Order",     description: "You start preparing the order",               icon: "👨‍🍳", category: "order" },
-  "order.ready":     { label: "Order Ready",         description: "Order ready for pickup/delivery",              icon: "📦", category: "order" },
-  "order.delivered": { label: "Order Delivered",     description: "After successful delivery",                   icon: "🎉", category: "order" },
-  "lead.welcome":    { label: "Welcome Message",     description: "New customer messages you first time",         icon: "👋", category: "lead" },
-  "lead.followup":   { label: "Follow-Up",           description: "Customer hasn't replied in a while",          icon: "⏰", category: "lead" },
-  "lead.cold_recovery": { label: "Cold Lead Recovery", description: "Re-engage customers who went cold",         icon: "🧊", category: "lead" },
-};
-
-const FLOW_ORDER_EVENTS = ["order.placed", "order.confirmed", "order.preparing", "order.ready", "order.delivered"];
-const FLOW_LEAD_EVENTS = ["lead.welcome", "lead.followup", "lead.cold_recovery"];
-
-const SUPPORTED_LANGUAGES = [
-  { code: "ta", label: "தமிழ்", flag: "🇮🇳" },
-  { code: "hi", label: "हिंदी", flag: "🇮🇳" },
-  { code: "te", label: "తెలుగు", flag: "🇮🇳" },
-  { code: "bn", label: "বাংলা", flag: "🇮🇳" },
-  { code: "en", label: "English", flag: "🇬🇧" },
-];
-
-type ViewType = "ai-list" | "ai-detail" | "events-list" | "events-detail";
+type ViewType = "ai-list" | "ai-detail";
 
 /* ──────────────────────────────────────────────────────────────
    Main Component
    ────────────────────────────────────────────────────────────── */
 
 export function AutoRepliesPage() {
+  // Testing state
+  const [testInputs, setTestInputs] = useState<Record<string, string>>({});
+  const [testResults, setTestResults] = useState<Record<string, { matched: boolean; matchedKeywords: string[]; response: string } | null>>({});
+  const [testingRuleId, setTestingRuleId] = useState<string | null>(null);
+
+  const handleTestRule = async (ruleId: string) => {
+    const sample = testInputs[ruleId];
+    if (!sample?.trim()) return;
+    setTestingRuleId(ruleId);
+    try {
+      const res = await testConversationalRule(ruleId, sample);
+      if (res.success) {
+        setTestResults(prev => ({ ...prev, [ruleId]: res.data }));
+      }
+    } catch {
+      toast.error("Failed to test instruction");
+    } finally {
+      setTestingRuleId(null);
+    }
+  };
   // Navigation
   const [currentView, setCurrentView] = useState<ViewType>("ai-list");
 
   // AI Instructions state
-  const [instructions, setInstructions] = useState<any[]>([]);
+  const [instructions, setInstructions] = useState<ConversationalRule[]>([]);
   const [instructionsLoading, setInstructionsLoading] = useState(true);
   const [instructionInput, setInstructionInput] = useState("");
-
-  // Event Auto-Replies state
-  const [rules, setRules] = useState<AutoReplyRule[]>([]);
-  const [activeFlow, setActiveFlow] = useState<"order" | "lead">("order");
-
-  // Generate zone
-  const [quickInput, setQuickInput] = useState("");
-  const [generating, setGenerating] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [previewMessages, setPreviewMessages] = useState<{ eventKey: string; message: string }[]>([]);
 
   // Create modal
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createFlowName, setCreateFlowName] = useState("");
+  const [flowToDelete, setFlowToDelete] = useState<{ id: string; name: string } | null>(null);
 
   // New flow description (AI generate)
   const [flowDescription, setFlowDescription] = useState("");
   const [showDescriptionPrompt, setShowDescriptionPrompt] = useState(false);
   const [isFirstTimeSetup, setIsFirstTimeSetup] = useState(false);
   const [selectedAiProfile, setSelectedAiProfile] = useState<{ name: string; desc: string } | null>(null);
-  const [selectedEventProfile, setSelectedEventProfile] = useState<{ name: string; desc: string } | null>(null);
 
   // Server-backed rule groups (automation flows)
   const [ruleGroups, setRuleGroups] = useState<any[]>([]);
   const [ruleGroupsLoading, setRuleGroupsLoading] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
-  // Inline editing state (for event detail view)
-  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
-  const [editMessage, setEditMessage] = useState("");
-  const [editDelay, setEditDelay] = useState(0);
-  const [editUseAI, setEditUseAI] = useState(false);
-  const [editBrandVoice, setEditBrandVoice] = useState<"formal" | "casual" | "friendly" | "salesy">("friendly");
-  const [editLanguage, setEditLanguage] = useState<"en" | "hi" | "ta" | "te" | "bn">("en");
+  // Surface editor state (per-rule, keyed by rule id)
+  const [surfaceEditId, setSurfaceEditId] = useState<string | null>(null);
+  const [surfaceDraft, setSurfaceDraft] = useState<SurfaceConfig>({
+    enabled: false, channel: "TELEGRAM", buttonLabel: "", command: "", menuPosition: 0,
+  });
+  const [draftUseAI, setDraftUseAI] = useState(false);
+  const [draftTemplateBody, setDraftTemplateBody] = useState("");
   const [saving, setSaving] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
 
   // Preview-before-confirm state
   const [previewRule, setPreviewRule] = useState<any>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
+  // Constants from backend (surfacing cap + known events)
+  const [constants, setConstants] = useState<RuleConstants>({
+    maxSurfacedRules: 6,
+    orderEventPrefix: "order.",
+    knownEvents: [],
+  });
+
   // Fetch on mount
   useEffect(() => {
     fetchInstructions();
-    fetchRules();
     fetchRuleGroups();
+    fetchConstants();
   }, []);
+
+  // ── API: constants ──
+  const fetchConstants = async () => {
+    try {
+      const data = await getRuleConstants();
+      setConstants({
+        maxSurfacedRules: data.maxSurfacedRules ?? 6,
+        orderEventPrefix: data.orderEventPrefix ?? "order.",
+        knownEvents: data.knownEvents ?? [],
+      });
+    } catch {
+      // keep defaults
+    }
+  };
 
   // ── API: AI Instructions ──
 
@@ -125,17 +149,20 @@ export function AutoRepliesPage() {
     }
   };
 
+  const surfacedCount = instructions.filter(
+    (r) => r.surfaceConfig?.enabled && r.surfaceConfig.command
+  ).length;
+
   const addInstruction = async () => {
     if (!instructionInput.trim()) {
       toast.error("Please type an instruction");
       return;
     }
-    if (!isValidInstructionInput(instructionInput)) {
-      toast.error("Please write a full sentence describing the instruction");
-      return;
-    }    try {
-      const data = await generateSmartRules(instructionInput, selectedGroupId || undefined);      if (data.rule) {
-        const _groupSource = selectedGroupId || undefined;        setPreviewRule({ ...data.rule, _groupSource });
+    try {
+      const data = await generateSmartRules(instructionInput, selectedGroupId || undefined);
+      if (data.rule) {
+        const _groupSource = selectedGroupId || undefined;
+        setPreviewRule({ ...data.rule, _groupSource });
         setShowPreviewModal(true);
       } else {
         toast.error("Could not create instruction. Try again.");
@@ -180,219 +207,129 @@ export function AutoRepliesPage() {
     }
   };
 
-  // ── API: Event Auto-Replies ──
-
-  const fetchRules = async () => {
+  const triggerDeleteFlow = async () => {
+    if (!flowToDelete) return;
+    const { id, name } = flowToDelete;
     try {
-      const res = await authedFetch("/api/auto-reply/rules");
-      if (!res.ok) throw new Error("Failed to load");
-      const data = await res.json();
-      setRules(data.rules || []);
+      await deleteRuleGroup(id);
+      await fetchRuleGroups();
+      await fetchInstructions();
+      toast.success(`Flow "${name}" deleted`);
     } catch {
-      toast.error("Could not load auto-reply settings");
+      toast.error("Failed to delete flow");
+    } finally {
+      setFlowToDelete(null);
     }
   };
 
-  const toggleRule = async (rule: AutoReplyRule) => {
-    try {
-      const res = await authedFetch(`/api/auto-reply/rules/${rule.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isEnabled: !rule.isEnabled }),
-      });
-      if (!res.ok) throw new Error("Failed to update");
-      const data = await res.json();
-      setRules(prev => prev.map(r => r.id === rule.id ? data.rule : r));
-      toast.success(rule.isEnabled ? "Auto-reply turned OFF" : "Auto-reply turned ON");
-    } catch {
-      toast.error("Failed to toggle");
-    }
+  // ── Surface editor ──
+
+  const openSurfaceEditor = (rule: ConversationalRule) => {
+    const sc = rule.surfaceConfig;
+    const showAsButton = sc?.showAsButton ?? (sc?.enabled ? true : false);
+    const showAsCommand = sc?.showAsCommand ?? (sc?.enabled ? true : false);
+    setSurfaceDraft({
+      enabled: sc?.enabled ?? false,
+      showAsButton,
+      showAsCommand,
+      channel: "TELEGRAM",
+      buttonLabel: sc?.buttonLabel ?? "",
+      command: sc?.command ?? "",
+      menuPosition: sc?.menuPosition ?? 0,
+      parentRuleId: sc?.parentRuleId ?? null,
+    });
+    setDraftUseAI(rule.useAI ?? false);
+    setDraftTemplateBody(rule.templateBody ?? "");
+    setSurfaceEditId(rule.id);
   };
 
-  const deleteRule = async (ruleId: string) => {
-    try {
-      const res = await authedFetch(`/api/auto-reply/rules/${ruleId}`, { method: "DELETE" });
-      if (res.ok) {
-        setRules(prev => prev.filter(r => r.id !== ruleId));
-        toast.success("Rule deleted");
-      } else {
-        throw new Error("Failed to delete");
+  const commandSeemsValid = (cmd: string) => /^\/[a-z0-9_]+$/.test(cmd);
+
+  const atCap = (ruleId: string, parentRuleId: string | null | undefined) => {
+    const targetParentId = parentRuleId || null;
+    const existingRule = instructions.find(r => r.id === ruleId);
+    
+    const existingSc = existingRule?.surfaceConfig;
+    const wasSurfacedButton = existingSc ? (existingSc.showAsButton !== undefined ? !!existingSc.showAsButton : !!existingSc.enabled) : false;
+    const wasSurfacedUnderThisParent =
+      wasSurfacedButton &&
+      (existingSc?.parentRuleId || null) === targetParentId;
+    if (wasSurfacedUnderThisParent) return false;
+
+    const currentCount = instructions.filter(
+      (r) => {
+        const sc = r.surfaceConfig;
+        if (!sc) return false;
+        const activeBtn = sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled;
+        return activeBtn && (sc.parentRuleId || null) === targetParentId;
       }
-    } catch {
-      toast.error("Failed to delete rule");
-    }
+    ).length;
+    return currentCount >= constants.maxSurfacedRules;
   };
 
-  const saveInlineEdit = async (ruleId: string) => {
+  const saveSurface = async (ruleId: string) => {
+    const draft = { ...surfaceDraft };
+    const showAsButton = !!draft.showAsButton;
+    const showAsCommand = !!draft.showAsCommand;
+
+    if (showAsButton && !draft.buttonLabel.trim()) {
+      toast.error("Button label is required when 'Show as inline button' is checked.");
+      return;
+    }
+    if (showAsCommand && !commandSeemsValid(draft.command)) {
+      toast.error("Command must start with '/' and use lowercase letters, numbers, or underscores (no spaces)");
+      return;
+    }
+    if (showAsButton && atCap(ruleId, draft.parentRuleId)) {
+      toast.error(`Surfaced rule button limit reached (${constants.maxSurfacedRules}). Disable another surfaced button in this menu first.`);
+      return;
+    }
+
+    if (!draftUseAI && !draftTemplateBody.trim()) {
+      toast.error("A Fixed Reply is required when AI Behavior is disabled.");
+      return;
+    }
+
+    setSaving(true);
     try {
-      setSaving(true);
-      const res = await authedFetch(`/api/auto-reply/rules/${ruleId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messageBody: editMessage,
-          delayMinutes: editDelay,
-          useAI: editUseAI,
-          brandVoice: editBrandVoice,
-          targetLanguage: editLanguage,
-        }),
+      const data = await updateSmartRule(ruleId, {
+        useAI: draftUseAI,
+        templateBody: draftTemplateBody.trim(),
+        surfaceConfig: {
+          showAsButton,
+          showAsCommand,
+          enabled: showAsButton || showAsCommand,
+          channel: "TELEGRAM",
+          buttonLabel: showAsButton || showAsCommand ? draft.buttonLabel.trim() : "",
+          command: showAsButton || showAsCommand ? draft.command.trim() : "",
+          menuPosition: Number(draft.menuPosition) || 0,
+          parentRuleId: draft.parentRuleId || null,
+        },
       });
-      if (!res.ok) throw new Error("Failed to save");
-      const data = await res.json();
-      setRules(prev => prev.map(r => r.id === ruleId ? data.rule : r));
-      setEditingRuleId(null);
-      toast.success("Message updated! ✨");
-    } catch {
-      toast.error("Failed to save");
+      if (data.rule) {
+        setInstructions(prev => prev.map(r => r.id === ruleId ? data.rule : r));
+      } else {
+        await fetchInstructions();
+      }
+      setSurfaceEditId(null);
+      toast.success("Rule settings updated successfully");
+    } catch (err: any) {
+      const serverMsg = err?.response?.data?.error || err?.message;
+      if (err?.response?.status === 409 || err?.message?.includes("SURFACED_LIMIT_REACHED")) {
+        toast.error(serverMsg || `Surfaced rule limit reached (${constants.maxSurfacedRules}). Disable another surfaced rule in this menu first.`);
+      } else if (serverMsg) {
+        toast.error(serverMsg);
+      } else {
+        toast.error("Failed to save rule settings");
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  const generateQuickAutomation = async () => {
-    if (!quickInput.trim()) {
-      toast.error("Please type your message or offer");
-      return;
-    }
-    try {
-      setGenerating(true);
-      setShowPreview(false);
-      const res = await authedFetch("/api/auto-reply/generate-from-description", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: quickInput, language: "auto" }),
-      });
-      if (!res.ok) throw new Error("Failed to generate");
-      const data = await res.json();
-      const genRules = data.rules || [];
-      const previews = genRules
-        .filter((r: AutoReplyRule) => r.messageBody && r.messageBody.length > 0)
-        .slice(0, 3)
-        .map((r: AutoReplyRule) => ({ eventKey: r.eventKey, message: r.messageBody }));
-      setPreviewMessages(previews);
-      setRules(genRules);
-      if (previews.length === 0) {
-        toast.error("Could not generate. Try again.");
-      } else {
-        toast.success("Preview ready!");
-      }
-      setShowPreview(true);
-    } catch {
-      toast.error("Failed to generate messages");
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const getRule = (eventKey: string) => rules.find(r => r.eventKey === eventKey);
-
-  const formatDelay = (minutes: number) => {
-    if (minutes === 0) return "Immediately";
-    if (minutes < 60) return `${minutes} min`;
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    if (days > 0) return `${days} day${days > 1 ? "s" : ""}`;
-    return `${hours} hour${hours > 1 ? "s" : ""}`;
-  };
-
-  // Test states for each instruction
-  const [testStates, setTestStates] = useState<Record<string, { 
-    input: string; 
-    result: string | null; 
-    testing: boolean;
-    exampleLoaded: boolean;
-    customerExample: string;
-    botExample: string;
-  }>>({});
-
-  // Load example conversation when instruction changes
-  const loadExampleConversation = async (instId: string, instruction: string) => {
-    try {
-      const data = await generateExample(instruction);
-      setTestStates(prev => ({
-        ...prev,
-        [instId]: {
-          ...prev[instId],
-          customerExample: data.customerMessage,
-          botExample: data.botResponse,
-          exampleLoaded: true
-        }
-      }));
-    } catch (error) {
-      console.error("Failed to load example:", error);
-    }
-  };
-
-  // Test instruction with real AI
-  const handleTestInstruction = async (instId: string, instruction: string) => {
-    const state = testStates[instId] || { 
-      input: '', 
-      result: null, 
-      testing: false,
-      exampleLoaded: false,
-      customerExample: '',
-      botExample: ''
-    };
-    
-    if (!state.input.trim()) return;
-    
-    setTestStates(prev => ({
-      ...prev,
-      [instId]: { ...state, testing: true, result: null }
-    }));
-    
-    try {
-      const data = await testInstruction(instruction, state.input);
-      setTestStates(prev => ({
-        ...prev,
-        [instId]: { ...state, testing: false, result: data.response }
-      }));
-    } catch (error) {
-      console.error("Failed to test instruction:", error);
-      setTestStates(prev => ({
-        ...prev,
-        [instId]: { ...state, testing: false, result: "Sorry, I couldn't process that. Please try again." }
-      }));
-    }
-  };
-
-  const updateTestInput = (instId: string, value: string) => {
-    setTestStates(prev => ({
-      ...prev,
-      [instId]: {
-        ...prev[instId],
-        input: value,
-        result: prev[instId]?.result || null,
-        testing: prev[instId]?.testing || false
-      }
-    }));
-  };
-
-  // Initialize example when component mounts/updates
-  useEffect(() => {
-    instructions.forEach(inst => {
-      const state = testStates[inst.id];
-      if (!state?.exampleLoaded && inst.isEnabled) {
-        loadExampleConversation(inst.id, inst.sourcePrompt || inst.name || '');
-      }
-    });
-  }, [instructions, testStates]);
-
-  const activeRulesCount = (flow: "order" | "lead") =>
-    (flow === "order" ? FLOW_ORDER_EVENTS : FLOW_LEAD_EVENTS)
-      .filter(e => getRule(e)?.isEnabled).length;
-
-  const totalRulesCount = (flow: "order" | "lead") =>
-    (flow === "order" ? FLOW_ORDER_EVENTS : FLOW_LEAD_EVENTS).length;
-
-  // ── Virtual flow data (grouped from rules by eventKey category) ──
-
-  const orderRules = rules.filter(r => EVENT_METADATA[r.eventKey]?.category === "order");
-  const leadRules = rules.filter(r => EVENT_METADATA[r.eventKey]?.category === "lead");
-
   // ── Create Flow ──
 
-  const openCreateModal = (_section: "ai" | "events") => {
+  const openCreateModal = () => {
     setCreateFlowName("");
     setShowCreateModal(true);
   };
@@ -441,15 +378,14 @@ export function AutoRepliesPage() {
       toast.error("Please describe your automation flow");
       return;
     }
-    if (!isValidInstructionInput(flowDescription)) {
-      toast.error("Please write a full sentence describing the instruction");
-      return;
-    }
     if (!selectedGroupId) {
       toast.error("No flow selected. Please create a flow first.");
       return;
-    }    try {
-      const data = await generateSmartRules(flowDescription, selectedGroupId);      if (data.rule) {        setPreviewRule({ ...data.rule, _groupSource: selectedGroupId });
+    }
+    try {
+      const data = await generateSmartRules(flowDescription, selectedGroupId);
+      if (data.rule) {
+        setPreviewRule({ ...data.rule, _groupSource: selectedGroupId });
         setShowPreviewModal(true);
       } else {
         toast.error("Could not generate instructions. Try again.");
@@ -459,24 +395,11 @@ export function AutoRepliesPage() {
     }
   };
 
-  // ── Input Validation Helpers ──
-
-  const isValidInstructionInput = (text: string): boolean => {
-    // Frontend only blocks empty/whitespace input.
-    // Quality validation is now handled by the backend's AI-output confidence checks.
-    return text.trim().length > 0;
-  };
-
   // ── Confirm Save (Preview → Persist) ──
 
   const confirmSavePreview = async () => {
     if (!previewRule) return;
     const { needsReview, clarificationHint, _groupSource, ...ruleFields } = previewRule;
-    // The currently-open flow (selectedGroupId) is the source of truth.
-    // Fall back to the preview's origin (_groupSource) only if no flow is open.
-    // Never save with a null groupId — that would create a stray orphan instruction
-    // that the UI presents as a fake "flow" (the root cause of instructions
-    // appearing under the wrong flow).
     const targetGroupId = selectedGroupId || _groupSource || null;
     if (!targetGroupId) {
       toast.error("Please open a flow first, then add your instruction.");
@@ -515,11 +438,9 @@ export function AutoRepliesPage() {
 
   // ── Navigation ──
 
-  const navigateTo = (view: ViewType) => {    setShowDescriptionPrompt(false);
+  const navigateTo = (view: ViewType) => {
+    setShowDescriptionPrompt(false);
     setCurrentView(view);
-    if (view !== "events-detail") {
-      setEditingRuleId(null);
-    }
     if (view === "ai-list") {
       fetchInstructions();
       fetchRuleGroups();
@@ -527,8 +448,8 @@ export function AutoRepliesPage() {
   };
 
   /* ═══════════════════════════════════════════════════════
-     RENDER: AI Instructions - List View
-     ═══════════════════════════════════════════════════════ */
+      RENDER: AI Instructions - List View
+      ═══════════════════════════════════════════════════════ */
   const renderAiList = () => (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -538,6 +459,17 @@ export function AutoRepliesPage() {
         <p className="font-medium text-base leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
           Each flow is a collection of behavioral rules the bot follows in every conversation.
         </p>
+      </div>
+
+      {/* Surfaced-rule counter */}
+      <div className="flex items-center justify-between bg-white rounded-2xl border-2 border-slate-200 px-4 py-3">
+        <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+          <CommandIcon className="w-4 h-4 text-purple-600" />
+          Telegram buttons / commands
+        </div>
+        <span className={`text-xs font-bold px-3 py-1 rounded-full ${surfacedCount >= constants.maxSurfacedRules ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+          {surfacedCount}/{constants.maxSurfacedRules} slots used
+        </span>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -600,17 +532,9 @@ export function AutoRepliesPage() {
               <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${_flowEnabled ? "translate-x-5" : ""}`} />
             </button>
             <button
-              onClick={async (e) => {
+              onClick={(e) => {
                 e.stopPropagation();
-                if (!confirm(`Delete flow "${group.name}" and all its instructions? This cannot be undone.`)) return;
-                try {
-                  await deleteRuleGroup(group.id);
-                  await fetchRuleGroups();
-                  await fetchInstructions();
-                  toast.success(`Flow "${group.name}" deleted`);
-                } catch {
-                  toast.error("Failed to delete flow");
-                }
+                setFlowToDelete({ id: group.id, name: group.name });
               }}
               className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all cursor-pointer"
             >
@@ -625,9 +549,6 @@ export function AutoRepliesPage() {
             <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 px-1">
               Ungrouped Instructions
             </p>
-            <p className="text-[11px] text-slate-400 mb-2 px-1">
-              These aren't in any flow yet. Open a flow above, then re-add them so they're used in conversations.
-            </p>
           </div>
         )}
 
@@ -636,10 +557,6 @@ export function AutoRepliesPage() {
             key={inst.id}
             className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-4 flex items-center gap-4 hover:border-slate-300 transition-all cursor-pointer"
             onClick={() => {
-              // IMPORTANT: do NOT null selectedGroupId here. Orphan instructions have an
-              // empty groupId, and setting selectedGroupId to null would make any new
-              // instruction added in this view become a stray orphan (the original bug).
-              // We preserve the currently-selected flow so the Add input still targets it.
               setSelectedAiProfile({
                 name: inst.sourcePrompt || inst.name || "AI Instruction",
                 desc: "Manage your instruction rules"
@@ -656,6 +573,7 @@ export function AutoRepliesPage() {
                 <span className="font-bold text-sm text-slate-800">
                   {inst.sourcePrompt || inst.name || "Instruction"}
                 </span>
+                <SurfacedBadge rule={inst} />
                 <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${inst.isEnabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                   {inst.isEnabled ? "Active" : "Draft"}
                 </span>
@@ -683,7 +601,7 @@ export function AutoRepliesPage() {
       </div>
 
       <button
-        onClick={() => openCreateModal("ai")}
+        onClick={openCreateModal}
         className="w-full flex items-center justify-center gap-3 p-5 border-2 border-dashed border-slate-200 rounded-2xl text-sm font-bold text-slate-400 hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50/30 transition-all cursor-pointer"
       >
         <Plus className="w-5 h-5" />
@@ -693,8 +611,8 @@ export function AutoRepliesPage() {
   );
 
   /* ═══════════════════════════════════════════════════════
-     RENDER: AI Instructions - Detail View (with Timeline)
-     ═══════════════════════════════════════════════════════ */
+      RENDER: AI Instructions - Detail View (with Timeline)
+      ═══════════════════════════════════════════════════════ */
   const renderAiDetail = () => (
     <div className="space-y-6">
       <button
@@ -788,7 +706,7 @@ export function AutoRepliesPage() {
                 {showDescriptionPrompt ? 'Hide' : 'Show'}
               </button>
             </div>
-            
+
             <AnimatePresence>
               {showDescriptionPrompt && (
                 <motion.div
@@ -824,24 +742,13 @@ export function AutoRepliesPage() {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white shadow-lg shrink-0">
                 <Brain className="w-5 h-5" />
               </div>
-            <div className="flex-1">
-              <h2 className="font-black text-slate-800 text-lg">🧠 Your Instructions</h2>
-              <p className="text-xs text-slate-500">The bot follows these rules automatically</p>
-            </div>
-            <div className="flex items-center bg-slate-100 rounded-xl p-0.5 shrink-0">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'list' ? 'bg-white border border-slate-200 text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                List
-              </button>
-              <button
-                onClick={() => setViewMode('gallery')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'gallery' ? 'bg-white border border-slate-200 text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                Gallery
-              </button>
-            </div>
+              <div className="flex-1">
+                <h2 className="font-black text-slate-800 text-lg">🧠 Your Instructions</h2>
+                <p className="text-xs text-slate-500">The bot follows these rules automatically</p>
+              </div>
+              <div className="flex items-center bg-slate-100 rounded-xl p-0.5 shrink-0">
+                <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-800 shadow-sm">List</span>
+              </div>
             </div>
 
             <div className="flex gap-2">
@@ -863,9 +770,7 @@ export function AutoRepliesPage() {
               </button>
             </div>
 
-            {viewMode === 'list' ? (
-              <>
-              {instructions.length === 0 ? (
+            {instructions.length === 0 ? (
               <div className="text-center py-8 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
                 <div className="text-2xl mb-2">🧠</div>
                 <p className="text-xs text-slate-400 font-medium">
@@ -877,208 +782,296 @@ export function AutoRepliesPage() {
                 {(() => {
                   const _flowEnabled = !selectedGroupId || (ruleGroups.find((g: any) => g.id === selectedGroupId)?.isEnabled !== false);
                   return instructions.map((inst) => {
-                  // Effective state: a rule is only active if BOTH the flow and the
-                  // rule itself are enabled. The flow-level toggle overrides the rule toggle.
-                  const _effectiveActive = inst.isEnabled && _flowEnabled;
-                  return (
-                  <div key={inst.id} className={`bg-white rounded-2xl border-2 p-5 transition-all ${_effectiveActive ? 'border-purple-200 shadow-sm' : 'border-slate-100 opacity-70'}`}>
-                    
-                    {/* Header: Instruction info + Toggle/Delete */}
-                    <div className="flex items-start justify-between mb-4 pb-4 border-b border-slate-100">
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${_effectiveActive ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="text-[10px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                              Instruction
-                            </div>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${_effectiveActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                              {_effectiveActive ? 'Active' : 'Disabled'}
-                            </span>
-                            {!_flowEnabled && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-700" title="This flow is disabled, so this instruction is not followed">
-                                Flow off
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-base font-bold text-slate-800 leading-snug">
-                            {inst.sourcePrompt || inst.name || "Instruction"}
-                          </p>
-                          {inst.triggerKeywords && inst.triggerKeywords.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {inst.triggerKeywords.slice(0, 5).map((kw: string, i: number) => (
-                                <span key={i} className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 py-0.5 rounded font-medium">{kw}</span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-3 shrink-0 ml-4">
-                        <button
-                          onClick={() => toggleInstruction(inst.id, inst.isEnabled)}
-                          className={`relative w-11 h-6 rounded-full transition-all cursor-pointer ${inst.isEnabled ? "bg-green-500" : "bg-slate-300"}`}
-                        >
-                          <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${inst.isEnabled ? "translate-x-5" : ""}`} />
-                        </button>
-                        <button
-                          onClick={() => deleteInstruction(inst.id)}
-                          className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Body: Example and Test */}
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {/* Left Side: Example Conversation */}
-                      <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
-                        {(() => {
-                          const state = testStates[inst.id];
-                          if (!state?.exampleLoaded) {
-                            return (
-                              <div>
-                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                                  <Sparkles className="w-3 h-3" />
-                                  Example Conversation
-                                </div>
-                                <div className="text-center py-4">
-                                  <RefreshCw className="w-4 h-4 animate-spin text-slate-400 mx-auto" />
-                                </div>
-                              </div>
-                            );
-                          }
-                          return (
-                            <div>
-                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                                <Sparkles className="w-3 h-3" />
-                                Example Conversation
-                              </div>
-                              <div className="space-y-3">
-                                <div className="flex items-start gap-2">
-                                  <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs shrink-0">👤</div>
-                                  <div className="bg-white rounded-xl px-3 py-2 border border-slate-200 text-xs text-slate-700 shadow-sm flex-1">
-                                    {state.customerExample}
-                                  </div>
-                                </div>
-                                <div className="flex items-start gap-2">
-                                  <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs shrink-0 text-white">🤖</div>
-                                  <div className="bg-purple-600 text-white rounded-xl px-3 py-2 shadow-sm text-xs flex-1">
-                                    {state.botExample}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Right Side: Interactive Test Box */}
-                      <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                        <div className="text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                          <Zap className="w-3 h-3" />
-                          Test With Your Inputs
-                        </div>
-                        <p className="text-[10px] text-slate-500 mb-3">See how the bot responds to custom messages</p>
-                        
-                        <div className="space-y-2">
-                          <textarea
-                            value={testStates[inst.id]?.input || ''}
-                            onChange={(e) => updateTestInput(inst.id, e.target.value)}
-                            placeholder="Type a message... e.g. 'Hello'"
-                            rows={2}
-                            className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-purple-400 transition-all resize-none font-medium"
-                          />
-                          <button
-                            onClick={() => handleTestInstruction(inst.id, inst.sourcePrompt || inst.name || '')}
-                            disabled={!testStates[inst.id]?.input?.trim() || testStates[inst.id]?.testing}
-                            className="w-full px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
-                          >
-                            {testStates[inst.id]?.testing ? (
-                              <>
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                Testing...
-                              </>
-                            ) : (
-                              <>
-                                <Play className="w-3.5 h-3.5 fill-current" />
-                                Run Test
-                              </>
-                            )}
-                          </button>
-                          
-                          {/* Test Result */}
-                          {testStates[inst.id]?.result && (
-                            <div className="mt-3 pt-3 border-t border-slate-200 space-y-3">
-                              <div className="flex items-start gap-2">
-                                <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs shrink-0">👤</div>
-                                <div className="bg-white rounded-xl px-3 py-2 border border-slate-200 text-xs text-slate-700 shadow-sm flex-1">
-                                  {testStates[inst.id].input}
-                                </div>
-                              </div>
-                              <div className="flex items-start gap-2">
-                                <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs shrink-0 text-white">🤖</div>
-                                <div className="bg-purple-600 text-white rounded-xl px-3 py-2 shadow-sm text-xs flex-1">
-                                  {testStates[inst.id].result}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  );
-                });
-              })()}
-              </div>
-            )}
-              </>
-            ) : (
-              <>
-              {instructions.length === 0 ? (
-                <div className="text-center py-8 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                  <div className="text-2xl mb-2">🧠</div>
-                  <p className="text-xs text-slate-400 font-medium">
-                    No instructions yet. Type one above to tell the bot how to behave.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4">
-                  {(() => {
-                    const _flowEnabled = !selectedGroupId || (ruleGroups.find((g: any) => g.id === selectedGroupId)?.isEnabled !== false);
-                    return instructions.map((inst) => {
                     const _effectiveActive = inst.isEnabled && _flowEnabled;
                     return (
-                    <div
-                      key={inst.id}
-                      onClick={() => setViewMode('list')}
-                      className="bg-white rounded-2xl border-2 p-3 hover:border-purple-300 transition-all cursor-pointer"
-                    >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${_effectiveActive ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>
-                        <Brain className="w-4 h-4" />
+                    <div key={inst.id} className={`bg-white rounded-2xl border-2 p-5 transition-all ${_effectiveActive ? 'border-purple-200 shadow-sm' : 'border-slate-100 opacity-70'}`}>
+
+                      {/* Header: Instruction info + Toggle/Delete */}
+                      <div className="flex items-start justify-between mb-2 pb-3 border-b border-slate-100">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${_effectiveActive ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 0 1 2 -2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <div className="text-[10px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                                Instruction
+                              </div>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${_effectiveActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                                {_effectiveActive ? 'Active' : 'Disabled'}
+                              </span>
+                              <SurfacedBadge rule={inst} />
+                              {!_flowEnabled && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-700" title="This flow is disabled, so this instruction is not followed">
+                                  Flow off
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-base font-bold text-slate-800 leading-snug">
+                              {inst.sourcePrompt || inst.name || "Instruction"}
+                            </p>
+                            {inst.triggerKeywords && inst.triggerKeywords.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {inst.triggerKeywords.slice(0, 5).map((kw: string, i: number) => (
+                                  <span key={i} className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 py-0.5 rounded font-medium">{kw}</span>
+                                ))}
+                              </div>
+                            )}
+
+                            {(() => {
+                              const sc = inst.surfaceConfig;
+                              const showAsButton = sc ? (sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled) : false;
+                              const showAsCommand = sc ? (sc.showAsCommand !== undefined ? !!sc.showAsCommand : !!sc.enabled) : false;
+                              const needsTemplate = !inst.useAI || showAsButton || showAsCommand;
+                              const noTemplate = !inst.templateBody || !inst.templateBody.trim();
+                              
+                              if (_effectiveActive && needsTemplate && noTemplate) {
+                                return (
+                                  <div className="mt-2.5 px-3 py-2 bg-amber-50 border border-amber-200/80 rounded-xl text-xs font-semibold text-amber-800 flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                                    <span>
+                                      Warning: No response text configured. 
+                                      {!inst.useAI ? " This is required for free-text matching." : ""}
+                                      {showAsButton || showAsCommand ? " This is required for button/command taps." : ""}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0 ml-4">
+                          <button
+                            onClick={() => toggleInstruction(inst.id, inst.isEnabled)}
+                            className={`relative w-11 h-6 rounded-full transition-all cursor-pointer ${inst.isEnabled ? "bg-green-500" : "bg-slate-300"}`}
+                          >
+                            <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${inst.isEnabled ? "translate-x-5" : ""}`} />
+                          </button>
+                          <button
+                            onClick={() => deleteInstruction(inst.id)}
+                            className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                      <p className="text-xs font-bold text-slate-800 truncate">
-                        {inst.sourcePrompt || inst.name || "Instruction"}
-                      </p>
-                      <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded mt-1.5 ${_effectiveActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>
-                        {_effectiveActive ? 'Active' : 'Disabled'}
-                      </span>
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        {inst.triggerKeywords?.length || 0} keywords
-                      </p>
+
+                      {/* Surface editor toggle + panel */}
+                      <div className="pt-1">
+                        <button
+                          onClick={() => surfaceEditId === inst.id ? setSurfaceEditId(null) : openSurfaceEditor(inst)}
+                          className="flex items-center gap-2 text-xs font-bold text-purple-600 hover:text-purple-800 transition-all cursor-pointer"
+                        >
+                          <CommandIcon className="w-3.5 h-3.5" />
+                          Configure reply & surfacing
+                          <span className="text-slate-300">›</span>
+                        </button>
+
+                        <AnimatePresence>
+                          {surfaceEditId === inst.id && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <SurfaceEditor
+                                draft={surfaceDraft}
+                                setDraft={setSurfaceDraft}
+                                draftUseAI={draftUseAI}
+                                setDraftUseAI={setDraftUseAI}
+                                draftTemplateBody={draftTemplateBody}
+                                setDraftTemplateBody={setDraftTemplateBody}
+                                rule={inst}
+                                allRules={instructions}
+                                constants={constants}
+                                atCap={atCap(inst.id, surfaceDraft.parentRuleId)}
+                                commandValid={commandSeemsValid(surfaceDraft.command)}
+                                surfacedCount={instructions.filter(
+                                  (r) => {
+                                    const sc = r.surfaceConfig;
+                                    if (!sc) return false;
+                                    const activeBtn = sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled;
+                                    return activeBtn && (sc.parentRuleId || null) === (surfaceDraft.parentRuleId || null) && r.id !== inst.id;
+                                  }
+                                ).length}
+                                saving={saving}
+                                onCancel={() => setSurfaceEditId(null)}
+                                onSave={() => saveSurface(inst.id)}
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      {/* Side-by-Side 2-Panel Layout: Example Conversation (Left) & Test With Your Inputs (Right) */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
+                        {/* LEFT PANEL: Example Conversation */}
+                        <div className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                              <Brain className="w-3.5 h-3.5 text-purple-600" />
+                              Example Conversation
+                            </label>
+                            <span className="text-[10px] text-slate-400 font-medium">Static Preview</span>
+                          </div>
+
+                          <div className="space-y-2.5 bg-white p-3 rounded-xl border border-slate-200/60 shadow-xs">
+                            {/* User Simulated Message */}
+                            <div className="flex items-start gap-2 max-w-[90%]">
+                              <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs shrink-0 font-bold text-slate-600">
+                                👤
+                              </div>
+                              <div className="bg-slate-100 text-slate-800 rounded-2xl px-3 py-2 text-xs font-medium leading-relaxed">
+                                {inst.triggerKeywords?.[0]
+                                  ? `Do you have ${inst.triggerKeywords[0]}?`
+                                  : `Can you tell me about ${inst.name}?`}
+                              </div>
+                            </div>
+
+                            {/* Bot Simulated Response */}
+                            {(() => {
+                              const children = instructions.filter(r => r.surfaceConfig?.enabled && r.surfaceConfig.parentRuleId === inst.id);
+                              const isCategory = children.length > 0;
+                              const hasBody = inst.templateBody && inst.templateBody.trim();
+                              const displayText = hasBody ? inst.templateBody : (isCategory ? `Select an option under ${inst.name}:` : null);
+
+                              return (
+                                <div className="space-y-2">
+                                  <div className="flex items-start gap-2 max-w-[90%] ml-auto flex-row-reverse">
+                                    <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs shrink-0 text-white shadow-sm">
+                                      🤖
+                                    </div>
+                                    {displayText ? (
+                                      <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-2xl px-3 py-2 text-xs font-medium leading-relaxed shadow-sm">
+                                        {displayText}
+                                      </div>
+                                    ) : (
+                                      <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-3 py-2 text-xs font-semibold leading-relaxed">
+                                        ⚠️ No bot response text configured.
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Submenu button previews */}
+                                  {isCategory && (
+                                    <div className="flex flex-col gap-1.5 pl-8 max-w-[90%] ml-auto">
+                                      <div className="grid grid-cols-2 gap-1">
+                                        {children.map(child => (
+                                          <div key={child.id} className="bg-purple-50 text-purple-700 border border-purple-200 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
+                                            {child.surfaceConfig?.buttonLabel || child.name}
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <div className="bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
+                                        ⬅️ Back
+                                      </div>
+                                    </div>
+                                  )}
+                                  {!isCategory && inst.surfaceConfig?.enabled && (
+                                    <div className="flex gap-1.5 pl-8 max-w-[90%] ml-auto">
+                                      {inst.surfaceConfig.parentRuleId ? (
+                                        <>
+                                          <div className="flex-1 bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
+                                            ⬅️ Back
+                                          </div>
+                                          <div className="flex-1 bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
+                                            🏠 Main Menu
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <div className="flex-1 bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
+                                          🏠 Main Menu
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+
+                        {/* RIGHT PANEL: Test With Your Inputs */}
+                        <div className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                              Test With Your Inputs
+                            </label>
+                            <span className="text-[10px] text-slate-400 font-medium">Live Simulator</span>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={testInputs[inst.id] || ""}
+                              onChange={e => setTestInputs({ ...testInputs, [inst.id]: e.target.value })}
+                              onKeyDown={e => e.key === "Enter" && handleTestRule(inst.id)}
+                              placeholder="Type a custom message e.g. 'How much is briyani?'"
+                              className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-purple-500 font-medium shadow-xs"
+                            />
+                            <button
+                              onClick={() => handleTestRule(inst.id)}
+                              disabled={testingRuleId === inst.id || !testInputs[inst.id]?.trim()}
+                              className="px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 cursor-pointer shadow-sm"
+                            >
+                              {testingRuleId === inst.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Run Test"}
+                            </button>
+                          </div>
+
+                          {testResults[inst.id] ? (
+                            <div className="space-y-2 bg-white p-3 rounded-xl border border-slate-200/60 shadow-xs">
+                              {/* User Live Input Message */}
+                              <div className="flex items-start gap-2 max-w-[90%]">
+                                <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs shrink-0 font-bold text-slate-600">
+                                  👤
+                                </div>
+                                <div className="bg-slate-100 text-slate-800 rounded-2xl px-3 py-2 text-xs font-medium leading-relaxed">
+                                  {testInputs[inst.id]}
+                                </div>
+                              </div>
+
+                              {/* Bot Live Response Bubble */}
+                              {testResults[inst.id]?.matched ? (
+                                <div className="flex items-start gap-2 max-w-[90%] ml-auto flex-row-reverse">
+                                  <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs shrink-0 text-white shadow-sm">
+                                    🤖
+                                  </div>
+                                  <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-2xl px-3 py-2 text-xs font-medium leading-relaxed shadow-sm">
+                                    {testResults[inst.id]?.response}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold">
+                                  ❌ No Match — This message did not trigger this instruction rule.
+                                </div>
+                              )}
+
+                              {testResults[inst.id]?.matchedKeywords?.length ? (
+                                <div className="pt-1 flex items-center justify-end gap-1">
+                                  <span className="text-[9px] text-green-700 bg-green-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                                    Matched: {testResults[inst.id]?.matchedKeywords.join(", ")}
+                                  </span>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <div className="text-center py-4 text-[11px] text-slate-400 font-medium bg-white rounded-xl border border-slate-100 border-dashed">
+                              Enter a message above and click "Run Test" to simulate the bot's response.
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     );
-                    });
-                  })()}
-                </div>
-              )}
-              </>
+                  });
+                })()}
+              </div>
             )}
           </div>
         </>
@@ -1087,366 +1080,10 @@ export function AutoRepliesPage() {
   );
 
   /* ═══════════════════════════════════════════════════════
-     RENDER: Event Auto-Replies - List View
-     ═══════════════════════════════════════════════════════ */
-  const renderEventList = () => (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
-          ⚡ Event Auto-Replies
-        </h1>
-        <p className="font-medium text-base leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-          Each flow is a collection of event-driven messages. Click to see and edit each one.
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <div
-          className="bg-white rounded-2xl border-2 border-slate-200 p-4 flex items-center gap-4 hover:border-teal-300 transition-all cursor-pointer"
-          onClick={() => {
-            setSelectedEventProfile({ name: "🛍️ Order Updates", desc: "Messages sent during the order lifecycle" });
-            setShowDescriptionPrompt(false);
-            setCurrentView("events-detail");
-          }}
-        >
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-lg shrink-0">
-            <Zap className="w-5 h-5" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3">
-              <span className="font-bold text-sm text-slate-800">🛍️ Order Updates</span>
-              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${orderRules.some(r => r.isEnabled) ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                {orderRules.some(r => r.isEnabled) ? "Active" : "Draft"}
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-1 truncate">
-              {orderRules.length} events · {orderRules.filter(r => r.isEnabled).length} active
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0 text-xs text-slate-400 font-medium">
-            <span>{orderRules.filter(r => r.isEnabled).length}/{orderRules.length}</span>
-          </div>
-        </div>
-
-        <div
-          className="bg-white rounded-2xl border-2 border-slate-200 p-4 flex items-center gap-4 hover:border-teal-300 transition-all cursor-pointer"
-          onClick={() => {
-            setSelectedEventProfile({ name: "💬 Customer Messages", desc: "Lead conversations, follow-ups, and re-engagement" });
-            setShowDescriptionPrompt(false);
-            setCurrentView("events-detail");
-          }}
-        >
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-lg shrink-0">
-            <Zap className="w-5 h-5" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3">
-              <span className="font-bold text-sm text-slate-800">💬 Customer Messages</span>
-              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${leadRules.some(r => r.isEnabled) ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                {leadRules.some(r => r.isEnabled) ? "Active" : "Draft"}
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-1 truncate">
-              {leadRules.length} events · {leadRules.filter(r => r.isEnabled).length} active
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0 text-xs text-slate-400 font-medium">
-            <span>{leadRules.filter(r => r.isEnabled).length}/{leadRules.length}</span>
-          </div>
-        </div>
-      </div>
-
-      <button
-        onClick={() => openCreateModal("events")}
-        className="w-full flex items-center justify-center gap-3 p-5 border-2 border-dashed border-slate-200 rounded-2xl text-sm font-bold text-slate-400 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/30 transition-all cursor-pointer"
-      >
-        <Plus className="w-5 h-5" />
-        Create New Event Flow
-      </button>
-    </div>
-  );
-
-  /* ═══════════════════════════════════════════════════════
-     RENDER: Event Auto-Replies - Detail View (with Timeline)
-     ═══════════════════════════════════════════════════════ */
-  const renderEventDetail = () => {
-    const flowEvents = activeFlow === "order" ? FLOW_ORDER_EVENTS : FLOW_LEAD_EVENTS;
-
-    return (
-      <div className="space-y-6">
-        <button
-          onClick={() => navigateTo("events-list")}
-          className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:border-slate-400 transition-all cursor-pointer"
-        >
-          ← Back to Event Flows
-        </button>
-
-        <div className="space-y-2">
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
-            {selectedEventProfile?.name || "⚡ Event Auto-Replies"}
-          </h1>
-          <p className="font-medium text-base leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            {selectedEventProfile?.desc || "Bot sends messages automatically when things happen"}
-          </p>
-        </div>
-
-        <AnimatePresence>
-          {showDescriptionPrompt && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="bg-white rounded-3xl border-2 border-teal-200 p-5 md:p-6 space-y-4"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white shadow-lg shrink-0">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="font-black text-slate-800 text-lg">✨ Describe Your Flow</h2>
-                  <p className="text-xs text-slate-500">Just tell the AI what you want — it will build the flow for you</p>
-                </div>
-              </div>
-              <textarea
-                value={flowDescription}
-                onChange={e => setFlowDescription(e.target.value)}
-                rows={3}
-                className="w-full bg-slate-50 border-2 border-teal-200 rounded-2xl px-5 py-4 text-base text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition-all resize-none font-medium placeholder:text-slate-400"
-                placeholder="Describe what you want the bot to do...&#10;Example: I want the bot to automatically reply when customers place orders, confirm them, and send a thank you after delivery"
-              />
-              <div className="flex justify-end">
-                <button
-                  onClick={handleGenerateFlow}
-                  disabled={!flowDescription.trim()}
-                  className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl font-bold text-sm transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer shadow-lg shadow-teal-500/20"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  Generate My Flow
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="bg-white rounded-3xl border-2 border-teal-200 p-5 md:p-6 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white shadow-lg shrink-0">
-              <Zap className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-black text-slate-800 text-lg">🔄 Event Messages</h2>
-              <p className="text-xs text-slate-500">Bot sends messages automatically when these events happen</p>
-            </div>
-          </div>
-
-          <div>
-            <textarea
-              value={quickInput}
-              onChange={e => setQuickInput(e.target.value)}
-              rows={2}
-              className="w-full bg-slate-50 border-2 border-teal-200 rounded-2xl px-5 py-4 text-base text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition-all resize-none font-medium placeholder:text-slate-400"
-              placeholder="Describe your business or offer — AI writes all messages for you ✨"
-            />
-            <div className="flex items-center justify-between flex-wrap gap-3 mt-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-bold text-slate-400">
-                  <Globe className="w-3.5 h-3.5 inline mr-1" />
-                  I understand:
-                </span>
-                {SUPPORTED_LANGUAGES.map(lang => (
-                  <span key={lang.code} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 text-xs font-bold text-slate-600 border border-slate-200">
-                    <span>{lang.flag}</span>
-                    <span>{lang.label}</span>
-                  </span>
-                ))}
-              </div>
-              <button
-                onClick={generateQuickAutomation}
-                disabled={generating || !quickInput.trim()}
-                className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-bold text-sm transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer shadow-lg shadow-teal-500/20"
-              >
-                {generating ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Sparkles className="w-4 h-4" />
-                )}
-                {generating ? "Generating..." : "✨ Generate All Messages"}
-              </button>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={() => setActiveFlow("order")}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs transition-all shrink-0 cursor-pointer border ${activeFlow === "order" ? 'bg-teal-50 border-teal-300 text-teal-700' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
-            >
-              🛍️ Order Updates ({activeRulesCount("order")}/{totalRulesCount("order")})
-            </button>
-            <button
-              onClick={() => setActiveFlow("lead")}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs transition-all shrink-0 cursor-pointer border ${activeFlow === "lead" ? 'bg-teal-50 border-teal-300 text-teal-700' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
-            >
-              💬 Customer Messages ({activeRulesCount("lead")}/{totalRulesCount("lead")})
-            </button>
-          </div>
-
-          {/* Event Timeline - center-aligned alternating layout */}
-          <div className="tl-container">
-            {flowEvents.length === 0 && (
-              <div className="text-center py-8 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                <div className="text-3xl mb-3">🤖</div>
-                <h3 className="text-base font-bold text-slate-600 mb-1">No rules yet</h3>
-                <p className="text-xs text-slate-400 mb-4 max-w-xs mx-auto">
-                  Use the "Generate All Messages" button above to create your first auto-reply rules
-                </p>
-              </div>
-            )}
-
-            {flowEvents.map((eventKey) => {
-              const meta = EVENT_METADATA[eventKey];
-              const rule = getRule(eventKey);
-              if (!meta) return null;
-
-              return (
-                <EventTimelinePair
-                  key={eventKey}
-                  meta={meta}
-                  rule={rule}
-                  formatDelay={formatDelay}
-                  onToggle={toggleRule}
-                  onDelete={deleteRule}
-                  onEdit={(r) => {
-                    setEditingRuleId(r.id);
-                    setEditMessage(r.messageBody);
-                    setEditDelay(r.delayMinutes);
-                    setEditUseAI(r.useAI ?? false);
-                    setEditBrandVoice("friendly");
-                    setEditLanguage("en");
-                  }}
-                  isEditing={editingRuleId === rule?.id}
-                  editMessage={editMessage}
-                  editDelay={editDelay}
-                  editUseAI={editUseAI}
-                  editBrandVoice={editBrandVoice}
-                  editLanguage={editLanguage}
-                  saving={saving}
-                  onEditMessageChange={setEditMessage}
-                  onEditDelayChange={setEditDelay}
-                  onEditUseAIToggle={() => setEditUseAI(!editUseAI)}
-                  onEditBrandVoiceChange={setEditBrandVoice}
-                  onEditLanguageChange={setEditLanguage}
-                  onCancelEdit={() => setEditingRuleId(null)}
-                  onSaveEdit={saveInlineEdit}
-                />
-              );
-            })}
-          </div>
-
-          {/* Preview */}
-          <AnimatePresence>
-            {showPreview && previewMessages.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-3 pt-2"
-              >
-                <div className="border-t border-slate-100 pt-4">
-                  <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                    👁️ Preview — How your bot will reply
-                  </h3>
-                  <div className="space-y-3">
-                    {previewMessages.map((pv) => {
-                      const meta = EVENT_METADATA[pv.eventKey];
-                      return (
-                        <div key={pv.eventKey} className="flex items-start gap-3 bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center text-lg shadow-sm shrink-0 border border-slate-100">
-                            {meta?.icon || "🤖"}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs font-bold text-slate-600">{meta?.label || pv.eventKey}</span>
-                              <span className="text-[10px] text-slate-400 bg-slate-200 px-2 py-0.5 rounded-full font-medium">
-                                {formatDelay(getRule(pv.eventKey)?.delayMinutes ?? 0)}
-                              </span>
-                            </div>
-                            <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm max-w-[90%]">
-                              <p className="text-sm text-slate-700 leading-relaxed">
-                                {pv.message
-                                  .replace(/{name}/g, "Priya")
-                                  .replace(/{orderId}/g, "LS-1024")
-                                  .replace(/{brand}/g, "Your Store")}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100">
-            <span>{activeRulesCount(activeFlow)} of {totalRulesCount(activeFlow)} active</span>
-            <button onClick={fetchRules} className="flex items-center gap-1 text-slate-500 hover:text-slate-700 transition-all cursor-pointer">
-              <RefreshCw className="w-3 h-3" />
-              Refresh
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  /* ═══════════════════════════════════════════════════════
-     RENDER: Root Layout
-     ═══════════════════════════════════════════════════════ */
+      RENDER: Root Layout
+      ═══════════════════════════════════════════════════════ */
   return (
     <>
-      <style>{`
-        .tl-container { position: relative; }
-        .tl-container::before {
-          content: '';
-          position: absolute;
-          left: 50%;
-          top: 0; bottom: 0;
-          width: 2px;
-          background: linear-gradient(to bottom, #cbd5e1, #94a3b8);
-          transform: translateX(-50%);
-          z-index: 0;
-        }
-        .tl-pair { position: relative; }
-        .tl-node { position: relative; display: flex; align-items: flex-start; padding: 8px 0; }
-        .tl-card-left { width: calc(50% - 36px); margin-right: auto; padding-right: 40px; }
-        .tl-card-right { width: calc(50% - 36px); margin-left: auto; padding-left: 40px; }
-        .tl-dot {
-          position: absolute; left: 50%; top: 24px;
-          transform: translateX(-50%);
-          width: 44px; height: 44px;
-          border-radius: 50%;
-          border: 4px solid #f1f5f9;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 2;
-          font-size: 16px;
-        }
-        .tl-dot.trigger { background: #1e293b; color: #fff; }
-        .tl-dot.action { background: #14b8a6; color: #fff; }
-        .tl-dot.disabled { background: #94a3b8; color: #fff; }
-        .tl-connector { position: relative; height: 20px; display: flex; align-items: center; justify-content: center; }
-        .tl-connector::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #cbd5e1; transform: translateX(-50%); }
-        .tl-connector-arrow { font-size: 10px; color: #94a3b8; position: relative; z-index: 1; background: #f1f5f9; padding: 0 8px; font-weight: 600; }
-        @media (max-width: 900px) {
-          .tl-card-left, .tl-card-right { width: 100%; padding: 0; }
-          .tl-container::before { left: 22px; }
-          .tl-dot { left: 22px; top: 20px; width: 36px; height: 36px; }
-          .tl-card-left { margin-left: 50px; padding-right: 0; }
-          .tl-card-right { margin-left: 50px; padding-left: 0; }
-        }
-      `}</style>
       <div className="flex gap-6 min-h-screen" style={{ backgroundColor: 'var(--app-bg)' }}>
         <div className="w-72 shrink-0 hidden md:block">
           <div className="bg-white rounded-3xl border-2 border-slate-200 p-5 sticky top-6">
@@ -1462,13 +1099,6 @@ export function AutoRepliesPage() {
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${currentView === "ai-list" || currentView === "ai-detail" ? 'bg-white/15' : 'bg-purple-100'}`}>🧠</div>
                 <span>AI Instructions</span>
               </button>
-              <button
-                onClick={() => navigateTo("events-list")}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all w-full text-left cursor-pointer ${currentView === "events-list" || currentView === "events-detail" ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-100'}`}
-              >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${currentView === "events-list" || currentView === "events-detail" ? 'bg-white/15' : 'bg-teal-100'}`}>⚡</div>
-                <span>Event Auto-Replies</span>
-              </button>
             </div>
           </div>
         </div>
@@ -1476,8 +1106,6 @@ export function AutoRepliesPage() {
         <div className="flex-1 min-w-0 max-w-4xl">
           {currentView === "ai-list" && renderAiList()}
           {currentView === "ai-detail" && renderAiDetail()}
-          {currentView === "events-list" && renderEventList()}
-          {currentView === "events-detail" && renderEventDetail()}
         </div>
 
         <AnimatePresence>
@@ -1504,13 +1132,13 @@ export function AutoRepliesPage() {
                   value={createFlowName}
                   onChange={e => setCreateFlowName(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleCreateFlow()}
-                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-teal-500 transition-all font-medium mb-2"
+                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-purple-500 transition-all font-medium mb-2"
                   placeholder="e.g. Language & Communication"
                   autoFocus
                 />
                 <div className="flex gap-3 justify-end mt-4">
                   <button onClick={() => setShowCreateModal(false)} className="px-5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl font-bold text-xs transition-all border border-slate-200 cursor-pointer">Cancel</button>
-                  <button onClick={handleCreateFlow} disabled={!createFlowName.trim()} className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs transition-all disabled:opacity-50 cursor-pointer">Next →</button>
+                  <button onClick={handleCreateFlow} disabled={!createFlowName.trim()} className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs transition-all disabled:opacity-50 cursor-pointer">Next →</button>
                 </div>
               </motion.div>
             </motion.div>
@@ -1546,13 +1174,11 @@ export function AutoRepliesPage() {
                   </div>
                 )}
 
-                {/* Rule name */}
                 <div className="mb-4">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Rule Name</label>
                   <p className="text-sm font-bold text-slate-800">{previewRule.name}</p>
                 </div>
 
-                {/* Trigger keywords */}
                 <div className="mb-4">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Trigger Keywords</label>
                   <div className="flex flex-wrap gap-1.5">
@@ -1562,7 +1188,6 @@ export function AutoRepliesPage() {
                   </div>
                 </div>
 
-                {/* Template body */}
                 <div className="mb-4">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Bot Response</label>
                   <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 text-sm text-slate-700 leading-relaxed">
@@ -1570,7 +1195,6 @@ export function AutoRepliesPage() {
                   </div>
                 </div>
 
-                {/* Metadata chips */}
                 <div className="flex flex-wrap gap-2 mb-6">
                   <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full capitalize">
                     {previewRule.triggerType?.replace(/_/g, " ").toLowerCase()}
@@ -1607,269 +1231,368 @@ export function AutoRepliesPage() {
             </motion.div>
           )}
         </AnimatePresence>
+        <ConfirmDialog
+          isOpen={!!flowToDelete}
+          onClose={() => setFlowToDelete(null)}
+          onConfirm={triggerDeleteFlow}
+          title="Delete Flow"
+          message={`Are you sure you want to delete flow "${flowToDelete?.name}" and all its instructions? This cannot be undone.`}
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          isDestructive={true}
+        />
       </div>
     </>
   );
 }
 
-/* ═══════════════════════════════════════════════════════
-   Event Timeline Pair Component
-   ═══════════════════════════════════════════════════════ */
+/* ──────────────────────────────────────────────────────────────
+   Surface badge — shown next to a rule when it's surfaced
+   ────────────────────────────────────────────────────────────── */
+function SurfacedBadge({ rule }: { rule: ConversationalRule }) {
+  const sc = rule.surfaceConfig;
+  if (!sc) return null;
 
-interface EventTimelinePairProps {
-  meta: AutoReplyEventMeta;
-  rule?: AutoReplyRule;
-  formatDelay: (minutes: number) => string;
-  onToggle: (rule: AutoReplyRule) => void;
-  onDelete: (ruleId: string) => void;
-  onEdit: (rule: AutoReplyRule) => void;
-  isEditing: boolean;
-  editMessage: string;
-  editDelay: number;
-  editUseAI: boolean;
-  editBrandVoice: string;
-  editLanguage: string;
-  saving: boolean;
-  onEditMessageChange: (val: string) => void;
-  onEditDelayChange: (val: number) => void;
-  onEditUseAIToggle: () => void;
-  onEditBrandVoiceChange: (val: any) => void;
-  onEditLanguageChange: (val: any) => void;
-  onCancelEdit: () => void;
-  onSaveEdit: (ruleId: string) => void;
-}
+  const showAsButton = sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled;
+  const showAsCommand = sc.showAsCommand !== undefined ? !!sc.showAsCommand : !!sc.enabled;
 
-function EventTimelinePair({
-  meta, rule, formatDelay, onToggle, onDelete, onEdit,
-  isEditing, editMessage, editDelay, editUseAI, editBrandVoice, editLanguage,
-  saving, onEditMessageChange, onEditDelayChange, onEditUseAIToggle,
-  onEditBrandVoiceChange, onEditLanguageChange, onCancelEdit, onSaveEdit,
-}: EventTimelinePairProps) {
-  const isActive = rule?.isEnabled ?? false;
+  if (!showAsButton && !showAsCommand) return null;
+
+  let label = "";
+  if (showAsButton && showAsCommand) label = `Button & Command: ${sc.command || ""}`;
+  else if (showAsButton) label = "Inline Button Only";
+  else if (showAsCommand) label = `Command Only: ${sc.command || ""}`;
 
   return (
-    <div className="tl-pair">
-      {/* Trigger (left) */}
-      <div className="tl-node">
-        <div className="tl-card-left">
-          <div className={`bg-white rounded-2xl border-2 p-4 transition-all ${isActive ? 'border-slate-200' : 'border-slate-100 opacity-60'}`}>
-            <div className="text-[9px] font-black uppercase tracking-[0.1em] px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 inline-block mb-2.5">
-              Step 1 · Trigger
+    <span
+      className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200"
+      title="Surfacing configured in Telegram"
+    >
+      <CommandIcon className="w-3 h-3" />
+      {label}
+    </span>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Surface editor — "Show as Button / Command" section
+   ────────────────────────────────────────────────────────────── */
+interface SurfaceEditorProps {
+  draft: SurfaceConfig;
+  setDraft: (d: SurfaceConfig) => void;
+  draftUseAI: boolean;
+  setDraftUseAI: (val: boolean) => void;
+  draftTemplateBody: string;
+  setDraftTemplateBody: (val: string) => void;
+  rule: ConversationalRule;
+  allRules: ConversationalRule[];
+  constants: RuleConstants;
+  atCap: boolean;
+  commandValid: boolean;
+  surfacedCount: number;
+  saving: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}
+
+function SurfaceEditor({
+  draft,
+  setDraft,
+  draftUseAI,
+  setDraftUseAI,
+  draftTemplateBody,
+  setDraftTemplateBody,
+  rule,
+  allRules,
+  constants,
+  atCap,
+  commandValid,
+  surfacedCount,
+  saving,
+  onCancel,
+  onSave
+}: SurfaceEditorProps) {
+  const isEventRule = rule.triggerType === "EVENT";
+  const capBlocked = draft.showAsButton && atCap;
+
+  const getParentChain = (
+    rules: ConversationalRule[],
+    startParentId: string | null | undefined,
+    currentRuleId?: string
+  ): { hasCycle: boolean; depth: number } => {
+    let depth = 0;
+    let currentId = startParentId;
+    const visited = new Set<string>();
+    if (currentRuleId) visited.add(currentRuleId);
+
+    while (currentId) {
+      if (visited.has(currentId)) return { hasCycle: true, depth };
+      visited.add(currentId);
+
+      const parentRule = rules.find((r) => r.id === currentId);
+      if (!parentRule) break;
+
+      const config = parentRule.surfaceConfig;
+      currentId = config?.parentRuleId;
+      depth++;
+    }
+    return { hasCycle: false, depth };
+  };
+
+  const getSubtreeHeight = (rules: ConversationalRule[], ruleId: string): number => {
+    let maxHeight = 0;
+    for (const r of rules) {
+      const parentId = r.surfaceConfig?.parentRuleId;
+      if (parentId === ruleId) {
+        maxHeight = Math.max(maxHeight, 1 + getSubtreeHeight(rules, r.id));
+      }
+    }
+    return maxHeight;
+  };
+
+  const parentCandidates = allRules.filter(
+    (r) => {
+      const sc = r.surfaceConfig;
+      if (!sc) return false;
+      const activeBtn = sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled;
+      return activeBtn && !sc.parentRuleId && r.id !== rule.id;
+    }
+  );
+
+  const isSurfaced = !!(draft.showAsButton || draft.showAsCommand);
+
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-100 space-y-4 bg-slate-50/60 rounded-xl p-4">
+      {/* 1. AI Behavior Section */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-sm">🧠</span>
+          <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">AI Behavior (Free-Text Matches)</h3>
+        </div>
+        <p className="text-[10px] text-slate-400">Configures how the bot responds when a customer types a message related to this instruction.</p>
+        
+        {rule.triggerKeywords && rule.triggerKeywords.length > 0 && (
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Keywords Driving Match</label>
+            <div className="flex flex-wrap gap-1.5">
+              {rule.triggerKeywords.map((kw, idx) => (
+                <span key={idx} className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">{kw}</span>
+              ))}
             </div>
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-lg shrink-0">
-                {meta.icon}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-slate-800">{meta.label}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{meta.description}</p>
-              </div>
-            </div>
-            {rule && (
-              <div className="flex items-center gap-2 mt-2 ml-12">
-                <button
-                  onClick={() => onToggle(rule)}
-                  className={`relative w-9 h-5 rounded-full transition-all cursor-pointer ${isActive ? "bg-teal-600" : "bg-slate-300"}`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${isActive ? "translate-x-4" : ""}`} />
-                </button>
-              </div>
-            )}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between pt-1">
+          <div>
+            <p className="text-xs font-bold text-slate-700">Enable dynamic AI elaboration</p>
+            <p className="text-[10px] text-slate-400">If enabled, matches are answered dynamically by the AI using your shop context and live product inventory.</p>
+          </div>
+          <button
+            onClick={() => setDraftUseAI(!draftUseAI)}
+            className={`relative w-11 h-6 rounded-full transition-all cursor-pointer shrink-0 ${draftUseAI ? "bg-purple-600" : "bg-slate-300"}`}
+          >
+            <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${draftUseAI ? "translate-x-5" : ""}`} />
+          </button>
+        </div>
+
+        {draftUseAI && (
+          <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-3 text-[11px] space-y-1.5 text-purple-800">
+            <p className="font-bold flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+              Available Shop Context Data Sources for AI:
+            </p>
+            <ul className="list-disc pl-4 space-y-0.5 text-purple-700 font-medium">
+              <li>📦 <strong>Live Product Catalog & Variants</strong> (Stock count, categories, and item prices)</li>
+              <li>ℹ️ <strong>Shop Profile</strong> (Welcome messages, custom guidelines, and storefront configurations)</li>
+              <li>💬 <strong>Conversation Context</strong> (Customer's segment, language, and recent message thread history)</li>
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* 2. Fixed Reply & Surfacing Section */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4 shadow-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-sm">💬</span>
+          <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">Fixed Reply & Surfacing</h3>
+        </div>
+        <p className="text-[10px] text-slate-400">Configures the canned response sent when a button is tapped or a command is typed.</p>
+
+        <div>
+          <label className="text-[11px] font-bold text-slate-600 mb-1 block">
+            Fixed Reply Message {!draftUseAI && <span className="text-red-500">*</span>}
+          </label>
+          <textarea
+            value={draftTemplateBody}
+            onChange={e => setDraftTemplateBody(e.target.value)}
+            rows={2}
+            placeholder="Enter the fixed response message..."
+            className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-purple-500 transition-all font-medium resize-none"
+          />
+          <p className="text-[9px] text-slate-400 mt-1">Always sent exactly as written when tapped or typed. Supported variables: <code className="bg-slate-100 px-1 rounded font-mono">{`{customerName}`}</code> <code className="bg-slate-100 px-1 rounded font-mono">{`{shopName}`}</code> <code className="bg-slate-100 px-1 rounded font-mono">{`{brand}`}</code> <code className="bg-slate-100 px-1 rounded font-mono">{`{name}`}</code>. All variables are case-insensitive.</p>
+        </div>
+
+        <div>
+          <label className="text-[11px] font-bold text-slate-600 mb-1.5 block">Surfacing Options</label>
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!draft.showAsButton}
+                onChange={e => setDraft({ ...draft, showAsButton: e.target.checked })}
+                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300"
+              />
+              Show as inline button
+            </label>
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!draft.showAsCommand}
+                onChange={e => setDraft({ ...draft, showAsCommand: e.target.checked })}
+                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300"
+              />
+              Show as typed command
+            </label>
           </div>
         </div>
-        <div className={`tl-dot ${isActive ? 'trigger' : 'disabled'}`}>⚡</div>
-      </div>
 
-      {/* Connector */}
-      <div className="tl-connector">
-        <span className="tl-connector-arrow">▼ Trigger → Action</span>
-      </div>
+        {capBlocked && (
+          <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] font-bold text-amber-700">
+            Limit reached ({surfacedCount}/{constants.maxSurfacedRules} slots used in this menu level). Disable another button in this menu first.
+          </div>
+        )}
 
-      {/* Action (right) */}
-      <div className="tl-node">
-        <div className="tl-card-right">
-          {!rule ? (
-            <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-4 opacity-60">
-              <div className="text-[9px] font-black uppercase tracking-[0.1em] px-2.5 py-1 rounded-md bg-slate-100 text-slate-500 inline-block mb-2.5">
-                Step 2 · Action
+        {isSurfaced && (
+          <div className="space-y-3 pt-2 border-t border-slate-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Button Label {draft.showAsButton && <span className="text-red-500">*</span>}</label>
+                <input
+                  type="text"
+                  value={draft.buttonLabel}
+                  maxLength={64}
+                  onChange={e => setDraft({ ...draft, buttonLabel: e.target.value })}
+                  placeholder="e.g. 🍛 View Menu"
+                  className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-purple-500 transition-all font-medium"
+                />
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">💬</span>
-                <span className="text-xs text-slate-500 font-medium">Generate messages above to create this rule</span>
-              </div>
-            </div>
-          ) : (
-            <div className={`bg-white rounded-2xl border-2 p-4 transition-all ${isActive ? 'border-teal-200 bg-teal-50/30' : 'border-slate-100 bg-slate-50/30 opacity-60'} ${isEditing ? 'border-teal-400 shadow-md' : ''}`}>
-              <div className="text-[9px] font-black uppercase tracking-[0.1em] px-2.5 py-1 rounded-md bg-teal-100 text-teal-700 inline-block mb-2.5">
-                Step 2 · Action
-              </div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-lg">💬</span>
-                <span className="text-sm font-bold text-slate-800">Send Auto-Reply</span>
-              </div>
-              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 text-sm text-slate-700 leading-relaxed mb-2">
-                {rule.messageBody || (
-                  <span className="text-slate-400 italic">No message yet</span>
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Command {draft.showAsCommand && <span className="text-red-500">*</span>}</label>
+                <input
+                  type="text"
+                  value={draft.command}
+                  maxLength={32}
+                  onChange={e => setDraft({ ...draft, command: e.target.value })}
+                  placeholder="/menu"
+                  className={`w-full bg-white border-2 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none transition-all font-mono ${commandValid ? 'border-slate-200 focus:border-purple-500' : 'border-red-300 focus:border-red-500'}`}
+                />
+                {!commandValid && draft.command && (
+                  <p className="text-[10px] text-red-500 mt-1 font-medium">Must start with / and use lowercase letters, numbers, or underscores.</p>
+                )}
+                {commandValid && draft.command && (
+                  <p className="text-[10px] text-slate-400 mt-1 font-medium">Customers type this in Telegram to trigger the rule.</p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                <span className="text-[10px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
-                  ⏱ {formatDelay(rule.delayMinutes)}
-                </span>
-                {rule.useAI && (
-                  <span className="text-[10px] font-medium bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                    ✨ AI Enhanced
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Parent Menu Level</label>
+                <select
+                  value={draft.parentRuleId || ""}
+                  onChange={(e) => setDraft({ ...draft, parentRuleId: e.target.value || null })}
+                  className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-purple-500 transition-all font-medium"
+                >
+                  <option value="">Root / Main Menu (/start)</option>
+                  {parentCandidates.map((p) => {
+                    const { hasCycle, depth: parentDepth } = getParentChain(allRules, p.id, rule.id);
+                    const subtreeHeight = getSubtreeHeight(allRules, rule.id);
+                    const isTooDeep = parentDepth + 1 + subtreeHeight > 2;
+
+                    const isDisabled = hasCycle || isTooDeep;
+                    let labelSuffix = "";
+                    if (hasCycle) labelSuffix = " ⚠️ (Disabled: would create cycle)";
+                    else if (isTooDeep) labelSuffix = " ⚠️ (Disabled: would exceed depth limit)";
+
+                    return (
+                      <option key={p.id} value={p.id} disabled={isDisabled}>
+                        {p.surfaceConfig?.buttonLabel || p.name} ({p.surfaceConfig?.command}){labelSuffix}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Menu Position (order shown, 0 = first)</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setDraft({ ...draft, menuPosition: Math.max(0, draft.menuPosition - 1) })}
+                    className="w-8 h-8 rounded-lg bg-white border-2 border-slate-200 text-slate-600 font-bold hover:border-purple-400 transition-all cursor-pointer"
+                  >−</button>
+                  <span className="w-10 text-center text-sm font-bold text-slate-800">{draft.menuPosition}</span>
+                  <button
+                    onClick={() => setDraft({ ...draft, menuPosition: draft.menuPosition + 1 })}
+                    className="w-8 h-8 rounded-lg bg-white border-2 border-slate-200 text-slate-600 font-bold hover:border-purple-400 transition-all cursor-pointer"
+                  >+</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Event config: only relevant for EVENT rules */}
+            {isEventRule && (
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">Trigger Event</label>
+                <select
+                  value={rule.eventConfig?.eventName || ""}
+                  onChange={() => {/* eventName managed at create time; read-only here */}}
+                  className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-purple-500 transition-all font-medium"
+                  disabled
+                >
+                  {(constants.knownEvents || []).map(ev => (
+                    <option key={ev.value} value={ev.value}>{ev.label}</option>
+                  ))}
+                  {rule.eventConfig?.eventName && !(constants.knownEvents || []).some(ev => ev.value === rule.eventConfig!.eventName) && (
+                    <option value={rule.eventConfig.eventName}>{rule.eventConfig.eventName}</option>
+                  )}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">Event name is set when the rule is created and matches a known event.</p>
+              </div>
+            )}
+
+            {/* Live preview */}
+            <div className="bg-white rounded-xl border border-slate-200 p-3">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Live preview</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {draft.showAsButton && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-bold shadow-sm">
+                    {draft.buttonLabel || "Button Label"}
                   </span>
                 )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => onToggle(rule)}
-                  className={`relative w-9 h-5 rounded-full transition-all cursor-pointer ${isActive ? "bg-teal-600" : "bg-slate-300"}`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${isActive ? "translate-x-4" : ""}`} />
-                </button>
-                <button
-                  onClick={() => { if (isEditing) onCancelEdit(); else onEdit(rule); }}
-                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${isEditing ? 'bg-teal-100 text-teal-700' : 'bg-white text-slate-500 hover:bg-slate-100 border border-slate-200'}`}
-                >
-                  <Edit3 className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={() => onDelete(rule.id)}
-                  className="p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-all cursor-pointer border border-red-100"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              </div>
-
-              {/* Inline edit */}
-              <AnimatePresence>
-                {isEditing && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="border-t border-slate-100 mt-3 pt-3 space-y-3"
-                  >
-                    <div>
-                      <label className="text-xs font-bold text-slate-700 mb-1.5 block">Message</label>
-                      <p className="text-[10px] text-slate-400 mb-1.5 font-medium">
-                        Use {'{name}'}, {'{orderId}'}, {'{brand}'} as placeholders
-                      </p>
-                      <textarea
-                        value={editMessage}
-                        onChange={e => onEditMessageChange(e.target.value)}
-                        rows={3}
-                        className="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-teal-500 transition-all resize-none font-medium"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                          <Clock className="w-3 h-3" />
-                          Delay
-                        </label>
-                        <select
-                          value={editDelay}
-                          onChange={e => onEditDelayChange(Number(e.target.value))}
-                          className="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:border-teal-500 transition-all font-medium"
-                        >
-                          <option value={0}>Immediately</option>
-                          <option value={5}>5 min</option>
-                          <option value={15}>15 min</option>
-                          <option value={30}>30 min</option>
-                          <option value={60}>1 hour</option>
-                          <option value={120}>2 hours</option>
-                          <option value={360}>6 hours</option>
-                          <option value={720}>12 hours</option>
-                          <option value={1440}>24 hours</option>
-                          <option value={2880}>2 days</option>
-                          <option value={4320}>3 days</option>
-                          <option value={10080}>7 days</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                          <Sparkles className="w-3 h-3 text-purple-600" />
-                          AI Enhance
-                        </label>
-                        <div className="flex items-center gap-3 h-full">
-                          <button
-                            onClick={onEditUseAIToggle}
-                            className={`relative w-10 h-6 rounded-full transition-all cursor-pointer ${editUseAI ? "bg-purple-600" : "bg-slate-300"}`}
-                          >
-                            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all ${editUseAI ? "translate-x-4" : ""}`} />
-                          </button>
-                          <span className="text-xs text-slate-500 font-medium">
-                            {editUseAI ? "AI will personalize this message" : "Plain message"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {editUseAI && (
-                      <div className="bg-purple-50/50 rounded-xl p-3 border border-purple-200/50 space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-[10px] font-bold text-purple-700 mb-1 block uppercase tracking-wider">Brand Voice</label>
-                            <select
-                              value={editBrandVoice}
-                              onChange={e => onEditBrandVoiceChange(e.target.value)}
-                              className="w-full bg-white border border-purple-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-purple-500 transition-all font-medium"
-                            >
-                              <option value="formal">Formal</option>
-                              <option value="casual">Casual</option>
-                              <option value="friendly">Friendly</option>
-                              <option value="salesy">Salesy</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-purple-700 mb-1 block uppercase tracking-wider">Language</label>
-                            <select
-                              value={editLanguage}
-                              onChange={e => onEditLanguageChange(e.target.value)}
-                              className="w-full bg-white border border-purple-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-purple-500 transition-all font-medium"
-                            >
-                              <option value="en">🇬🇧 English</option>
-                              <option value="hi">🇮🇳 हिंदी</option>
-                              <option value="ta">🇮🇳 தமிழ்</option>
-                              <option value="te">🇮🇳 తెలుగు</option>
-                              <option value="bn">🇮🇳 বাংলা</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={onCancelEdit}
-                        className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl font-bold text-xs transition-all border border-slate-200 cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => onSaveEdit(rule.id)}
-                        disabled={saving || !editMessage.trim()}
-                        className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
-                      >
-                        {saving ? (
-                          <RefreshCw className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Save className="w-3 h-3" />
-                        )}
-                        Save
-                      </button>
-                    </div>
-                  </motion.div>
+                {draft.showAsCommand && (
+                  <code className="px-2 py-1 rounded bg-slate-100 text-slate-600 text-xs font-mono">{commandValid && draft.command ? draft.command : "/command"}</code>
                 )}
-              </AnimatePresence>
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={onCancel}
+          className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl font-bold text-xs transition-all border border-slate-200 cursor-pointer"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onSave}
+          disabled={saving || capBlocked}
+          className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+        >
+          {saving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+          Save Settings
+        </button>
       </div>
     </div>
   );

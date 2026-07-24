@@ -132,6 +132,7 @@ export interface ProductVariantData {
   attribute_value: string;
   price_override: number | null;
   stock: number | null;
+  sku?: string;
 }
 
 /**
@@ -149,6 +150,8 @@ export interface ProductData {
   sku?: string;
   colors?: string[];
   sizes?: string[];
+  categories?: string[];
+  customFieldValues?: Record<string, string | number | boolean>;
 }
 
 /**
@@ -224,6 +227,15 @@ export function normalizeProductData(product: ProductData): NormalizedProductDat
     result.variants = [...(result.variants || []), ...sizeVariants];
     result.attribute_name = result.attribute_name || "Size";
   }
-  
+
+  // Normalize categories: ensure it's always a string[]
+  if (Array.isArray(result.categories)) {
+    // already correct
+  } else if (typeof result.categories === "string") {
+    result.categories = (result.categories as unknown as string).split(",").map((c: string) => c.trim()).filter(Boolean);
+  } else {
+    result.categories = [];
+  }
+
   return result;
 }

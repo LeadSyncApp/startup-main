@@ -41,6 +41,9 @@ const updateGroupSchema = z.object({
 router.post("/", authMiddleware as any, async (req: any, res: any) => {
   try {
     const data = createGroupSchema.parse(req.body);
+    if (data.companyId !== req.user.companyId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
 
     const group = await prisma.ruleGroup.create({
       data: {
@@ -70,6 +73,9 @@ router.post("/", authMiddleware as any, async (req: any, res: any) => {
 router.get("/:companyId", authMiddleware as any, async (req: any, res: any) => {
   try {
     const { companyId } = req.params;
+    if (companyId !== req.user.companyId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     const { type } = req.query;
 
     const where: any = { companyId };
@@ -152,6 +158,10 @@ router.put("/:id", authMiddleware as any, async (req: any, res: any) => {
       return res.status(404).json({ error: "Rule group not found" });
     }
 
+    if (existing.companyId !== req.user.companyId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
     if (data.description !== undefined) updateData.description = data.description;
@@ -195,6 +205,10 @@ router.delete("/:id", authMiddleware as any, async (req: any, res: any) => {
 
     if (!existing) {
       return res.status(404).json({ error: "Rule group not found" });
+    }
+
+    if (existing.companyId !== req.user.companyId) {
+      return res.status(403).json({ error: "Forbidden" });
     }
 
     // Delete all rules in the group first, then the group

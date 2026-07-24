@@ -11,7 +11,7 @@ export class OutboundDispatcher {
    * and records the delivery status ('SENT' or 'FAILED') atomically back to the message table.
    */
   public async dispatch(payload: OutboundPayload): Promise<{ messageId: string; deliveryStatus: "SENT" | "FAILED"; message?: any }> {
-    const { companyId, conversationId, to, channel, content, sender, clientMessageId } = payload;
+    const { companyId, conversationId, to, channel, content, sender, clientMessageId, replyMarkup } = payload;
 
     // 1. Strict Input Verification
     if (!companyId || typeof companyId !== "string" || companyId.trim() === "") {
@@ -36,7 +36,7 @@ export class OutboundDispatcher {
     // 2. Dispatch through the targeted channel adapter
     try {
       if (channel === "TELEGRAM") {
-        await TelegramTransportService.sendOutboundPayload(companyId, to, content.text);
+        await TelegramTransportService.sendOutboundPayload(companyId, to, content.text, undefined, replyMarkup);
       } else if (channel === "WHATSAPP") {
         await metaAdapterService.sendWhatsAppMessage(companyId, to, content.text);
       } else if (channel === "INSTAGRAM") {
@@ -64,39 +64,45 @@ export class OutboundDispatcher {
 const messageSender = payload.sender === "AGENT" ? MessageSender.AGENT 
   : payload.sender === "BOT" ? MessageSender.BOT 
   : MessageSender.SYSTEM;
-      const result = await prisma.$transaction(async (tx) => {
-        // Create the message with the exact delivery status 'SENT' or 'FAILED'
-        const messageData: any = {
-          companyId,
-          conversationId,
-          content: content.text,
-          sender: messageSender,
-          senderName: payload.senderName || senderName,
-          senderId: payload.senderId,
-          platform: platformMap[channel],
-          deliveryStatus,
-          ...(transportError?.message && { deliveryError: transportError.message }),
-        };
-        // Persist clientMessageId for idempotency if provided
-        if (clientMessageId) {
-          messageData.clientMessageId = clientMessageId;
-        }
-
-        const newMessage = await tx.message.create({
-          data: messageData,
-        });
-
-        // Update the Conversation summary & timestamp
-        await tx.conversation.update({
-          where: { id: conversationId, companyId },
-          data: {
-            updatedAt: new Date()
+      const result = await prisma.$transaction(
+        async (tx) => {
+          // Create the message with the exact delivery status 'SENT' or 'FAILED'
+          const messageData: any = {
+            companyId,
+            conversationId,
+            content: content.text,
+            sender: messageSender,
+            senderName: payload.senderName || senderName,
+            senderId: payload.senderId,
+            platform: platformMap[channel],
+            deliveryStatus,
+            ...(transportError?.message && { deliveryError: transportError.message }),
+          };
+          // Persist clientMessageId for idempotency if provided
+          if (clientMessageId) {
+            messageData.clientMessageId = clientMessageId;
           }
-        });
 
-        console.log(`📊 [OutboundDispatcher] Atomic ledger transaction completed for Message "${newMessage.id}". DeliveryStatus=${deliveryStatus}${clientMessageId ? ` clientMessageId=${clientMessageId}` : ''}`);
-        return newMessage;
-      });
+          const newMessage = await tx.message.create({
+            data: messageData,
+          });
+
+          // Update the Conversation summary & timestamp
+          await tx.conversation.update({
+            where: { id: conversationId, companyId },
+            data: {
+              updatedAt: new Date()
+            }
+          });
+
+          console.log(`📊 [OutboundDispatcher] Atomic ledger transaction completed for Message "${newMessage.id}". DeliveryStatus=${deliveryStatus}${clientMessageId ? ` clientMessageId=${clientMessageId}` : ''}`);
+          return newMessage;
+        },
+        {
+          timeout: 30000,
+          maxWait: 30000
+        }
+      );
       createdMessageId = result.id;
       createdMessage = result;
     } catch (dbError: any) {
@@ -117,7 +123,26 @@ const messageSender = payload.sender === "AGENT" ? MessageSender.AGENT
     return { messageId: createdMessageId, deliveryStatus, message: createdMessage };
   }
 
-  public async sendMessageFrame(channel: ChannelType, externalChatId: string, conversationId: string, payload: { bodyText: string; interactivePayload: any }, sender?: "BOT" | "SYSTEM") {
+  public async sendTransportOnlyFrame(channel: ChannelType, externalChatId: string, payload: { bodyText: string; interactivePayload?: any; replyMarkup?: any }): Promise<{ deliveryStatus: "SENT" | "FAILED"; transportError?: string }> {
+    const context = getTenantContext();
+    if (!context) throw new Error("OutboundDispatcher: No tenant context");
+
+    try {
+      if (channel === "TELEGRAM") {
+        await TelegramTransportService.sendOutboundPayload(context.companyId, externalChatId, payload.bodyText, undefined, payload.replyMarkup);
+      } else if (channel === "WHATSAPP") {
+        await metaAdapterService.sendWhatsAppMessage(context.companyId, externalChatId, payload.bodyText);
+      } else if (channel === "INSTAGRAM") {
+        await metaAdapterService.sendInstagramMessage(context.companyId, externalChatId, payload.bodyText);
+      }
+      return { deliveryStatus: "SENT" };
+    } catch (err: any) {
+      console.error(`⚠️ [OutboundDispatcher] Immediate transport dispatch failed for channel ${channel}: ${err.message}`);
+      return { deliveryStatus: "FAILED", transportError: err.message };
+    }
+  }
+
+  public async sendMessageFrame(channel: ChannelType, externalChatId: string, conversationId: string, payload: { bodyText: string; interactivePayload: any; replyMarkup?: any }, sender?: "BOT" | "SYSTEM") {
       const context = getTenantContext();
       if (!context) throw new Error("OutboundDispatcher: No tenant context");
       
@@ -127,9 +152,19 @@ const messageSender = payload.sender === "AGENT" ? MessageSender.AGENT
           to: externalChatId,
           channel: channel,
           content: { text: payload.bodyText },
-          sender: sender || "SYSTEM"
+          sender: sender || "SYSTEM",
+          replyMarkup: payload.replyMarkup
       });
       return result;
+  }
+
+  public async editMessageFrame(channel: ChannelType, externalChatId: string, messageId: string, payload: { bodyText: string; replyMarkup?: any }) {
+      const context = getTenantContext();
+      if (!context) throw new Error("OutboundDispatcher: No tenant context");
+
+      if (channel === "TELEGRAM") {
+          await TelegramTransportService.editMessageText(context.companyId, externalChatId, messageId, payload.bodyText, payload.replyMarkup);
+      }
   }
 
   public async dispatchAction(validatedIntent: string, aiTurnResult: any) {
