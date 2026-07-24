@@ -6,7 +6,7 @@
  */
 
 import Groq from "groq-sdk";
-import { prisma } from "../../lib/prisma";
+import { prisma, directPrisma } from "../../lib/prisma";
 import { embedText } from "../../utils/embedding";
 import {
   PRODUCT_PARSING_PROMPT,
@@ -176,11 +176,11 @@ function generateBaseSku(name: string): string {
 /**
  * Ensure a SKU is unique within a company. Appends -1, -2, etc. on conflict.
  */
-async function ensureSkuUnique(companyId: string, baseSku: string): Promise<string> {
+async function ensureSkuUnique(companyId: string, baseSku: string, db: any = prisma): Promise<string> {
   let sku = baseSku;
   let counter = 1;
   while (true) {
-    const exists = await prisma.inventoryProduct.findFirst({
+    const exists = await db.inventoryProduct.findFirst({
       where: { companyId, sku },
       select: { id: true },
     });
@@ -197,16 +197,17 @@ async function upsertVariants(
   productId: string, 
   variants: ProductVariantData[], 
   parentSku: string | null,
-  historyPromises: Promise<any>[]
+  historyPromises: Promise<any>[],
+  db: any = prisma
 ) {
-  const existing = await prisma.inventoryVariant.findMany({ where: { productId } });
-  const existingValues = new Set(existing.map(v => v.attributeValue));
+  const existing = await db.inventoryVariant.findMany({ where: { productId } });
+  const existingValues = new Set(existing.map((v: any) => v.attributeValue));
   const incomingValues = new Set(variants.map(v => v.attribute_value));
 
   // Remove variants no longer present
   for (const v of existing) {
     if (!incomingValues.has(v.attributeValue)) {
-      await prisma.inventoryVariant.delete({ where: { id: v.id } });
+      await db.inventoryVariant.delete({ where: { id: v.id } });
     }
   }
 
@@ -216,12 +217,12 @@ async function upsertVariants(
       ? `${parentSku}-${sanitizeForSku(v.attribute_value)}`
       : null);
     
-    const existingVar = existing.find(ev => ev.attributeValue === v.attribute_value);
+    const existingVar = existing.find((ev: any) => ev.attributeValue === v.attribute_value);
     if (existingVar) {
       const newPrice = v.price_override ?? 0;
       if (existingVar.price !== newPrice) {
         historyPromises.push(
-          prisma.priceHistory.create({
+          db.priceHistory.create({
             data: {
               productId,
               variantId: existingVar.id,
@@ -236,7 +237,7 @@ async function upsertVariants(
       const newStock = v.stock;
       if (v.stock !== undefined && existingVar.stock !== newStock) {
         historyPromises.push(
-          prisma.stockHistory.create({
+          db.stockHistory.create({
             data: {
               productId,
               variantId: existingVar.id,
@@ -249,7 +250,7 @@ async function upsertVariants(
       }
     }
 
-    await prisma.inventoryVariant.upsert({
+    await db.inventoryVariant.upsert({
       where: { productId_attributeValue: { productId, attributeValue: v.attribute_value } },
       update: { price: v.price_override ?? 0, stock: v.stock, ...(variantSku ? { sku: variantSku } : {}) },
       create: { productId, attributeValue: v.attribute_value, price: v.price_override ?? 0, stock: v.stock, sku: variantSku }
@@ -266,7 +267,6 @@ export async function confirmInventoryProducts(
   products: ProductData[]
 ): Promise<{ count: number; ids: string[] }> {
   const createdIds: string[] = [];
-  const historyPromises: Promise<any>[] = [];
 
   // Load business type once to know whether the availability toggle applies.
   const company = await prisma.company.findUnique({
@@ -276,110 +276,105 @@ export async function confirmInventoryProducts(
   const isRestaurant = company?.businessType === "RESTAURANT";
 
   for (const product of products) {
-    const productName = buildProductName(product);
-    const hasVariants = product.variants && product.variants.length > 0;
-    // Availability toggle only meaningful for restaurants; default true otherwise.
-    const isAvailable = isRestaurant ? (product.isAvailable ?? true) : true;
+    await prisma.$transaction(async (tx) => {
+      const historyPromises: Promise<any>[] = [];
+      const productName = buildProductName(product);
+      const hasVariants = product.variants && product.variants.length > 0;
+      // Availability toggle only meaningful for restaurants; default true otherwise.
+      const isAvailable = isRestaurant ? (product.isAvailable ?? true) : true;
 
-    // Dedup check: find existing product by company + name
-    const existing = await prisma.inventoryProduct.findUnique({
-      where: { companyId_name: { companyId, name: productName } }
-    });
+      // Dedup check: find existing product by company + name
+      const existing = await tx.inventoryProduct.findUnique({
+        where: { companyId_name: { companyId, name: productName } }
+      });
 
-    let productId: string;
-    let productSku: string | null = null;
+      let productId: string;
+      let productSku: string | null = null;
 
-    if (existing) {
-      // Update existing product — only update SKU if explicitly provided
-      productSku = product.sku ?? existing.sku;
-      const newPrice = product.price_inr ?? existing.basePrice;
-      
-      if (existing.basePrice !== newPrice) {
-        historyPromises.push(
-          prisma.priceHistory.create({
-            data: {
-              productId: existing.id,
-              oldPrice: existing.basePrice,
-              newPrice: newPrice,
-              actorName: "System Ingestion"
-            }
-          })
-        );
+      if (existing) {
+        // Update existing product — only update SKU if explicitly provided
+        productSku = product.sku ?? existing.sku;
+        const newPrice = product.price_inr ?? existing.basePrice;
+        
+        if (existing.basePrice !== newPrice) {
+          historyPromises.push(
+            tx.priceHistory.create({
+              data: {
+                productId: existing.id,
+                oldPrice: existing.basePrice,
+                newPrice: newPrice,
+                actorName: "System Ingestion"
+              }
+            })
+          );
+        }
+
+        await tx.inventoryProduct.update({
+          where: { id: existing.id },
+          data: {
+            basePrice: newPrice,
+            hasVariants,
+            variantAttributeName: product.attribute_name,
+            description: product.description ?? existing.description,
+            isAvailable,
+            customFieldValues: product.customFieldValues ? JSON.parse(JSON.stringify(product.customFieldValues)) : existing.customFieldValues,
+            ...(product.sku !== undefined ? { sku: product.sku } : {}),
+            ...(product.categories !== undefined ? { categories: product.categories } : {}),
+          }
+        });
+        productId = existing.id;
+      } else {
+        // Create new product — auto-generate SKU if not provided
+        const baseSku = product.sku || generateBaseSku(productName);
+        productSku = await ensureSkuUnique(companyId, baseSku, tx);
+        const newProduct = await tx.inventoryProduct.create({
+          data: {
+            companyId,
+            name: productName,
+            description: product.description,
+            basePrice: product.price_inr ?? 0,
+            hasVariants,
+            variantAttributeName: product.attribute_name,
+            isAvailable,
+            sku: productSku,
+            categories: product.categories || [],
+            customFieldValues: product.customFieldValues ? JSON.parse(JSON.stringify(product.customFieldValues)) : undefined,
+          }
+        });
+        productId = newProduct.id;
       }
 
-      await prisma.inventoryProduct.update({
-        where: { id: existing.id },
-        data: {
-          basePrice: newPrice,
-          hasVariants,
-          variantAttributeName: product.attribute_name,
-          description: product.description ?? existing.description,
-          isAvailable,
-          customFieldValues: product.customFieldValues ? JSON.parse(JSON.stringify(product.customFieldValues)) : existing.customFieldValues,
-          ...(product.sku !== undefined ? { sku: product.sku } : {}),
-          ...(product.categories !== undefined ? { categories: product.categories } : {}),
-        }
-      });
-      productId = existing.id;
-    } else {
-      // Create new product — auto-generate SKU if not provided
-      const baseSku = product.sku || generateBaseSku(productName);
-      productSku = await ensureSkuUnique(companyId, baseSku);
-      const newProduct = await prisma.inventoryProduct.create({
-        data: {
-          companyId,
-          name: productName,
-          description: product.description,
-          basePrice: product.price_inr ?? 0,
-          hasVariants,
-          variantAttributeName: product.attribute_name,
-          isAvailable,
-          sku: productSku,
-          categories: product.categories || [],
-          customFieldValues: product.customFieldValues ? JSON.parse(JSON.stringify(product.customFieldValues)) : undefined,
-        }
-      });
-      productId = newProduct.id;
-    }
+      // Upsert variants
+      if (hasVariants) {
+        await upsertVariants(productId, product.variants, productSku, historyPromises, tx);
+      }
 
-    // Upsert variants
-    if (hasVariants) {
-      await upsertVariants(productId, product.variants, productSku, historyPromises);
-    }
+      // Also maintain KnowledgeChunk for RAG retrieval backward compatibility
+      const content = formatProductForKnowledgeChunk(product);
+      // E5 models require "passage: " prefix for indexed content to align with query embeddings
+      const embedding = await embedText("passage: " + content);
+      const embeddingLiteral = `[${embedding.join(",")}]`;
+      // Use the InventoryProduct UUID as sourceId so PRODUCT knowledge chunks
+      // can be resolved back to the live InventoryProduct + variant stock.
+      const sourceId = productId;
+      const now = new Date();
+      const kcId = randomUUID();
+      await tx.$executeRaw`
+        INSERT INTO "KnowledgeChunk" ("id", "companyId", "sourceType", "sourceId", "content", "embedding", "isActive", "createdAt", "updatedAt")
+        VALUES (${kcId}, ${companyId}, 'PRODUCT'::"KnowledgeSourceType", ${sourceId}, ${content}, ${embeddingLiteral}::vector(384), true, ${now}, ${now})
+        ON CONFLICT ("companyId", "sourceType", "sourceId")
+        DO UPDATE SET
+          "content" = ${content},
+          "embedding" = ${embeddingLiteral}::vector(384),
+          "isActive" = true,
+          "updatedAt" = ${now}
+      `;
 
-    // Also maintain KnowledgeChunk for RAG retrieval backward compatibility
-    const content = formatProductForKnowledgeChunk(product);
-    const embedding = await embedText(content);
-    const embeddingLiteral = `[${embedding.join(",")}]`;
-    // Use the InventoryProduct UUID as sourceId so PRODUCT knowledge chunks
-    // can be resolved back to the live InventoryProduct + variant stock.
-    const sourceId = productId;
-    const now = new Date();
-    const kcId = randomUUID();
-    await prisma.$executeRaw`
-      INSERT INTO "KnowledgeChunk" ("id", "companyId", "sourceType", "sourceId", "content", "embedding", "isActive", "createdAt", "updatedAt")
-      VALUES (${kcId}, ${companyId}, 'PRODUCT'::"KnowledgeSourceType", ${sourceId}, ${content}, ${embeddingLiteral}::vector(384), true, ${now}, ${now})
-      ON CONFLICT ("companyId", "sourceType", "sourceId")
-      DO UPDATE SET
-        "content" = ${content},
-        "embedding" = ${embeddingLiteral}::vector(384),
-        "isActive" = true,
-        "updatedAt" = ${now}
-    `;
+      if (historyPromises.length > 0) {
+        await Promise.all(historyPromises);
+      }
 
-    createdIds.push(productId);
-  }
-
-  // Execute history log writes asynchronously and non-blocking
-  if (historyPromises.length > 0) {
-    Promise.allSettled(historyPromises).then((results) => {
-      results.forEach((res, i) => {
-        if (res.status === "rejected") {
-          console.error(`❌ [InventoryHistory] Failed to write history row at index ${i}:`, res.reason);
-        }
-      });
-    }).catch(err => {
-      console.error("❌ [InventoryHistory] Promise.allSettled critical error:", err);
+      createdIds.push(productId);
     });
   }
 
@@ -516,84 +511,105 @@ export async function getInventoryProducts(companyId: string, categoriesFilter?:
  * Skips variant-less products (no `stock` field on the product itself).
  */
 export async function decrementStockForOrder(orderId: string, companyId: string): Promise<void> {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { orderItems: true }
-  });
-  if (!order || !order.orderItems.length) return;
-
-  for (const item of order.orderItems) {
-    let product = item.sku
-      ? await (prisma.inventoryProduct as any).findFirst({
-          where: { companyId, sku: item.sku, isActive: true }
-        })
-      : null;
-
-    if (!product) {
-      product = await (prisma.inventoryProduct as any).findFirst({
-        where: { companyId, name: { equals: item.name, mode: "insensitive" }, isActive: true }
-      });
-    }
-
-    if (!product || !product.hasVariants) continue;
-
-    const allVariants: any[] = await (prisma.inventoryVariant as any).findMany({
-      where: { productId: product.id, isActive: true }
+  await (directPrisma || prisma).$transaction(async (tx) => {
+    // 1. Atomic Idempotency Check: set stockDecremented = true only if it is currently false
+    const updated = await tx.order.updateMany({
+      where: { id: orderId, stockDecremented: false },
+      data: { stockDecremented: true }
     });
-    if (!allVariants.length) continue;
 
-    let targetVariant: any = null;
-
-    // 1. Direct variant ID match (payment-request stores variant.id in item.sku)
-    if (item.sku) {
-      targetVariant = allVariants.find((v: any) => v.id === item.sku);
+    if (updated.count === 0) {
+      console.log(`ℹ️ [StockDecrement] Order ${orderId} stock was already decremented. Skipping.`);
+      return;
     }
 
-    // 2. Attribute value as whole word in item name (word-boundary, avoids false positives)
-    if (!targetVariant) {
-      targetVariant = allVariants.find((v: any) => {
-        const escaped = v.attributeValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        return new RegExp(`\\b${escaped}\\b`, "i").test(item.name);
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { orderItems: true }
+    });
+    if (!order || !order.orderItems.length) return;
+
+    for (const item of order.orderItems) {
+      let product = item.sku
+        ? await (tx.inventoryProduct as any).findFirst({
+            where: { companyId, sku: item.sku, isActive: true }
+          })
+        : null;
+
+      if (!product) {
+        product = await (tx.inventoryProduct as any).findFirst({
+          where: { companyId, name: { equals: item.name, mode: "insensitive" }, isActive: true }
+        });
+      }
+
+      if (!product || !product.hasVariants) continue;
+
+      const allVariants: any[] = await (tx.inventoryVariant as any).findMany({
+        where: { productId: product.id, isActive: true }
       });
-    }
+      if (!allVariants.length) continue;
 
-    // 3. Fallback: pick variant with same price as OrderItem (if unique)
-    if (!targetVariant) {
-      const samePrice = allVariants.filter((v: any) => v.price === item.price);
-      if (samePrice.length === 1) {
-        targetVariant = samePrice[0];
+      let targetVariant: any = null;
+
+      // 1. Direct variant ID match (payment-request stores variant.id in item.sku)
+      if (item.sku) {
+        targetVariant = allVariants.find((v: any) => v.id === item.sku);
+      }
+
+      // 2. Attribute value as whole word in item name (word-boundary, avoids false positives)
+      if (!targetVariant) {
+        targetVariant = allVariants.find((v: any) => {
+          const escaped = v.attributeValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          return new RegExp(`\\b${escaped}\\b`, "i").test(item.name);
+        });
+      }
+
+      // 3. Fallback: pick variant with same price as OrderItem (if unique)
+      if (!targetVariant) {
+        const samePrice = allVariants.filter((v: any) => v.price === item.price);
+        if (samePrice.length === 1) {
+          targetVariant = samePrice[0];
+        }
+      }
+
+      // 4. Last resort: most-stocked variant (triggers only when all above fail)
+      if (!targetVariant) {
+        targetVariant = allVariants.sort((a: any, b: any) => (b.stock ?? -1) - (a.stock ?? -1))[0];
+        console.warn(`⚠️ [StockDecrement] FALLBACK: No variant match for order ${orderId}, item "${item.name}" (qty ${item.quantity}). Using most-stocked variant "${targetVariant?.attributeValue}" (id: ${targetVariant?.id}). Product "${product.name}" has ${allVariants.length} variants: [${allVariants.map((v: any) => v.attributeValue).join(", ")}].`);
+      }
+
+      if (!targetVariant || targetVariant.stock === null || targetVariant.stock === undefined) continue;
+
+      let actualNewStock = 0;
+      let actualOldStock = 0;
+
+      try {
+        const result = await tx.$queryRaw<{ stock: number }[]>`
+          UPDATE "InventoryVariant"
+          SET "stock" = "stock" - ${item.quantity}
+          WHERE "id" = ${targetVariant.id} AND "stock" >= ${item.quantity}
+          RETURNING "stock"
+        `;
+        if (!result.length) continue;
+
+        actualNewStock = result[0].stock;
+        actualOldStock = actualNewStock + item.quantity;
+
+        await tx.stockHistory.create({
+          data: {
+            productId: product.id,
+            variantId: targetVariant.id,
+            oldStock: actualOldStock,
+            newStock: actualNewStock,
+            actorName: `Order ${order.id}`
+          }
+        });
+
+        console.log(`📦 [StockDecrement] Variant ${targetVariant.id} ("${targetVariant.attributeValue}"): ${actualOldStock} → ${actualNewStock} (ordered ${item.quantity})`);
+      } catch (historyErr) {
+        console.error("❌ [StockDecrement] Failed to write StockHistory row:", historyErr);
+        continue;
       }
     }
-
-    // 4. Last resort: most-stocked variant (triggers only when all above fail)
-    if (!targetVariant) {
-      targetVariant = allVariants.sort((a: any, b: any) => (b.stock ?? -1) - (a.stock ?? -1))[0];
-      console.warn(`⚠️ [StockDecrement] FALLBACK: No variant match for order ${orderId}, item "${item.name}" (qty ${item.quantity}). Using most-stocked variant "${targetVariant?.attributeValue}" (id: ${targetVariant?.id}). Product "${product.name}" has ${allVariants.length} variants: [${allVariants.map((v: any) => v.attributeValue).join(", ")}].`);
-    }
-
-    if (!targetVariant || targetVariant.stock === null || targetVariant.stock === undefined) continue;
-
-    const newStock = Math.max(0, targetVariant.stock - item.quantity);
-    await (prisma.inventoryVariant as any).update({
-      where: { id: targetVariant.id },
-      data: { stock: newStock }
-    });
-
-    // Write to StockHistory table
-    try {
-      await prisma.stockHistory.create({
-        data: {
-          productId: product.id,
-          variantId: targetVariant.id,
-          oldStock: targetVariant.stock,
-          newStock: newStock,
-          actorName: `Order ${order.id}`
-        }
-      });
-    } catch (historyErr) {
-      console.error("❌ [StockDecrement] Failed to write StockHistory row:", historyErr);
-    }
-
-    console.log(`📦 [StockDecrement] Variant ${targetVariant.id} ("${targetVariant.attributeValue}"): ${targetVariant.stock} → ${newStock} (ordered ${item.quantity})`);
-  }
+  }, { maxWait: 10000, timeout: 20000 });
 }

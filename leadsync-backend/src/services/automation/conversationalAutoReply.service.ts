@@ -478,8 +478,14 @@ export class ConversationalAutoReplyService {
       }
     }
 
-    // Get ALL chunks first (both eligible and ineligible rules) for proper blockedReason analysis
-    const allChunks = await retrieveSimilarChunks(companyId, messageText, 10, "RULE");
+    // Get chunks for eligible rules with 500ms timeout guard
+    let allChunks: any[] = [];
+    if (eligibleRules.length > 0) {
+      allChunks = await Promise.race([
+        retrieveSimilarChunks(companyId, messageText, 5, "RULE"),
+        new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 500))
+      ]);
+    }
     
     // Find the best-scoring rule overall (regardless of eligibility)
     if (allChunks.length > 0) {
@@ -619,6 +625,28 @@ export class ConversationalAutoReplyService {
 
     // Confident match - conditions already checked during eligibility filtering
     const { rule, topScore, secondScore, gap, candidates } = simMatch;
+
+    // Idempotency check: Skip dispatch if a ConversationalRuleLog already exists for this inbound message within the last 5 minutes (dedupes webhook retries without blocking future messages)
+    const DUP_LOOKBACK_MS = 5 * 60 * 1000;
+    const existingLog = await prisma.conversationalRuleLog.findFirst({
+      where: {
+        companyId,
+        conversationId: context.conversationId,
+        inboundText: context.messageText.substring(0, 1000),
+        createdAt: { gte: new Date(Date.now() - DUP_LOOKBACK_MS) },
+      },
+    });
+
+    if (existingLog) {
+      return {
+        matched: true,
+        ruleId: rule.id,
+        ruleName: rule.name,
+        matchedKeywords: candidates[0]?.matchedKeywords || [],
+        response: existingLog.responseSent || "",
+        responseAlreadySent: true,
+      };
+    }
 
     // For Type 2/3 (RAG) rules, don't send response - let orchestrator handle it
     // These rules use PRODUCT KnowledgeChunks for context + Sarvam/Groq for response

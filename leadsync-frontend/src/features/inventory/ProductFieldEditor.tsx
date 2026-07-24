@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../auth-tenancy/AuthContext";
+import { authedFetch } from "../../api/client";
 
 export interface ProductField {
   id: string;
@@ -23,7 +24,6 @@ interface ProductFieldEditorProps {
 export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }: ProductFieldEditorProps) {
   const auth = useAuth();
   const companyId = propCompanyId || auth?.companyId;
-  const token = auth?.token;
 
   const [fields, setFields] = useState<ProductField[]>([]);
   const [loading, setLoading] = useState(!!companyId);
@@ -51,9 +51,7 @@ export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }:
     if (!companyId) return;
     try {
       setLoading(true);
-      const response = await fetch(`/api/companies/${companyId}/product-fields`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await authedFetch(`/api/companies/${companyId}/product-fields`);
       if (response.ok) {
         const data = await response.json();
         setFields(data);
@@ -91,11 +89,10 @@ export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }:
     if (companyId) {
       // API mode
       try {
-        const response = await fetch(`/api/companies/${companyId}/product-fields`, {
+        const response = await authedFetch(`/api/companies/${companyId}/product-fields`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             fieldName: normalizedKey,
@@ -138,9 +135,8 @@ export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }:
     if (companyId && !id.startsWith("draft-")) {
       // API mode
       try {
-        const response = await fetch(`/api/companies/${companyId}/product-fields/${id}`, {
+        const response = await authedFetch(`/api/companies/${companyId}/product-fields/${id}`, {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
         });
 
         if (response.ok) {

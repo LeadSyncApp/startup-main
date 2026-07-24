@@ -8,6 +8,7 @@
 
 import { embedText } from "../../utils/embedding";
 import { prisma } from "../../lib/prisma";
+import { stepProfiler } from "../../utils/stepProfiler";
 
 export interface RetrievedChunk {
   sourceId: string | null;
@@ -31,50 +32,59 @@ export async function retrieveSimilarChunks(
   sourceType?: string
 ): Promise<RetrievedChunk[]> {
   try {
-    // Step 1: Embed the message text to get its 384-dim vector
-    const embedding = await embedText(messageText);
+    const embedding = await stepProfiler.time(
+      "embedText (Xenova/multilingual-e5-small)",
+      "knowledgeRetriever.service.ts:36",
+      "In-process compute",
+      "ONNX feature-extraction model inference",
+      false,
+      () => embedText("query: " + messageText)
+    );
 
-    // Convert embedding array to PostgreSQL vector literal format
     const embeddingLiteral = `[${embedding.join(",")}]`;
 
-    // Step 2: Query KnowledgeChunk using pgvector's cosine distance operator
-    // pgvector's <=> operator returns cosine distance (0 = identical, 2 = opposite for normalized vectors)
-    // We compute similarity as (1 - distance) so scores read intuitively (1.0 = perfect match, 0 = unrelated)
-    let rows;
-    if (sourceType) {
-      rows = await prisma.$queryRaw<
-        { sourceId: string | null; sourceType: string; content: string; distance: number }[]
-      >`
-        SELECT
-          "sourceId",
-          "sourceType",
-          "content",
-          ("embedding" <=> ${embeddingLiteral}::vector(384)) as distance
-        FROM "KnowledgeChunk"
-        WHERE "companyId" = ${companyId}
-          AND "isActive" = true
-          AND "sourceType" = ${sourceType}::"KnowledgeSourceType"
-        ORDER BY distance ASC
-        LIMIT ${topN}
-      `;
-    } else {
-      rows = await prisma.$queryRaw<
-        { sourceId: string | null; sourceType: string; content: string; distance: number }[]
-      >`
-        SELECT
-          "sourceId",
-          "sourceType",
-          "content",
-          ("embedding" <=> ${embeddingLiteral}::vector(384)) as distance
-        FROM "KnowledgeChunk"
-        WHERE "companyId" = ${companyId}
-          AND "isActive" = true
-        ORDER BY distance ASC
-        LIMIT ${topN}
-      `;
-    }
+    const rows = await stepProfiler.time(
+      "pgvector cosine distance query",
+      "knowledgeRetriever.service.ts:46",
+      "DB query",
+      `SELECT FROM KnowledgeChunk WHERE companyId=${companyId} AND isActive=true ORDER BY embedding <=> vector`,
+      false,
+      async () => {
+        if (sourceType) {
+          return await prisma.$queryRaw<
+            { sourceId: string | null; sourceType: string; content: string; distance: number }[]
+          >`
+            SELECT
+              "sourceId",
+              "sourceType",
+              "content",
+              ("embedding" <=> ${embeddingLiteral}::vector(384)) as distance
+            FROM "KnowledgeChunk"
+            WHERE "companyId" = ${companyId}
+              AND "isActive" = true
+              AND "sourceType" = ${sourceType}::"KnowledgeSourceType"
+            ORDER BY distance ASC
+            LIMIT ${topN}
+          `;
+        } else {
+          return await prisma.$queryRaw<
+            { sourceId: string | null; sourceType: string; content: string; distance: number }[]
+          >`
+            SELECT
+              "sourceId",
+              "sourceType",
+              "content",
+              ("embedding" <=> ${embeddingLiteral}::vector(384)) as distance
+            FROM "KnowledgeChunk"
+            WHERE "companyId" = ${companyId}
+              AND "isActive" = true
+            ORDER BY distance ASC
+            LIMIT ${topN}
+          `;
+        }
+      }
+    );
 
-    // Step 3: Convert distance to similarity and sort descending
     const results: RetrievedChunk[] = rows
       .map((row) => ({
         sourceId: row.sourceId,
@@ -129,43 +139,51 @@ export async function searchByFullText(
   topN: number = 20
 ): Promise<RetrievedChunk[]> {
   try {
-    let rows;
-    if (sourceType) {
-      rows = await prisma.$queryRaw<
-        { sourceId: string | null; sourceType: string; content: string; rank: number }[]
-      >`
-        SELECT
-          "id",
-          "sourceId",
-          "sourceType",
-          "content",
-          ts_rank("contentTsv", websearch_to_tsquery('english', ${queryText})) AS rank
-        FROM "KnowledgeChunk"
-        WHERE "companyId" = ${companyId}
-          AND "isActive" = true
-          AND "contentTsv" @@ websearch_to_tsquery('english', ${queryText})
-          AND "sourceType" = ${sourceType}::"KnowledgeSourceType"
-        ORDER BY rank DESC
-        LIMIT ${topN}
-      `;
-    } else {
-      rows = await prisma.$queryRaw<
-        { sourceId: string | null; sourceType: string; content: string; rank: number }[]
-      >`
-        SELECT
-          "id",
-          "sourceId",
-          "sourceType",
-          "content",
-          ts_rank("contentTsv", websearch_to_tsquery('english', ${queryText})) AS rank
-        FROM "KnowledgeChunk"
-        WHERE "companyId" = ${companyId}
-          AND "isActive" = true
-          AND "contentTsv" @@ websearch_to_tsquery('english', ${queryText})
-        ORDER BY rank DESC
-        LIMIT ${topN}
-      `;
-    }
+    const rows = await stepProfiler.time(
+      "Postgres tsvector FTS query",
+      "knowledgeRetriever.service.ts:133",
+      "DB query",
+      `SELECT FROM KnowledgeChunk WHERE companyId=${companyId} AND contentTsv @@ websearch_to_tsquery`,
+      false,
+      async () => {
+        if (sourceType) {
+          return await prisma.$queryRaw<
+            { sourceId: string | null; sourceType: string; content: string; rank: number }[]
+          >`
+            SELECT
+              "id",
+              "sourceId",
+              "sourceType",
+              "content",
+              ts_rank("contentTsv", websearch_to_tsquery('english', ${queryText})) AS rank
+            FROM "KnowledgeChunk"
+            WHERE "companyId" = ${companyId}
+              AND "isActive" = true
+              AND "contentTsv" @@ websearch_to_tsquery('english', ${queryText})
+              AND "sourceType" = ${sourceType}::"KnowledgeSourceType"
+            ORDER BY rank DESC
+            LIMIT ${topN}
+          `;
+        } else {
+          return await prisma.$queryRaw<
+            { sourceId: string | null; sourceType: string; content: string; rank: number }[]
+          >`
+            SELECT
+              "id",
+              "sourceId",
+              "sourceType",
+              "content",
+              ts_rank("contentTsv", websearch_to_tsquery('english', ${queryText})) AS rank
+            FROM "KnowledgeChunk"
+            WHERE "companyId" = ${companyId}
+              AND "isActive" = true
+              AND "contentTsv" @@ websearch_to_tsquery('english', ${queryText})
+            ORDER BY rank DESC
+            LIMIT ${topN}
+          `;
+        }
+      }
+    );
 
     const results: RetrievedChunk[] = rows
       .map((row) => ({

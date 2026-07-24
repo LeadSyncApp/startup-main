@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Package, Trash2, Loader2 } from "lucide-react";
 import { ProductHistoryChart, PriceHistoryItem, StockHistoryItem } from "./ProductHistoryChart";
+import { authedFetch } from "../../../api/client";
 
 interface ProductVariant {
   id: string;
@@ -57,7 +58,7 @@ export function ProductDetailModal({ product, companyId, onClose, onDelete }: Pr
     // Fetch history logs
     if (companyId && product.id) {
       setLoadingHistory(true);
-      fetch(`/api/companies/${companyId}/inventory/${product.id}/history`)
+      authedFetch(`/api/companies/${companyId}/inventory/${product.id}/history`)
         .then(res => (res.ok ? res.json() : Promise.reject("Failed to load history")))
         .then(data => {
           setPriceHistory(data.priceHistory || []);

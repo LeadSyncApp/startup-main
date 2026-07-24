@@ -5,6 +5,8 @@ import { prisma } from "../../lib/prisma";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { can } from "../../services/auth/permissions.service";
 import { notificationService } from "../../services/infrastructure/notification.service";
+import { pgBossService } from "../../services/infrastructure/pgboss/pgboss.service";
+import { Channel, StandardMessageFrame } from "../../interfaces/messaging.interface";
 
 const router = Router();
 
@@ -321,7 +323,7 @@ router.get("/webhook-logs", authMiddleware as any, async (req: any, res: any) =>
     const companyId = req.user?.companyId;
     const userRole = req.user?.role;
 
-    if (!can(userRole, "company.delete") && !can(userRole, "lead.view")) {
+    if (!can(userRole, "company.delete")) {
       return res.status(403).json({ message: "Access denied" });
     }
 
@@ -392,9 +394,6 @@ router.post("/webhook-logs/:logId/replay", authMiddleware as any, async (req: an
     } catch {
       return res.status(400).json({ message: "Stored payload is not valid JSON" });
     }
-
-    const { pgBossService } = await import("../../services/infrastructure/pgboss/pgboss.service");
-    const { Channel, StandardMessageFrame } = await import("../../interfaces/messaging.interface");
 
     const boss = pgBossService.getBoss();
     const frame: StandardMessageFrame = {

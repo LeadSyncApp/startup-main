@@ -272,6 +272,7 @@ model Order {
   predictedValue Float?
   priorityScore  Int                 @default(0)
   version        Int                 @default(1)
+  stockDecremented Boolean           @default(false)
   invoice        Invoice?
   company        Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -449,6 +450,7 @@ model Message {
   isRead            Boolean       @default(false)
   deliveryError     String?
   clientMessageId   String?
+  dedupKey          String?       @unique
   Company           Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversation      Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 

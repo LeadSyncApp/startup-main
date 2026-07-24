@@ -29,6 +29,7 @@ import {
 import { ProductData, ProductVariantData } from "./InventoryIntakeScreen";
 import { ProductField } from "./ProductFieldEditor";
 import { useAuth } from "../auth-tenancy/AuthContext";
+import { authedFetch } from "../../api/client";
 
 interface InventoryConfirmationScreenProps {
   companyId?: string;
@@ -87,7 +88,7 @@ export function InventoryConfirmationScreen({
   // Fetch existing categories for suggestions
   useEffect(() => {
     if (!companyId) return;
-    fetch(`/api/companies/${companyId}/inventory`)
+    authedFetch(`/api/companies/${companyId}/inventory`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.products) {
@@ -101,9 +102,7 @@ export function InventoryConfirmationScreen({
   // Fetch product field definitions
   useEffect(() => {
     if (!companyId) return;
-    fetch(`/api/companies/${companyId}/product-fields`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    authedFetch(`/api/companies/${companyId}/product-fields`)
       .then(r => r.ok ? r.json() : [])
       .then(data => setProductFieldDefs(data || []))
       .catch(() => {});
@@ -238,7 +237,7 @@ export function InventoryConfirmationScreen({
     formData.append("image", file);
 
     try {
-      const response = await fetch(`/api/companies/${companyId}/inventory/${product.id}/images`, {
+      const response = await authedFetch(`/api/companies/${companyId}/inventory/${product.id}/images`, {
         method: "POST",
         body: formData
       });
@@ -270,7 +269,7 @@ export function InventoryConfirmationScreen({
     if (!product.id) return;
 
     try {
-      const response = await fetch(`/api/companies/${companyId}/inventory/${product.id}/images/${imageId}`, {
+      const response = await authedFetch(`/api/companies/${companyId}/inventory/${product.id}/images/${imageId}`, {
         method: "DELETE"
       });
 
@@ -320,7 +319,7 @@ export function InventoryConfirmationScreen({
       } as any;
       setProducts(updatedProducts);
 
-      const response = await fetch(`/api/companies/${companyId}/inventory/${product.id}/images/reorder`, {
+      const response = await authedFetch(`/api/companies/${companyId}/inventory/${product.id}/images/reorder`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageIds })
@@ -343,7 +342,7 @@ export function InventoryConfirmationScreen({
 
     setLoadingHistoryId(productId);
     try {
-      const response = await fetch(`/api/companies/${companyId}/inventory/${productId}/history`);
+      const response = await authedFetch(`/api/companies/${companyId}/inventory/${productId}/history`);
       if (!response.ok) throw new Error("Failed to fetch history");
       const data = await response.json();
       setHistories(prev => ({
@@ -363,7 +362,7 @@ export function InventoryConfirmationScreen({
   const checkDuplicates = async () => {
     if (!companyId) return false;
     try {
-      const response = await fetch(`/api/companies/${companyId}/inventory/check-duplicates`, {
+      const response = await authedFetch(`/api/companies/${companyId}/inventory/check-duplicates`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ products })
@@ -389,7 +388,7 @@ export function InventoryConfirmationScreen({
     await checkDuplicates();
 
     try {
-      const response = await fetch(`/api/companies/${companyId}/inventory/confirm`, {
+      const response = await authedFetch(`/api/companies/${companyId}/inventory/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ products })
@@ -859,12 +858,12 @@ export function InventoryConfirmationScreen({
                             .filter(f => f.appliesTo === "product")
                             .sort((a, b) => a.sortOrder - b.sortOrder)
                             .map((field) => {
-                              const currentValues = (product as any).customFieldValues || {};
+                              const currentValues = product.customFieldValues || {};
                               const currentValue = currentValues[field.fieldName] || "";
 
                               const handleCustomFieldChange = (value: string) => {
                                 const updatedValues = { ...currentValues, [field.fieldName]: value };
-                                updateProduct(idx, { customFieldValues: updatedValues } as any);
+                                updateProduct(idx, { customFieldValues: updatedValues });
                               };
 
                               if (field.fieldType === "boolean") {

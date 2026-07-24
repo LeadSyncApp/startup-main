@@ -123,6 +123,25 @@ const messageSender = payload.sender === "AGENT" ? MessageSender.AGENT
     return { messageId: createdMessageId, deliveryStatus, message: createdMessage };
   }
 
+  public async sendTransportOnlyFrame(channel: ChannelType, externalChatId: string, payload: { bodyText: string; interactivePayload?: any; replyMarkup?: any }): Promise<{ deliveryStatus: "SENT" | "FAILED"; transportError?: string }> {
+    const context = getTenantContext();
+    if (!context) throw new Error("OutboundDispatcher: No tenant context");
+
+    try {
+      if (channel === "TELEGRAM") {
+        await TelegramTransportService.sendOutboundPayload(context.companyId, externalChatId, payload.bodyText, undefined, payload.replyMarkup);
+      } else if (channel === "WHATSAPP") {
+        await metaAdapterService.sendWhatsAppMessage(context.companyId, externalChatId, payload.bodyText);
+      } else if (channel === "INSTAGRAM") {
+        await metaAdapterService.sendInstagramMessage(context.companyId, externalChatId, payload.bodyText);
+      }
+      return { deliveryStatus: "SENT" };
+    } catch (err: any) {
+      console.error(`⚠️ [OutboundDispatcher] Immediate transport dispatch failed for channel ${channel}: ${err.message}`);
+      return { deliveryStatus: "FAILED", transportError: err.message };
+    }
+  }
+
   public async sendMessageFrame(channel: ChannelType, externalChatId: string, conversationId: string, payload: { bodyText: string; interactivePayload: any; replyMarkup?: any }, sender?: "BOT" | "SYSTEM") {
       const context = getTenantContext();
       if (!context) throw new Error("OutboundDispatcher: No tenant context");

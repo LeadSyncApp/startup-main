@@ -103,7 +103,6 @@ function normalizePhoneNumber(phone: string, countryCode?: string): string {
 router.post("/:companyId", validateWebsiteWebhookSignature, async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.params;
   const body = req.body;
-  const platform: WebhookPlatform = req.detectedPlatform || "custom";
   const rawPayload = JSON.stringify(body).slice(0, 4000);
   const rawHeaders = JSON.stringify({
     "x-shopify-hmac-sha256": req.header("X-Shopify-Hmac-SHA256") ? "[present]" : undefined,
@@ -114,6 +113,8 @@ router.post("/:companyId", validateWebsiteWebhookSignature, async (req: Request,
   if (!companyId) {
     return res.status(400).json({ error: "Missing required route parameter companyId" });
   }
+
+  const platform: WebhookPlatform = req.detectedPlatform || "custom";
 
   try {
     let customerName = "Website Customer";
@@ -127,7 +128,6 @@ router.post("/:companyId", validateWebsiteWebhookSignature, async (req: Request,
     // When platform is explicitly known, use ONLY that parser — never cross-match on shape.
     // Shape-based detection only runs as a fallback when no platform header was present
     // (should not happen after middleware, but kept as safety net).
-    const platform = req.detectedPlatform;
 
     if (platform === "shopify") {
       // ── Shopify parser ──────────────────────────────────────────────────

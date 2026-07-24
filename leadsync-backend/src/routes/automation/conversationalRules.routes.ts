@@ -215,6 +215,9 @@ function getSubtreeHeight(rulesMap: Map<string, any>, ruleId: string): number {
 router.post("/generate-from-prompt", authMiddleware as any, async (req: any, res: any) => {
   try {
     const input = generateFromPromptSchema.parse(req.body);
+    if (input.companyId !== req.user.companyId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     // Fetch company + products for context
     const [company, products] = await Promise.all([
       prisma.company.findUnique({
@@ -262,6 +265,9 @@ router.post("/generate-from-prompt", authMiddleware as any, async (req: any, res
 router.post("/", authMiddleware as any, async (req: any, res: any) => {
   try {
     const validated = createRuleSchema.parse(req.body);
+    if (validated.companyId !== req.user.companyId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     // Normalize nullable optional fields so Prisma doesn't choke on null
     const data = {
       ...validated,
@@ -397,6 +403,9 @@ router.get("/constants", authMiddleware as any, async (_req: any, res: any) => {
 router.get("/:companyId", authMiddleware as any, async (req: any, res: any) => {
   try {
     const { companyId } = req.params;
+    if (companyId !== req.user.companyId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     const { groupId } = req.query;
 
     const where: any = { companyId };
@@ -659,6 +668,15 @@ router.delete("/:id", authMiddleware as any, async (req: any, res: any) => {
 router.post("/test", authMiddleware as any, async (req: any, res: any) => {
   try {
     const { ruleId, sampleMessage } = testRuleSchema.parse(req.body);
+
+    const rule = await prisma.conversationalRule.findUnique({
+      where: { id: ruleId },
+      select: { companyId: true },
+    });
+
+    if (!rule || rule.companyId !== req.user.companyId) {
+      return res.status(404).json({ error: "Rule not found" });
+    }
 
     const result = await conversationalAutoReplyService.testRule(ruleId, sampleMessage);
 

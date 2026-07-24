@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { basePrisma } from "../lib/prisma";
+import { stepProfiler } from "./stepProfiler";
 
 /**
  * Standard CRC32 string hashing algorithm.
@@ -52,26 +53,33 @@ export class ConcurrencyLock {
     // PostgreSQL only accepts ONE bigint argument, not two
     const lockKey = (BigInt(hashPartA & 0xFFFFFFFF) << 32n) | BigInt(hashPartB & 0xFFFFFFFF);
 
-    // We use an interactive transaction to hold the transaction-level advisory lock
-    return await basePrisma.$transaction(
-      async (tx: Prisma.TransactionClient) => {
-        // Enforce FIFO sequencing: This blocks until the lock is acquired for this specific transaction.
-        // It is automatically released when this `prisma.$transaction` commits or rolls back.
-        // Acquire native 64-bit transaction-scoped advisory lock (takes a single bigint key)
-        await tx.$executeRawUnsafe(
-          `SELECT pg_advisory_xact_lock($1);`,
-          lockKey
-        );
+    return await stepProfiler.time(
+      "ConcurrencyLock.withConversationLock total block",
+      "concurrencyLock.ts:56",
+      "Lock",
+      `basePrisma.$transaction (pg_advisory_xact_lock Key=${lockKey})`,
+      true,
+      async () => {
+        return await basePrisma.$transaction(
+          async (tx: Prisma.TransactionClient) => {
+            await stepProfiler.time(
+              "pg_advisory_xact_lock acquisition",
+              "concurrencyLock.ts:61",
+              "Lock",
+              `SELECT pg_advisory_xact_lock(${lockKey})`,
+              true,
+              () => tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock($1);`, lockKey)
+            );
 
-        console.log(`🔒 [ConcurrencyLock] Acquired 64-bit transaction-scoped distributed lock for Conversation=${conversationId} (Key=${lockKey})`);
-        
-        // NO EXPLICIT UNLOCK IS NEEDED OR ALLOWED. 
-        // Pass tx down so all queries operate inside the protected transaction boundary.
-        return await action(tx);
-      },
-      {
-        timeout: 60000,   // Max time for processing logic
-        maxWait: 60000    // Max time to wait for a database connection
+            console.log(`🔒 [ConcurrencyLock] Acquired 64-bit transaction-scoped distributed lock for Conversation=${conversationId} (Key=${lockKey})`);
+            
+            return await action(tx);
+          },
+          {
+            timeout: 60000,   // Max time for processing logic
+            maxWait: 60000    // Max time to wait for a database connection
+          }
+        );
       }
     );
   }

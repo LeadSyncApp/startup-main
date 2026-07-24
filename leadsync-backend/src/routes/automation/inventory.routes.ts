@@ -10,6 +10,7 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import {
   parseInventoryText,
   confirmInventoryProducts,
@@ -39,6 +40,21 @@ const upload = multer({
 
 const router = Router();
 
+// ==========================================
+// VALIDATION SCHEMAS
+// ==========================================
+
+const confirmVariantSchema = z.object({
+  price_override: z.number().nonnegative().nullable().optional(),
+  stock: z.number().int().nonnegative().nullable(),
+}).passthrough();
+
+const confirmProductSchema = z.object({
+  product_type: z.string().trim().min(1, "Product type is required"),
+  price_inr: z.number().nonnegative("Price must not be negative").nullable(),
+  variants: z.array(confirmVariantSchema).default([]),
+  categories: z.array(z.string().min(1, "Category cannot be empty")).optional(),
+}).passthrough();
 
 /**
  * GET /companies/:id/inventory
@@ -46,8 +62,11 @@ const router = Router();
  * Returns all active InventoryProduct records with nested variants.
  * Optional query param: ?categories=X,Y — filter by any of the given categories (AND logic for array overlap).
  */
-router.get("/:id/inventory", async (req, res) => {
+router.get("/:id/inventory", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { categories } = req.query;
 
   try {
@@ -67,8 +86,11 @@ router.get("/:id/inventory", async (req, res) => {
  * 
  * Search products by name or category for the in-chat product picker.
  */
-router.get("/:id/inventory/search", async (req, res) => {
+router.get("/:id/inventory/search", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { q } = req.query;
   const searchTerm = (q as string || "").trim();
 
@@ -93,8 +115,11 @@ router.get("/:id/inventory/search", async (req, res) => {
  * 
  * Check if any of the submitted products already exist (by name).
  */
-router.post("/:id/inventory/check-duplicates", async (req, res) => {
+router.post("/:id/inventory/check-duplicates", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { products } = req.body;
 
   if (!Array.isArray(products)) {
@@ -130,8 +155,11 @@ router.post("/:id/inventory/check-duplicates", async (req, res) => {
  * Groq-based parsing of free-text inventory descriptions.
  * Returns structured products array without persisting.
  */
-router.post("/:id/inventory/parse", async (req, res) => {
+router.post("/:id/inventory/parse", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { text, language } = req.body;
 
   if (!text || typeof text !== "string") {
@@ -159,14 +187,31 @@ router.post("/:id/inventory/parse", async (req, res) => {
  * Also maintains KnowledgeChunk for RAG backward compatibility.
  * Deduplicates by product name.
  */
-router.post("/:id/inventory/confirm", async (req, res) => {
+router.post("/:id/inventory/confirm", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { products } = req.body;
 
   if (!Array.isArray(products)) {
     return res.status(400).json({
       error: "Invalid request: 'products' field must be an array"
     });
+  }
+
+  for (const [index, product] of products.entries()) {
+    const parsed = confirmProductSchema.safeParse(product);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Product validation failed",
+        details: parsed.error.issues.map(issue => ({
+          productIndex: index,
+          field: issue.path.join("."),
+          message: issue.message
+        }))
+      });
+    }
   }
 
   try {
@@ -232,8 +277,11 @@ router.get("/search", authMiddleware, async (req: AuthRequest, res) => {
  * Soft-deletes a product by setting isActive = false, and also deactivates 
  * the corresponding KnowledgeChunk (sourceType = 'PRODUCT') so it's removed from RAG search.
  */
-router.delete("/:id/inventory/:productId", async (req, res) => {
+router.delete("/:id/inventory/:productId", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId, productId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
 
   try {
     // 1. Verify product belongs to the requested company (tenant check)
@@ -277,9 +325,13 @@ router.delete("/:id/inventory/:productId", async (req, res) => {
  */
 router.post(
   "/:id/inventory/:productId/images",
+  authMiddleware,
   upload.single("image"),
-  async (req, res) => {
+  async (req: AuthRequest, res) => {
     const { id: companyId, productId } = req.params;
+    const userCompanyId = req.user?.companyId;
+    if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+    if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
     const file = req.file;
 
     if (!file) {
@@ -359,8 +411,11 @@ router.post(
  * DELETE /companies/:id/inventory/:productId/images/:imageId
  * Delete an image
  */
-router.delete("/:id/inventory/:productId/images/:imageId", async (req, res) => {
+router.delete("/:id/inventory/:productId/images/:imageId", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId, productId, imageId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
 
   try {
     const image = await prisma.productImage.findFirst({
@@ -413,8 +468,11 @@ router.delete("/:id/inventory/:productId/images/:imageId", async (req, res) => {
  * POST /companies/:id/inventory/:productId/images/reorder
  * Reorder image gallery
  */
-router.post("/:id/inventory/:productId/images/reorder", async (req, res) => {
+router.post("/:id/inventory/:productId/images/reorder", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId, productId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { imageIds } = req.body;
 
   if (!Array.isArray(imageIds)) {
@@ -458,8 +516,11 @@ router.post("/:id/inventory/:productId/images/reorder", async (req, res) => {
  * GET /companies/:id/inventory/:productId/history
  * Fetch price and stock history logs for a product
  */
-router.get("/:id/inventory/:productId/history", async (req, res) => {
+router.get("/:id/inventory/:productId/history", authMiddleware, async (req: AuthRequest, res) => {
   const { id: companyId, productId } = req.params;
+  const userCompanyId = req.user?.companyId;
+  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
+  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
 
   try {
     const product = await prisma.inventoryProduct.findFirst({
