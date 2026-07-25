@@ -15,6 +15,7 @@ import {
 } from "../ai/modelComparison.service";
 import { normalizeProductsArray, ProductData, ProductVariantData, ParsedData } from "../ai/numeralConverter";
 import { randomUUID } from "crypto";
+import { validateVariantDimensions } from "../../utils/variantValidation";
 
 export const LOW_STOCK_THRESHOLD = 5;
 
@@ -250,10 +251,24 @@ async function upsertVariants(
       }
     }
 
+    const attributesMap = v.attributes || null;
+
     await db.inventoryVariant.upsert({
       where: { productId_attributeValue: { productId, attributeValue: v.attribute_value } },
-      update: { price: v.price_override ?? 0, stock: v.stock, ...(variantSku ? { sku: variantSku } : {}) },
-      create: { productId, attributeValue: v.attribute_value, price: v.price_override ?? 0, stock: v.stock, sku: variantSku }
+      update: { 
+        price: v.price_override ?? 0, 
+        stock: v.stock, 
+        ...(attributesMap ? { attributes: attributesMap } : {}),
+        ...(variantSku ? { sku: variantSku } : {}) 
+      },
+      create: { 
+        productId, 
+        attributeValue: v.attribute_value, 
+        attributes: attributesMap,
+        price: v.price_override ?? 0, 
+        stock: v.stock, 
+        sku: variantSku 
+      }
     });
   }
 }
@@ -282,6 +297,13 @@ export async function confirmInventoryProducts(
       const hasVariants = product.variants && product.variants.length > 0;
       // Availability toggle only meaningful for restaurants; default true otherwise.
       const isAvailable = isRestaurant ? (product.isAvailable ?? true) : true;
+
+      // Compute multi-dimensional variant attribute names (max 3)
+      const dimensionNames: string[] = product.variantAttributeNames
+        || (product.variant_dimensions ? product.variant_dimensions.map(d => d.name) : [])
+        || (product.attribute_name ? [product.attribute_name] : []);
+
+      validateVariantDimensions(dimensionNames);
 
       // Dedup check: find existing product by company + name
       const existing = await tx.inventoryProduct.findUnique({
@@ -315,6 +337,7 @@ export async function confirmInventoryProducts(
             basePrice: newPrice,
             hasVariants,
             variantAttributeName: product.attribute_name,
+            variantAttributeNames: dimensionNames,
             description: product.description ?? existing.description,
             isAvailable,
             customFieldValues: product.customFieldValues ? JSON.parse(JSON.stringify(product.customFieldValues)) : existing.customFieldValues,
@@ -335,6 +358,7 @@ export async function confirmInventoryProducts(
             basePrice: product.price_inr ?? 0,
             hasVariants,
             variantAttributeName: product.attribute_name,
+            variantAttributeNames: dimensionNames,
             isAvailable,
             sku: productSku,
             categories: product.categories || [],

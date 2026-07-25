@@ -42,7 +42,7 @@ export async function detectLanguage(
  * Call Sarvam AI language detection API
  */
 async function sarvamLanguageDetect(text: string, apiKey: string): Promise<LanguageDetectionResult> {
-  const response = await fetch("https://api.sarvam.ai/language-detection", {
+  const response = await fetch("https://api.sarvam.ai/text-lid", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -61,9 +61,9 @@ async function sarvamLanguageDetect(text: string, apiKey: string): Promise<Langu
 
   const data = await response.json();
   
-  // Sarvam returns: { language_code: "ta-IN", confidence: 0.98 }
+  // Sarvam returns: { request_id: "...", language_code: "ta-IN", script_code: "Taml" }
   const langCode = data.language_code?.split("-")[0]?.toLowerCase() || "en";
-  const confidence = data.confidence || 0;
+  const confidence = data.confidence !== undefined ? data.confidence : 1.0;
   
   const validLanguages: DetectedLanguage[] = ["en", "hi", "ta", "te", "bn", "gu", "kn", "ml", "mr", "pa", "ur"];
   const language = validLanguages.includes(langCode as DetectedLanguage) 

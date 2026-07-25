@@ -2,11 +2,14 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Brain, Sparkles, RefreshCw, Play, StopCircle,
-  Trash2, Plus, Save, Command as CommandIcon, AlertTriangle
+  Trash2, Plus, Save, Command as CommandIcon, AlertTriangle,
+  ChevronDown, ChevronUp
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { generateSmartRules, listSmartRules, updateSmartRule, deleteSmartRule, createRuleGroup, listRuleGroups, deleteRuleGroup, updateRuleGroup, createSmartRule, getRuleConstants, testConversationalRule } from "../../api/client";
+import { generateSmartRules, listSmartRules, updateSmartRule, deleteSmartRule, createRuleGroup, listRuleGroups, deleteRuleGroup, updateRuleGroup, createSmartRule, getRuleConstants, testConversationalRule, getCompanyId } from "../../api/client";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { VoiceMicButton } from "../inventory/components/VoiceMicButton";
+import { VoiceLanguageSelect } from "../inventory/components/VoiceLanguageSelect";
 
 /* ──────────────────────────────────────────────────────────────
    Types
@@ -50,6 +53,8 @@ type ViewType = "ai-list" | "ai-detail";
    ────────────────────────────────────────────────────────────── */
 
 export function AutoRepliesPage() {
+  const companyId = getCompanyId();
+
   // Testing state
   const [testInputs, setTestInputs] = useState<Record<string, string>>({});
   const [testResults, setTestResults] = useState<Record<string, { matched: boolean; matchedKeywords: string[]; response: string } | null>>({});
@@ -77,6 +82,8 @@ export function AutoRepliesPage() {
   const [instructions, setInstructions] = useState<ConversationalRule[]>([]);
   const [instructionsLoading, setInstructionsLoading] = useState(true);
   const [instructionInput, setInstructionInput] = useState("");
+  const [expandedRuleId, setExpandedRuleId] = useState<string | null>(null);
+  const [voiceLanguage, setVoiceLanguage] = useState("English");
 
   // Create modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -675,7 +682,21 @@ export function AutoRepliesPage() {
             className="w-full bg-slate-50 border-2 border-purple-200 rounded-2xl px-5 py-4 text-base text-slate-800 focus:outline-none focus:border-purple-500 focus:bg-white transition-all resize-none font-medium placeholder:text-slate-400"
             placeholder="Describe what you want the bot to do...&#10;Example: I want the bot to always reply in the customer's language and be friendly with emojis"
           />
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <div className="flex items-center gap-2">
+              <VoiceLanguageSelect value={voiceLanguage} onChange={setVoiceLanguage} compact />
+              <VoiceMicButton
+                companyId={companyId || undefined}
+                language={voiceLanguage}
+                onExtractionComplete={(res) => {
+                  if (res?.transcript) {
+                    setFlowDescription(res.transcript);
+                  }
+                }}
+                buttonText="Dictate Flow"
+                compact
+              />
+            </div>
             <button
               onClick={handleGenerateFlow}
               disabled={!flowDescription.trim()}
@@ -722,7 +743,21 @@ export function AutoRepliesPage() {
                     className="w-full bg-slate-50 border-2 border-purple-200 rounded-2xl px-5 py-4 text-base text-slate-800 focus:outline-none focus:border-purple-500 focus:bg-white transition-all resize-none font-medium placeholder:text-slate-400"
                     placeholder="Describe what you want the bot to do...&#10;Example: I want the bot to always reply in the customer's language and be friendly with emojis"
                   />
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-between gap-3 pt-1">
+                    <div className="flex items-center gap-2">
+                      <VoiceLanguageSelect value={voiceLanguage} onChange={setVoiceLanguage} compact />
+                      <VoiceMicButton
+                        companyId={companyId || undefined}
+                        language={voiceLanguage}
+                        onExtractionComplete={(res) => {
+                          if (res?.transcript) {
+                            setFlowDescription(res.transcript);
+                          }
+                        }}
+                        buttonText="Dictate Flow"
+                        compact
+                      />
+                    </div>
                     <button
                       onClick={handleGenerateFlow}
                       disabled={!flowDescription.trim()}
@@ -751,14 +786,26 @@ export function AutoRepliesPage() {
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center flex-wrap sm:flex-nowrap">
               <input
                 type="text"
                 value={instructionInput}
                 onChange={e => setInstructionInput(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && addInstruction()}
-                className="flex-1 bg-slate-50 border-2 border-purple-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-purple-500 transition-all font-medium"
+                className="flex-1 min-w-[200px] bg-slate-50 border-2 border-purple-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-purple-500 transition-all font-medium"
                 placeholder="Type an instruction... e.g. Always reply in customer's language"
+              />
+              <VoiceLanguageSelect value={voiceLanguage} onChange={setVoiceLanguage} compact />
+              <VoiceMicButton
+                companyId={companyId || undefined}
+                language={voiceLanguage}
+                onExtractionComplete={(res) => {
+                  if (res?.transcript) {
+                    setInstructionInput(res.transcript);
+                  }
+                }}
+                buttonText="Dictate"
+                compact
               />
               <button
                 onClick={addInstruction}
@@ -783,11 +830,15 @@ export function AutoRepliesPage() {
                   const _flowEnabled = !selectedGroupId || (ruleGroups.find((g: any) => g.id === selectedGroupId)?.isEnabled !== false);
                   return instructions.map((inst) => {
                     const _effectiveActive = inst.isEnabled && _flowEnabled;
+                    const isExpanded = expandedRuleId === inst.id;
                     return (
-                    <div key={inst.id} className={`bg-white rounded-2xl border-2 p-5 transition-all ${_effectiveActive ? 'border-purple-200 shadow-sm' : 'border-slate-100 opacity-70'}`}>
+                    <div key={inst.id} className={`bg-white rounded-2xl border-2 transition-all ${_effectiveActive ? 'border-purple-200 shadow-sm' : 'border-slate-100 opacity-70'}`}>
 
                       {/* Header: Instruction info + Toggle/Delete */}
-                      <div className="flex items-start justify-between mb-2 pb-3 border-b border-slate-100">
+                      <div
+                        onClick={() => setExpandedRuleId(isExpanded ? null : inst.id)}
+                        className="p-4 sm:p-5 flex items-start justify-between cursor-pointer hover:bg-slate-50/50 rounded-2xl transition-colors"
+                      >
                         <div className="flex items-start gap-3 flex-1 min-w-0">
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${_effectiveActive ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -819,7 +870,43 @@ export function AutoRepliesPage() {
                                 ))}
                               </div>
                             )}
+                          </div>
+                        </div>
 
+                        <div className="flex items-center gap-3 shrink-0 ml-4">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleInstruction(inst.id, inst.isEnabled);
+                            }}
+                            className={`relative w-11 h-6 rounded-full transition-all cursor-pointer ${inst.isEnabled ? "bg-green-500" : "bg-slate-300"}`}
+                          >
+                            <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${inst.isEnabled ? "translate-x-5" : ""}`} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteInstruction(inst.id);
+                            }}
+                            className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                          <div className="p-1 text-slate-400 hover:text-purple-600 transition-colors">
+                            {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Expanded Details Body */}
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden px-5 pb-5 border-t border-slate-100 pt-3"
+                          >
                             {(() => {
                               const sc = inst.surfaceConfig;
                               const showAsButton = sc ? (sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled) : false;
@@ -829,7 +916,7 @@ export function AutoRepliesPage() {
                               
                               if (_effectiveActive && needsTemplate && noTemplate) {
                                 return (
-                                  <div className="mt-2.5 px-3 py-2 bg-amber-50 border border-amber-200/80 rounded-xl text-xs font-semibold text-amber-800 flex items-center gap-2">
+                                  <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200/80 rounded-xl text-xs font-semibold text-amber-800 flex items-center gap-2">
                                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                                     <span>
                                       Warning: No response text configured. 
@@ -841,224 +928,205 @@ export function AutoRepliesPage() {
                               }
                               return null;
                             })()}
-                          </div>
-                        </div>
 
-                        <div className="flex items-center gap-3 shrink-0 ml-4">
-                          <button
-                            onClick={() => toggleInstruction(inst.id, inst.isEnabled)}
-                            className={`relative w-11 h-6 rounded-full transition-all cursor-pointer ${inst.isEnabled ? "bg-green-500" : "bg-slate-300"}`}
-                          >
-                            <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${inst.isEnabled ? "translate-x-5" : ""}`} />
-                          </button>
-                          <button
-                            onClick={() => deleteInstruction(inst.id)}
-                            className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
+                            {/* Surface editor toggle + panel */}
+                            <div className="pt-1">
+                              <button
+                                onClick={() => surfaceEditId === inst.id ? setSurfaceEditId(null) : openSurfaceEditor(inst)}
+                                className="flex items-center gap-2 text-xs font-bold text-purple-600 hover:text-purple-800 transition-all cursor-pointer"
+                              >
+                                <CommandIcon className="w-3.5 h-3.5" />
+                                Configure reply & surfacing
+                                <span className="text-slate-300">›</span>
+                              </button>
 
-                      {/* Surface editor toggle + panel */}
-                      <div className="pt-1">
-                        <button
-                          onClick={() => surfaceEditId === inst.id ? setSurfaceEditId(null) : openSurfaceEditor(inst)}
-                          className="flex items-center gap-2 text-xs font-bold text-purple-600 hover:text-purple-800 transition-all cursor-pointer"
-                        >
-                          <CommandIcon className="w-3.5 h-3.5" />
-                          Configure reply & surfacing
-                          <span className="text-slate-300">›</span>
-                        </button>
-
-                        <AnimatePresence>
-                          {surfaceEditId === inst.id && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: "auto" }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="overflow-hidden"
-                            >
-                              <SurfaceEditor
-                                draft={surfaceDraft}
-                                setDraft={setSurfaceDraft}
-                                draftUseAI={draftUseAI}
-                                setDraftUseAI={setDraftUseAI}
-                                draftTemplateBody={draftTemplateBody}
-                                setDraftTemplateBody={setDraftTemplateBody}
-                                rule={inst}
-                                allRules={instructions}
-                                constants={constants}
-                                atCap={atCap(inst.id, surfaceDraft.parentRuleId)}
-                                commandValid={commandSeemsValid(surfaceDraft.command)}
-                                surfacedCount={instructions.filter(
-                                  (r) => {
-                                    const sc = r.surfaceConfig;
-                                    if (!sc) return false;
-                                    const activeBtn = sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled;
-                                    return activeBtn && (sc.parentRuleId || null) === (surfaceDraft.parentRuleId || null) && r.id !== inst.id;
-                                  }
-                                ).length}
-                                saving={saving}
-                                onCancel={() => setSurfaceEditId(null)}
-                                onSave={() => saveSurface(inst.id)}
-                              />
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-
-                      {/* Side-by-Side 2-Panel Layout: Example Conversation (Left) & Test With Your Inputs (Right) */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
-                        {/* LEFT PANEL: Example Conversation */}
-                        <div className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                              <Brain className="w-3.5 h-3.5 text-purple-600" />
-                              Example Conversation
-                            </label>
-                            <span className="text-[10px] text-slate-400 font-medium">Static Preview</span>
-                          </div>
-
-                          <div className="space-y-2.5 bg-white p-3 rounded-xl border border-slate-200/60 shadow-xs">
-                            {/* User Simulated Message */}
-                            <div className="flex items-start gap-2 max-w-[90%]">
-                              <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs shrink-0 font-bold text-slate-600">
-                                👤
-                              </div>
-                              <div className="bg-slate-100 text-slate-800 rounded-2xl px-3 py-2 text-xs font-medium leading-relaxed">
-                                {inst.triggerKeywords?.[0]
-                                  ? `Do you have ${inst.triggerKeywords[0]}?`
-                                  : `Can you tell me about ${inst.name}?`}
-                              </div>
+                              <AnimatePresence>
+                                {surfaceEditId === inst.id && (
+                                  <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    className="overflow-hidden"
+                                  >
+                                    <SurfaceEditor
+                                      draft={surfaceDraft}
+                                      setDraft={setSurfaceDraft}
+                                      draftUseAI={draftUseAI}
+                                      setDraftUseAI={setDraftUseAI}
+                                      draftTemplateBody={draftTemplateBody}
+                                      setDraftTemplateBody={setDraftTemplateBody}
+                                      rule={inst}
+                                      allRules={instructions}
+                                      constants={constants}
+                                      atCap={atCap(inst.id, surfaceDraft.parentRuleId)}
+                                      commandValid={commandSeemsValid(surfaceDraft.command)}
+                                      surfacedCount={instructions.filter(
+                                        (r) => {
+                                          const sc = r.surfaceConfig;
+                                          if (!sc) return false;
+                                          const activeBtn = sc.showAsButton !== undefined ? !!sc.showAsButton : !!sc.enabled;
+                                          return activeBtn && (sc.parentRuleId || null) === (surfaceDraft.parentRuleId || null) && r.id !== inst.id;
+                                        }
+                                      ).length}
+                                      saving={saving}
+                                      onCancel={() => setSurfaceEditId(null)}
+                                      onSave={() => saveSurface(inst.id)}
+                                    />
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </div>
 
-                            {/* Bot Simulated Response */}
-                            {(() => {
-                              const children = instructions.filter(r => r.surfaceConfig?.enabled && r.surfaceConfig.parentRuleId === inst.id);
-                              const isCategory = children.length > 0;
-                              const hasBody = inst.templateBody && inst.templateBody.trim();
-                              const displayText = hasBody ? inst.templateBody : (isCategory ? `Select an option under ${inst.name}:` : null);
+                            {/* Side-by-Side 2-Panel Layout: Example Conversation (Left) & Test With Your Inputs (Right) */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
+                              {/* LEFT PANEL: Example Conversation */}
+                              <div className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                    <Brain className="w-3.5 h-3.5 text-purple-600" />
+                                    Example Conversation
+                                  </label>
+                                  <span className="text-[10px] text-slate-400 font-medium">Static Preview</span>
+                                </div>
 
-                              return (
-                                <div className="space-y-2">
-                                  <div className="flex items-start gap-2 max-w-[90%] ml-auto flex-row-reverse">
-                                    <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs shrink-0 text-white shadow-sm">
-                                      🤖
+                                <div className="space-y-2.5 bg-white p-3 rounded-xl border border-slate-200/60 shadow-xs">
+                                  {/* User Simulated Message */}
+                                  <div className="flex items-start gap-2 max-w-[90%]">
+                                    <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs shrink-0 font-bold text-slate-600">
+                                      👤
                                     </div>
-                                    {displayText ? (
-                                      <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-2xl px-3 py-2 text-xs font-medium leading-relaxed shadow-sm">
-                                        {displayText}
-                                      </div>
-                                    ) : (
-                                      <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-3 py-2 text-xs font-semibold leading-relaxed">
-                                        ⚠️ No bot response text configured.
-                                      </div>
-                                    )}
+                                    <div className="bg-slate-100 text-slate-800 rounded-2xl px-3 py-2 text-xs font-medium leading-relaxed">
+                                      {inst.triggerKeywords?.[0]
+                                        ? `Do you have ${inst.triggerKeywords[0]}?`
+                                        : `Can you tell me about ${inst.name}?`}
+                                    </div>
                                   </div>
 
-                                  {/* Submenu button previews */}
-                                  {isCategory && (
-                                    <div className="flex flex-col gap-1.5 pl-8 max-w-[90%] ml-auto">
-                                      <div className="grid grid-cols-2 gap-1">
-                                        {children.map(child => (
-                                          <div key={child.id} className="bg-purple-50 text-purple-700 border border-purple-200 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
-                                            {child.surfaceConfig?.buttonLabel || child.name}
+                                  {/* Bot Simulated Response */}
+                                  {(() => {
+                                    const children = instructions.filter(r => r.surfaceConfig?.enabled && r.surfaceConfig.parentRuleId === inst.id);
+                                    const isCategory = children.length > 0;
+                                    const hasBody = inst.templateBody && inst.templateBody.trim();
+                                    const displayText = hasBody ? inst.templateBody : (isCategory ? `Select an option under ${inst.name}:` : null);
+
+                                    return (
+                                      <div className="space-y-2">
+                                        <div className="flex items-start gap-2 max-w-[90%] ml-auto flex-row-reverse">
+                                          <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs shrink-0 text-white shadow-sm">
+                                            🤖
                                           </div>
-                                        ))}
-                                      </div>
-                                      <div className="bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
-                                        ⬅️ Back
-                                      </div>
-                                    </div>
-                                  )}
-                                  {!isCategory && inst.surfaceConfig?.enabled && (
-                                    <div className="flex gap-1.5 pl-8 max-w-[90%] ml-auto">
-                                      {inst.surfaceConfig.parentRuleId ? (
-                                        <>
-                                          <div className="flex-1 bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
-                                            ⬅️ Back
-                                          </div>
-                                          <div className="flex-1 bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
-                                            🏠 Main Menu
-                                          </div>
-                                        </>
-                                      ) : (
-                                        <div className="flex-1 bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
-                                          🏠 Main Menu
+                                          {displayText ? (
+                                            <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-2xl px-3 py-2 text-xs font-medium leading-relaxed shadow-sm">
+                                              {displayText}
+                                            </div>
+                                          ) : (
+                                            <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-3 py-2 text-xs font-semibold leading-relaxed">
+                                              ⚠️ No bot response text configured.
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
 
-                        {/* RIGHT PANEL: Test With Your Inputs */}
-                        <div className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                              Test With Your Inputs
-                            </label>
-                            <span className="text-[10px] text-slate-400 font-medium">Live Simulator</span>
-                          </div>
-
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={testInputs[inst.id] || ""}
-                              onChange={e => setTestInputs({ ...testInputs, [inst.id]: e.target.value })}
-                              onKeyDown={e => e.key === "Enter" && handleTestRule(inst.id)}
-                              placeholder="Type a custom message e.g. 'How much is briyani?'"
-                              className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-purple-500 font-medium shadow-xs"
-                            />
-                            <button
-                              onClick={() => handleTestRule(inst.id)}
-                              disabled={testingRuleId === inst.id || !testInputs[inst.id]?.trim()}
-                              className="px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 cursor-pointer shadow-sm"
-                            >
-                              {testingRuleId === inst.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Run Test"}
-                            </button>
-                          </div>
-
-                          {testResults[inst.id] ? (
-                            <div className="space-y-2 bg-white p-3 rounded-xl border border-slate-200/60 shadow-xs">
-                              {/* User Live Input Message */}
-                              <div className="flex items-start gap-2 max-w-[90%]">
-                                <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs shrink-0 font-bold text-slate-600">
-                                  👤
-                                </div>
-                                <div className="bg-slate-100 text-slate-800 rounded-2xl px-3 py-2 text-xs font-medium leading-relaxed">
-                                  {testInputs[inst.id]}
+                                        {/* Submenu button previews */}
+                                        {isCategory && (
+                                          <div className="flex flex-col gap-1.5 pl-8 max-w-[90%] ml-auto">
+                                            <div className="grid grid-cols-2 gap-1">
+                                              {children.map(child => (
+                                                <div key={child.id} className="bg-purple-50 text-purple-700 border border-purple-200 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
+                                                  {child.surfaceConfig?.buttonLabel || child.name}
+                                                </div>
+                                              ))}
+                                            </div>
+                                            <div className="bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
+                                              ⬅️ Back
+                                            </div>
+                                          </div>
+                                        )}
+                                        {!isCategory && inst.surfaceConfig?.enabled && (
+                                          <div className="flex gap-1.5 pl-8 max-w-[90%] ml-auto">
+                                            {inst.surfaceConfig.parentRuleId ? (
+                                              <>
+                                                <div className="flex-1 bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
+                                                  ⬅️ Back
+                                                </div>
+                                                <div className="flex-1 bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
+                                                  🏠 Main Menu
+                                                </div>
+                                              </>
+                                            ) : (
+                                              <div className="flex-1 bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold text-center">
+                                                🏠 Main Menu
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               </div>
 
-                              {/* Bot Live Response Bubble */}
-                              {testResults[inst.id]?.matched ? (
-                                <div className="flex items-start gap-2 max-w-[90%] ml-auto flex-row-reverse">
-                                  <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs shrink-0 text-white shadow-sm">
-                                    🤖
-                                  </div>
-                                  <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-2xl px-3 py-2 text-xs font-medium leading-relaxed shadow-sm">
-                                    {testResults[inst.id]?.response}
-                                  </div>
+                              {/* RIGHT PANEL: Test With Your Inputs */}
+                              <div className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                    <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                                    Test With Your Inputs
+                                  </label>
+                                  <span className="text-[10px] text-slate-400 font-medium">Live Simulator</span>
                                 </div>
-                              ) : (
-                                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold">
-                                  ❌ No Match — This message did not trigger this instruction rule.
-                                </div>
-                              )}
 
-                              {testResults[inst.id]?.matchedKeywords?.length ? (
-                                <div className="pt-1 flex items-center justify-end gap-1">
-                                  <span className="text-[9px] text-green-700 bg-green-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
-                                    Matched: {testResults[inst.id]?.matchedKeywords.join(", ")}
-                                  </span>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={testInputs[inst.id] || ""}
+                                    onChange={e => setTestInputs({ ...testInputs, [inst.id]: e.target.value })}
+                                    onKeyDown={e => e.key === "Enter" && handleTestRule(inst.id)}
+                                    placeholder="Type a custom message e.g. 'How much is briyani?'"
+                                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-purple-500 font-medium shadow-xs"
+                                  />
+                                  <button
+                                    onClick={() => handleTestRule(inst.id)}
+                                    disabled={testingRuleId === inst.id || !testInputs[inst.id]?.trim()}
+                                    className="px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 cursor-pointer shadow-sm"
+                                  >
+                                    {testingRuleId === inst.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Run Test"}
+                                  </button>
                                 </div>
-                              ) : null}
+
+                                {testResults[inst.id] ? (
+                                  <div className="space-y-2 bg-white p-3 rounded-xl border border-slate-200/60 shadow-xs">
+                                    {/* User Live Input Message */}
+                                    <div className="flex items-start gap-2 max-w-[90%]">
+                                      <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs shrink-0 font-bold text-slate-600">
+                                        👤
+                                      </div>
+                                      <div className="bg-slate-100 text-slate-800 rounded-2xl px-3 py-2 text-xs font-medium leading-relaxed">
+                                        {testInputs[inst.id]}
+                                      </div>
+                                    </div>
+
+                                    {/* Bot Live Response Bubble */}
+                                    {testResults[inst.id]?.matched ? (
+                                      <div className="flex items-start gap-2 max-w-[90%] ml-auto flex-row-reverse">
+                                        <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs shrink-0 text-white shadow-sm">
+                                          🤖
+                                        </div>
+                                        <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-2xl px-3 py-2 text-xs font-medium leading-relaxed shadow-sm">
+                                          {testResults[inst.id]?.response}
+                                          {testResults[inst.id]?.matchedKeywords?.length ? (
+                                            <div className="pt-1 flex items-center justify-end gap-1">
+                                              <span className="text-[9px] text-green-700 bg-green-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                                                Matched: {testResults[inst.id]?.matchedKeywords.join(", ")}
+                                              </span>
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold">
+                                        ❌ No Match — This message did not trigger this instruction rule.
+                                      </div>
+                                    )}
                             </div>
                           ) : (
                             <div className="text-center py-4 text-[11px] text-slate-400 font-medium bg-white rounded-xl border border-slate-100 border-dashed">
@@ -1067,8 +1135,11 @@ export function AutoRepliesPage() {
                           )}
                         </div>
                       </div>
-                    </div>
-                    );
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              );
                   });
                 })()}
               </div>

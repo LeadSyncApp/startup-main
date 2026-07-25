@@ -8,6 +8,8 @@
  * not by this dictionary-based approach. This file ONLY handles numeral conversion.
  */
 
+import { MAX_VARIANT_DIMENSIONS } from "../../utils/variantValidation";
+
 // Tamil numeral word to digit mapping (based on actual Tamil number patterns)
 // Tamil numerals work additively: எழுநூற்று ஐம்பது = 700 + 50 = 750
 const TAMIL_NUMERALS: Record<string, number> = {
@@ -125,11 +127,20 @@ export function extractAndConvertPriceNumeral(text: string): number | null {
 }
 
 /**
+ * Product variant dimension definition
+ */
+export interface ProductVariantDimension {
+  name: string;
+  options: string[];
+}
+
+/**
  * Product variant data - flexible, business-agnostic
  */
 export interface ProductVariantData {
-  attribute_name: string;
+  attribute_name?: string;
   attribute_value: string;
+  attributes?: Record<string, string>;
   price_override: number | null;
   stock: number | null;
   sku?: string;
@@ -141,6 +152,9 @@ export interface ProductVariantData {
 export interface ProductData {
   brand: string | null;
   product_type: string;
+  variant_dimensions?: ProductVariantDimension[];
+  variantAttributeNames?: string[];
+  base_specifications?: Record<string, string>;
   variants: ProductVariantData[];
   attribute_name: string | null;
   description: string | null;
@@ -198,13 +212,36 @@ export function normalizeProductData(product: ProductData): NormalizedProductDat
     }
   }
 
-  // Normalize variant price_override via numeral conversion if raw_source_fragment has it
-  if (result.variants && result.variants.length > 0 && result.price_inr !== null) {
-    // If variants have no price_override, set them to base price
-    result.variants = result.variants.map(v => ({
-      ...v,
-      price_override: v.price_override ?? result.price_inr
-    }));
+  // Process variant_dimensions and enforce max 3 dimension hard cap
+  if (result.variant_dimensions && Array.isArray(result.variant_dimensions)) {
+    if (result.variant_dimensions.length > MAX_VARIANT_DIMENSIONS) {
+      const keep = result.variant_dimensions.slice(0, MAX_VARIANT_DIMENSIONS);
+      const dropped = result.variant_dimensions.slice(MAX_VARIANT_DIMENSIONS);
+      const droppedDesc = dropped.map(d => `${d.name} (${d.options.join(", ")})`).join("; ");
+      
+      const warningNote = `⚠️ Maximum 3 variant dimensions supported. Truncated extra dimension(s): ${droppedDesc}. Consider adding descriptive specs as custom fields.`;
+      (result as any).overflow_warning = warningNote;
+      result.variant_dimensions = keep;
+    }
+
+    result.variantAttributeNames = result.variant_dimensions.map(d => d.name);
+    result.attribute_name = result.variantAttributeNames.length > 0 ? result.variantAttributeNames[0] : null;
+  } else if (!result.variantAttributeNames && result.attribute_name) {
+    result.variantAttributeNames = [result.attribute_name];
+  } else {
+    result.variantAttributeNames = result.variantAttributeNames || [];
+  }
+
+  // Normalize variants: set price_override and ensure attributes map exists
+  if (result.variants && result.variants.length > 0) {
+    result.variants = result.variants.map(v => {
+      const attributes = v.attributes || (result.attribute_name ? { [result.attribute_name]: v.attribute_value } : {});
+      return {
+        ...v,
+        attributes,
+        price_override: v.price_override ?? result.price_inr
+      };
+    });
   }
 
   // Backward compat: if LLM returned old format (colors/sizes), convert to variants

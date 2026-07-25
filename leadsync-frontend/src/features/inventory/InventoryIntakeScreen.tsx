@@ -19,20 +19,41 @@ import {
   FileText
 } from "lucide-react";
 import { authedFetch } from "../../api/client";
+import { VoiceMicButton } from "./components/VoiceMicButton";
+import { VoiceLanguageSelect } from "./components/VoiceLanguageSelect";
+
+export interface ProductVariantDimension {
+  name: string;
+  options: string[];
+}
+
+export interface AttributeTag {
+  id: string;
+  label: string;
+  value: string;
+  mode: "repeats" | "creates_variants";
+}
 
 export interface ProductVariantData {
-  attribute_name: string;
+  id?: string;
+  attribute_name?: string;
   attribute_value: string;
+  attributes?: Record<string, string>;
   price_override: number | null;
   stock: number | null;
+  sku?: string;
 }
 
 export interface ProductData {
   id?: string;
   brand: string | null;
   product_type: string;
+  variant_dimensions?: ProductVariantDimension[];
+  variantAttributeNames?: string[];
+  base_specifications?: Record<string, string>;
   variants: ProductVariantData[];
-  attribute_name: string | null;
+  attributeTags?: AttributeTag[];
+  attribute_name?: string | null;
   description: string | null;
   price_inr: number | null;
   raw_source_fragment: string;
@@ -45,6 +66,7 @@ export interface ProductData {
   imageUrl?: string | null;
   images?: any[];
   customFieldValues?: Record<string, any>;
+  unparsed_notes?: string | null;
 }
 
 interface IntakeResponse {
@@ -221,21 +243,18 @@ export function InventoryIntakeScreen({ companyId, onProceedToConfirm }: Invento
               <div className="flex items-center justify-between text-xs" style={{ color: 'var(--app-text-muted)' }}>
                 <span className="font-medium">Product / Service Free-Text Input</span>
                 <div className="flex items-center gap-2">
-                  <label className="font-medium" htmlFor="language-select">Output language:</label>
-                  <select
-                    id="language-select"
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    className="px-2 py-1 rounded-lg border text-xs font-semibold cursor-pointer"
-                    style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                  >
-                    <option value="English">English</option>
-                    <option value="Tamil">Tamil</option>
-                    <option value="Telugu">Telugu</option>
-                    <option value="Kannada">Kannada</option>
-                    <option value="Malayalam">Malayalam</option>
-                    <option value="Bengali">Bengali</option>
-                  </select>
+                  <VoiceLanguageSelect value={language} onChange={setLanguage} compact />
+                  <VoiceMicButton
+                    companyId={companyId}
+                    language={language}
+                    buttonText="Fill with voice"
+                    compact
+                    onExtractionComplete={(res) => {
+                      if (res.transcript) {
+                        setText((prev) => (prev ? prev + "\n" + res.transcript : res.transcript));
+                      }
+                    }}
+                  />
                   {text.length > 0 && (
                     <button
                       onClick={() => setText("")}

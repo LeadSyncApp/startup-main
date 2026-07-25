@@ -211,6 +211,7 @@ model InventoryProduct {
   imageUrl              String?
   hasVariants           Boolean             @default(false)
   variantAttributeName String?
+  variantAttributeNames String[]            @default([])
   isAvailable           Boolean             @default(true)
   isActive              Boolean             @default(true)
   createdAt             DateTime            @default(now())

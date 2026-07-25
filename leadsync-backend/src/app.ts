@@ -25,6 +25,7 @@ import { authMiddleware } from "./middleware/auth.middleware";
 import analyticsRoutes from "./routes/core/analytics.routes";
 import notificationRoutes from "./routes/core/notification.routes";
 import inventoryRoutes from "./routes/automation/inventory.routes";
+import voiceIntakeRoutes from "./routes/automation/voiceIntake.routes";
 import productsRoutes from "./routes/core/products.routes";
 import broadcastRoutes from "./routes/core/broadcast.routes";
 
@@ -137,6 +138,7 @@ app.use("/api/orders", ordersRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/companies", inventoryRoutes);
+app.use("/api/companies", voiceIntakeRoutes);
 app.use("/api/automation/rule-groups", authMiddleware, ruleGroupsRoutes);
 app.use("/api/automation/conversational-rules", authMiddleware, conversationalRulesRoutes);
 
