@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { sysLog } from "./lib/logger";
 import crypto from "crypto";
 import http from "http";
 import app from "./app";
@@ -10,7 +11,6 @@ import { taskTracker } from "./services/infrastructure/taskTracker";
 import { pgBossService } from "./services/infrastructure/pgboss/pgboss.service";
 import { WorkerRegistry } from "./services/infrastructure/pgboss/worker.registry";
 import { SchedulerRegistry } from "./services/infrastructure/pgboss/scheduler.registry";
-import { sysLog } from "./lib/logger";
 import { startOrchestratorWorker } from "./services/workers/ai.orchestrator.worker";
 import { startAiTriageWorker } from "./services/workers/ai.triage.worker";
 import { ensureRerankerReady } from "./services/knowledge/productMatch.service";
