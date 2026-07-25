@@ -16,14 +16,82 @@ export interface VoiceIntakeResult {
   extracted: ExtractedProductFields;
 }
 
+const LANGUAGE_CODE_MAP: Record<string, string> = {
+  English: "en-IN",
+  Hindi: "hi-IN",
+  Tamil: "ta-IN",
+  Telugu: "te-IN",
+  Kannada: "kn-IN",
+  Malayalam: "ml-IN",
+  Bengali: "bn-IN",
+  Marathi: "mr-IN",
+  Gujarati: "gu-IN",
+};
+
+/**
+ * Server-side anti-hallucination check: Filter noise/silence STT artifacts
+ */
+function isHallucinatedTranscript(transcript: string): boolean {
+  const clean = transcript.trim();
+  if (!clean) return true;
+
+  // Single or repeated punctuation/symbols
+  if (/^[.\s\-?,!:]+$/.test(clean)) return true;
+
+  // Common STT silence/noise hallucination phrases (English & regional languages)
+  const lower = clean.toLowerCase();
+  const hallucinations = [
+    "thank you for watching",
+    "subtitles by",
+    "amara.org",
+    "subscribe to my channel",
+    "thanks for watching",
+    "bye bye",
+    "like and subscribe",
+    "naanu enna confirm",
+    "enna confirm",
+    "naanu enna",
+  ];
+  if (hallucinations.some((h) => lower.includes(h))) return true;
+
+  // Single word noise hallucinations when standing alone (e.g. "hello", "hi", "hey", "hello hello")
+  const standaloneHallucinations = [
+    "hello",
+    "hi",
+    "hey",
+    "hello?",
+    "hello hello",
+    "hi hi",
+    "test",
+    "testing",
+    "thank you",
+    "thanks",
+  ];
+  if (standaloneHallucinations.includes(lower.replace(/[.!?]/g, ""))) return true;
+
+  // Single word under 2 chars containing only punctuation/symbols
+  if (clean.length < 2 && !/[a-zA-Z0-9\u0900-\u0D7F]/.test(clean)) return true;
+
+  return false;
+}
+
 /**
  * Transcribe audio buffer using Sarvam saaras:v3 speech-to-text API
  */
 export async function transcribeAudioWithSarvam(
   audioBuffer: Buffer,
   filename: string = "audio.webm",
-  mimeType: string = "audio/webm"
+  mimeType: string = "audio/webm",
+  language: string = "English"
 ): Promise<string> {
+  console.log(`[BACKEND_VOICE_DEBUG] Received audio buffer size: ${audioBuffer?.length || 0} bytes, filename: "${filename}", language: "${language}"`);
+
+  // Buffer size sanity check
+  if (!audioBuffer || audioBuffer.length < 500) {
+    console.warn("[BACKEND_VOICE_DEBUG] REJECT: Buffer size < 500 bytes.");
+    throw new Error("No speech detected, please try again.");
+  }
+
   const sarvamApiKey = process.env.SARVAM_API_KEY;
   if (!sarvamApiKey) {
     throw new Error("SARVAM_API_KEY environment variable is not configured");
@@ -36,6 +104,10 @@ export async function transcribeAudioWithSarvam(
   });
   formData.append("model", "saaras:v3");
 
+  const langCode = LANGUAGE_CODE_MAP[language] || "en-IN";
+  formData.append("language_code", langCode);
+  console.log(`[BACKEND_VOICE_DEBUG] Sending request to Sarvam STT (model: saaras:v3, language_code: ${langCode})...`);
+
   const response = await fetch("https://api.sarvam.ai/speech-to-text", {
     method: "POST",
     headers: {
@@ -47,15 +119,20 @@ export async function transcribeAudioWithSarvam(
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
+    console.error(`[BACKEND_VOICE_DEBUG] Sarvam STT error (${response.status}):`, errorText);
     throw new Error(`Sarvam STT API error (${response.status}): ${errorText}`);
   }
 
   const data = (await response.json()) as { transcript?: string };
-  if (!data.transcript) {
-    throw new Error("Sarvam STT returned empty transcript");
+  const rawTranscript = data.transcript ? data.transcript.trim() : "";
+  console.log(`[BACKEND_VOICE_DEBUG] Sarvam raw transcript output: "${rawTranscript}"`);
+
+  if (isHallucinatedTranscript(rawTranscript)) {
+    console.warn(`[BACKEND_VOICE_DEBUG] REJECT HALLUCINATION: "${rawTranscript}" matched hallucination filter.`);
+    throw new Error("No speech detected, please try again.");
   }
 
-  return data.transcript.trim();
+  return rawTranscript;
 }
 
 /**
@@ -134,10 +211,11 @@ Output JSON only.`;
 export async function processVoiceIntake(
   audioBuffer: Buffer,
   filename: string = "audio.webm",
-  mimeType: string = "audio/webm"
+  mimeType: string = "audio/webm",
+  language: string = "English"
 ): Promise<VoiceIntakeResult> {
-  // Step 1: Speech to text using Sarvam saaras:v3
-  const transcript = await transcribeAudioWithSarvam(audioBuffer, filename, mimeType);
+  // Step 1: Speech to text using Sarvam saaras:v3 with language_code parameter
+  const transcript = await transcribeAudioWithSarvam(audioBuffer, filename, mimeType, language);
 
   // Step 2: Field extraction using Groq llama-3.1-8b-instant
   const extracted = await extractProductFieldsWithGroq(transcript);

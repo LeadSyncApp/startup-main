@@ -13,7 +13,8 @@ const upload = multer({
  * POST /companies/:id/inventory/voice-intake
  * 
  * Takes recorded audio file (multipart/form-data key: 'audio')
- * 1. Transcribes audio via Sarvam saaras:v3 STT
+ * Accepts optional 'language' field in multipart body (e.g. 'English', 'Tamil', 'Hindi')
+ * 1. Transcribes audio via Sarvam saaras:v3 STT (with language_code hint and silence detection)
  * 2. Extracts product fields via Groq llama-3.1-8b-instant LLM
  * 3. Returns { transcript, extracted: { product_name, price, stock, fabric_type, category, description } }
  */
@@ -39,14 +40,15 @@ router.post(
     try {
       const filename = req.file.originalname || "recording.webm";
       const mimeType = req.file.mimetype || "audio/webm";
+      const language = (req.body?.language || req.query?.language || "English") as string;
 
-      const result = await processVoiceIntake(req.file.buffer, filename, mimeType);
+      const result = await processVoiceIntake(req.file.buffer, filename, mimeType, language);
 
       return res.json(result);
     } catch (error: any) {
       console.error("[VoiceIntakeRoute] Error processing voice intake:", error);
-      return res.status(500).json({
-        error: "Failed to process voice intake",
+      return res.status(400).json({
+        error: error.message || "Failed to process voice intake",
         details: error.message || String(error),
       });
     }
