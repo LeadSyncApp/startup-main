@@ -796,8 +796,13 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
             const tier = triageMatchedProduct.confidenceTier;
             const stockNote = triageMatchedProduct.stockStatus === "OUT_OF_STOCK" ? " (OUT OF STOCK)" : triageMatchedProduct.stockStatus === "LOW_STOCK" ? " (LOW STOCK)" : "";
             const tierNote = tier === "LOW" ? " (UNVERIFIED — ask customer to confirm)" : "";
-            menuSnapshotForAi = `Matched Product: ${triageMatchedProduct.name}${triageMatchedProduct.variant ? ` (${triageMatchedProduct.variant})` : ""} — Confidence: ${tier}${tierNote}${stockNote}`;
-            console.log(`[Orchestrator RAG] Semantic match: ${triageMatchedProduct.name} (${tier})`);
+            const variantLines = triageMatchedProduct.variants && triageMatchedProduct.variants.length > 0
+              ? triageMatchedProduct.variants.map((v: any) =>
+                  `  - Variant "${v.attributeValue}": Price ₹${v.price ?? 'N/A'}, Stock: ${v.stock ?? 0} units (${v.stockStatus})`
+                ).join("\n")
+              : "";
+            menuSnapshotForAi = `Matched Product: ${triageMatchedProduct.name}${triageMatchedProduct.variant ? ` (Mentioned: ${triageMatchedProduct.variant})` : ""} — Confidence: ${tier}${tierNote}${stockNote}${variantLines ? `\nAvailable Variants & Live Stock Breakdown:\n${variantLines}` : ""}`;
+            console.log(`[Orchestrator RAG] Semantic match: ${triageMatchedProduct.name} (${tier}) with ${triageMatchedProduct.variants?.length || 0} variants`);
           }
         } else if (classification.inquiryType === "general") {
           // Semantic matcher returned null — genuine catalog-browsing query

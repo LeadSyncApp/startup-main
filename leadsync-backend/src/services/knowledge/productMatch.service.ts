@@ -21,6 +21,15 @@ import { LOW_STOCK_THRESHOLD } from "./inventory.service";
 import { getGroq } from "../ai/ai.service";
 import { stepProfiler } from "../../utils/stepProfiler";
 
+export interface MatchedVariantInfo {
+  id?: string;
+  attributeValue: string;
+  attributes?: Record<string, string>;
+  price: number | null;
+  stock: number | null;
+  stockStatus: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK" | null;
+}
+
 export interface ProductMatchCandidate {
   /** InventoryProduct UUID */
   productId: string;
@@ -40,6 +49,8 @@ export interface ProductMatchCandidate {
   confidenceTier: "HIGH" | "MEDIUM" | "LOW" | "NONE";
   /** Human-readable explanation of why the product matched */
   matchReason: string;
+  /** Complete active variant breakdown for the product */
+  variants?: MatchedVariantInfo[];
 }
 
 export interface ProductMatchResult {
@@ -68,6 +79,8 @@ export interface ProductMatchResult {
   isMultiCandidate?: boolean;
   /** Array of close candidate products when 2 or more candidates score within threshold */
   candidates?: ProductMatchCandidate[];
+  /** Complete active variant breakdown for the product */
+  variants?: MatchedVariantInfo[];
 }
 
 // Multi-candidate close score ratio threshold (runner-up score >= 60-70% of top candidate score).
@@ -398,6 +411,15 @@ export async function matchProductForMessage(
         else if (chunkScore >= MIN_CONFIDENCE_THRESHOLD) candidateTier = "LOW";
         else candidateTier = "NONE";
 
+        const allVariants: MatchedVariantInfo[] = (product.variants || []).map((v: any) => ({
+          id: v.id,
+          attributeValue: v.attributeValue,
+          attributes: v.attributes as Record<string, string> | undefined,
+          price: v.price !== null && v.price !== undefined ? Number(v.price) : (product.basePrice !== null && product.basePrice !== undefined ? Number(product.basePrice) : null),
+          stock: v.stock,
+          stockStatus: v.stock === 0 ? "OUT_OF_STOCK" : v.stock !== null && v.stock <= LOW_STOCK_THRESHOLD ? "LOW_STOCK" : v.stock !== null ? "IN_STOCK" : null
+        }));
+
         candidateProducts.push({
           productId: product.id,
           name: product.name,
@@ -408,6 +430,7 @@ export async function matchProductForMessage(
           score: chunkScore,
           confidenceTier: candidateTier,
           matchReason: extractMatchReason(chunk.content, messageText),
+          variants: allVariants,
         });
       }
     }
@@ -521,6 +544,7 @@ export async function matchProductForMessage(
       matchReason: topCandidate.matchReason,
       isMultiCandidate,
       candidates: isMultiCandidate ? closeCandidates : undefined,
+      variants: topCandidate.variants,
     };
 
     console.log("[productMatch] SUCCESS — product matched:", JSON.stringify(result, null, 2));
