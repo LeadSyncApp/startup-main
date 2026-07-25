@@ -116,9 +116,13 @@ Return ONLY valid JSON, no preamble, no markdown fences. Schema:
       "product_type": string,
       "categories": string[],
       "customFieldValues": {},
+      "base_specifications": { [key: string]: string },
+      "variant_dimensions": [
+        { "name": string, "options": string[] }
+      ],
       "variants": [
         {
-          "attribute_name": string,
+          "attributes": { [key: string]: string },
           "attribute_value": string,
           "price_override": number | null,
           "stock": number | null
@@ -141,7 +145,7 @@ CRITICAL NUMERAL VERIFICATION RULE:
 LANGUAGE NORMALIZATION RULE:
 - product_type, variant attribute names, and variant values MUST be output in English regardless of input language.
 - Preserve the original phrase in raw_source_fragment for the owner-facing confirmation screen.
-- Example: Tamil "நீல நிற பருத்தி சேலை" should output product_type="cotton saree", variants with attribute_name="Color", attribute_value="blue".
+- Example: Tamil "நீல நிற பருத்தி சேலை" should output product_type="cotton saree", variant_dimensions with name="Color", options=["blue"].
 - GARMENT TRANSLATION GUIDANCE: Use standard English garment terminology. For example:
   * "சேலை", "புடவை" → "saree" (NOT "dupatta" or "veil")
   * "ப்ளவுஸ்", "செட்" → "blouse" (e.g., "ஜரிகை ப்ளவுஸ்" → "zari blouse")
@@ -149,17 +153,22 @@ LANGUAGE NORMALIZATION RULE:
 - For uncommon or unseen vocabulary, translate to the closest standard English equivalent based on
   context and linguistic similarity. When in doubt, transliterate phonetically to English.
 
-VARIANT DETECTION RULES:
-- Infer the variant attribute type from context. Examples:
-  * "M L XL" → attribute_name="Size", variants with values "M", "L", "XL"
-  * "red blue green" → attribute_name="Color", variants with values "red", "blue", "green"
-  * "60 min 90 min" → attribute_name="Duration", variants with values "60 min", "90 min"
-  * "single double triple plate" → attribute_name="Plates", variants accordingly
-  * "half full" → attribute_name="Portion", variants accordingly
-  * "basic premium" → attribute_name="Package", variants accordingly
-- If no variants detected, return empty variants array and set attribute_name to null.
+PRODUCT TITLE & BRAND PRESERVATION RULE:
+- product_type MUST preserve the full product name, title, brand prefix, or model identifier provided by the merchant in raw text (e.g., "abc pants" → product_type: "abc pants", "ABS pants" → product_type: "ABS pants", "STS shirt" → product_type: "STS shirt", "Otto shirt" → product_type: "Otto shirt").
+- Do NOT drop short alphabetic prefixes, acronyms, or brand codes (like "abc", "ABS", "STS", "Otto") from product_type. Keep the full merchant-stated title.
+
+VARIANT DETECTION & MULTI-DIMENSIONAL RULES:
+- Identify distinct variant attributes and tokens as typed/spoken by the merchant (e.g., "Size", "Color", "Portion", "Prep", "Duration", "Fit", "Type").
+- DISTINCT ATTRIBUTE COLUMN SEPARATION RULE: Every distinct attribute category or measurement type mentioned by the merchant MUST be extracted as its own separate dimension object in 'variant_dimensions'.
+  - If numeric sizing (e.g. "size 32", "waist 34") appears alongside lettered sizes, fits, or types (e.g. "type L, M, S", "fit S, M, L", "sizes S, M, L"), extract them as TWO separate dimensions (e.g., [{"name": "Size", "options": ["32"]}, {"name": "Type", "options": ["L", "M", "S"]}] or [{"name": "Size", "options": ["32"]}, {"name": "Fit", "options": ["S", "M", "L"]}]).
+  - NEVER lump numeric measurements and letter sizes/types together into a single dimension array like ["32", "L", "M", "S"]. Separate distinct attribute descriptors into distinct dimensions.
+  - Preserve merchant labels ("Size", "Fit", "Type", "Color", "Waist", "Length", etc.). If no distinct label word is given for an attribute type, name numeric dimensions "Size" (or "Waist") and letter/fit dimensions "Fit" (or "Type").
+- SINGLE-DIMENSION PRESERVATION RULE: If only 1 attribute dimension is mentioned (e.g. "sizes S M L" or "sizes 30 32 34"), output ONLY 1 dimension in variant_dimensions: [{"name": "Size", "options": ["S", "M", "L"]}]. Never force artificial secondary dimensions when only one attribute is present.
+- ZERO-VARIANT PRESERVATION RULE: If no variants are mentioned, return empty variant_dimensions: [] and empty variants: [].
+- 3-DIMENSION HARD CAP & OVERFLOW WARNING RULE: A product can have at most 3 variant dimensions. If 4 or more dimensions are described (e.g., Size, Color, Fabric, Finish), extract ONLY the top 3 most important dimensions into variant_dimensions. Do NOT silently discard overflow dimensions; append an explicit warning to unparsed_notes: "⚠️ Maximum 3 variant dimensions supported per product. Excluded dimension(s): Finish (matte, glossy). Consider adding them as custom fields."
+- For multi-dimensional variants, compute the Cartesian product of variant_dimensions and output individual variant items. attribute_value for each variant must be a composite string joining attribute values with " / " (e.g. "L / Red").
 - price_inr is the base price. If individual variants have different prices, set price_override on those variants.
-- stock is null for services or digital goods (no stock concept).
+- stock is null for services, digital goods, or unstated inventory quantities so merchant can configure stock in matrix editor.
 
 SKU EXTRACTION RULE:
 - If the source text contains an explicit SKU, product code, or catalog number (e.g. "SKU: ABC-123", "code: TSHIRT-001", "ref# 456"), extract it into the "sku" field.
