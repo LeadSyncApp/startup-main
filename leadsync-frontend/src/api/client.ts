@@ -157,7 +157,7 @@ export async function authedFetch(url: string, options: RequestInit = {}): Promi
 /**
  * Get company ID from localStorage (parsed from stored company JSON)
  */
-function getCompanyId(): string | null {
+export function getCompanyId(): string | null {
   try {
     const storedCompany = localStorage.getItem("company");
     if (storedCompany) {
