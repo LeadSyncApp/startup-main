@@ -19,20 +19,40 @@ import {
   FileText
 } from "lucide-react";
 import { authedFetch } from "../../api/client";
+import { VoiceMicButton } from "./components/VoiceMicButton";
+
+export interface ProductVariantDimension {
+  name: string;
+  options: string[];
+}
+
+export interface AttributeTag {
+  id: string;
+  label: string;
+  value: string;
+  mode: "repeats" | "creates_variants";
+}
 
 export interface ProductVariantData {
-  attribute_name: string;
+  id?: string;
+  attribute_name?: string;
   attribute_value: string;
+  attributes?: Record<string, string>;
   price_override: number | null;
   stock: number | null;
+  sku?: string;
 }
 
 export interface ProductData {
   id?: string;
   brand: string | null;
   product_type: string;
+  variant_dimensions?: ProductVariantDimension[];
+  variantAttributeNames?: string[];
+  base_specifications?: Record<string, string>;
   variants: ProductVariantData[];
-  attribute_name: string | null;
+  attributeTags?: AttributeTag[];
+  attribute_name?: string | null;
   description: string | null;
   price_inr: number | null;
   raw_source_fragment: string;
@@ -45,6 +65,7 @@ export interface ProductData {
   imageUrl?: string | null;
   images?: any[];
   customFieldValues?: Record<string, any>;
+  unparsed_notes?: string | null;
 }
 
 interface IntakeResponse {
@@ -236,6 +257,16 @@ export function InventoryIntakeScreen({ companyId, onProceedToConfirm }: Invento
                     <option value="Malayalam">Malayalam</option>
                     <option value="Bengali">Bengali</option>
                   </select>
+                  <VoiceMicButton
+                    companyId={companyId}
+                    buttonText="Fill with voice"
+                    compact
+                    onExtractionComplete={(res) => {
+                      if (res.transcript) {
+                        setText((prev) => (prev ? prev + "\n" + res.transcript : res.transcript));
+                      }
+                    }}
+                  />
                   {text.length > 0 && (
                     <button
                       onClick={() => setText("")}

@@ -103,8 +103,11 @@ export function ProductPickerModal({
     setGeneratingLink(true);
     try {
       const price = variant ? variant.price : product.basePrice;
+      const attrNames = (product as any).variantAttributeNames?.length > 0 
+        ? (product as any).variantAttributeNames.join(" / ")
+        : (product.variantAttributeName || "Variant");
       const variantLabel = variant
-        ? ` (${product.variantAttributeName}: ${variant.attributeValue})`
+        ? ` (${attrNames}: ${variant.attributeValue})`
         : "";
       const name = product.name;
 
