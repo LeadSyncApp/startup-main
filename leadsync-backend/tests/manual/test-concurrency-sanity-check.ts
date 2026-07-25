@@ -13,7 +13,8 @@ async function main() {
       data: {
         id: "test-company-sanity",
         name: "Test Company Sanity",
-        businessType: "RETAIL"
+        businessType: "RETAIL",
+        companyCode: "TEST_SANITY"
       }
     });
   }
