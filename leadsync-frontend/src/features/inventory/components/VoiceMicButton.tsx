@@ -4,6 +4,7 @@ import { useVoiceRecorder, VoiceIntakeResponse } from "../hooks/useVoiceRecorder
 
 interface VoiceMicButtonProps {
   companyId?: string;
+  language?: string;
   onExtractionComplete: (result: VoiceIntakeResponse) => void;
   buttonText?: string;
   compact?: boolean;
@@ -11,6 +12,7 @@ interface VoiceMicButtonProps {
 
 export function VoiceMicButton({
   companyId,
+  language,
   onExtractionComplete,
   buttonText = "Fill with voice",
   compact = false,
@@ -25,6 +27,7 @@ export function VoiceMicButton({
     stopRecording,
   } = useVoiceRecorder({
     companyId,
+    language,
     onSuccess: (res) => {
       onExtractionComplete(res);
     },

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { authedFetch } from "../../api/client";
 import { VoiceMicButton } from "./components/VoiceMicButton";
+import { VoiceLanguageSelect } from "./components/VoiceLanguageSelect";
 
 export interface ProductVariantDimension {
   name: string;
@@ -242,23 +243,10 @@ export function InventoryIntakeScreen({ companyId, onProceedToConfirm }: Invento
               <div className="flex items-center justify-between text-xs" style={{ color: 'var(--app-text-muted)' }}>
                 <span className="font-medium">Product / Service Free-Text Input</span>
                 <div className="flex items-center gap-2">
-                  <label className="font-medium" htmlFor="language-select">Output language:</label>
-                  <select
-                    id="language-select"
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    className="px-2 py-1 rounded-lg border text-xs font-semibold cursor-pointer"
-                    style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                  >
-                    <option value="English">English</option>
-                    <option value="Tamil">Tamil</option>
-                    <option value="Telugu">Telugu</option>
-                    <option value="Kannada">Kannada</option>
-                    <option value="Malayalam">Malayalam</option>
-                    <option value="Bengali">Bengali</option>
-                  </select>
+                  <VoiceLanguageSelect value={language} onChange={setLanguage} compact />
                   <VoiceMicButton
                     companyId={companyId}
+                    language={language}
                     buttonText="Fill with voice"
                     compact
                     onExtractionComplete={(res) => {
