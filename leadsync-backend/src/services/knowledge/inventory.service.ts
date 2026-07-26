@@ -8,6 +8,7 @@
 import Groq from "groq-sdk";
 import { prisma, directPrisma } from "../../lib/prisma";
 import { embedText } from "../../utils/embedding";
+import { invalidateChunkCache } from "./chunkCache";
 import {
   PRODUCT_PARSING_PROMPT,
   buildBusinessTypeRules,
@@ -393,6 +394,9 @@ export async function confirmInventoryProducts(
           "isActive" = true,
           "updatedAt" = ${now}
       `;
+
+      // Invalidate in-memory knowledge chunk cache after product upsert
+      invalidateChunkCache(companyId);
 
       if (historyPromises.length > 0) {
         await Promise.all(historyPromises);

@@ -10,65 +10,9 @@ import { ConversationStatus, ConversationMode, MessageSender, Channel as PrismaC
 import { outboundDispatcherService } from "../../services/outbound.dispatcher";
 import { escalateToHuman, resolveConversation } from "../../services";
 import { generateReplySuggestion } from "../../services/ai/ai.service";
-import { LOW_STOCK_THRESHOLD, getStockStatus } from "../../services/knowledge/inventory.service";
+import { getStockStatus } from "../../services/knowledge/inventory.service";
 
 const router = Router();
-
-/**
- * Resolve the cached product match for a conversation into the shape the
- * StreamTriage frontend expects ({ name, variant, stock, thumbnailUrl } | null).
- *
- * The match itself is computed once (gap-based confidence) and cached on the
- * Conversation. Here we only re-fetch the LIVE stock count from the Inventory
- * table so the displayed number is never stale. Returns null when there is no
- * confident cached match.
- */
-async function resolveMatchedProduct(conversation: any, companyId: string): Promise<{
-  name: string;
-  variant: string;
-  stock: number;
-  stockStatus: string | null;
-  thumbnailUrl: string;
-} | null> {
-  const cached = conversation?.matchedProduct as
-    | { productId?: string; name?: string; variant?: string; thumbnailUrl?: string }
-    | null
-    | undefined;
-
-  if (!cached || !cached.productId) return null;
-
-  try {
-    const product = await prisma.inventoryProduct.findFirst({
-      where: { id: cached.productId, companyId, isActive: true },
-      select: {
-        name: true,
-        imageUrl: true,
-        variants: {
-          where: { isActive: true },
-          select: { attributeValue: true, stock: true },
-        },
-      },
-    });
-
-    if (!product) return null;
-
-    const stock = (product.variants || []).reduce(
-      (sum: number, v: any) => sum + (v.stock ?? 0),
-      0
-    );
-
-    return {
-      name: cached.name || product.name,
-      variant: cached.variant || "",
-      stock,
-      stockStatus: getStockStatus(stock),
-      thumbnailUrl: cached.thumbnailUrl || product.imageUrl || "",
-    };
-  } catch (err: any) {
-    console.error("[leads] Failed to resolve matched product:", err?.message);
-    return null;
-  }
-}
 
 /**
  * GET /api/leads
@@ -177,7 +121,83 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       take: limit,
     });
 
-    const formatted = await Promise.all(leads.map(async (lead: any) => {
+    // ── Batch pre-compute unread counts for ALL conversations in one query ──
+    // Instead of N individual prisma.message.count() calls, we use a single
+    // GROUP BY query. The lastViewedAt join handles the "messages after last view"
+    // logic correctly: when lastViewedAt is NULL, all CLIENT/BOT messages count.
+    const conversationIds = leads
+      .map((l: any) => l.conversations?.[0]?.id)
+      .filter(Boolean);
+    const unreadCountMap = new Map<string, number>();
+    if (conversationIds.length > 0) {
+      const unreadRows = await prisma.$queryRaw<
+        { conversationId: string; count: bigint }[]
+      >`
+        SELECT m."conversationId", CAST(COUNT(*) AS bigint) AS count
+        FROM "Message" m
+        INNER JOIN "Conversation" c ON m."conversationId" = c.id
+        WHERE m."conversationId" = ANY(${conversationIds}::text[])
+          AND m."sender" IN ('CLIENT', 'BOT')
+          AND (c."lastViewedAt" IS NULL OR m."createdAt" > c."lastViewedAt")
+        GROUP BY m."conversationId"
+      `;
+      for (const row of unreadRows) {
+        unreadCountMap.set(row.conversationId, Number(row.count));
+      }
+    }
+
+    // ── Batch pre-fetch matched products for ALL conversations in one query ──
+    // Collect unique cached productIds from conversation.matchedProduct,
+    // fetch all at once via WHERE id IN (...), then resolve inside the loop
+    // using the precomputed map — no per-lead inventoryProduct.findFirst.
+    const productIds = leads
+      .map((l: any) => l.conversations?.[0]?.matchedProduct?.productId)
+      .filter(Boolean);
+    const uniqueProductIds = [...new Set<string>(productIds)];
+    const productBatchMap = new Map<string, any>();
+    if (uniqueProductIds.length > 0) {
+      const batchProducts = await prisma.inventoryProduct.findMany({
+        where: { id: { in: uniqueProductIds }, companyId, isActive: true },
+        select: {
+          id: true,
+          name: true,
+          imageUrl: true,
+          variants: {
+            where: { isActive: true },
+            select: { attributeValue: true, stock: true },
+          },
+        },
+      });
+      for (const p of batchProducts) {
+        const stock = p.variants.reduce((sum: number, v: any) => sum + (v.stock ?? 0), 0);
+        productBatchMap.set(p.id, {
+          name: p.name,
+          stock,
+          stockStatus: getStockStatus(stock),
+          thumbnailUrl: p.imageUrl || "",
+        });
+      }
+    }
+
+    // Resolve matched product from the batch pre-fetched map (O(1) per lead)
+    const resolveMatchedProductFromBatch = (conversation: any) => {
+      const cached = conversation?.matchedProduct as
+        | { productId?: string; name?: string; variant?: string; thumbnailUrl?: string }
+        | null
+        | undefined;
+      if (!cached || !cached.productId) return null;
+      const batch = productBatchMap.get(cached.productId);
+      if (!batch) return null;
+      return {
+        name: cached.name || batch.name,
+        variant: cached.variant || "",
+        stock: batch.stock,
+        stockStatus: batch.stockStatus,
+        thumbnailUrl: cached.thumbnailUrl || batch.thumbnailUrl,
+      };
+    };
+
+    const formatted = leads.map((lead: any) => {
       const conversation = lead.conversations[0];
 
       // Read-ahead mapped directly from DB (O(1))
@@ -214,14 +234,14 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 
       // Get all messages for this conversation
       const allMessages = conversation?.messages || [];
-      
+
        // Find the most recent message that is NOT from SYSTEM (true last customer message)
        const lastCustomerMessage = allMessages.find((m: any) => m.sender !== "SYSTEM" && m.sender !== "BOT");
-       
+
        // Check if most recent message overall is from SYSTEM (hasAutoReply)
        const mostRecent = allMessages[0];
        const hasAutoReply = mostRecent?.sender === "SYSTEM" || mostRecent?.sender === "BOT";
-       
+
        // botRepliedAt: timestamp of most recent SYSTEM message if hasAutoReply is true
        let botRepliedAt: string | null = null;
        if (hasAutoReply) {
@@ -236,24 +256,10 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
           ? new Date(lead.lastActiveAt) > new Date(conversation.lastViewedAt)
           : true;
 
-        // unreadCount: number of customer messages the staff hasn't seen yet.
-        // When lastViewedAt is null (never opened), every customer message is unread.
-        // Otherwise, count only customer-origin messages after lastViewedAt.
-        // Customer-origin = CLIENT and BOT (inbound); AGENT/SYSTEM are staff/bot replies.
-        const unreadCount = conversation?.lastViewedAt
-          ? await prisma.message.count({
-              where: {
-                conversationId: conversation.id,
-                createdAt: { gt: conversation.lastViewedAt },
-                sender: { in: [MessageSender.CLIENT, MessageSender.BOT] },
-              },
-            })
-          : await prisma.message.count({
-              where: {
-                conversationId: conversation.id,
-                sender: { in: [MessageSender.CLIENT, MessageSender.BOT] },
-              },
-            });
+        // unreadCount: resolved from precomputed batch map (zero queries per lead)
+        const unreadCount = conversation?.id
+          ? (unreadCountMap.get(conversation.id) ?? (conversation.lastViewedAt ? 0 : (allMessages.filter((m: any) => m.sender === "CLIENT" || m.sender === "BOT").length)))
+          : 0;
 
       return {
         id: lead.id,
@@ -323,10 +329,10 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
             if (lead.orderCount > 0) return "Returning customer — maintain relationship and explore upsell.";
             return "New conversation — monitor for engagement signals.";
           })(),
-          matchedProduct: await resolveMatchedProduct(conversation, companyId),
+          matchedProduct: resolveMatchedProductFromBatch(conversation),
           dropOffMinutes: null, // Drop-off prediction not yet implemented
         };
-    }));
+    });
 
     res.json({
       data: formatted,
@@ -1316,10 +1322,56 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
   try {
     const { companyId } = req.user!;
 
-    // 1. Find the lead with multi-tenant safety, include conversation + contact info
+    // Single query: fetch lead + its latest conversation (with messages) + orders
+    // in one round-trip instead of three sequential queries.
     const lead = await prisma.lead.findFirst({
       where: { id: req.params.id, companyId },
-      select: { id: true, name: true, contact: true, channel: true, conversations: { select: { id: true, status: true, claimedById: true, mode: true, resolvedBy: true }, take: 1, orderBy: { updatedAt: "desc" } } }
+      select: {
+        id: true,
+        name: true,
+        contact: true,
+        channel: true,
+        conversations: {
+          select: {
+            id: true,
+            status: true,
+            claimedById: true,
+            mode: true,
+            resolvedBy: true,
+            messages: {
+              where: { deletedAt: null },
+              orderBy: { createdAt: "asc" },
+              select: {
+                id: true,
+                content: true,
+                sender: true,
+                senderName: true,
+                platform: true,
+                messageType: true,
+                deliveryStatus: true,
+                deliveryError: true,
+                isRead: true,
+                createdAt: true,
+              },
+            },
+          },
+          take: 1,
+          orderBy: { updatedAt: "desc" },
+        },
+        orders: {
+          where: { isDeleted: false },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            status: true,
+            amount: true,
+            summary: true,
+            source: true,
+            createdAt: true,
+            metadata: true,
+          },
+        },
+      },
     });
 
     if (!lead) {
@@ -1331,39 +1383,6 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
       return res.status(404).json({ message: "No conversation found for this lead" });
     }
 
-    // 2. Fetch linked orders for this lead
-    const orders = await prisma.order.findMany({
-      where: { leadId: lead.id, isDeleted: false },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        status: true,
-        amount: true,
-        summary: true,
-        source: true,
-        createdAt: true,
-        metadata: true,
-      },
-    });
-
-    // 3. Fetch all active (non-deleted) messages for this conversation, oldest first
-    const messages = await (prisma.message as any).findMany({
-      where: { conversationId: conversation.id, deletedAt: null },
-      orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        content: true,
-        sender: true,
-        senderName: true,
-        platform: true,
-        messageType: true,
-        deliveryStatus: true,
-        deliveryError: true,
-        isRead: true,
-        createdAt: true,
-      },
-    });
-
     return res.json({
       leadId: lead.id,
       conversationId: conversation.id,
@@ -1373,8 +1392,8 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
       channel: lead.channel,
       customerName: lead.name,
       customerContact: lead.contact,
-      orders,
-      messages,
+      orders: lead.orders,
+      messages: conversation.messages,
     });
   } catch (error) {
     console.error("Fetch messages error:", error);

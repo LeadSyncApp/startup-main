@@ -221,6 +221,8 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     const queue_delay = Math.max(0, t_worker_pickup - t_enqueued);
     (job as any)._latencyMetrics = { t_worker_pickup, queue_delay };
 
+    console.log(`⏱️ [PIPELINE_TIMING] [START] [${traceId}] TOTAL_END_TO_END_PIPELINE at ${new Date(t_worker_pickup).toISOString()} (${t_worker_pickup} ms) | Queue delay: ${queue_delay} ms`);
+
   if (process.env.DEBUG_LATENCY === "true") {
     console.log(`⏱️ [LATENCY DEBUG] Stage 7 (pg-boss Queue Delay): ${queue_delay} ms`);
     console.log(`⏱️ [LATENCY DEBUG] Worker picked up job at: ${t_worker_pickup}`);
@@ -639,7 +641,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
             customerName: lead.name || undefined,
             customerSegment: lead.segment,
             customerLanguage: lead.preferredLanguage || undefined,
-            channel: (channel === Channel.TELEGRAM ? "TELEGRAM" : channel === Channel.WHATSAPP ? "WHATSAPP" : "INSTAGRAM") as any,
+            channel: frame.channel as any,
             contact: lead.contact,
             isCallback: frame.isCallback,
             callbackQueryId: frame.callbackQueryId,
@@ -703,7 +705,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
           leadId: lead.id,
           messageText: processingText,
           customerName: lead.name || undefined,
-          channel: (channel === Channel.TELEGRAM ? "TELEGRAM" : channel === Channel.WHATSAPP ? "WHATSAPP" : "INSTAGRAM") as ChannelType,
+          channel: frame.channel as ChannelType,
           contact: lead.contact,
         });
 
@@ -1061,45 +1063,24 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
             );
           }
 
-          // 🔄 PHASE 1 — Run in parallel: Lead pending order sync (Op 1) & App-level message dedup check (Op 2)
-          const [_, recentDuplicate] = await stepProfiler.time(
-            "Phase 1 — Pre-Lock Parallel (Ops 1 & 2)",
-            "ai.orchestrator.worker.ts:1003",
+          // 🔄 PHASE 1 — Fast pre-lock message dedup check
+          const recentDuplicate = await stepProfiler.time(
+            "App-level Message Dedup Check (findFirst)",
+            "ai.orchestrator.worker.ts:1086",
             "DB query",
-            `Phase 1 parallel execution of Op 1 & Op 2 for conversation ${conversation.id}`,
+            `findFirst Message in last 60s for conversation ${conversation.id}`,
             true,
             async () => {
-              return await Promise.all([
-                stepProfiler.time(
-                  "syncLeadPendingOrderState",
-                  "ai.orchestrator.worker.ts:1004",
-                  "DB query",
-                  `Sync lead pending order state for lead ${lead.id}`,
-                  true,
-                  async () => {
-                    await syncLeadPendingOrderState(companyId, lead.id, conversation.id).catch(() => {});
-                  }
-                ),
-                stepProfiler.time(
-                  "App-level Message Dedup Check (findFirst)",
-                  "ai.orchestrator.worker.ts:1020",
-                  "DB query",
-                  `findFirst Message in last 60s for conversation ${conversation.id}`,
-                  true,
-                  async () => {
-                    const sixtySecondsAgo = new Date(Date.now() - 60000);
-                    return await tenantPrisma.message.findFirst({
-                      where: {
-                        conversationId: conversation.id,
-                        content: text,
-                        sender: MessageSender.CLIENT,
-                        createdAt: { gte: sixtySecondsAgo }
-                      },
-                      select: { id: true }
-                    });
-                  }
-                )
-              ]);
+              const sixtySecondsAgo = new Date(Date.now() - 60000);
+              return await tenantPrisma.message.findFirst({
+                where: {
+                  conversationId: conversation.id,
+                  content: text,
+                  sender: MessageSender.CLIENT,
+                  createdAt: { gte: sixtySecondsAgo }
+                },
+                select: { id: true }
+              });
             }
           );
 
@@ -1125,7 +1106,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
                         conversationId: conversation.id,
                         content: replyText,
                         sender: MessageSender.BOT,
-                        platform: (frame.channel === "TELEGRAM" ? Channel.TELEGRAM : frame.channel === "WHATSAPP" ? Channel.WHATSAPP : Channel.INSTAGRAM) as Channel,
+                        platform: frame.channel as Channel,
                         deliveryStatus: dispatchStatus,
                         ...(dispatchError ? { deliveryError: dispatchError } : {})
                       }
@@ -1168,17 +1149,24 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
                   `update lead ${lead.id} and conversation ${conversation.id}`,
                   true,
                   async () => {
+                    const pendingOrderAmount = (activeDraftOrder && activeDraftOrder.totalAmount > 0)
+                      ? activeDraftOrder.totalAmount
+                      : null;
                     await tenantPrisma.$transaction([
                       tenantPrisma.lead.update({
                         where: { id: lead.id },
                         data: {
                           aiPriority: priority === "URGENT" ? "HIGH" : priority === "HIGH" ? "MEDIUM" : "LOW",
+                          pendingOrderAmount,
                           lastActiveAt: new Date()
                         }
                       }),
                       tenantPrisma.conversation.update({
                         where: { id: conversation.id },
-                        data: { updatedAt: new Date() }
+                        data: {
+                          updatedAt: new Date(),
+                          ...(pendingOrderAmount !== null ? { intent: "ORDERING" as any } : {})
+                        }
                       })
                     ]).catch((e) => console.error("[Orchestrator] Non-critical lead/conversation update transaction failed:", e.message));
                   }
@@ -1285,6 +1273,9 @@ Total Non-AI Pipeline Latency: ${totalNonAi} ms (excluding polling delay)
     }
 
     P("FULL PIPELINE EXIT");
+    const t_pipeline_end = Date.now();
+    const total_pipeline_ms = t_pipeline_end - t_worker_pickup;
+    console.log(`⏱️ [PIPELINE_TIMING] [END]   [${traceId}] TOTAL_END_TO_END_PIPELINE at ${new Date(t_pipeline_end).toISOString()} (${t_pipeline_end} ms) | Total Duration: ${total_pipeline_ms} ms`);
     return aiTurnResult;
   });
 });
