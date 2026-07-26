@@ -1,433 +1,240 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ChevronRight, ChevronLeft, Store, MessageSquare, ShoppingBag, Zap, Settings, Users,
-  Check, HelpCircle, ArrowUp
-} from 'lucide-react';
+import { HelpCircle, X, ChevronRight } from 'lucide-react';
 import { TabID } from '../layouts/MasterDashboardLayout';
+import { getGuideForPage } from './guideRegistry';
+import type { GuideSection } from '../../guides/types';
 
-interface TourStep {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  targetSelector: string;
-}
-
-const pageTourSteps: Record<TabID, TourStep[]> = {
-  shop: [
-    {
-      title: 'Daily Collection Stats',
-      description: 'See today\'s collections, pending payments, paid orders, and pending orders at a glance.',
-      icon: <Store className="h-5 w-5" />,
-      targetSelector: '[data-tour="daily-stats"]',
-    },
-    {
-      title: 'Quick Actions',
-      description: 'Reply to messages, view orders, check customers, or send offers — all with one tap.',
-      icon: <Zap className="h-5 w-5" />,
-      targetSelector: '[data-tour="quick-actions"]',
-    },
-    {
-      title: 'Today\'s Activity',
-      description: 'Real-time activity pulse showing your shop\'s performance throughout the day.',
-      icon: <ShoppingBag className="h-5 w-5" />,
-      targetSelector: '[data-tour="todays-activity"]',
-    },
-    {
-      title: 'Getting Started',
-      description: 'Start your digital journey — import data or log your first customer.',
-      icon: <Zap className="h-5 w-5" />,
-      targetSelector: '[data-tour="getting-started"]',
-    },
-  ],
-  messages: [
-    {
-      title: 'Customer Conversations',
-      description: 'When customers message you on WhatsApp or Instagram, their chats appear here. Reply, send invoices, and take orders in one screen.',
-      icon: <MessageSquare className="h-5 w-5" />,
-      targetSelector: '[data-tour="messages-panel"]',
-    },
-  ],
-  inbox: [],
-  customers: [
-    {
-      title: 'Customer List',
-      description: 'View all your customers, their contact info, order history, and preferences in one place.',
-      icon: <Users className="h-5 w-5" />,
-      targetSelector: '[data-tour="customers-list"]',
-    },
-  ],
-  broadcast: [
-    {
-      title: 'Broadcast Engine',
-      description: 'Send special offers, new arrivals, or festival greetings to all your customers at once.',
-      icon: <Zap className="h-5 w-5" />,
-      targetSelector: '[data-tour="broadcast-engine"]',
-    },
-  ],
-  orders: [
-    {
-      title: 'Order Fulfillment',
-      description: 'See all orders, mark them confirmed or shipped, and customers get notified automatically.',
-      icon: <ShoppingBag className="h-5 w-5" />,
-      targetSelector: '[data-tour="orders-board"]',
-    },
-  ],
-  automation: [
-    {
-      title: 'Automation Builder',
-      description: 'Build automated checkout flows and chatbot responses for your customers.',
-      icon: <Zap className="h-5 w-5" />,
-      targetSelector: '[data-tour="automation-builder"]',
-    },
-  ],
-  inventory: [],
-  settings: [
-    {
-      title: 'Shop Settings',
-      description: 'Configure your profile, add staff, connect WhatsApp and Instagram. Set everything up the way you want.',
-      icon: <Settings className="h-5 w-5" />,
-      targetSelector: '[data-tour="settings-page"]',
-    },
-  ],
-};
-
-const DISMISSED_KEY = 'leadsync_tour_dismissed';
+const HIGHLIGHT_PULSE_MS = 3000;
 
 interface GuidedTourProps {
   activeTab: TabID;
 }
 
 export const GuidedTour: React.FC<GuidedTourProps> = ({ activeTab }) => {
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [tourActive, setTourActive] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
-  const [hasTarget, setHasTarget] = useState(false);
-  const scrollAttemptRef = useRef(0);
-  const [, setRenderTick] = useState(0);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const steps = pageTourSteps[activeTab] || [];
-  const step = steps[currentStep];
-  const isLastStep = currentStep === steps.length - 1;
-  const stepKey = `${activeTab}-${currentStep}`;
+  const guide = getGuideForPage(activeTab);
+  const sections: GuideSection[] = guide?.sections ?? [];
 
-  // Clean up when tour deactivates
+  // Close drawer and clear highlight when tab changes
   useEffect(() => {
-    if (!tourActive) {
-      setTargetRect(null);
-      setHasTarget(false);
-      setCurrentStep(0);
+    setDrawerOpen(false);
+    setActiveSectionId(null);
+    setHighlightRect(null);
+    if (highlightTimerRef.current) {
+      clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = null;
     }
-  }, [tourActive]);
+  }, [activeTab]);
 
-  // Search for target element when step changes
+  // Cleanup timer on unmount
   useEffect(() => {
-    if (!tourActive || !step) return;
-
-    const findTarget = () => {
-      setRenderTick(t => t + 1);
-      const el = document.querySelector(step.targetSelector);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setTimeout(() => {
-          const rect = el.getBoundingClientRect();
-          setTargetRect(rect);
-          setHasTarget(true);
-        }, 400);
-        scrollAttemptRef.current = 0;
-        return true;
-      }
-      return false;
-    };
-
-    setHasTarget(false);
-    setTargetRect(null);
-
-    const timeout = setTimeout(() => {
-      if (!findTarget()) {
-        const interval = setInterval(() => {
-          scrollAttemptRef.current++;
-          if (findTarget() || scrollAttemptRef.current > 10) {
-            clearInterval(interval);
-          }
-        }, 250);
-      }
-    }, 300);
-
     return () => {
-      clearTimeout(timeout);
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
     };
-  }, [currentStep, tourActive, step, stepKey]);
-
-  // Handle resize for spotlight
-  useEffect(() => {
-    if (!tourActive || !hasTarget || !step) return;
-    const handleResize = () => {
-      const el = document.querySelector(step.targetSelector);
-      if (el) {
-        setTargetRect(el.getBoundingClientRect());
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [tourActive, hasTarget, step, stepKey]);
-
-  const handleGuideClick = useCallback(() => {
-    if (tourActive) {
-      // If tour is active, dismiss it
-      setTourActive(false);
-      return;
-    }
-    // Show confirmation dialog
-    setShowConfirmation(true);
-  }, [tourActive]);
-
-  const handleShow = useCallback(() => {
-    setShowConfirmation(false);
-    localStorage.removeItem(DISMISSED_KEY);
-    setCurrentStep(0);
-    setTourActive(true);
   }, []);
 
-  const handleDismissPermanently = useCallback(() => {
-    setShowConfirmation(false);
-    localStorage.setItem(DISMISSED_KEY, 'true');
+  const handleSectionClick = useCallback((section: GuideSection) => {
+    const selector = `[data-tour="${section.id}"]`;
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Clear previous highlight immediately
+    if (highlightTimerRef.current) {
+      clearTimeout(highlightTimerRef.current);
+    }
+    setHighlightRect(null);
+    setActiveSectionId(section.id);
+
+    // Wait for scroll to finish, then measure and show highlight
+    setTimeout(() => {
+      const rect = el.getBoundingClientRect();
+      setHighlightRect(rect);
+    }, 400);
+
+    // Auto-dismiss highlight after delay
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightRect(null);
+      setActiveSectionId(null);
+      highlightTimerRef.current = null;
+    }, HIGHLIGHT_PULSE_MS);
   }, []);
 
-  const handleNext = useCallback(() => {
-    if (isLastStep) {
-      setTourActive(false);
-    } else {
-      setHasTarget(false);
-      setTargetRect(null);
-      setCurrentStep(prev => prev + 1);
+  const handleHelpClick = useCallback(() => {
+    setDrawerOpen(prev => !prev);
+    if (drawerOpen) {
+      setActiveSectionId(null);
+      setHighlightRect(null);
     }
-  }, [isLastStep]);
+  }, [drawerOpen]);
 
-  const handlePrev = useCallback(() => {
-    if (currentStep === 0) return;
-    setHasTarget(false);
-    setTargetRect(null);
-    setCurrentStep(prev => Math.max(0, prev - 1));
-  }, [currentStep]);
-
-  const handleSkip = useCallback(() => {
-    setTourActive(false);
+  const handleCloseDrawer = useCallback(() => {
+    setDrawerOpen(false);
+    setActiveSectionId(null);
+    setHighlightRect(null);
   }, []);
-
-  const padding = 16;
-
-  // Spotlight clip-path (only if target found)
-  const overlayStyle: React.CSSProperties = targetRect ? {
-    clipPath: `polygon(
-      0% 0%,
-      0% 100%,
-      100% 100%,
-      100% 0%,
-      0% 0%,
-      ${targetRect.left - padding}px ${targetRect.top - padding}px,
-      ${targetRect.left - padding}px ${targetRect.bottom + padding}px,
-      ${targetRect.right + padding}px ${targetRect.bottom + padding}px,
-      ${targetRect.right + padding}px ${targetRect.top - padding}px,
-      ${targetRect.left - padding}px ${targetRect.top - padding}px
-    )`,
-  } : {};
-
-  // Determine tooltip position relative to target
-  const getTooltipPosition = () => {
-    if (!targetRect) return { bottom: '2rem', left: '50%', transform: 'translateX(-50%)' };
-
-    const viewportHeight = window.innerHeight;
-    const centerY = viewportHeight / 2;
-    const isInTopHalf = targetRect.top + targetRect.height / 2 < centerY;
-
-    if (isInTopHalf) {
-      // Show below the target
-      return {
-        top: targetRect.bottom + padding + 12,
-        left: Math.max(16, Math.min(targetRect.left + targetRect.width / 2 - 240, window.innerWidth - 496)),
-      };
-    } else {
-      // Show above the target
-      return {
-        bottom: viewportHeight - targetRect.top + padding + 12,
-        left: Math.max(16, Math.min(targetRect.left + targetRect.width / 2 - 240, window.innerWidth - 496)),
-      };
-    }
-  };
-
-  const tooltipPos = getTooltipPosition();
 
   return (
     <>
-      {/* Floating Guide Button - always visible at top-right */}
+      {/* Help Button — fixed top-right */}
       <button
-        onClick={handleGuideClick}
-        className="fixed top-20 right-4 md:top-20 md:right-4 z-50 h-10 w-10 rounded-full bg-brand-navy text-white shadow-lg hover:shadow-xl hover:scale-110 transition-all duration-200 flex items-center justify-center cursor-pointer"
+        onClick={handleHelpClick}
+        className="fixed top-20 right-4 md:top-20 md:right-4 z-50 h-10 w-10 rounded-full bg-[var(--brand-navy,#D36B46)] text-white shadow-lg hover:shadow-xl hover:scale-110 transition-all duration-200 flex items-center justify-center cursor-pointer"
         title="Page guide"
       >
-        <HelpCircle className="h-5 w-5" />
+        {drawerOpen ? (
+          <X className="h-5 w-5" />
+        ) : (
+          <HelpCircle className="h-5 w-5" />
+        )}
       </button>
 
-      {/* Confirmation Modal */}
+      {/* Highlight ring overlay */}
       <AnimatePresence>
-        {showConfirmation && (
+        {highlightRect && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-            onClick={() => setShowConfirmation(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ duration: 0.2 }}
-              className="bg-app-surface rounded-2xl shadow-2xl border border-app-border p-6 w-[90vw] max-w-sm mx-4"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="h-10 w-10 rounded-xl bg-brand-saffron-soft text-brand-saffron flex items-center justify-center">
-                  <HelpCircle className="h-5 w-5" />
-                </div>
-                <h3 className="font-bold text-app-text text-lg">Page Guide</h3>
-              </div>
-              <p className="text-app-text-muted text-sm leading-relaxed mb-6">
-                Do you want to know about this page? We'll walk you through each section with a quick guided tour.
-              </p>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleDismissPermanently}
-                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-app-text-muted hover:bg-app-bg-soft hover:text-app-text transition-all cursor-pointer"
-                >
-                  Dismiss
-                </button>
-                <button
-                  onClick={handleShow}
-                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium bg-brand-navy text-white hover:bg-brand-navy/90 transition-all cursor-pointer"
-                >
-                  Show
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+            transition={{ duration: 0.2 }}
+            className="fixed z-[45] pointer-events-none"
+            style={{
+              top: highlightRect.top - 6,
+              left: highlightRect.left - 6,
+              width: highlightRect.width + 12,
+              height: highlightRect.height + 12,
+              boxShadow: '0 0 0 2px var(--brand-saffron,#D4A843), 0 0 0 6px rgba(212,168,67,0.25)',
+              borderRadius: '0.75rem',
+            }}
+          />
         )}
       </AnimatePresence>
 
-      {/* Tour Mode */}
+      {/* Guide Drawer */}
       <AnimatePresence>
-        {tourActive && step && (
+        {drawerOpen && (
           <>
-            {/* Semi-transparent overlay */}
+            {/* Backdrop — mobile only */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-app-backdrop transition-all duration-300"
-              style={targetRect ? overlayStyle : {}}
-              onClick={handleSkip}
+              className="fixed inset-0 z-[46] bg-black/30 md:hidden"
+              onClick={handleCloseDrawer}
             />
 
-            {/* Spotlight ring (only if target found) */}
-            {targetRect && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="fixed z-40 border-2 border-brand-saffron rounded-lg shadow-[0_0_0_4px_rgba(212,168,67,0.3)] pointer-events-none"
-                style={{
-                  top: targetRect.top - padding,
-                  left: targetRect.left - padding,
-                  width: targetRect.width + padding * 2,
-                  height: targetRect.height + padding * 2,
-                }}
-              />
-            )}
-
-            {/* Dialogue tooltip positioned near the target */}
+            {/* Drawer panel */}
             <motion.div
-              key={stepKey}
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="fixed z-50 w-[90vw] max-w-sm"
-              style={{
-                ...tooltipPos,
-                position: 'fixed',
-              }}
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed z-[47] bg-[var(--app-surface)] border-l border-[var(--app-border)] shadow-2xl flex flex-col
+                md:top-0 md:right-0 md:bottom-0 md:w-[400px]
+                max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:h-[70vh] max-md:rounded-t-2xl max-md:border-l-0 max-md:border-t"
             >
-              {/* Arrow pointing toward target */}
-              {hasTarget && (
-                <div className={`flex ${targetRect && targetRect.top + targetRect.height / 2 < window.innerHeight / 2 ? 'justify-center mb-1' : 'justify-center mt-1'}`}>
-                  <div className="animate-bounce">
-                    <ArrowUp className={`h-5 w-5 text-brand-saffron ${targetRect && targetRect.top + targetRect.height / 2 < window.innerHeight / 2 ? '' : 'rotate-180'}`} />
+              {/* Drawer header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--app-border)] shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)] flex items-center justify-center">
+                    <HelpCircle className="h-5 w-5" />
                   </div>
-                </div>
-              )}
-
-              <div className="bg-app-surface rounded-2xl shadow-2xl border border-app-border p-5">
-                {/* Progress dots */}
-                <div className="flex gap-1 mb-4">
-                  {steps.map((_, i) => (
-                    <div
-                      key={i}
-                      className={`h-1 flex-1 rounded-full transition-all ${
-                        i <= currentStep ? 'bg-brand-navy' : 'bg-app-border'
-                      }`}
-                    />
-                  ))}
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="h-10 w-10 rounded-xl bg-brand-saffron-soft text-brand-saffron flex items-center justify-center shrink-0">
-                    {step.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-app-text text-sm">{step.title}</h3>
-                    <p className="text-sm text-app-text-muted mt-1 leading-relaxed">
-                      {step.description}
+                  <div>
+                    <h2 className="font-bold text-[var(--app-text)] text-sm">
+                      {guide?.pageTitle ?? 'Page Guide'}
+                    </h2>
+                    <p className="text-xs text-[var(--app-text-muted)]">
+                      {sections.length} section{sections.length !== 1 ? 's' : ''} to explore
                     </p>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between mt-4 pt-3 border-t border-app-border">
-                  <button
-                    onClick={handleSkip}
-                    className="text-sm text-app-text-muted hover:text-app-text font-medium cursor-pointer"
-                  >
-                    Skip tour
-                  </button>
-                  <div className="flex items-center gap-2">
-                    {currentStep > 0 && (
-                      <button
-                        onClick={handlePrev}
-                        className="p-2 rounded-lg hover:bg-app-bg-soft text-app-text-muted cursor-pointer"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={handleNext}
-                      className="btn-primary text-sm flex items-center gap-1.5 cursor-pointer"
-                    >
-                      {isLastStep ? (
-                        <>
-                          Done
-                          <Check className="h-4 w-4" />
-                        </>
-                      ) : (
-                        <>
-                          Next
-                          <ChevronRight className="h-4 w-4" />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
+                <button
+                  onClick={handleCloseDrawer}
+                  className="p-2 rounded-lg hover:bg-[var(--app-bg-soft)] text-[var(--app-text-muted)] cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
+
+              {/* Sections list */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {sections.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <HelpCircle className="h-10 w-10 text-[var(--app-text-muted)] opacity-30 mb-3" />
+                    <p className="text-sm font-medium text-[var(--app-text-muted)]">
+                      No guide available yet
+                    </p>
+                    <p className="text-xs text-[var(--app-text-muted)] mt-1 opacity-60">
+                      Guide content for this page is coming soon.
+                    </p>
+                  </div>
+                ) : (
+                  sections.map((section) => {
+                    const isActive = section.id === activeSectionId;
+                    const Icon = section.icon;
+                    return (
+                      <button
+                        key={section.id}
+                        onClick={() => handleSectionClick(section)}
+                        className={`w-full text-left rounded-xl p-4 transition-all duration-200 cursor-pointer border
+                          ${isActive
+                            ? 'bg-[var(--brand-saffron-soft)] border-[var(--brand-saffron)] shadow-md'
+                            : 'bg-[var(--app-bg)] border-[var(--app-border)] hover:border-[var(--brand-saffron)] hover:shadow-sm'
+                          }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 transition-colors
+                            ${isActive
+                              ? 'bg-[var(--brand-saffron)] text-white'
+                              : 'bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)]'
+                            }`}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className={`font-bold text-sm ${isActive ? 'text-[var(--brand-saffron)]' : 'text-[var(--app-text)]'}`}>
+                                {section.title}
+                              </h3>
+                              <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${isActive ? 'rotate-90 text-[var(--brand-saffron)]' : 'text-[var(--app-text-muted)]'}`} />
+                            </div>
+                            {isActive && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                transition={{ duration: 0.2 }}
+                              >
+                                <p className="text-xs text-[var(--app-text-muted)] mt-2 leading-relaxed">
+                                  {section.description}
+                                </p>
+                                {section.whyItMatters && (
+                                  <p className="text-xs text-[var(--brand-saffron)] mt-2 font-medium leading-relaxed">
+                                    Why it matters: {section.whyItMatters}
+                                  </p>
+                                )}
+                              </motion.div>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Drawer footer hint */}
+              {sections.length > 0 && (
+                <div className="px-5 py-3 border-t border-[var(--app-border)] shrink-0">
+                  <p className="text-[11px] text-[var(--app-text-muted)] text-center opacity-60">
+                    Tap any section to scroll to it on the page
+                  </p>
+                </div>
+              )}
             </motion.div>
           </>
         )}
