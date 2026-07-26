@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Website Webhook Integration Tester | LeadSync</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0B0F17;
+      --card-bg: #141B2D;
+      --card-border: #232D45;
+      --input-bg: #0F1626;
+      --input-border: #2B3754;
+      --text-main: #F1F5F9;
+      --text-muted: #8E9BAE;
+      --brand-gold: #D4A843;
+      --brand-gold-glow: rgba(212, 168, 67, 0.15);
+      --accent-green: #22C55E;
+      --accent-red: #EF4444;
+      --accent-blue: #3B82F6;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem 1rem;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(212, 168, 67, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(59, 130, 246, 0.06) 0%, transparent 40%);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 950px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 768px) {
+      .container {
+        grid-template-columns: 1.1fr 0.9fr;
+      }
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 1.25rem;
+      padding: 1.75rem;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 0.5rem;
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-gold {
+      background-color: rgba(212, 168, 67, 0.15);
+      color: var(--brand-gold);
+      border: 1px solid rgba(212, 168, 67, 0.3);
+    }
+
+    .badge-success {
+      background-color: rgba(34, 197, 94, 0.15);
+      color: var(--accent-green);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .badge-error {
+      background-color: rgba(239, 68, 68, 0.15);
+      color: var(--accent-red);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.1rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+
+    input, textarea {
+      width: 100%;
+      background-color: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 0.75rem;
+      padding: 0.75rem 1rem;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus, textarea:focus {
+      border-color: var(--brand-gold);
+      box-shadow: 0 0 0 3px var(--brand-gold-glow);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+    }
+
+    .port-btn {
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.3rem 0.6rem;
+      border-radius: 0.4rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .port-btn:hover, .port-btn.active {
+      color: var(--brand-gold);
+      border-color: var(--brand-gold);
+      background-color: rgba(212, 168, 67, 0.1);
+    }
+
+    .btn {
+      width: 100%;
+      background: linear-gradient(135deg, #D4A843 0%, #B88B2A 100%);
+      color: #000;
+      font-weight: 800;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.9rem 1.5rem;
+      border: none;
+      border-radius: 0.75rem;
+      cursor: pointer;
+      transition: transform 0.15s, filter 0.2s, box-shadow 0.2s;
+      box-shadow: 0 8px 20px -5px rgba(212, 168, 67, 0.4);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .preview-box {
+      background-color: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+
+    .preview-title {
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: #A5F3FC;
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow-x: auto;
+      line-height: 1.5;
+    }
+
+    .status-banner {
+      padding: 0.75rem 1rem;
+      border-radius: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 700;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(0,0,0,0.3);
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .alert-box {
+      background-color: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: 0.75rem;
+      padding: 0.85rem 1rem;
+      margin-bottom: 1.2rem;
+      font-size: 0.8rem;
+      color: #FCA5A5;
+      line-height: 1.5;
+    }
+
+    .alert-box code {
+      font-family: 'JetBrains Mono', monospace;
+      background-color: rgba(0, 0, 0, 0.4);
+      padding: 0.15rem 0.4rem;
+      border-radius: 0.3rem;
+      color: #FDE047;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- LEFT: FORM CARD -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <span class="badge badge-gold">Website Integration Test</span>
+          <h1>Submit Test Lead</h1>
+          <p class="subtitle">Om Sai Silk Boutique Webhook Gateway</p>
+        </div>
+      </div>
+
+      <!-- FILE:// ORIGIN WARNING BANNER (shown automatically if opened via file:// protocol) -->
+      <div id="fileProtocolWarning" class="alert-box" style="display: none;">
+        <strong>⚠️ File Protocol Detected (<code>file://</code>)</strong><br>
+        Modern browsers block <code>fetch()</code> from <code>file://</code> to <code>http://localhost</code> due to CORS / Private Network security restrictions.<br><br>
+        <strong>Quick Fix:</strong> Run a local HTTP server in terminal:<br>
+        <code>npx serve d:\startup-backup\startup-new\startup</code><br>
+        Then open: <a href="http://localhost:3000/test-website-webhook.html" style="color: #6EE7B7; text-decoration: underline;" target="_blank">http://localhost:3000/test-website-webhook.html</a>
+      </div>
+
+      <form id="webhookForm">
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+            <label for="webhookUrl" style="margin-bottom: 0;">Webhook Endpoint URL</label>
+            <div style="display: flex; gap: 0.3rem;">
+              <button type="button" class="port-btn active" id="port4000Btn" onclick="setTargetPort(4000)">Port 4000 (Backend Direct)</button>
+              <button type="button" class="port-btn" id="port5173Btn" onclick="setTargetPort(5173)">Port 5173 (Vite Proxy)</button>
+            </div>
+          </div>
+          <input type="url" id="webhookUrl" class="mono" value="http://localhost:4000/api/webhook/3102a85e-1798-45bb-b6c5-d94ea436f775" required />
+        </div>
+
+        <div class="form-group">
+          <label for="webhookSecret">Webhook Secret (HMAC Key)</label>
+          <input type="text" id="webhookSecret" class="mono" value="9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d" required />
+        </div>
+
+        <div class="form-group">
+          <label for="name">Customer Name</label>
+          <input type="text" id="name" value="Ananya Rao" placeholder="e.g. Ananya Rao" required />
+        </div>
+
+        <div class="form-group">
+          <label for="phone">Phone Number</label>
+          <input type="tel" id="phone" value="9876543210" placeholder="e.g. 9876543210" required />
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" value="ananya.rao@example.com" placeholder="ananya@example.com" />
+        </div>
+
+        <div class="form-group">
+          <label for="message">Message / Inquiry / Order Item</label>
+          <textarea id="message" placeholder="Describe inquiry or order items...">I would like to purchase a Banarasi Silk Saree in Emerald Green with gold zari work.</textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="address">Shipping / Contact Address</label>
+          <input type="text" id="address" value="88 Commercial Street, Shivajinagar, Bengaluru, KA 560001" />
+        </div>
+
+        <button type="submit" id="submitBtn" class="btn">
+          <span id="btnText">Send Webhook Request</span>
+          <div id="btnSpinner" class="spinner" style="display: none;"></div>
+        </button>
+      </form>
+    </div>
+
+    <!-- RIGHT: LIVE INSPECTOR & RESPONSE CARD -->
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+      
+      <!-- CALCULATED SIGNATURE PREVIEW -->
+      <div class="card">
+        <div class="card-header" style="margin-bottom: 0.75rem; padding-bottom: 0.75rem;">
+          <div>
+            <span class="badge badge-gold">Real-time Auth</span>
+            <h2 style="font-size: 1.05rem; font-weight: 800; margin-top: 0.2rem;">HMAC-SHA256 Header</h2>
+          </div>
+        </div>
+        <div class="preview-box" style="margin-top: 0;">
+          <div class="preview-title">X-Webhook-Signature</div>
+          <pre id="computedSignature" style="color: #FDE047;">sha256=calculating...</pre>
+        </div>
+        <div class="preview-box">
+          <div class="preview-title">Raw JSON Payload</div>
+          <pre id="payloadPreview">{ ... }</pre>
+        </div>
+      </div>
+
+      <!-- RESPONSE CARD -->
+      <div class="card" id="responseCard">
+        <div class="card-header" style="margin-bottom: 0.75rem; padding-bottom: 0.75rem;">
+          <div>
+            <span id="statusBadge" class="badge" style="background-color: rgba(255,255,255,0.08); color: var(--text-muted);">Awaiting Test</span>
+            <h2 style="font-size: 1.05rem; font-weight: 800; margin-top: 0.2rem;">Server Response</h2>
+          </div>
+        </div>
+
+        <div id="responseStatusBanner" class="status-banner" style="background-color: var(--input-bg); color: var(--text-muted);">
+          <span id="statusText">No request sent yet</span>
+          <span id="responseTime" class="mono" style="font-size: 0.75rem;">-- ms</span>
+        </div>
+
+        <div class="preview-box" style="margin-top: 0;">
+          <div class="preview-title">Response JSON Body</div>
+          <pre id="responseBody">// Press "Send Webhook Request" to execute</pre>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    // Show warning if opened via file:// protocol
+    if (window.location.protocol === 'file:') {
+      document.getElementById('fileProtocolWarning').style.display = 'block';
+    }
+
+    // Elements
+    const form = document.getElementById('webhookForm');
+    const urlInput = document.getElementById('webhookUrl');
+    const secretInput = document.getElementById('webhookSecret');
+    const nameInput = document.getElementById('name');
+    const phoneInput = document.getElementById('phone');
+    const emailInput = document.getElementById('email');
+    const messageInput = document.getElementById('message');
+    const addressInput = document.getElementById('address');
+    
+    const computedSignatureEl = document.getElementById('computedSignature');
+    const payloadPreviewEl = document.getElementById('payloadPreview');
+    const submitBtn = document.getElementById('submitBtn');
+    const btnText = document.getElementById('btnText');
+    const btnSpinner = document.getElementById('btnSpinner');
+
+    const statusBadge = document.getElementById('statusBadge');
+    const responseStatusBanner = document.getElementById('responseStatusBanner');
+    const statusText = document.getElementById('statusText');
+    const responseTimeEl = document.getElementById('responseTime');
+    const responseBodyEl = document.getElementById('responseBody');
+
+    const port4000Btn = document.getElementById('port4000Btn');
+    const port5173Btn = document.getElementById('port5173Btn');
+
+    function setTargetPort(port) {
+      const companyId = '3102a85e-1798-45bb-b6c5-d94ea436f775';
+      urlInput.value = `http://localhost:${port}/api/webhook/${companyId}`;
+      if (port === 4000) {
+        port4000Btn.classList.add('active');
+        port5173Btn.classList.remove('active');
+      } else {
+        port5173Btn.classList.add('active');
+        port4000Btn.classList.remove('active');
+      }
+      updatePreviews();
+    }
+
+    // Build payload object
+    function getPayloadObject() {
+      return {
+        name: nameInput.value.trim(),
+        phone: phoneInput.value.trim(),
+        email: emailInput.value.trim(),
+        message: messageInput.value.trim(),
+        shipping_address: addressInput.value.trim(),
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    // Compute HMAC-SHA256 signature using browser Web Crypto API
+    async function computeSignatureHex(secret, rawBody) {
+      if (!secret) return 'sha256=missing_secret';
+      try {
+        const encoder = new TextEncoder();
+        const keyData = encoder.encode(secret);
+        const bodyData = encoder.encode(rawBody);
+
+        const cryptoKey = await crypto.subtle.importKey(
+          'raw',
+          keyData,
+          { name: 'HMAC', hash: 'SHA-256' },
+          false,
+          ['sign']
+        );
+
+        const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, bodyData);
+        const hex = Array.from(new Uint8Array(signatureBuffer))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+
+        return `sha256=${hex}`;
+      } catch (err) {
+        console.error('Signature computation failed:', err);
+        return `sha256=error_${err.message}`;
+      }
+    }
+
+    // Update live previews
+    async function updatePreviews() {
+      const payloadObj = getPayloadObject();
+      const rawBody = JSON.stringify(payloadObj, null, 2);
+      payloadPreviewEl.textContent = rawBody;
+
+      const signature = await computeSignatureHex(secretInput.value.trim(), JSON.stringify(payloadObj));
+      computedSignatureEl.textContent = signature;
+      return { payloadObj, rawBody, signature };
+    }
+
+    // Event listeners for inputs to update signature live
+    [nameInput, phoneInput, emailInput, messageInput, addressInput, secretInput].forEach(el => {
+      el.addEventListener('input', updatePreviews);
+    });
+
+    // Initial calculation
+    updatePreviews();
+
+    // Form submit handler
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      submitBtn.disabled = true;
+      btnText.textContent = 'Sending POST...';
+      btnSpinner.style.display = 'block';
+
+      const targetUrl = urlInput.value.trim();
+      const secret = secretInput.value.trim();
+      const payloadObj = getPayloadObject();
+      const rawBody = JSON.stringify(payloadObj);
+      const signature = await computeSignatureHex(secret, rawBody);
+
+      const startTime = performance.now();
+
+      try {
+        const response = await fetch(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Webhook-Signature': signature
+          },
+          body: rawBody
+        });
+
+        const duration = Math.round(performance.now() - startTime);
+        responseTimeEl.textContent = `${duration} ms`;
+
+        const status = response.status;
+        const statusTextStr = response.statusText || (status === 202 ? 'Accepted' : status === 200 ? 'OK' : 'Response Received');
+
+        // Update status badge & banner
+        if (response.ok) {
+          statusBadge.className = 'badge badge-success';
+          statusBadge.textContent = `${status} ${statusTextStr}`;
+          responseStatusBanner.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
+          responseStatusBanner.style.color = 'var(--accent-green)';
+          statusText.textContent = `SUCCESS: Webhook ${status} ${statusTextStr}`;
+        } else {
+          statusBadge.className = 'badge badge-error';
+          statusBadge.textContent = `${status} Error`;
+          responseStatusBanner.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+          responseStatusBanner.style.color = 'var(--accent-red)';
+          statusText.textContent = `FAILED: Webhook HTTP ${status}`;
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        let responseData;
+        if (contentType.includes('application/json')) {
+          responseData = await response.json();
+          responseBodyEl.textContent = JSON.stringify(responseData, null, 2);
+        } else {
+          responseData = await response.text();
+          responseBodyEl.textContent = responseData || '(empty response body)';
+        }
+
+      } catch (err) {
+        const duration = Math.round(performance.now() - startTime);
+        responseTimeEl.textContent = `${duration} ms`;
+        statusBadge.className = 'badge badge-error';
+        statusBadge.textContent = 'Network / CORS Error';
+        responseStatusBanner.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+        responseStatusBanner.style.color = 'var(--accent-red)';
+        
+        let helpTip = '';
+        if (window.location.protocol === 'file:') {
+          helpTip = '\n\n➡️ REASON: You opened this file via file:// protocol.\nModern browsers block fetch() from file:// to localhost.\nRun `npx serve d:\\startup-backup\\startup-new\\startup` in terminal and open http://localhost:3000/test-website-webhook.html';
+        } else {
+          helpTip = '\n\n➡️ Tip: Make sure LeadSync backend is running on port 4000.';
+        }
+
+        statusText.textContent = `CONNECTION FAILED: ${err.message}`;
+        responseBodyEl.textContent = `Error details: ${err.message}${helpTip}`;
+      } finally {
+        submitBtn.disabled = false;
+        btnText.textContent = 'Send Webhook Request';
+        btnSpinner.style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>

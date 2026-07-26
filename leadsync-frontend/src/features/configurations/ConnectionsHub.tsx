@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Send, Globe, MessageCircle, MessageSquare, X, Check,
-  Loader2, Trash2, Copy, FileCode, Shield, HelpCircle
+  Loader2, Trash2, FileCode, Shield, HelpCircle
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "../auth-tenancy/AuthContext";
@@ -11,6 +11,8 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { WebsiteIntegration } from "./WebsiteIntegration";
+import { WebsiteWidgetConfig } from "./WebsiteWidgetConfig";
 
 export function ConnectionsHub() {
   const { user, company, updateCompany } = useAuth();
@@ -24,10 +26,8 @@ export function ConnectionsHub() {
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   const [isDisconnectConfirmOpen, setIsDisconnectConfirmOpen] = useState(false);
   const [telegramToken, setTelegramToken] = useState("");
-  const [isWidgetModalOpen, setIsWidgetModalOpen] = useState(false);
   const [isMetaStubModalOpen, setIsMetaStubModalOpen] = useState(false);
   const [activeMetaPlatform, setActiveMetaPlatform] = useState<string>("");
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -113,14 +113,6 @@ export function ConnectionsHub() {
   const openMetaStubDialog = (platform: string) => {
     setActiveMetaPlatform(platform);
     setIsMetaStubModalOpen(true);
-  };
-
-  const handleCopySnippet = () => {
-    const snippetText = `<script src="https://widget.leadsync.com/loader.js" data-tenant-id="${company?.id || 'your-workspace-tenant-id'}"></script>`;
-    navigator.clipboard.writeText(snippetText);
-    setCopied(true);
-    toast.success("Widget snippet copied successfully!", { icon: "📋" });
-    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -215,24 +207,24 @@ export function ConnectionsHub() {
           </div>
         </Card>
 
-        {/* Website Widget Card */}
+        {/* Website Chat Widget Card (Zero-Code Script) */}
         <Card className="p-8 flex flex-col justify-between">
           <div className="space-y-5">
             <div className="flex items-center justify-between">
               <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
                    style={{ backgroundColor: 'var(--brand-saffron-soft)', color: 'var(--brand-saffron)', border: '1px solid rgba(212, 168, 67, 0.2)' }}>
-                <Globe className="h-7 w-7 stroke-[2.2]" />
+                <MessageSquare className="h-7 w-7 stroke-[2.2]" />
               </div>
               <Badge variant="success" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
-                ⚡ Available
+                ⚡ Active Widget
               </Badge>
             </div>
             <div className="space-y-2">
               <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
-                Website Widget
+                Website Chat Widget
               </h3>
               <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Deploy a live-chat snippet on Shopify, Webflow, or custom sites. Direct visitors straight into your shared inbox.
+                Single embed script tag to render a live floating chat bubble on any site (Shopify, WordPress, HTML).
               </p>
             </div>
           </div>
@@ -240,15 +232,59 @@ export function ConnectionsHub() {
                style={{ borderTop: '1px solid var(--app-border)' }}>
             <span className="text-[10px] font-black uppercase tracking-wider"
                   style={{ color: 'var(--app-text-muted)' }}>
-              SME Snippet Script
+              Zero-Code Embed Tag
             </span>
             <Button
-              variant="secondary"
-              onClick={() => setIsWidgetModalOpen(true)}
+              variant="primary"
+              onClick={() => {
+                const el = document.getElementById("website-widget-section");
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              }}
               className="px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl"
             >
               <FileCode className="h-4 w-4 mr-1.5" />
-              Get Snippet
+              Get Script Tag
+            </Button>
+          </div>
+        </Card>
+
+        {/* Website Store Webhooks Card */}
+        <Card className="p-8 flex flex-col justify-between">
+          <div className="space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
+                   style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                <Globe className="h-7 w-7 stroke-[2.2]" />
+              </div>
+              <Badge variant="success" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
+                ⚡ Store Webhooks
+              </Badge>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
+                Store Order Webhooks
+              </h3>
+              <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                Receive order updates from Shopify, WooCommerce, or custom sites via signed HMAC webhooks.
+              </p>
+            </div>
+          </div>
+          <div className="mt-8 pt-6 flex items-center justify-between gap-3"
+               style={{ borderTop: '1px solid var(--app-border)' }}>
+            <span className="text-[10px] font-black uppercase tracking-wider"
+                  style={{ color: 'var(--app-text-muted)' }}>
+              HMAC API & Logs
+            </span>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const el = document.getElementById("website-integration-section");
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl"
+            >
+              <FileCode className="h-4 w-4 mr-1.5" />
+              Configure
             </Button>
           </div>
         </Card>
@@ -373,6 +409,16 @@ export function ConnectionsHub() {
         </Card>
       </div>
 
+      {/* Website Chat Widget Section (Embed Script Tag & Live Simulator) */}
+      <div id="website-widget-section" className="pt-6">
+        <WebsiteWidgetConfig />
+      </div>
+
+      {/* Website Integration Section (Full Webhook Setup & Delivery Logs) */}
+      <div id="website-integration-section" className="pt-6">
+        <WebsiteIntegration />
+      </div>
+
       {/* Telegram Token Pairing Modal */}
       <AnimatePresence>
         {isTelegramModalOpen && (
@@ -457,76 +503,6 @@ export function ConnectionsHub() {
                   </Button>
                 </div>
               </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Website Widget Dialog Modal */}
-      <AnimatePresence>
-        {isWidgetModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsWidgetModalOpen(false)}
-              className="absolute inset-0 backdrop-blur-md"
-              style={{ backgroundColor: 'var(--app-backdrop)' }}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 30 }}
-              className="relative w-full max-w-xl rounded-[2.5rem] shadow-[0_48px_80px_-24px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col z-10"
-              style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}
-            >
-              <div className="px-8 py-6 flex justify-between items-center"
-                   style={{ borderBottom: '1px solid var(--app-border)', backgroundColor: 'var(--app-bg-soft)' }}>
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-lg flex items-center justify-center"
-                       style={{ backgroundColor: 'var(--brand-saffron-soft)', color: 'var(--brand-saffron)' }}>
-                    <Globe className="h-5 w-5 stroke-[2.2]" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black" style={{ color: 'var(--app-text)' }}>Website Snippet</h3>
-                    <p className="text-[10px] font-black uppercase tracking-widest mt-0.5"
-                       style={{ color: 'var(--brand-saffron)' }}>
-                      Custom Site Integrations
-                    </p>
-                  </div>
-                </div>
-                <button onClick={() => setIsWidgetModalOpen(false)}
-                        className="h-10 w-10 rounded-xl flex items-center justify-center transition-transform active:scale-95 cursor-pointer"
-                        style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)', color: 'var(--app-text-muted)' }}>
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <div className="p-8 space-y-6">
-                <p className="font-medium text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                  Embed this HTML snippet into your website header. When visitors interact with the widget, messages drop into your workspace.
-                </p>
-                <div className="relative rounded-2xl overflow-hidden p-6 shadow-inner font-mono text-xs border"
-                     style={{ backgroundColor: '#0F172A', borderColor: '#1E293B', color: 'rgba(212, 168, 67, 0.7)' }}>
-                  <div className="absolute top-3 left-4 flex gap-1.5 pointer-events-none">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'rgba(239, 68, 68, 0.8)' }} />
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'rgba(245, 158, 11, 0.8)' }} />
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'rgba(34, 197, 94, 0.8)' }} />
-                  </div>
-                  <div className="pt-3 overflow-x-auto leading-relaxed max-w-full select-all whitespace-pre-wrap word-break">
-                    {`<!-- LeadSync Interactive Client Loader -->\n<script \n  src="https://widget.leadsync.com/loader.js" \n  data-tenant-id="${company?.id || 'your-workspace-tenant-id'}"\n  defer>\n</script>`}
-                  </div>
-                  <button onClick={handleCopySnippet}
-                          className="absolute right-3 top-3 p-2 rounded-lg transition-all border flex items-center gap-1.5 cursor-pointer active:scale-95"
-                          style={{ backgroundColor: '#1E293B', color: 'rgba(212, 168, 67, 0.7)', borderColor: '#334155' }}>
-                    {copied ? (
-                      <><Check className="h-4 w-4" style={{ color: 'var(--success-green)' }} /><span className="text-[10px] uppercase font-bold" style={{ color: 'var(--success-green)' }}>Copied</span></>
-                    ) : (
-                      <><Copy className="h-4 w-4" /><span className="text-[10px] uppercase font-bold">Copy</span></>
-                    )}
-                  </button>
-                </div>
-              </div>
             </motion.div>
           </div>
         )}

@@ -955,8 +955,9 @@ Chat History:
 "${threadHistory}"
 
 # RULES
-1. Categorize as EXACLY ONE OF: "Sales", "Support", or "Spam".
-2. Generate a ONE-LINE short summary (max 12 words) of what the customer wants.
+1. Categorize as EXACTLY ONE OF: "Sales", "Support", or "Spam".
+2. IMPORTANT: Any message where the customer expresses intent to purchase, buy, order, or inquire about purchasing a specific item (e.g. "I would like to purchase...", "I want to buy...", "Order...") MUST be categorized as "Sales", regardless of whether the store has the item in stock or has responded.
+3. Generate a ONE-LINE short summary (max 12 words) of what the customer wants.
 
 # OUTPUT
 Return ONLY a JSON object matching this structure:
@@ -971,13 +972,24 @@ Return ONLY a JSON object matching this structure:
     });
 
     const parsed = JSON.parse(result.choices[0]?.message?.content || "{}");
+    let intent = parsed.intent || "Support";
+
+    // Heuristic safety net: Ensure clear purchase / buy phrases are categorized as Sales intent
+    const lowerHistory = threadHistory.toLowerCase();
+    const isBuyingSignal = /(purchase|buy|order|want to buy|like to purchase|book my order|confirm order)/i.test(lowerHistory);
+    if (isBuyingSignal && intent !== "Sales") {
+      intent = "Sales";
+    }
+
     return {
-       intent: parsed.intent || "Support",
+       intent,
        summary: parsed.summary || "Customer sent a message"
     };
   } catch (err) {
     console.error("❌ AI Triage failed (Groq):", err);
-    return { intent: "Support", summary: "Conversation started" };
+    const lowerHistory = threadHistory.toLowerCase();
+    const isBuyingSignal = /(purchase|buy|order|want to buy|like to purchase|book my order|confirm order)/i.test(lowerHistory);
+    return { intent: isBuyingSignal ? "Sales" : "Support", summary: "Conversation started" };
   }
 }
 

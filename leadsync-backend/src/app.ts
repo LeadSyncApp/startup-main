@@ -3,6 +3,7 @@ import cors from "cors";
 import compression from "compression";
 import helmet from "helmet";
 import rateLimit, { MemoryStore } from "express-rate-limit";
+import path from "path";
 
 // Routes
 import authRoutes from "./routes/auth/auth.routes";
@@ -38,6 +39,7 @@ import ruleGroupsRoutes from "./routes/automation/ruleGroups.routes";
 
 import webhookRoutes from "./routes/webhooks/webhook.routes";
 import websiteRoutes from "./routes/webhooks/website.routes";
+import widgetRoutes from "./routes/webhooks/widget.routes";
 import telegramWebhookRoutes from "./routes/webhooks/telegram.routes";
 import { metadataRoutes } from "./routes/crm/metadata.routes";
 import { productFieldsRoutes } from "./routes/crm/product-fields.routes";
@@ -85,7 +87,7 @@ app.use(
     origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Webhook-Signature', 'X-Shopify-Hmac-SHA256', 'X-WC-Webhook-Signature', 'x-webhook-signature', 'x-shopify-hmac-sha256', 'x-wc-webhook-signature'],
   })
 );
 
@@ -142,9 +144,19 @@ app.use("/api/companies", voiceIntakeRoutes);
 app.use("/api/automation/rule-groups", authMiddleware, ruleGroupsRoutes);
 app.use("/api/automation/conversational-rules", authMiddleware, conversationalRulesRoutes);
 
-app.use("/api/webhook", webhookRoutes);
-app.use("/api/webhook", websiteRoutes);
+app.use("/api/widget", widgetRoutes);
+app.use("/api/webhook/widget", widgetRoutes);
 app.use("/api/webhook/telegram", telegramWebhookRoutes);
+app.use("/api/webhook", websiteRoutes);
+app.use("/api/webhook", webhookRoutes);
+
+// Serve widget.js static file with cache-busting headers
+const publicDirPath = path.resolve(__dirname, '../public');
+app.get('/widget.js', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(publicDirPath, 'widget.js'));
+});
+app.use('/public', express.static(publicDirPath));
 app.use("/api/bot-knowledge", botKnowledgeRoutes);
 
 // 🆕 Add New Order Arrivals routes
@@ -163,8 +175,6 @@ import companyRoutes from "./routes/team/company.routes";
 app.use("/api/team", teamRoutes);
 app.use("/api/team/invitations", invitationsRoutes);
 app.use("/api/company", companyRoutes);
-
-import path from "path";
 
 /* 🩺 DIAGNOSTIC ROUTE */
 app.get("/api/debug/system", async (req, res) => {

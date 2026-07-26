@@ -129,33 +129,39 @@ router.post("/:companyId", validateWebsiteWebhookSignature, async (req: Request,
     // Shape-based detection only runs as a fallback when no platform header was present
     // (should not happen after middleware, but kept as safety net).
 
+    let customerMessage = "";
+
     if (platform === "shopify") {
       // ── Shopify parser ──────────────────────────────────────────────────
-      customerName = `${body.customer.first_name || ""} ${body.customer.last_name || ""}`.trim() || "Shopify Customer";
-      contactPhone = body.customer.phone || body.billing_address?.phone || body.shipping_address?.phone || "";
-      totalAmount = parseFloat(body.total_price);
+      customerName = `${body.customer?.first_name || ""} ${body.customer?.last_name || ""}`.trim() || "Shopify Customer";
+      contactPhone = body.customer?.phone || body.billing_address?.phone || body.shipping_address?.phone || "";
+      totalAmount = parseFloat(body.total_price || "0");
       
       const items = body.line_items || [];
       const itemDescriptions = items.map((i: any) => `${i.quantity}x ${i.title}`).join(", ");
-      orderDetails = `ordered ${itemDescriptions} (Total: ₹${totalAmount})`;
+      orderDetails = itemDescriptions ? `ordered ${itemDescriptions} (Total: ₹${totalAmount})` : "";
       
       const sa = body.shipping_address || {};
       rawAddress = [sa.address1, sa.address2, sa.city, sa.province, sa.zip, sa.country || "India"].filter(Boolean).join(", ");
       countryCode = sa.country_code || body.billing_address?.country_code || "IN";
 
+      customerMessage = body.note || body.customer_note || body.note_attributes?.map((a: any) => `${a.name}: ${a.value}`).join(", ") || "";
+
     } else if (platform === "woocommerce") {
       // ── WooCommerce parser ──────────────────────────────────────────────
-      customerName = `${body.billing.first_name || ""} ${body.billing.last_name || ""}`.trim() || "WooCommerce Customer";
-      contactPhone = body.billing.phone || "";
-      totalAmount = parseFloat(body.total);
+      customerName = `${body.billing?.first_name || ""} ${body.billing?.last_name || ""}`.trim() || "WooCommerce Customer";
+      contactPhone = body.billing?.phone || "";
+      totalAmount = parseFloat(body.total || "0");
 
       const items = body.line_items || [];
       const itemDescriptions = items.map((i: any) => `${i.quantity}x ${i.name}`).join(", ");
-      orderDetails = `ordered ${itemDescriptions} (Total: ₹${totalAmount})`;
+      orderDetails = itemDescriptions ? `ordered ${itemDescriptions} (Total: ₹${totalAmount})` : "";
 
       const sa = body.shipping || {};
       rawAddress = [sa.address_1, sa.address_2, sa.city, sa.state, sa.postcode, sa.country || "India"].filter(Boolean).join(", ");
-      countryCode = sa.country || body.billing.country || "IN";
+      countryCode = sa.country || body.billing?.country || "IN";
+
+      customerMessage = body.customer_note || body.note || "";
 
     } else if (platform === "custom") {
       // ── Custom parser (header-confirmed, shape-independent) ──────────────
@@ -165,40 +171,47 @@ router.post("/:companyId", validateWebsiteWebhookSignature, async (req: Request,
       
       const items = body.items || [];
       const itemDescriptions = items.map((i: any) => `${i.quantity || 1}x ${i.name || i.title}`).join(", ");
-      orderDetails = itemDescriptions ? `ordered ${itemDescriptions} (Total: ₹${totalAmount})` : `placed an order (Total: ₹${totalAmount})`;
+      orderDetails = itemDescriptions ? `ordered ${itemDescriptions} (Total: ₹${totalAmount})` : "";
       
       rawAddress = body.shipping_address || body.address || "";
       countryCode = body.customer?.country_code || body.country_code || "IN";
+
+      customerMessage = body.message || body.inquiry || body.text || body.note || body.customer?.message || "";
 
     } else {
       // ── Shape-based fallback (should not normally be reached) ───────────
       if (body.total_price && body.customer) {
         customerName = `${body.customer.first_name || ""} ${body.customer.last_name || ""}`.trim() || "Shopify Customer";
         contactPhone = body.customer.phone || body.billing_address?.phone || body.shipping_address?.phone || "";
-        totalAmount = parseFloat(body.total_price);
+        totalAmount = parseFloat(body.total_price || "0");
         const items = body.line_items || [];
-        orderDetails = `ordered ${items.map((i: any) => `${i.quantity}x ${i.title}`).join(", ")} (Total: ₹${totalAmount})`;
+        const itemDescriptions = items.map((i: any) => `${i.quantity}x ${i.title}`).join(", ");
+        orderDetails = itemDescriptions ? `ordered ${itemDescriptions} (Total: ₹${totalAmount})` : "";
         const sa = body.shipping_address || {};
         rawAddress = [sa.address1, sa.address2, sa.city, sa.province, sa.zip, sa.country || "India"].filter(Boolean).join(", ");
         countryCode = sa.country_code || body.billing_address?.country_code || "IN";
+        customerMessage = body.note || body.customer_note || "";
       } else if (body.billing && body.line_items && body.total) {
         customerName = `${body.billing.first_name || ""} ${body.billing.last_name || ""}`.trim() || "WooCommerce Customer";
         contactPhone = body.billing.phone || "";
-        totalAmount = parseFloat(body.total);
+        totalAmount = parseFloat(body.total || "0");
         const items = body.line_items || [];
-        orderDetails = `ordered ${items.map((i: any) => `${i.quantity}x ${i.name}`).join(", ")} (Total: ₹${totalAmount})`;
+        const itemDescriptions = items.map((i: any) => `${i.quantity}x ${i.name}`).join(", ");
+        orderDetails = itemDescriptions ? `ordered ${itemDescriptions} (Total: ₹${totalAmount})` : "";
         const sa = body.shipping || {};
         rawAddress = [sa.address_1, sa.address_2, sa.city, sa.state, sa.postcode, sa.country || "India"].filter(Boolean).join(", ");
         countryCode = sa.country || body.billing.country || "IN";
+        customerMessage = body.customer_note || body.note || "";
       } else {
         customerName = body.customer?.name || body.name || "Store Shopper";
         contactPhone = body.customer?.phone || body.phone || "";
         totalAmount = parseFloat(body.total || body.amount || "0");
         const items = body.items || [];
         const itemDescriptions = items.map((i: any) => `${i.quantity || 1}x ${i.name || i.title}`).join(", ");
-        orderDetails = itemDescriptions ? `ordered ${itemDescriptions} (Total: ₹${totalAmount})` : `placed an order (Total: ₹${totalAmount})`;
+        orderDetails = itemDescriptions ? `ordered ${itemDescriptions} (Total: ₹${totalAmount})` : "";
         rawAddress = body.shipping_address || body.address || "";
         countryCode = body.customer?.country_code || body.country_code || "IN";
+        customerMessage = body.message || body.inquiry || body.text || body.note || "";
       }
     }
 
@@ -212,8 +225,18 @@ router.post("/:companyId", validateWebsiteWebhookSignature, async (req: Request,
       return res.status(200).json({ status: "ignored", reason: "Missing phone contact details" });
     }
 
-    // Structure a conversational intent message simulating the transaction checkout request
-    const mockIntentText = `I want to order: ${orderDetails}. My details: name: ${customerName}, phone: ${sanitizedPhone}, address: ${rawAddress}`;
+    // Structure a conversational intent message, prioritizing customer message and combining order items if present
+    let mockIntentText = "";
+    const cleanMsg = customerMessage.trim();
+    if (cleanMsg && orderDetails) {
+      mockIntentText = `${cleanMsg}\n\n[Order Details: ${orderDetails}]`;
+    } else if (cleanMsg) {
+      mockIntentText = cleanMsg;
+    } else if (orderDetails) {
+      mockIntentText = `I want to order: ${orderDetails}. My details: name: ${customerName}, phone: ${sanitizedPhone}, address: ${rawAddress}`;
+    } else {
+      mockIntentText = `Inquiry from website. My details: name: ${customerName}, phone: ${sanitizedPhone}, address: ${rawAddress}`;
+    }
 
     const standardizedFrame: StandardMessageFrame = {
       channel: Channel.WEBSITE,
