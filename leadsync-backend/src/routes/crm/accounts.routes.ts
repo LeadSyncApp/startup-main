@@ -45,10 +45,30 @@ router.get(
   authMiddleware,
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const tenantDb = createTenantRepository(req.user!.companyId);
-    const accounts = await tenantDb.account.findMany({
-      include: { leads: true, deals: true },
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 50));
+    const skip = (page - 1) * limit;
+
+    const [total, accounts] = await Promise.all([
+      tenantDb.account.count(),
+      tenantDb.account.findMany({
+        skip,
+        take: limit,
+        include: { leads: true, deals: true },
+        orderBy: { createdAt: "desc" }
+      })
+    ]);
+
+    res.json({
+      data: accounts,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasMore: skip + accounts.length < total,
+      }
     });
-    res.json(accounts);
   })
 );
 

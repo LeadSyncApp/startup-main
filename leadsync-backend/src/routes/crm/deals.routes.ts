@@ -56,16 +56,36 @@ router.get(
   authMiddleware,
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const tenantDb = createTenantRepository(req.user!.companyId);
-    const deals = await tenantDb.deal.findMany({
-      include: {
-        stage: true,
-        account: true,
-        owner: { select: { id: true, firstName: true, lastName: true } },
-        lead: true,
-        tags: { include: { tag: true } },
-      },
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 50));
+    const skip = (page - 1) * limit;
+
+    const [total, deals] = await Promise.all([
+      tenantDb.deal.count(),
+      tenantDb.deal.findMany({
+        skip,
+        take: limit,
+        include: {
+          stage: true,
+          account: true,
+          owner: { select: { id: true, firstName: true, lastName: true } },
+          lead: true,
+          tags: { include: { tag: true } },
+        },
+        orderBy: { createdAt: "desc" }
+      })
+    ]);
+
+    res.json({
+      data: deals,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasMore: skip + deals.length < total,
+      }
     });
-    res.json(deals);
   })
 );
 

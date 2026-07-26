@@ -51,12 +51,31 @@ router.get(
     if (req.query.dealId) filters.dealId = req.query.dealId;
     if (req.query.leadId) filters.leadId = req.query.leadId;
 
-    const tasks = await tenantDb.task.findMany({
-      where: filters,
-      include: { owner: { select: { id: true, firstName: true, lastName: true } } },
-      orderBy: { dueDate: "asc" },
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 50));
+    const skip = (page - 1) * limit;
+
+    const [total, tasks] = await Promise.all([
+      tenantDb.task.count({ where: filters }),
+      tenantDb.task.findMany({
+        where: filters,
+        skip,
+        take: limit,
+        include: { owner: { select: { id: true, firstName: true, lastName: true } } },
+        orderBy: { dueDate: "asc" },
+      })
+    ]);
+
+    res.json({
+      data: tasks,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasMore: skip + tasks.length < total,
+      }
     });
-    res.json(tasks);
   })
 );
 
