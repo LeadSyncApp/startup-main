@@ -554,16 +554,47 @@ export async function decrementStockForOrder(orderId: string, companyId: string)
     if (!order || !order.orderItems.length) return;
 
     for (const item of order.orderItems) {
-      let product = item.sku
-        ? await (tx.inventoryProduct as any).findFirst({
-            where: { companyId, sku: item.sku, isActive: true }
-          })
-        : null;
+      let product: any = null;
 
+      // 1. Direct match by item.productId (if populated)
+      if (item.productId) {
+        product = await (tx.inventoryProduct as any).findFirst({
+          where: { id: item.productId, companyId, isActive: true }
+        });
+      }
+
+      // 2. Lookup product by item.sku (if item.sku matches InventoryProduct SKU)
+      if (!product && item.sku) {
+        product = await (tx.inventoryProduct as any).findFirst({
+          where: { companyId, sku: item.sku, isActive: true }
+        });
+      }
+
+      // 3. Lookup product by variant ID stored in item.sku
+      if (!product && item.sku) {
+        const variant = await (tx.inventoryVariant as any).findFirst({
+          where: { id: item.sku, isActive: true },
+          include: { product: true }
+        });
+        if (variant && variant.product && variant.product.companyId === companyId && variant.product.isActive) {
+          product = variant.product;
+        }
+      }
+
+      // 4. Fallback: Exact name match or prefix match (e.g. item.name = "wss shirts - 42 / M", product.name = "wss shirts")
       if (!product) {
         product = await (tx.inventoryProduct as any).findFirst({
           where: { companyId, name: { equals: item.name, mode: "insensitive" }, isActive: true }
         });
+      }
+
+      if (!product) {
+        const allProducts: any[] = await (tx.inventoryProduct as any).findMany({
+          where: { companyId, isActive: true }
+        });
+        product = allProducts.find((p: any) =>
+          item.name.toLowerCase().startsWith(p.name.toLowerCase())
+        );
       }
 
       if (!product || !product.hasVariants) continue;

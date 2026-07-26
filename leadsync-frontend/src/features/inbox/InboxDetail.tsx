@@ -9,7 +9,7 @@ interface InboxDetailProps {
   leadId?: string;
   showBackButton?: boolean;
 }
-import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe, Menu, Plus, CreditCard } from "lucide-react";
+import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe, Menu, Plus, CreditCard, Copy, Zap, MoreVertical, Eraser, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
 import AiSuggestionPanel from "./AiSuggestionPanel";
@@ -32,15 +32,33 @@ export interface BackendMessage {
 }
 
 export interface ConversationDetail {
+  id: string;
+  conversationId?: string;
   leadId: string;
-  conversationId: string;
+  companyId: string;
+  channel: string;
   status: string;
-  channel?: string;
-  mode?: "BOT" | "HUMAN";
+  mode?: any;
   resolvedBy?: string | null;
   customerName?: string | null;
   customerContact?: string | null;
+  summary?: string | null;
+  suggestedReply?: string | null;
+  orders?: Array<{
+    id: string;
+    status: string;
+    amount: number;
+    summary: string;
+    createdAt: string;
+    metadata?: any;
+  }>;
   messages: BackendMessage[];
+  lastActiveAt?: string;
+  orderCount?: number;
+  totalSpend?: number;
+  tags?: string[];
+  city?: string;
+  state?: string;
 }
 
 const CHANNEL_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -67,7 +85,43 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   const [sending, setSending] = useState(false);
   const [content, setContent] = useState("");
   const [networkError, setNetworkError] = useState<string | null>(null);
+  const [simulatingOrderId, setSimulatingOrderId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const handleSimulatePayment = async (orderId: string | null, paymentPayload?: any) => {
+    const simKey = orderId || "deferred_payload";
+    setSimulatingOrderId(simKey);
+    try {
+      let res: Response;
+      if (paymentPayload) {
+        res = await authedFetch(`/api/orders/fulfill-payment-request`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentPayload })
+        });
+      } else if (orderId) {
+        res = await authedFetch(`/api/orders/${orderId}/simulate-success`, {
+          method: "POST"
+        });
+      } else {
+        toast.error("No valid payment payload or order found");
+        return;
+      }
+
+      if (res.ok) {
+        toast.success("Payment simulated successfully! Order created as PAID & invoice queued.");
+        fetchMessages();
+      } else {
+        const data = await res.json();
+        toast.error(data.message || "Failed to simulate payment");
+      }
+    } catch (err) {
+      console.error("Payment simulation error:", err);
+      toast.error("Network error simulating payment");
+    } finally {
+      setSimulatingOrderId(null);
+    }
+  };
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   // Tracks the last known message count so we can mark the conversation read
   // whenever a NEW message arrives while it's open (keeps unread at 0 live).
@@ -86,6 +140,10 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   const [panelTab, setPanelTab] = useState<"details" | "ai">("details");
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [showPaymentRequest, setShowPaymentRequest] = useState(false);
+  const [showKebabMenu, setShowKebabMenu] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const fetchMessages = useCallback(async () => {
     if (!leadId) return;
@@ -194,6 +252,50 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
       fetchMessages(); // Refresh to get updated status
     } catch (e: any) {
       toast.error("Could not resolve: " + (e.message || "Unknown error"));
+    }
+  };
+
+  const handleClearMessages = async () => {
+    if (!leadId) return;
+    setActionLoading(true);
+    try {
+      const res = await authedFetch(`/api/leads/${leadId}/messages`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        toast.success("Message history cleared");
+        setDetail(prev => prev ? { ...prev, messages: [] } : prev);
+        setShowClearConfirm(false);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Failed to clear messages");
+      }
+    } catch (e) {
+      toast.error("Network error clearing messages");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteConversation = async () => {
+    if (!leadId) return;
+    setActionLoading(true);
+    try {
+      const res = await authedFetch(`/api/leads/${leadId}/conversation`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        toast.success("Conversation deleted");
+        setShowDeleteConfirm(false);
+        navigate("/inbox");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Failed to delete conversation");
+      }
+    } catch (e) {
+      toast.error("Network error deleting conversation");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -307,6 +409,9 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   const customerDisplayName = detail.customerName || detail.customerContact || "Customer";
   const customerPhone = detail.customerContact || null;
 
+  const CONFIRMED_PAID_STATUSES = ["PAID", "COMPLETED", "CONFIRMED", "PROCESSING", "PREPARING", "READY", "SHIPPED", "DELIVERED"];
+  const hasConfirmedPaidOrder = detail?.orders?.some((o) => CONFIRMED_PAID_STATUSES.includes(o.status));
+
   const renderBubble = (msg: BackendMessage) => {
     const isClient = msg.sender === "CLIENT";
     const isAgent = msg.sender === "AGENT";
@@ -316,10 +421,135 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
     const senderLabel = msg.senderName || (isBot ? (company?.telegramBotUsername ? `@${company.telegramBotUsername}` : "Auto-reply") : isAgent ? "Agent" : isClient ? customerDisplayName : "System");
 
     if (isSystem) {
+      // Suppress orphaned "Payment Received" system messages if there is no real confirmed DB order
+      if (msg.content.includes("Payment Received") && !hasConfirmedPaidOrder) {
+        return null;
+      }
       return (
         <div key={msg.id} className="flex justify-center py-0.5">
           <div className="px-3 py-1.5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-alt)] text-[11px] text-[var(--app-text-muted)] font-mono max-w-[85%] text-center">
             {msg.content}
+          </div>
+        </div>
+      );
+    }
+
+    const isPaymentReq = msg.content.includes("PAYMENT REQUEST") || msg.content.includes("upi://pay") || msg.content.includes("payment link");
+
+    if (isPaymentReq) {
+      const orderIdMatch = msg.content.match(/\[ORDER:(.*?)\]/);
+      const orderId = orderIdMatch ? orderIdMatch[1] : null;
+
+      const payloadMatch = msg.content.match(/\[PAYMENT_REQUEST:(.*?)\]/);
+      let paymentPayload: any = null;
+      if (payloadMatch) {
+        try {
+          paymentPayload = JSON.parse(decodeURIComponent(payloadMatch[1]));
+        } catch (e) {
+          console.error("Error parsing payment payload tag:", e);
+        }
+      }
+
+      const upiMatch = msg.content.match(/(upi:\/\/[^\s\n]+)/);
+      const upiLink = upiMatch ? upiMatch[0] : null;
+
+      // Card-specific order matching: Check if THIS specific payment request has a matching confirmed-paid DB order
+      let isPaid = false;
+      if (detail?.orders && detail.orders.length > 0) {
+        if (orderId) {
+          const matched = detail.orders.find((o) => o.id === orderId);
+          if (matched && CONFIRMED_PAID_STATUSES.includes(matched.status)) {
+            isPaid = true;
+          }
+        } else if (paymentPayload) {
+          const cardAmount = Number(paymentPayload.amount);
+          const matched = detail.orders.find((o) => {
+            if (!CONFIRMED_PAID_STATUSES.includes(o.status)) return false;
+            if (upiLink && o.metadata && typeof o.metadata === "object" && (o.metadata as any).upiLink === upiLink) {
+              return true;
+            }
+            return cardAmount > 0 && Math.abs(o.amount - cardAmount) < 0.01;
+          });
+          if (matched) isPaid = true;
+        } else {
+          // Fallback: Parse amount from card content if no tags present
+          const amountMatch = msg.content.match(/₹(\d+(?:\.\d+)?)/);
+          if (amountMatch) {
+            const cardAmount = parseFloat(amountMatch[1]);
+            const matched = detail.orders.find((o) => {
+              if (!CONFIRMED_PAID_STATUSES.includes(o.status)) return false;
+              if (upiLink && o.metadata && typeof o.metadata === "object" && (o.metadata as any).upiLink === upiLink) {
+                return true;
+              }
+              return Math.abs(o.amount - cardAmount) < 0.01;
+            });
+            if (matched) isPaid = true;
+          }
+        }
+      }
+
+      const displayContent = msg.content
+        .replace(/\[ORDER:.*?\]/g, "")
+        .replace(/\[PAYMENT_REQUEST:.*?\]/g, "")
+        .trim();
+
+      const simKey = orderId || "deferred_payload";
+
+      return (
+        <div key={msg.id} className={`flex ${isClient ? "justify-start" : "justify-end"} py-2`}>
+          <div className="max-w-[85%] sm:max-w-[75%] p-4 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-[var(--app-surface)] to-[var(--app-surface-alt)] shadow-lg text-[var(--app-text)]">
+            <div className="flex items-center justify-between gap-2 border-b border-[var(--app-border)] pb-2 mb-3">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-brand-saffron" />
+                <span className="text-xs font-black tracking-wider uppercase">Payment Request</span>
+              </div>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                isPaid 
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" 
+                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+              }`}>
+                {isPaid ? "✅ Paid" : "⏳ Awaiting Payment"}
+              </span>
+            </div>
+
+            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words font-medium text-[var(--app-text)] mb-3">
+              {displayContent}
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--app-border)]">
+              {upiLink && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(upiLink);
+                    toast.success("Payment link copied to clipboard!");
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-[var(--app-bg-soft)] border border-[var(--app-border)] text-xs font-bold hover:bg-[var(--app-surface)] transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Copy className="h-3.5 w-3.5 text-brand-saffron" /> Copy Link
+                </button>
+              )}
+
+              {!isPaid && (orderId || paymentPayload) && (
+                <button
+                  onClick={() => handleSimulatePayment(orderId, paymentPayload)}
+                  disabled={simulatingOrderId === simKey}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Simulate successful payment for testing"
+                >
+                  {simulatingOrderId === simKey ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Zap className="h-3.5 w-3.5" />
+                  )}
+                  ⚡ Simulate Payment
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between mt-2 pt-1 opacity-60 text-[9px] font-mono">
+              <span>{senderLabel}</span>
+              <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+            </div>
           </div>
         </div>
       );
@@ -443,9 +673,47 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
               ? "bg-[var(--app-surface-alt)] border-[var(--app-border-strong)] text-[var(--app-text)]"
               : "bg-[var(--app-surface-alt)] border-[var(--app-border)] text-[var(--app-text-muted)] hover:bg-[var(--app-bg-soft)]"
           }`}
+          title="Customer details"
         >
           <Menu className="h-4 w-4" />
         </button>
+
+        {/* Options / Kebab Menu */}
+        <div className="relative">
+          <button
+            onClick={() => setShowKebabMenu(!showKebabMenu)}
+            className={`p-1.5 rounded-lg border transition cursor-pointer ${
+              showKebabMenu
+                ? "bg-[var(--app-surface-alt)] border-[var(--app-border-strong)] text-[var(--app-text)]"
+                : "bg-[var(--app-surface-alt)] border-[var(--app-border)] text-[var(--app-text-muted)] hover:bg-[var(--app-bg-soft)] text-[var(--app-text)]"
+            }`}
+            title="Conversation options"
+          >
+            <MoreVertical className="h-4 w-4" />
+          </button>
+
+          {showKebabMenu && (
+            <div
+              className="absolute right-0 mt-2 w-52 bg-[var(--app-surface)] border border-[var(--app-border)] rounded-xl shadow-xl z-50 py-1 overflow-hidden"
+              onClick={() => setShowKebabMenu(false)}
+            >
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="w-full px-3 py-2 text-xs font-bold text-[var(--app-text)] hover:bg-[var(--app-surface-alt)] flex items-center gap-2.5 transition text-left cursor-pointer"
+              >
+                <Eraser className="h-3.5 w-3.5 text-amber-500" />
+                <span>Clear Messages</span>
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="w-full px-3 py-2 text-xs font-bold text-rose-500 hover:bg-rose-500/10 flex items-center gap-2.5 transition text-left cursor-pointer border-t border-[var(--app-border)]"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                <span>Delete Conversation</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
@@ -531,7 +799,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
       {/* Payment Request Modal */}
       {showPaymentRequest && (
         <PaymentRequestModal
-          conversationId={detail.conversationId}
+          conversationId={detail.id || detail.conversationId || ""}
           onClose={() => setShowPaymentRequest(false)}
           onPaymentGenerated={(message) => {
             setContent(prev => prev ? `${prev}\n${message}` : message);
@@ -697,6 +965,78 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
                 className="px-3 py-1.5 text-xs font-black text-emerald-300 border border-emerald-500/40 rounded bg-emerald-500/20 hover:bg-emerald-500/30 transition cursor-pointer"
               >
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Messages Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--app-surface)] border border-[var(--app-border)] rounded-xl p-5 max-w-sm w-full shadow-2xl">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+                <Eraser className="h-5 w-5" />
+              </div>
+              <h3 className="text-sm font-black text-[var(--app-text)]">Clear Message History?</h3>
+            </div>
+            <p className="text-xs text-[var(--app-text-muted)] leading-relaxed mb-5">
+              Are you sure you want to clear all message history for this chat?
+              <br /><br />
+              <span className="font-bold text-[var(--app-text)]">Note:</span> Customer identity, tags, and past order history will be preserved. This operation is soft-deleted and recoverable.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                disabled={actionLoading}
+                className="px-3.5 py-2 text-xs font-black text-[var(--app-text-muted)] border border-[var(--app-border)] rounded-lg hover:bg-[var(--app-bg-soft)] transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearMessages}
+                disabled={actionLoading}
+                className="px-3.5 py-2 text-xs font-black text-amber-950 dark:text-amber-100 bg-amber-500 hover:bg-amber-600 rounded-lg transition cursor-pointer flex items-center gap-2"
+              >
+                {actionLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Clear Messages
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Conversation Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--app-surface)] border border-[var(--app-border)] rounded-xl p-5 max-w-sm w-full shadow-2xl">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <h3 className="text-sm font-black text-rose-500">Delete Conversation?</h3>
+            </div>
+            <p className="text-xs text-[var(--app-text-muted)] leading-relaxed mb-5">
+              Are you sure you want to delete this conversation? It will be removed from your active inbox feeds.
+              <br /><br />
+              <span className="font-bold text-rose-400">Soft-delete safeguard:</span> The conversation will be hidden and archived safely without destroying financial audit logs.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={actionLoading}
+                className="px-3.5 py-2 text-xs font-black text-[var(--app-text-muted)] border border-[var(--app-border)] rounded-lg hover:bg-[var(--app-bg-soft)] transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConversation}
+                disabled={actionLoading}
+                className="px-3.5 py-2 text-xs font-black text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition cursor-pointer flex items-center gap-2"
+              >
+                {actionLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Delete Conversation
               </button>
             </div>
           </div>

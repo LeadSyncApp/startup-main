@@ -1,5 +1,5 @@
 import { Router, Response } from "express";
-import { ConversationStatus } from "@prisma/client";
+import { ConversationStatus, MessageSender } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { createTenantRepository } from "../../lib/tenantDb";
 import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
@@ -11,9 +11,12 @@ import {
   Role,
 } from "@prisma/client";
 import { sendTelegramMessage } from "../../bot/telegram.sender";
-import { safeEmitConversationUpdate, emitToCompany, emitToAgent } from "../../lib/socket";
+import { safeEmitConversationUpdate, emitToCompany, emitToAgent, emitToConversation } from "../../lib/socket";
 import { recalculateLeadCRM } from "../../services/integrations/crm.service";
 import { decrementStockForOrder } from "../../services/knowledge/inventory.service";
+import { orderWorkflowService } from "../../services/workflow/orderWorkflow.service";
+import { queueProvider } from "../../services/infrastructure/queue-provider/queue-provider.factory";
+import { PDF_JOB_NAME } from "../../services/infrastructure/pgboss/jobs/pdf.job";
 
 const router = Router();
 
@@ -97,60 +100,58 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
     const company = await prisma.company.findUnique({ where: { id: companyId } });
     if (!company) return res.status(404).json({ message: "Company not found" });
 
-    let lead = await prisma.lead.findFirst({
-      where: { companyId, contact: "9999999999" }
+    // Find conversation and its associated lead
+    const conv = await prisma.conversation.findFirst({
+      where: { id: conversationId, companyId },
+      include: { lead: true, company: { select: { name: true } } }
     });
-    if (!lead) {
-      lead = await prisma.lead.create({
-        data: {
-          companyId,
-          name: "Simulator Customer",
-          contact: "9999999999",
-          channel: "WEBSITE",
-        }
+
+    if (!conv) {
+      return res.status(400).json({ message: "Conversation not found" });
+    }
+
+    let leadId = conv.leadId;
+
+    // If conversation has no lead yet, create or find one for this conversation
+    if (!leadId) {
+      let lead = await prisma.lead.findFirst({
+        where: { companyId, contact: `conv_${conversationId.slice(0, 8)}` }
       });
+      if (!lead) {
+        lead = await prisma.lead.create({
+          data: {
+            companyId,
+            name: "Customer",
+            contact: `conv_${conversationId.slice(0, 8)}`,
+            channel: conv.channel || "WEBSITE",
+          }
+        });
+      }
+      leadId = lead!.id;
     }
 
     const upiId = "business@bank";
     const upiName = "business@bank";
-    const conv = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { company: { select: { name: true } } } });
     const cleanNote = note || `Payment for order from ${conv?.company?.name || "store"}`;
     const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(upiName)}&am=${totalAmount}&cu=INR&tn=${encodeURIComponent(cleanNote)}`;
 
-    // 3. Create the Order and its items
-    const order = await prisma.order.create({
-      data: {
-        companyId,
-        conversationId,
-        leadId: lead!.id,
-        amount: totalAmount,
-        status: OrderStatus.PENDING,
-        summary: note || `Order for ${orderItemsData.length} item(s)`,
-        source: "MANUAL",
-        metadata: {
-          upiLink,
-          isPaymentRequest: true,
-          catalogBased: hasProducts
-        },
-        orderItems: {
-          create: orderItemsData as any
-        }
-      },
-      include: {
-        orderItems: true
-      }
-    });
-
-    // Decrement stock for catalog-based orders with real products
-    if (hasProducts) {
-      decrementStockForOrder(order.id, companyId).catch(err =>
-        console.error(`❌ [StockDecrement] Failed for order ${order.id}:`, err)
-      );
-    }
+    // TRUE DEFERRED ORDER CREATION:
+    // Do NOT create an Order row in DB at link generation time.
+    // Return a lightweight payment intent payload. The Order row is ONLY created upon payment confirmation.
+    const paymentPayload = {
+      conversationId,
+      leadId: leadId!,
+      companyId,
+      amount: totalAmount,
+      summary: note || `Order for ${orderItemsData.length} item(s)`,
+      orderItems: orderItemsData,
+      catalogBased: hasProducts,
+      upiLink
+    };
 
     res.json({
-      message: "Catalog-based payment request generated",
-      order,
+      message: "Payment request generated (Order creation deferred to payment)",
+      paymentPayload,
       upiLink
     });
 
@@ -161,65 +162,170 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
 });
 
 /* ===============================
+   FULFILL PAYMENT REQUEST (DEFERRED ORDER CREATION ON PAYMENT CONFIRMATION)
+================================== */
+router.post("/fulfill-payment-request", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { paymentPayload } = req.body;
+    const { companyId, userId, role } = req.user!;
+    const userDisplayName = (req.user as any).firstName || (req.user as any).name || "Agent";
+
+    if (!paymentPayload || !paymentPayload.conversationId || !paymentPayload.amount) {
+      return res.status(400).json({ message: "Invalid payment payload" });
+    }
+
+    // Sanitize item.productId: only pass productId if it exists in the Product table (prevents FK constraint errors for InventoryProduct IDs)
+    const incomingProductIds = (paymentPayload.orderItems || [])
+      .map((item: any) => item.productId)
+      .filter((id: any): id is string => typeof id === "string" && id.length > 0);
+
+    const validProductIds = incomingProductIds.length > 0
+      ? new Set(
+          (await prisma.product.findMany({
+            where: { id: { in: incomingProductIds } },
+            select: { id: true }
+          })).map(p => p.id)
+        )
+      : new Set<string>();
+
+    // 1. Create the Order directly in PAID status upon payment confirmation
+    const order = await prisma.order.create({
+      data: {
+        companyId,
+        conversationId: paymentPayload.conversationId,
+        leadId: paymentPayload.leadId,
+        amount: paymentPayload.amount,
+        status: OrderStatus.PAID,
+        completedAt: null,
+        summary: paymentPayload.summary || "Paid Order",
+        source: "MANUAL",
+        processedById: userId,
+        metadata: {
+          upiLink: paymentPayload.upiLink,
+          isPaymentRequest: true,
+          catalogBased: paymentPayload.catalogBased || false
+        },
+        orderItems: {
+          create: (paymentPayload.orderItems || []).map((item: any) => ({
+            companyId,
+            productId: (item.productId && validProductIds.has(item.productId)) ? item.productId : null,
+            sku: item.sku || null,
+            name: item.name,
+            quantity: item.quantity || 1,
+            price: item.price || 0,
+            cogs: item.cogs || 0
+          }))
+        }
+      },
+      include: {
+        orderItems: true,
+        lead: true
+      }
+    });
+
+    // 2. Decrement Stock for inventory items
+    await decrementStockForOrder(order.id, companyId).catch(err =>
+      console.error(`❌ [StockDecrement] Failed for order ${order.id}:`, err)
+    );
+
+    // 3. Queue PDF Invoice generation
+    const paymentRef = "PAY_" + Date.now();
+    await queueProvider.enqueue(PDF_JOB_NAME, { orderId: order.id, paymentRef });
+
+    // 4. Recalculate Lead CRM metrics
+    if (order.leadId) {
+      await recalculateLeadCRM(order.leadId, companyId);
+    }
+
+    // 5. Emit socket & post confirmation system message
+    const conv = await prisma.conversation.findFirst({
+      where: { id: paymentPayload.conversationId, companyId }
+    });
+
+    if (conv) {
+      const sysMsg = await prisma.message.create({
+        data: {
+          content: "✅ Payment Received successfully! Your order is now being processed. An invoice will be generated shortly.",
+          sender: MessageSender.SYSTEM,
+          conversationId: conv.id,
+          companyId
+        }
+      });
+      emitToConversation(conv.id, "new_message", sysMsg);
+      safeEmitConversationUpdate(conv as any, "payment_confirmed", order);
+    }
+
+    res.json({
+      message: "Payment confirmed and Order created as PAID!",
+      order
+    });
+  } catch (error) {
+    console.error("Fulfill payment request error:", error);
+    res.status(500).json({ message: "Failed to fulfill payment request" });
+  }
+});
+
+/* ===============================
    SIMULATE PAYMENT SUCCESS (WEBHOOK MOCK)
 ================================== */
 router.post("/:id/simulate-success", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { companyId } = req.user!;
+    const { companyId, userId, role } = req.user!;
+    const userDisplayName = (req.user as any).firstName || (req.user as any).name || "Agent";
 
     // 1. Find the order with items
     const order = await prisma.order.findUnique({
       where: { id, companyId },
-      include: { orderItems: true }
+      include: { orderItems: true, lead: true }
     });
 
     if (!order) return res.status(404).json({ message: "Order not found" });
     if (order.status === OrderStatus.PAID) return res.status(400).json({ message: "Order is already paid" });
 
-    // Find conversation via lead
+    // 2. Execute status transition via OrderWorkflowService (audit log + state Machine validation)
+    const actor = { id: userId, name: userDisplayName, role };
+    const { order: updatedOrder } = await orderWorkflowService.transitionStatus(
+      companyId,
+      id,
+      OrderStatus.PAID,
+      actor
+    );
+
+    // 3. Deferred Stock Decrement: Decrement inventory stock on payment confirmation
+    await decrementStockForOrder(id, companyId).catch(err =>
+      console.error(`❌ [StockDecrement] Failed for order ${id}:`, err)
+    );
+
+    // 4. Queue PDF Invoice generation
+    const paymentRef = "MOCK_SIM_" + Date.now();
+    await queueProvider.enqueue(PDF_JOB_NAME, { orderId: id, paymentRef });
+
+    // 5. Recalculate Lead CRM metrics
+    if (order.leadId) {
+      await recalculateLeadCRM(order.leadId, companyId);
+    }
+
+    // 6. Find conversation via lead & post System Confirmation Message
     const conv = order.leadId ? await prisma.conversation.findFirst({
-      where: { leadId: order.leadId, lifecycleStatus: 'active' }
+      where: { leadId: order.leadId, lifecycleStatus: 'active', companyId }
     }) : null;
 
-    // 2. Perform automated updates in a transaction
-    const updatedOrder = await prisma.$transaction(async (tx) => {
-      // Update order status
-      const updated = await tx.order.update({
-        where: { id },
-        data: { 
-          status: OrderStatus.PAID,
-          completedAt: new Date()
+    if (conv) {
+      const sysMsg = await prisma.message.create({
+        data: {
+          content: "✅ Payment Received successfully! Your order is now being processed. An invoice will be generated shortly.",
+          sender: MessageSender.SYSTEM,
+          conversationId: conv.id,
+          companyId
         }
       });
-
-      // Automated Inventory Management: Decrement stock for tracked products
-      for (const item of order.orderItems) {
-        if (item.productId) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stockQuantity: {
-                decrement: item.quantity
-              }
-            }
-          });
-        }
-      }
-
-      return updated;
-    });
-
-    // Notify event bus for analytics/reporting
-    eventBus.emit(Events.ORDER_UPDATED, { order: updatedOrder });
-    
-    // Notify frontend via Socket - use the found conversation
-    if (conv) {
+      emitToConversation(conv.id, "new_message", sysMsg);
       safeEmitConversationUpdate(conv as any, "payment_confirmed", updatedOrder);
     }
 
     res.json({ 
-      message: "Payment successfully simulated! Stock has been auto-deducted.", 
+      message: "Payment successfully simulated! Stock has been auto-deducted and invoice queued.", 
       order: updatedOrder 
     });
   } catch (error) {
@@ -444,21 +550,18 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       whereCondition.source = "MANUAL";
     } else if (view === "history") {
       // History: Completed, Delivered, Cancelled, Archived, Shipped mapped to valid Enums
-      whereCondition.status = { in: ["DELIVERED", "PAID", "CANCELLED"] };
+      whereCondition.status = { in: ["DELIVERED", "PAID", "COMPLETED", "CANCELLED"] };
       if (req.user!.role === "STAFF") {
         whereCondition.processedById = req.user!.userId;
       }
     } else {
-      // Active Board: Include all stages for agent view since they are scoped. Also support NEW/BOT_CREATED_ORDER for agents to see their own
+      // Active Board: Include active stages. Unconfirmed PENDING payment request links are excluded until payment is confirmed.
+      const activeStatuses = ["NEW", "CONFIRMED", "PROCESSING", "PREPARING", "READY", "PAID", "SHIPPED", "COMPLETED"];
       if (req.user!.role === "STAFF") {
-        whereCondition.status = {
-          in: ["NEW", "PENDING", "CONFIRMED", "PROCESSING", "PREPARING", "READY", "PAID", "SHIPPED"]
-        };
+        whereCondition.status = { in: activeStatuses };
         whereCondition.processedById = req.user!.userId;
       } else {
-        whereCondition.status = {
-          in: ["PENDING", "CONFIRMED", "PROCESSING", "PREPARING", "READY", "PAID", "SHIPPED"]
-        };
+        whereCondition.status = { in: activeStatuses };
       }
     }
 
@@ -503,8 +606,6 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ message: "Failed to fetch orders" });
   }
 });
-
-import { orderWorkflowService } from "../../services/workflow/orderWorkflow.service";
 
 /* ===============================
    APPROVE ORDER (Activates Pending)

@@ -1331,9 +1331,24 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
       return res.status(404).json({ message: "No conversation found for this lead" });
     }
 
-    // 2. Fetch all messages for this conversation, oldest first
-    const messages = await prisma.message.findMany({
-      where: { conversationId: conversation.id },
+    // 2. Fetch linked orders for this lead
+    const orders = await prisma.order.findMany({
+      where: { leadId: lead.id, isDeleted: false },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        status: true,
+        amount: true,
+        summary: true,
+        source: true,
+        createdAt: true,
+        metadata: true,
+      },
+    });
+
+    // 3. Fetch all active (non-deleted) messages for this conversation, oldest first
+    const messages = await (prisma.message as any).findMany({
+      where: { conversationId: conversation.id, deletedAt: null },
       orderBy: { createdAt: "asc" },
       select: {
         id: true,
@@ -1358,11 +1373,108 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
       channel: lead.channel,
       customerName: lead.name,
       customerContact: lead.contact,
+      orders,
       messages,
     });
   } catch (error) {
     console.error("Fetch messages error:", error);
     return res.status(500).json({ message: "Failed to fetch messages" });
+  }
+});
+
+/* =========================================
+   DELETE /api/leads/:id/messages
+   Clear Message History for a conversation (Soft-Delete)
+   Keeps Lead, Conversation, Orders, and customer data intact
+========================================= */
+router.delete("/:id/messages", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { companyId } = req.user!;
+    const { id } = req.params;
+
+    const lead = await prisma.lead.findFirst({
+      where: { id, companyId },
+      select: {
+        id: true,
+        conversations: {
+          select: { id: true },
+          take: 1,
+          orderBy: { updatedAt: "desc" }
+        }
+      }
+    });
+
+    if (!lead || !lead.conversations[0]) {
+      return res.status(404).json({ message: "Lead or conversation not found" });
+    }
+
+    const conversationId = lead.conversations[0].id;
+
+    // Soft-delete all active messages for this conversation
+    await (prisma.message as any).updateMany({
+      where: { conversationId, companyId, deletedAt: null },
+      data: { deletedAt: new Date() }
+    });
+
+    safeEmitConversationUpdate({ id: conversationId } as any, "messages_cleared", { conversationId });
+
+    return res.json({ message: "Message history cleared successfully", conversationId });
+  } catch (error: any) {
+    console.error("Clear messages error:", error);
+    return res.status(500).json({ message: "Failed to clear message history" });
+  }
+});
+
+/* =========================================
+   DELETE /api/leads/:id/conversation
+   Delete Conversation Thread (Soft-Delete)
+   Sets deletedAt on Conversation and clears messages
+========================================= */
+router.delete("/:id/conversation", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { companyId } = req.user!;
+    const { id } = req.params;
+
+    const lead = await prisma.lead.findFirst({
+      where: { id, companyId },
+      select: {
+        id: true,
+        conversations: {
+          select: { id: true },
+          take: 1,
+          orderBy: { updatedAt: "desc" }
+        }
+      }
+    });
+
+    if (!lead || !lead.conversations[0]) {
+      return res.status(404).json({ message: "Lead or conversation not found" });
+    }
+
+    const conversationId = lead.conversations[0].id;
+
+    // Soft-delete conversation
+    await (prisma.conversation as any).update({
+      where: { id: conversationId },
+      data: {
+        deletedAt: new Date(),
+        lifecycleStatus: "deleted",
+        status: "RESOLVED"
+      }
+    });
+
+    // Also soft-delete related messages
+    await (prisma.message as any).updateMany({
+      where: { conversationId, companyId, deletedAt: null },
+      data: { deletedAt: new Date() }
+    });
+
+    emitToCompany(companyId, "conversation_deleted", { conversationId, leadId: id });
+
+    return res.json({ message: "Conversation deleted successfully", conversationId });
+  } catch (error: any) {
+    console.error("Delete conversation error:", error);
+    return res.status(500).json({ message: "Failed to delete conversation" });
   }
 });
 
