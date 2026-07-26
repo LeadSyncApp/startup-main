@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { 
   MessageSquare, 
@@ -85,50 +85,49 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
   const refreshBadgeCounts = useCallback(async () => {
     if (!companyId) return;
     try {
-      // Fetch unclaimed conversations for the "New Customers" badge (StreamTriage queue).
-      const unclaimedRes = await authedFetch('/api/leads?filter=unclaimed&limit=1');
+      // Fetch unclaimed conversations for the "New Customers" badge (StreamTriage queue) using lightweight countOnly query.
+      const unclaimedRes = await authedFetch('/api/leads?filter=unclaimed&countOnly=true');
       if (unclaimedRes.ok) {
         const unclaimedJson = await unclaimedRes.json();
         setUnclaimedCount(unclaimedJson.meta?.total ?? (unclaimedJson.data?.length ?? 0));
       }
 
-      // Fetch my assigned conversations for the "My Chats" unread badge.
-      const mineRes = await authedFetch('/api/leads?filter=mine&limit=50');
-      if (mineRes.ok) {
-        const json = await mineRes.json();
-        const active = (json.data || []).filter(
-          (l: { status: string }) => l.status !== 'RESOLVED'
-        );
-        // Unread chats = active chats that actually have unread messages.
-        // Use unreadCount (>0) as the single source of truth so the sidebar
-        // stays consistent with the per-chat badge in the chat list.
-        setUnreadLeadIds(
-          new Set(active.filter((l: { id: string; unreadCount?: number }) => (l.unreadCount ?? 0) > 0).map((l: { id: string }) => l.id))
-        );
+      // Fetch my assigned conversations for the "My Chats" unread badge, unless inbox page is active
+      // (inbox page broadcasts its unread lead IDs directly via inbox:unread_leads to prevent duplicate fetches).
+      if (activeTab !== 'inbox') {
+        const mineRes = await authedFetch('/api/leads?filter=mine&limit=50');
+        if (mineRes.ok) {
+          const json = await mineRes.json();
+          const active = (json.data || []).filter(
+            (l: { status: string }) => l.status !== 'RESOLVED'
+          );
+          setUnreadLeadIds(
+            new Set(active.filter((l: { id: string; unreadCount?: number }) => (l.unreadCount ?? 0) > 0).map((l: { id: string }) => l.id))
+          );
+        }
       }
     } catch {
       // Keep counts at 0 on failure; badges simply don't show.
     }
-  }, [companyId]);
+  }, [companyId, activeTab]);
 
   // Count of unread chats, with the currently-open conversation excluded so it
   // never shows as unread while the user is viewing it live. Updates instantly
   // whenever openLeadId changes (no server round-trip).
-  const myUnreadChats = Math.max(
+  const myUnreadChats = useMemo(() => Math.max(
     0,
     unreadLeadIds.size - (openLeadId && unreadLeadIds.has(openLeadId) ? 1 : 0)
-  );
+  ), [unreadLeadIds, openLeadId]);
 
   // Initial fetch on mount; re-fetch if companyId changes
   useEffect(() => {
     refreshBadgeCounts();
   }, [refreshBadgeCounts]);
 
-  // Polling fallback: keep badge in sync even if socket events are missed
-  // (e.g. WebSocket reconnect gap, raw SQL deletions, backend events we don't subscribe to).
-  // Matches StreamTriage's 10s poll but uses 15s to avoid redundant load.
+  // Fallback safety net polling: keep badge in sync if socket events are missed (e.g. WS reconnect gap).
+  // Sockets handle primary real-time updates; fallback polling runs every 60s.
   useEffect(() => {
-    const interval = setInterval(refreshBadgeCounts, 15_000);
+    const interval = setInterval(refreshBadgeCounts, 60_000);
     return () => clearInterval(interval);
   }, [refreshBadgeCounts]);
 
@@ -158,6 +157,15 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
     };
     window.addEventListener("conversation:open", handleOpen);
 
+    // Track unread leads broadcast from InboxList when activeTab === 'inbox'
+    const handleInboxUnread = (e: Event) => {
+      const ids = (e as CustomEvent<{ unreadLeadIds: string[] }>).detail?.unreadLeadIds;
+      if (ids) {
+        setUnreadLeadIds(new Set(ids));
+      }
+    };
+    window.addEventListener("inbox:unread_leads", handleInboxUnread);
+
     return () => {
       unsub1();
       unsub2();
@@ -166,24 +174,25 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
       unsub5();
       unsub6();
       window.removeEventListener("conversation:open", handleOpen);
+      window.removeEventListener("inbox:unread_leads", handleInboxUnread);
       if (badgeRefreshTimer.current) clearTimeout(badgeRefreshTimer.current);
     };
   }, [scheduleBadgeRefresh]);
 
   // Map dynamic counts onto ONLY the two tabs that should ever show a badge.
   // Other tabs keep their original (absent) badge property, exactly as before.
-  const badgeFor: Partial<Record<string, number>> = {
+  const badgeFor = useMemo((): Partial<Record<string, number>> => ({
     messages: unclaimedCount > 0 ? unclaimedCount : undefined,
     inbox: myUnreadChats > 0 ? myUnreadChats : undefined,
-  };
+  }), [unclaimedCount, myUnreadChats]);
 
-  const allowedTabs = tabConfig
+  const allowedTabs = useMemo(() => tabConfig
     .filter(tab => tab.allowedRoles.includes(userRole))
     .map(tab =>
       tab.id in badgeFor
         ? { ...tab, badge: badgeFor[tab.id] }
         : tab
-    );
+    ), [userRole, badgeFor]);
 
   const displayRole = userRole === 'STAFF' ? 'Staff' : userRole === 'MANAGER' ? 'Manager' : 'Owner';
 

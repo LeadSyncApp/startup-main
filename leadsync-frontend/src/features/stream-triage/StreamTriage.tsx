@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -176,7 +176,7 @@ const VIRTUAL_ROW_HEIGHT = 82;
 const glassStyles = "backdrop-filter backdrop-blur-[20px] bg-app-surface/75";
 
 // ── Conversation card (shared between collapsed and virtual views) ──
-function ConversationCard({
+const ConversationCard = memo(function ConversationCard({
   lead, tier, isSelected, onSelect, onClaim,
 }: {
   lead: BackendLead; tier: Tier; isSelected: boolean;
@@ -235,7 +235,7 @@ function ConversationCard({
       </div>
     </button>
   );
-}
+});
 
 function ChannelIcon({ channel }: { channel?: string }) {
   const Icon = CHANNEL_ICONS[(channel || "WEBSITE").toUpperCase()] || Globe;
@@ -258,7 +258,7 @@ function AiReasonTags({ lead }: { lead: BackendLead }) {
 }
 
 // ── Tier section ──
-function TierSection({
+const TierSection = memo(function TierSection({
   tier, leads, expanded, onToggle, selectedLeadId, onSelectLead, onClaim, emptyLabel,
 }: {
   tier: Tier; leads: BackendLead[]; expanded: boolean;
@@ -378,7 +378,7 @@ function TierSection({
       )}
     </div>
   );
-}
+});
 
 // ── Main component ──
 export function StreamTriage() {
@@ -504,17 +504,24 @@ export function StreamTriage() {
     return null;
   }, [currentIndex, leads, selectedLeadId]);
 
-  const toggleSection = (tier: Tier) => {
+  // Refs for stable callbacks — read the latest leads/activeLead without capturing
+  // them in useCallback deps, which would recreate the callback on every poll.
+  const leadsRef = useRef(leads);
+  leadsRef.current = leads;
+  const activeLeadRef = useRef(activeLead);
+  activeLeadRef.current = activeLead;
+
+  const toggleSection = useCallback((tier: Tier) => {
     setExpandedSections(prev => {
       const next = new Set(prev);
       if (next.has(tier)) next.delete(tier); else next.add(tier);
       return next;
     });
-  };
+  }, [setExpandedSections]);
 
   // ── Handle claim ──
-  const handleClaim = async (leadId?: string) => {
-    const lead = leadId ? leads.find(l => l.id === leadId) : activeLead;
+  const handleClaim = useCallback(async (leadId?: string) => {
+    const lead = leadId ? leadsRef.current.find(l => l.id === leadId) : activeLeadRef.current;
     if (!lead?.conversationId) return;
     try {
       const endpoint = lead.pendingOrderAmount !== null && lead.pendingOrderAmount > 0
@@ -528,10 +535,10 @@ export function StreamTriage() {
       setLeads(prev => prev.filter(l => l.id !== lead.id));
       pollLeads();
     } catch (e: any) { toast.error(e.message || "Failed to claim ticket"); }
-  };
+  }, [pollLeads]);
 
-  const handleSkip = async () => {
-    const lead = activeLead;
+  const handleSkip = useCallback(async () => {
+    const lead = activeLeadRef.current;
     if (lead?.conversationId) {
       try {
         const res = await authedFetch(`/api/leads/${lead.id}/skip`, { method: "POST" });
@@ -541,8 +548,8 @@ export function StreamTriage() {
     }
     setCurrentIndex(prev => prev + 1);
     setSelectedLeadId(null);
-  };
-  const handleRowClick = (leadId: string) => setSelectedLeadId(leadId);
+  }, []);
+  const handleRowClick = useCallback((leadId: string) => setSelectedLeadId(leadId), [setSelectedLeadId]);
 
   // ── Loading state ──
   if (loading) {

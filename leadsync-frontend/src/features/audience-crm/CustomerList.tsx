@@ -79,8 +79,11 @@ export const CustomerList: React.FC = () => {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
-    fetchAudience();
+    if (page !== 1) {
+      setPage(1);
+    } else {
+      fetchAudience();
+    }
   };
 
   const toggleSelection = (id: string) => {

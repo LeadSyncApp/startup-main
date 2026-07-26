@@ -18,7 +18,8 @@ export const DailyCollectionStats: React.FC = () => {
       try {
         const response = await authedFetch('/api/orders');
         if (response.ok) {
-          const orders = await response.json();
+          const rawData = await response.json();
+          const orders = Array.isArray(rawData) ? rawData : (rawData.data || []);
           const today = new Date().toISOString().split('T')[0];
           const todayCollection = orders.filter((o: any) => o.status === 'PAID' && o.createdAt.startsWith(today)).reduce((sum: number, o: any) => sum + o.amount, 0);
           const pendingPayments = orders.filter((o: any) => o.status === 'PENDING').reduce((sum: number, o: any) => sum + o.amount, 0);

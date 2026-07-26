@@ -3,7 +3,7 @@
  * Business-agnostic: supports Retail, Restaurant, Services, Salons, Freelancers, Tutors, etc.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Check,
@@ -447,7 +447,6 @@ export function InventoryConfirmationScreen({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [duplicates, setDuplicates] = useState<Array<{ name: string; existingId: string }>>([]);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
-  const [existingCategories, setExistingCategories] = useState<string[]>([]);
   const [categoryInput, setCategoryInput] = useState("");
   const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
   const [categoryFocusIndex, setCategoryFocusIndex] = useState<number | null>(null);
@@ -464,19 +463,9 @@ export function InventoryConfirmationScreen({
     setProducts(initialProducts);
   }, [initialProducts]);
 
-  // Fetch existing categories for suggestions
-  useEffect(() => {
-    if (!companyId) return;
-    authedFetch(`/api/companies/${companyId}/inventory`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.products) {
-          const cats = [...new Set(data.products.flatMap((p: any) => p.categories || []))].sort() as string[];
-          setExistingCategories(cats);
-        }
-      })
-      .catch(() => {});
-  }, [companyId]);
+  const existingCategories = useMemo(() => {
+    return [...new Set((products || []).flatMap((p: any) => p.categories || []))].sort() as string[];
+  }, [products]);
 
   // Fetch product field definitions
   useEffect(() => {

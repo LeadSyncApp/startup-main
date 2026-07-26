@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { MessageSquare, MessageCircle, Instagram, Globe, Loader2, UserPlus } from "lucide-react";
 import toast from "react-hot-toast";
@@ -74,7 +74,7 @@ function relativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {}) {
+export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {}) {
   const navigate = useNavigate();
   const [leads, setLeads] = useState<BackendLead[]>([]);
   const [meta, setMeta] = useState<{ total: number; page: number; limit: number; hasMore: boolean }>({ total: 0, page: 1, limit: 50, hasMore: false });
@@ -86,21 +86,6 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
   // Total conversation counts per tab, always visible in the tab labels.
   const [tabTotals, setTabTotals] = useState<Record<FilterTab, number>>({ chats: 0, completed: 0 });
   const { companyId } = useAuth();
-
-  // Fetch the total count for a given tab's backend filter (limit=1 is enough to read meta.total).
-  const fetchTabTotal = useCallback(async (tab: FilterTab) => {
-    const backendFilter = tab === "completed" ? "resolved" : "mine";
-    const params = new URLSearchParams({ filter: backendFilter, limit: "1", page: "1" });
-    if (search) params.set("search", search);
-    try {
-      const res = await authedFetch(`/api/leads?${params.toString()}`);
-      if (!res.ok) return;
-      const json: LeadsResponse = await res.json();
-      setTabTotals((prev) => ({ ...prev, [tab]: json.meta?.total ?? 0 }));
-    } catch {
-      // Leave previous total on failure.
-    }
-  }, [search]);
 
   const fetchLeads = useCallback(async (pageNum: number = 1, append: boolean = false) => {
     try {
@@ -133,11 +118,31 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
       });
 
       if (append) {
-        setLeads((prev) => [...prev, ...statusFiltered]);
+        setLeads((prev) => {
+          const next = [...prev, ...statusFiltered];
+          const unreadIds = next
+            .filter((l) => l.status !== "RESOLVED" && (l.unreadCount ?? 0) > 0)
+            .map((l) => l.id);
+          window.dispatchEvent(
+            new CustomEvent("inbox:unread_leads", {
+              detail: { unreadLeadIds: unreadIds },
+            })
+          );
+          return next;
+        });
       } else {
         setLeads(statusFiltered);
+        const unreadIds = statusFiltered
+          .filter((l) => l.status !== "RESOLVED" && (l.unreadCount ?? 0) > 0)
+          .map((l) => l.id);
+        window.dispatchEvent(
+          new CustomEvent("inbox:unread_leads", {
+            detail: { unreadLeadIds: unreadIds },
+          })
+        );
       }
       setMeta(json.meta);
+      setTabTotals((prev) => ({ ...prev, [filter]: json.meta?.total ?? 0 }));
     } catch (e: any) {
       setError(e.message || "Failed to load inbox");
       setLeads([]);
@@ -146,26 +151,22 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
     }
   }, [filter, search]);
 
-  // Initial fetch when filter/search changes; also refresh both tab totals.
+  // Initial fetch when filter/search changes.
   useEffect(() => {
     fetchLeads(1);
-    fetchTabTotal("chats");
-    fetchTabTotal("completed");
-  }, [fetchLeads, fetchTabTotal]);
+  }, [fetchLeads]);
 
   // Listen for real-time conversation resolution to remove from list immediately
   useEffect(() => {
     const handleResolved = (data: { conversationId: string; companyId: string }) => {
       if (data.companyId === companyId) {
         setLeads((prev) => prev.filter((lead) => lead.conversationId !== data.conversationId));
-        // A chat moved to Completed — refresh both tab totals.
-        fetchTabTotal("chats");
-        fetchTabTotal("completed");
+        fetchLeads(1);
       }
     };
 
     return onEvent("conversation.resolved", handleResolved);
-  }, [companyId, fetchTabTotal]);
+  }, [companyId, fetchLeads]);
 
   // Refresh the list when a conversation is updated (e.g. marked read or new message),
   // so per-chat unread counts + dot update in real time without a page reload.
@@ -184,11 +185,20 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
     const handleRead = (e: Event) => {
       const leadId = (e as CustomEvent<{ leadId: string }>).detail?.leadId;
       if (!leadId) return;
-      setLeads((prev) =>
-        prev.map((lead) =>
+      setLeads((prev) => {
+        const next = prev.map((lead) =>
           lead.id === leadId ? { ...lead, unreadCount: 0, isUnread: false } : lead
-        )
-      );
+        );
+        const unreadIds = next
+          .filter((l) => l.status !== "RESOLVED" && (l.unreadCount ?? 0) > 0)
+          .map((l) => l.id);
+        window.dispatchEvent(
+          new CustomEvent("inbox:unread_leads", {
+            detail: { unreadLeadIds: unreadIds },
+          })
+        );
+        return next;
+      });
     };
 
     window.addEventListener("conversation:read", handleRead);
@@ -206,7 +216,7 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
   };
 
   // Handle claim for unclaimed chat
-  const handleClaim = async (e: React.MouseEvent, leadId: string) => {
+  const handleClaim = useCallback(async (e: React.MouseEvent, leadId: string) => {
     e.stopPropagation(); // Prevent row click navigation
     e.preventDefault();
     try {
@@ -222,7 +232,7 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
     } catch (e: any) {
       toast.error(e.message || "Failed to claim");
     }
-  };
+  }, [fetchLeads]);
 
   if (loading && leads.length === 0) {
     return (
@@ -365,12 +375,7 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
                       <Badge variant={STATUS_VARIANT[lead.status.toUpperCase()] || "neutral"}>
                         {lead.status}
                       </Badge>
-                      {/* Pending order amount badge */}
-                      {lead.pendingOrderAmount && lead.pendingOrderAmount > 0 && (
-                        <Badge variant="warning">
-                          ₹{Math.round(lead.pendingOrderAmount)}
-                        </Badge>
-                      )}
+
                       {/* Claim button for unassigned chats */}
                       {!lead.assignedTo && (
                         <button
@@ -413,6 +418,6 @@ export function InboxList({ selectedLeadId, onSelectLead }: InboxListProps = {})
       )}
     </div>
   );
-}
+});
 
 export default InboxList;
