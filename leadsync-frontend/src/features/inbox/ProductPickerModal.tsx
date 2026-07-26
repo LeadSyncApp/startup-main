@@ -9,6 +9,8 @@ import { motion } from "framer-motion";
 import { Search, X, Package, CreditCard, Loader2 } from "lucide-react";
 import { authedFetch } from "../../api/client";
 
+import { formatVariantLabel, formatVariantAttributeHeader } from "./PaymentRequestModal";
+
 const LOW_STOCK_THRESHOLD = 5;
 
 function getStockStatus(stock: number | null): string | null {
@@ -23,6 +25,7 @@ interface ProductVariant {
   attributeValue: string;
   price: number;
   stock: number | null;
+  attributes?: Record<string, string> | null;
 }
 
 interface PickerProduct {
@@ -35,6 +38,7 @@ interface PickerProduct {
   imageUrl: string | null;
   hasVariants: boolean;
   variantAttributeName: string | null;
+  variantAttributeNames?: string[];
   variants: ProductVariant[];
 }
 
@@ -103,11 +107,9 @@ export function ProductPickerModal({
     setGeneratingLink(true);
     try {
       const price = variant ? variant.price : product.basePrice;
-      const attrNames = (product as any).variantAttributeNames?.length > 0 
-        ? (product as any).variantAttributeNames.join(" / ")
-        : (product.variantAttributeName || "Variant");
+      const attrHeader = formatVariantAttributeHeader(product);
       const variantLabel = variant
-        ? ` (${attrNames}: ${variant.attributeValue})`
+        ? ` (${attrHeader}: ${formatVariantLabel(variant, product)})`
         : "";
       const name = product.name;
 
@@ -228,7 +230,7 @@ export function ProductPickerModal({
                   )}
                   {product.hasVariants && (
                     <span className="text-[10px] text-[var(--app-text-muted)]">
-                      {product.variants.length} {product.variantAttributeName || "variants"}
+                      {product.variants.length} {formatVariantAttributeHeader(product)}
                     </span>
                   )}
                 </div>
@@ -250,7 +252,7 @@ export function ProductPickerModal({
               </div>
 
               <p className="text-xs text-[var(--app-text-muted)]">
-                Select {selectedProduct.variantAttributeName || "variant"} for{" "}
+                Select {formatVariantAttributeHeader(selectedProduct)} for{" "}
                 <span className="text-[var(--app-text)] font-bold">{selectedProduct.name}</span>
               </p>
 
@@ -266,7 +268,7 @@ export function ProductPickerModal({
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-[var(--app-text)]">{variant.attributeValue}</span>
+                    <span className="text-sm font-bold text-[var(--app-text)]">{formatVariantLabel(variant, selectedProduct)}</span>
                     {variant.stock !== null && (
                       (() => {
                         const status = getStockStatus(variant.stock);
