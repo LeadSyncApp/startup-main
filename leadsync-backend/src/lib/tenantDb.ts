@@ -207,6 +207,14 @@ export const createTenantRepository = (companyId: string, tx?: any) => {
             companyId,
           },
         }),
+      count: (args?: any) =>
+        db.order.count({
+          ...args,
+          where: {
+            ...args?.where,
+            companyId,
+          },
+        }),
     },
 
     orderLog: {
@@ -269,6 +277,14 @@ export const createTenantRepository = (companyId: string, tx?: any) => {
           where: { id: existing.id },
         });
       },
+      count: (args?: any) =>
+        db.account.count({
+          ...args,
+          where: {
+            ...args?.where,
+            companyId,
+          },
+        }),
     },
 
     deal: {
@@ -316,6 +332,14 @@ export const createTenantRepository = (companyId: string, tx?: any) => {
           where: { id: existing.id },
         });
       },
+      count: (args?: any) =>
+        db.deal.count({
+          ...args,
+          where: {
+            ...args?.where,
+            companyId,
+          },
+        }),
     },
 
     task: {
@@ -363,6 +387,14 @@ export const createTenantRepository = (companyId: string, tx?: any) => {
           where: { id: existing.id },
         });
       },
+      count: (args?: any) =>
+        db.task.count({
+          ...args,
+          where: {
+            ...args?.where,
+            companyId,
+          },
+        }),
     },
 
     tag: {
