@@ -649,7 +649,6 @@ model KnowledgeChunk {
 
   @@unique([companyId, sourceType, sourceId])
   @@index([companyId])
-  @@index([companyId, isActive])
 }
 
 model NotificationTemplate {
