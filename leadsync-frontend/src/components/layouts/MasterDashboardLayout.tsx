@@ -124,6 +124,14 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
     refreshBadgeCounts();
   }, [refreshBadgeCounts]);
 
+  // Polling fallback: keep badge in sync even if socket events are missed
+  // (e.g. WebSocket reconnect gap, raw SQL deletions, backend events we don't subscribe to).
+  // Matches StreamTriage's 10s poll but uses 15s to avoid redundant load.
+  useEffect(() => {
+    const interval = setInterval(refreshBadgeCounts, 15_000);
+    return () => clearInterval(interval);
+  }, [refreshBadgeCounts]);
+
   // Live badge updates via socket events — debounced to batch rapid-fire events
   const badgeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleBadgeRefresh = useCallback(() => {
@@ -138,6 +146,8 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
     const unsub2 = onEvent("conversation_updated", handler);
     const unsub3 = onEvent("conversation.resolved", handler);
     const unsub4 = onEvent("lead_updated", handler);
+    const unsub5 = onEvent("lead_claimed", handler);
+    const unsub6 = onEvent("conversation_deleted", handler);
 
     // Track which conversation is currently open (broadcast by InboxSplitView).
     // The open chat is excluded from the unread count on the SAME tick it opens,
@@ -153,6 +163,8 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
       unsub2();
       unsub3();
       unsub4();
+      unsub5();
+      unsub6();
       window.removeEventListener("conversation:open", handleOpen);
       if (badgeRefreshTimer.current) clearTimeout(badgeRefreshTimer.current);
     };

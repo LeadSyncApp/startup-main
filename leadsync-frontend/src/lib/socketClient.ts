@@ -25,7 +25,12 @@ export function connectSocket(userId: string, companyId: string, token: string, 
   disconnectSocket();
   connectedUserId = userId;
 
-  socket = io(window.location.origin, {
+  const socketTarget = (import.meta.env.VITE_SOCKET_URL as string) ||
+    (typeof window !== "undefined" && window.location.origin.includes(":5173")
+      ? "http://localhost:4000"
+      : window.location.origin);
+
+  socket = io(socketTarget, {
     transports: ["websocket", "polling"],
     auth: {
       token, // passed to io.use middleware for JWT verification

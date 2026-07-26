@@ -44,7 +44,7 @@ function getBaseTier(lead: BackendLead): Tier {
   if (lead.intent === "ORDERING" || (lead.pendingOrderAmount !== null && lead.pendingOrderAmount > 0)) {
     return "claim_now";
   }
-  if (lead.aiScore >= 60) {
+  if (lead.intent === "SUPPORT" || lead.intent === "COMPLAINT" || lead.aiScore >= 60) {
     return "follow_up";
   }
   return "browsing";
@@ -201,7 +201,7 @@ function ConversationCard({
               ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
               : "bg-teal-500/20 text-teal-400 border-teal-500/30"
           }`}>
-            {(lead.name || lead.contact || "??").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+            {(lead.name || lead.contact || "CU").split(" ").filter(Boolean).map(w => w[0] || "").slice(0, 2).join("").toUpperCase() || "CU"}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
@@ -210,7 +210,7 @@ function ConversationCard({
             </div>
             <p className="text-[9px] text-app-text-muted font-mono flex items-center gap-1">
               <ChannelIcon channel={lead.channel} />
-              <span>{lead.channel}</span>
+              <span>{lead.channel || "WEBSITE"}</span>
               <span className="text-app-text-muted">·</span>
               <span>{waitTime(lead)}</span>
             </p>
@@ -237,8 +237,8 @@ function ConversationCard({
   );
 }
 
-function ChannelIcon({ channel }: { channel: string }) {
-  const Icon = CHANNEL_ICONS[channel.toUpperCase()] || Globe;
+function ChannelIcon({ channel }: { channel?: string }) {
+  const Icon = CHANNEL_ICONS[(channel || "WEBSITE").toUpperCase()] || Globe;
   return <Icon className="h-3 w-3" />;
 }
 
@@ -390,13 +390,13 @@ export function StreamTriage() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set());
 
   const availablePlatforms = useMemo(() => {
-    const platforms = new Set(leads.map(l => l.channel.toUpperCase()));
+    const platforms = new Set(leads.map(l => (l.channel || "WEBSITE").toUpperCase()));
     return Array.from(platforms).sort();
   }, [leads]);
 
   const filteredLeads = useMemo(() => {
     if (selectedPlatforms.size === 0) return leads;
-    return leads.filter(l => selectedPlatforms.has(l.channel.toUpperCase()));
+    return leads.filter(l => selectedPlatforms.has((l.channel || "WEBSITE").toUpperCase()));
   }, [leads, selectedPlatforms]);
 
   // ── Initial fetch ──

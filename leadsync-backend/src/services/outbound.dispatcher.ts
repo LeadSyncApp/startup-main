@@ -4,6 +4,7 @@ import { TelegramTransportService } from "./transport/telegramTransport.service"
 import { metaAdapterService } from "./adapters/meta.adapter";
 import { Channel, MessageSender } from "@prisma/client";
 import { getTenantContext } from "./context/tenantContext.provider";
+import { emitToConversation, emitToVisitor } from "../lib/socket";
 
 export class OutboundDispatcher {
   /**
@@ -23,7 +24,7 @@ export class OutboundDispatcher {
     if (!to || typeof to !== "string" || to.trim() === "") {
       throw new Error("OutboundDispatcher: Invalid or missing to (recipient ID)");
     }
-    if (!channel || (channel !== "TELEGRAM" && channel !== "WHATSAPP" && channel !== "INSTAGRAM")) {
+    if (!channel || (channel !== "TELEGRAM" && channel !== "WHATSAPP" && channel !== "INSTAGRAM" && channel !== "WEBSITE")) {
       throw new Error(`OutboundDispatcher: Invalid or unsupported channel "${channel}"`);
     }
     if (!content || typeof content.text !== "string" || content.text.trim() === "") {
@@ -41,6 +42,9 @@ export class OutboundDispatcher {
         await metaAdapterService.sendWhatsAppMessage(companyId, to, content.text);
       } else if (channel === "INSTAGRAM") {
         await metaAdapterService.sendInstagramMessage(companyId, to, content.text);
+      } else if (channel === "WEBSITE") {
+        // First-party web widget — no external 3rd party HTTP transport needed
+        deliveryStatus = "SENT";
       }
     } catch (err: unknown) {
       deliveryStatus = "FAILED";
@@ -49,10 +53,11 @@ export class OutboundDispatcher {
     }
 
     // 3. Channel Enum and Sender Enum Mappings
-    const platformMap: Record<"TELEGRAM" | "WHATSAPP" | "INSTAGRAM", Channel> = {
+    const platformMap: Record<"TELEGRAM" | "WHATSAPP" | "INSTAGRAM" | "WEBSITE", Channel> = {
       TELEGRAM: Channel.TELEGRAM,
       WHATSAPP: Channel.WHATSAPP,
-      INSTAGRAM: Channel.INSTAGRAM
+      INSTAGRAM: Channel.INSTAGRAM,
+      WEBSITE: Channel.WEBSITE
     };
 
     const senderName = sender || "SYSTEM";
@@ -105,6 +110,11 @@ const messageSender = payload.sender === "AGENT" ? MessageSender.AGENT
       );
       createdMessageId = result.id;
       createdMessage = result;
+
+      if (createdMessage) {
+        emitToConversation(conversationId, "new_message", { ...createdMessage, conversationId });
+        if (to) emitToVisitor(to, "new_message", { ...createdMessage, conversationId });
+      }
     } catch (dbError: any) {
       const dbMsg = dbError instanceof Error ? dbError.message : String(dbError);
       console.error(`❌ [OutboundDispatcher] Database transaction failed while recording message: ${dbMsg}`);

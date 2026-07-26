@@ -12,6 +12,37 @@ const userHeartbeats = new Map<string, number>();
 const HEARTBEAT_TIMEOUT_MS = 90_000; // 90s no ping = offline
 const CLEANUP_INTERVAL_MS = 30_000;  // check every 30s
 
+// ============================================================
+// Per-Company Visitor Socket Concurrency Cap
+// Max 100 concurrent visitor socket connections per store workspace
+// ============================================================
+export const MAX_VISITOR_CONCURRENCY_PER_COMPANY = 100;
+const activeVisitorSocketsPerCompany = new Map<string, Set<string>>();
+
+function registerVisitorSocket(companyId: string, socketId: string): boolean {
+    if (!companyId) return true;
+    let set = activeVisitorSocketsPerCompany.get(companyId);
+    if (!set) {
+        set = new Set<string>();
+        activeVisitorSocketsPerCompany.set(companyId, set);
+    }
+    if (set.has(socketId)) return true;
+    if (set.size >= MAX_VISITOR_CONCURRENCY_PER_COMPANY) {
+        return false;
+    }
+    set.add(socketId);
+    return true;
+}
+
+function removeVisitorSocket(socketId: string) {
+    for (const [companyId, set] of activeVisitorSocketsPerCompany.entries()) {
+        if (set.has(socketId)) {
+            set.delete(socketId);
+            if (set.size === 0) activeVisitorSocketsPerCompany.delete(companyId);
+        }
+    }
+}
+
 /**
  * On server startup, reset all users to offline so that stale
  * "isOnline: true" from a previous crash/restart is cleared.
@@ -93,8 +124,46 @@ export const initSocket = (httpServer: HttpServer) => {
             console.log(`🛡️ Socket ${socket.id} joined admin room: company:${companyId}:admin`);
         });
 
+        socket.on("join_conversation", (conversationId: string) => {
+            if (conversationId) {
+                socket.join(conversationId);
+                socket.join(`conversation:${conversationId}`);
+                console.log(`💬 Socket ${socket.id} joined conversation room: ${conversationId}`);
+            }
+        });
+
+        socket.on("join_visitor", (payload: any) => {
+            const token = typeof payload === "string" ? payload : payload?.visitorToken;
+            const phone = typeof payload === "object" ? payload?.phone : null;
+            const companyId = typeof payload === "object" ? payload?.companyId : null;
+
+            if (companyId) {
+                const allowed = registerVisitorSocket(companyId, socket.id);
+                if (!allowed) {
+                    console.warn(`⚠️ [Socket Cap] Exceeded max visitor concurrency (${MAX_VISITOR_CONCURRENCY_PER_COMPANY}) for company: ${companyId}`);
+                    socket.emit("visitor_limit_exceeded", {
+                        message: "Store chat high traffic. Please try again shortly."
+                    });
+                    return;
+                }
+            }
+
+            if (token) {
+                socket.join(`visitor:${token}`);
+                console.log(`💬 Socket ${socket.id} joined visitor room: visitor:${token}`);
+            }
+            if (phone) {
+                const cleanPhone = String(phone).replace(/[^0-9]/g, "");
+                if (cleanPhone) {
+                    socket.join(`visitor:${cleanPhone}`);
+                    console.log(`💬 Socket ${socket.id} joined visitor room: visitor:${cleanPhone}`);
+                }
+            }
+        });
+
         socket.on("disconnect", async () => {
             console.log(`🔌 Socket disconnected: ${socket.id}`);
+            removeVisitorSocket(socket.id);
             // Check if this socket was associated with a user
             const userId = socket.data?.userId;
             if (userId) {
@@ -181,6 +250,10 @@ export const emitToCompanyAdmin = (companyId: string, event: string, data: any) 
 
 export const emitToAgent = (userId: string, event: string, data: any) => {
     if (io) io.to(`user:${userId}`).emit(event, data);
+};
+
+export const emitToVisitor = (visitorToken: string, event: string, data: any) => {
+    if (io && visitorToken) io.to(`visitor:${visitorToken}`).emit(event, data);
 };
 
 export const emitToConversation = (conversationId: string, event: string, data: any) => {

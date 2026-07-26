@@ -259,7 +259,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         id: lead.id,
         name: lead.name || "Customer",
         contact: lead.contact,
-        channel: lead.channel,
+        channel: lead.channel || "WEBSITE",
         createdAt: lead.createdAt,
         lastActiveAt: lead.lastActiveAt,
 
@@ -1576,10 +1576,11 @@ router.post("/:id/reply", authMiddleware, async (req: AuthRequest, res: Response
     }
 
     // 3. Map Prisma Channel enum to OutboundPayload ChannelType
-    const channelMap: Record<string, "TELEGRAM" | "WHATSAPP" | "INSTAGRAM"> = {
+    const channelMap: Record<string, "TELEGRAM" | "WHATSAPP" | "INSTAGRAM" | "WEBSITE"> = {
       TELEGRAM: "TELEGRAM",
       WHATSAPP: "WHATSAPP",
       INSTAGRAM: "INSTAGRAM",
+      WEBSITE: "WEBSITE",
     };
 
     const channelType = channelMap[lead.channel];

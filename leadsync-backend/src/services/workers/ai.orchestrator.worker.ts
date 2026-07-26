@@ -11,7 +11,7 @@ import { retrieveSimilarChunks } from "../knowledge/knowledgeRetriever.service";
 import { matchProductForMessage } from "../knowledge/productMatch.service";
 import { StandardMessageFrame } from "../../interfaces/messaging.interface";
 import { tenantContextStorage, TenantContext } from "../context/tenantContext.provider";
-import { safeEmitConversationUpdate, emitToConversation, getIO } from "../../lib/socket";
+import { safeEmitConversationUpdate, emitToConversation, emitToVisitor, getIO } from "../../lib/socket";
 import { conversationalAutoReplyService } from "../automation/conversationalAutoReply.service";
 import { telegramSurfaceAdapter } from "../automation/telegramSurface.adapter";
 import { detectLanguage } from "../ai/languageDetection.service";
@@ -43,6 +43,17 @@ export function evaluateTenantPriorityRules(aiOutput: any, rules: TenantContext[
   return "STANDARD";
 }
 
+const GENERIC_NAMES = new Set([
+  "user", "customer", "store shopper", "shopify customer", 
+  "woocommerce customer", "website customer", "telegram user", 
+  "whatsapp user", "unknown", "lead", "test user", "test lead"
+]);
+
+function isGenericName(name?: string | null): boolean {
+  if (!name || !name.trim()) return true;
+  return GENERIC_NAMES.has(name.trim().toLowerCase());
+}
+
 // In-memory lock map to prevent race conditions during first-touch lead/conversation creation
 const firstTouchLeadLocks = new Map<string, Promise<any>>();
 
@@ -64,6 +75,13 @@ async function resolveOrCreateLeadAndConversation(
     );
     P(`fast-path resolveOrCreate: existingLead conversations length=${existingLead.conversations?.length ?? 0}, activeConv found=${!!activeConv}`);
     if (activeConv) {
+      if (!isGenericName(contactName) && (isGenericName(existingLead.name) || existingLead.name !== contactName)) {
+        tenantPrisma.lead.update({
+          where: { id: existingLead.id },
+          data: { name: contactName }
+        }).catch((err: any) => console.error("[Orchestrator] Fast-path lead name update failed:", err.message));
+        existingLead.name = contactName;
+      }
       P("fast-path resolveOrCreate: returning early with activeConv from existingLead");
       return { lead: existingLead, conversation: activeConv };
     }
@@ -120,7 +138,7 @@ async function resolveOrCreateLeadAndConversation(
           }
         }
         P("fast-path resolveOrCreate: after tenantPrisma.lead.create");
-      } else if (contactName && lead.name !== contactName) {
+      } else if (!isGenericName(contactName) && (isGenericName(lead.name) || lead.name !== contactName)) {
         P("fast-path resolveOrCreate: before tenantPrisma.lead.update");
         lead = await tenantPrisma.lead.update({
           where: { id: lead.id },
@@ -1177,6 +1195,9 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
                     }
                     if (botMsg) {
                       emitToConversation(conversation.id, "new_message", { ...botMsg, conversationId: conversation.id });
+                      if (contact) {
+                        emitToVisitor(contact, "new_message", { ...botMsg, conversationId: conversation.id });
+                      }
                     }
                     safeEmitConversationUpdate(conversation, "conversation_updated", {
                       conversationId: conversation.id,

@@ -1,4 +1,4 @@
-export type ChannelType = "TELEGRAM" | "WHATSAPP" | "INSTAGRAM";
+export type ChannelType = "TELEGRAM" | "WHATSAPP" | "INSTAGRAM" | "WEBSITE";
 
 export interface MessageContent {
   text: string;
