@@ -54,68 +54,102 @@ router.post("/razorpay", async (req: Request, res: Response) => {
         // 2️⃣ Handle Payment Success
         if (event.event === "payment_link.paid" || event.event === "order.paid") {
             const paymentLink = event.payload.payment_link?.entity || event.payload.payment?.entity;
-            const orderId = paymentLink.notes?.order_id;
+            const notes = paymentLink.notes || {};
+            const orderId = notes.order_id;
+            const paymentId = paymentLink.payment_id || paymentLink.id || "PAY_" + Date.now();
+
+            let targetOrder: any = null;
 
             if (orderId) {
-                const order = await prisma.order.findUnique({
+                targetOrder = await prisma.order.findUnique({
                     where: { id: orderId },
                     include: { lead: true }
                 });
+            }
 
-                if (order) {
-                    // Find conversation via lead (Order no longer has direct conversation relation)
-                    const conv = order.leadId ? await prisma.conversation.findFirst({
-                        where: { leadId: order.leadId, lifecycleStatus: 'active', companyId: order.companyId }
-                    }) : null;
-                    const conversationId = conv?.id;
+            if (targetOrder) {
+                // Existing order: Transition status to PAID
+                const conv = targetOrder.leadId ? await prisma.conversation.findFirst({
+                    where: { leadId: targetOrder.leadId, lifecycleStatus: 'active', companyId: targetOrder.companyId }
+                }) : null;
 
-                    // 1️⃣ Update Order to PAID using Workflow Service
-                    const { order: updatedOrder } = await orderWorkflowService.transitionStatus(
-                        order.companyId,
-                        orderId,
-                        "PAID" as any,
-                        { id: "SYSTEM", name: "Razorpay", role: "SYSTEM" }
-                    );
+                const { order: updatedOrder } = await orderWorkflowService.transitionStatus(
+                    targetOrder.companyId,
+                    targetOrder.id,
+                    "PAID" as any,
+                    { id: "SYSTEM", name: "Razorpay Webhook", role: "SYSTEM" }
+                );
 
-                    // 2️⃣ Generate Invoice
-                    const paymentId = paymentLink.payment_id || paymentLink.id;
-                    await queueProvider.enqueue(PDF_JOB_NAME, { orderId, paymentRef: paymentId });
+                await queueProvider.enqueue(PDF_JOB_NAME, { orderId: targetOrder.id, paymentRef: paymentId });
 
-                    // 3️⃣ 🆕 CRM INTELLIGENCE: Update Lead Stats
-                    if (order.leadId) {
-                        const newOrderCount = (order.lead?.orderCount || 0) + 1;
-                        const newTotalSpend = (order.lead?.totalSpend || 0) + order.amount;
-                        await prisma.lead.update({
-                            where: { id: order.leadId },
-                            data: {
-                                orderCount: newOrderCount,
-                                totalSpend: newTotalSpend,
-                                segment: newOrderCount > 1 ? "REGULAR" : "NEW",
-                                lastActiveAt: new Date()
-                            }
-                        });
-                    }
+                if (targetOrder.leadId) {
+                    const { recalculateLeadCRM } = require("../../services/integrations/crm.service");
+                    await recalculateLeadCRM(targetOrder.leadId, targetOrder.companyId);
+                }
 
-                    // 4️⃣ Create System Message
-                    let sysMsgText = "✅ Payment Received successfully! Your order is now being processed. An invoice will be generated shortly.";
-
-                    const sysMsg = conversationId ? await prisma.message.create({
+                if (conv) {
+                    const sysMsg = await prisma.message.create({
                         data: {
-                            content: sysMsgText,
+                            content: "✅ Payment Received successfully! Your order is now being processed. An invoice will be generated shortly.",
                             sender: MessageSender.SYSTEM,
-                            conversationId,
-                            companyId: order.companyId
+                            conversationId: conv.id,
+                            companyId: targetOrder.companyId
                         }
-                    }) : null;
+                    });
+                    emitToConversation(conv.id, "new_message", sysMsg);
+                }
 
-                    // Real-time Updates
-                    if (sysMsg && conversationId) {
-                        emitToConversation(conversationId, "new_message", sysMsg);
+                console.log(`✅ Existing Order ${targetOrder.id} marked as PAID via Razorpay webhook.`);
+            } else if (notes.conversation_id || notes.company_id) {
+                // Deferred Order Creation: Create PAID order in DB upon real payment confirmation
+                const companyId = notes.company_id;
+                const conversationId = notes.conversation_id;
+                const amount = paymentLink.amount ? paymentLink.amount / 100 : parseFloat(notes.amount || "0");
+                
+                const conv = await prisma.conversation.findFirst({
+                    where: { id: conversationId }
+                });
+
+                if (conv) {
+                    const createdOrder = await prisma.order.create({
+                        data: {
+                            companyId: conv.companyId,
+                            conversationId: conv.id,
+                            leadId: conv.leadId!,
+                            amount,
+                            status: OrderStatus.PAID,
+                            completedAt: null,
+                            summary: notes.summary || "Paid Order (Razorpay)",
+                            source: "MANUAL",
+                            metadata: {
+                                paymentId,
+                                razorpayLinkId: paymentLink.id,
+                                isPaymentRequest: true
+                            }
+                        }
+                    });
+
+                    const { decrementStockForOrder } = require("../../services/knowledge/inventory.service");
+                    await decrementStockForOrder(createdOrder.id, conv.companyId).catch((e: any) => console.error(e));
+
+                    await queueProvider.enqueue(PDF_JOB_NAME, { orderId: createdOrder.id, paymentRef: paymentId });
+
+                    if (conv.leadId) {
+                        const { recalculateLeadCRM } = require("../../services/integrations/crm.service");
+                        await recalculateLeadCRM(conv.leadId, conv.companyId);
                     }
-                    // Updated order already emitted by workflow service, but we might want to emit it again with invoice details if needed
-                    // emitToConversation(order.conversationId, "order_updated", updatedOrder);
 
-                    console.log(`✅ Order ${orderId} marked as PAID and invoice generated.`);
+                    const sysMsg = await prisma.message.create({
+                        data: {
+                            content: "✅ Payment Received successfully! Your order is now being processed. An invoice will be generated shortly.",
+                            sender: MessageSender.SYSTEM,
+                            conversationId: conv.id,
+                            companyId: conv.companyId
+                        }
+                    });
+                    emitToConversation(conv.id, "new_message", sysMsg);
+
+                    console.log(`✅ Deferred Order ${createdOrder.id} created as PAID via Razorpay webhook.`);
                 }
             }
         }
