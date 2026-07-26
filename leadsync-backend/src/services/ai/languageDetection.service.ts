@@ -14,7 +14,8 @@ export interface LanguageDetectionResult {
 /**
  * Detect language using Sarvam AI API with Unicode fallback
  */
-let sarvamDisabled = false;
+let sarvamCooldownUntil = 0;
+const SARVAM_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes after failure
 
 export async function detectLanguage(
   text: string,
@@ -24,13 +25,13 @@ export async function detectLanguage(
     return { language: "en", confidence: 0 };
   }
 
-  // Try Sarvam AI API first if not disabled
-  if (apiKey && !sarvamDisabled) {
+  // Try Sarvam AI API first if not in cooldown
+  if (apiKey && Date.now() > sarvamCooldownUntil) {
     try {
       return await sarvamLanguageDetect(text, apiKey);
     } catch (error: any) {
-      sarvamDisabled = true;
-      console.warn(`[LanguageDetection] Sarvam API failed (${error.message}). Disabling Sarvam for session and falling back to Unicode detection.`);
+      sarvamCooldownUntil = Date.now() + SARVAM_COOLDOWN_MS;
+      console.warn(`[LanguageDetection] Sarvam API failed (${error.message}). Cooldown for 5 minutes, falling back to Unicode detection.`);
     }
   }
 
@@ -51,7 +52,7 @@ async function sarvamLanguageDetect(text: string, apiKey: string): Promise<Langu
     body: JSON.stringify({
       input: text.substring(0, 500), // Limit input length
     }),
-    signal: AbortSignal.timeout(1000), // 1s fail-fast timeout
+    signal: AbortSignal.timeout(1500), // 1.5s timeout (Sarvam healthy response ~770ms)
   });
 
   if (!response.ok) {
