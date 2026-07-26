@@ -7,7 +7,6 @@ import { Toaster, toast } from "react-hot-toast";
 import { MasterDashboardLayout, TabID } from "./components/layouts/MasterDashboardLayout";
 import { OnboardingWizard } from "./components/onboarding/OnboardingWizard";
 import { SignInForm } from "./components/auth/SignInForm";
-import { SimulationController } from "./simulation/SimulationController";
 import { connectSocket, disconnectSocket, onNotification } from "./lib/socketClient";
 import { useNotificationStore } from "./features/notifications/useNotificationStore";
 import { AcceptInvitePage } from "./features/team/AcceptInvitePage";
@@ -24,8 +23,8 @@ const OrderFulfillmentBoard = lazy(() => import("./features/orders/OrderFulfillm
 const StreamTriage = lazy(() => import("./features/stream-triage/StreamTriage").then(m => ({ default: m.StreamTriage })));
 const InboxSplitView = lazy(() => import("./features/inbox/InboxSplitView"));
 const InventoryPage = lazy(() => import("./features/inventory/InventoryPage").then(m => ({ default: m.InventoryPage })));
-const DailyCollectionStats = lazy(() => import("./features/dashboard/DailyCollectionStats").then(m => ({ default: m.DailyCollectionStats })));
 const DailyPulseAdaptiveWidget = lazy(() => import("./features/dashboard/DailyPulseAdaptiveWidget").then(m => ({ default: m.DailyPulseAdaptiveWidget })));
+const MyShopPage = lazy(() => import("./features/dashboard/MyShopPage").then(m => ({ default: m.MyShopPage })));
 const ConfigurationsPage = lazy(() => import("./features/configurations/ConfigurationsPage").then(m => ({ default: m.ConfigurationsPage })));
 
 // NOTE FOR REVIEW: InboxSplitWithParam reads the :leadId URL param and passes it
@@ -70,12 +69,12 @@ export default function App() {
   // Active tab state - now using new TabID values
   const [activeTab, setActiveTab] = useState<TabID>("shop");
 
-  const handleTabChange = (tabId: TabID) => {
+  const handleTabChange = useCallback((tabId: TabID) => {
     setActiveTab(tabId);
     if (window.location.pathname !== "/") {
       navigate("/");
     }
-  };
+  }, [navigate]);
 
   // Auth-based route guard
   const lastHandledPathRef = useRef<string | null>(null);
@@ -182,7 +181,7 @@ export default function App() {
     };
   }, [user?.id, user?.companyId]);
 
-  const handleGoogleOnboardingComplete = async (data: any) => {
+  const handleGoogleOnboardingComplete = useCallback(async (data: any) => {
     try {
       setBusinessScale(data.businessScale);
       setBusinessType(data.businessType);
@@ -204,9 +203,9 @@ export default function App() {
       setMockCompany(data.companyName || mockCompany);
       activityToast.success(`Workspace ready for ${mockCompany}!`);
     } catch (err: any) { activityToast.error(err.message); }
-  };
+  }, [pendingToken, mockCompany, completeOnboarding, activityToast]);
 
-  const handleOnboardingComplete = async (data: any) => {
+  const handleOnboardingComplete = useCallback(async (data: any) => {
     try {
       setBusinessScale(data.businessScale);
       setBusinessType(data.businessType);
@@ -226,22 +225,27 @@ export default function App() {
       login(result.user, result.company, result.token || "mock_access_jwt_token_leadsync_secure");
       activityToast.success(`System ready for ${mockCompany}!`);
     } catch (err: any) { activityToast.error(err.message); }
-  };
+  }, [mockCompany, firstName, lastName, mockEmail, password, phone, login, activityToast]);
 
   const isGoogleOnboarding = isPendingOnboarding && !!pendingToken;
 
-  // Simplified dashboard home ("My Shop") content
-  const renderShopHome = () => (
-    <motion.div
-      key="shop-tab"
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.2, ease: "easeInOut" }}
-      className="space-y-6"
-    >
-      {/* Daily Stats */}
-      <DailyCollectionStats />
+  const signInOnSuccess = useCallback((userData: any, companyData: any, token: string) => {
+    setMockCompany(companyData.name);
+    login(userData, companyData, token);
+  }, [login]);
+
+  const switchToSignup = useCallback(() => {
+    navigate("/onboarding", { replace: true });
+  }, [navigate]);
+
+  const switchToSignIn = useCallback(() => {
+    navigate("/login", { replace: true });
+  }, [navigate]);
+
+  // Dashboard home ("My Shop") content
+  const shopHome = (
+    <div className="space-y-6">
+      <MyShopPage />
 
       {/* Quick actions grid for new users */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" data-tour="quick-actions">
@@ -304,16 +308,16 @@ export default function App() {
           </div>
           <div className="flex-1">
             <h3 className="font-bold text-base" style={{ color: 'var(--sidebar-text)' }}>
-              {currentWorkflow === "PAPER" 
-                ? "Start your digital journey" 
-                : currentWorkflow === "SPREADSHEET" 
-                  ? "Import your spreadsheet" 
+              {currentWorkflow === "PAPER"
+                ? "Start your digital journey"
+                : currentWorkflow === "SPREADSHEET"
+                  ? "Import your spreadsheet"
                   : "Connect your current system"}
             </h3>
             <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.6)' }}>
-              {currentWorkflow === "PAPER" 
+              {currentWorkflow === "PAPER"
                 ? "Move from pen and paper to digital. Log your first customer today."
-                : currentWorkflow === "SPREADSHEET" 
+                : currentWorkflow === "SPREADSHEET"
                   ? "Upload your Excel or Sheets file and we'll map everything automatically."
                   : "Sync your existing data from other tools."}
             </p>
@@ -392,22 +396,18 @@ export default function App() {
           </div>
         )}
       </Card>
-    </motion.div>
+    </div>
   );
 
   return (
     <div className="w-full font-sans antialiased">
       <Toaster position="top-center" />
-      <SimulationController onNavigate={setActiveTab} />
       <Routes>
         <Route path="/login" element={
           !user ? (
             <SignInForm
-              onSuccess={(userData, companyData, token) => {
-                setMockCompany(companyData.name);
-                login(userData, companyData, token);
-              }}
-              onSwitchToSignup={() => navigate("/onboarding", { replace: true })}
+              onSuccess={signInOnSuccess}
+              onSwitchToSignup={switchToSignup}
             />
           ) : (
             <Navigate to="/" replace />
@@ -417,7 +417,7 @@ export default function App() {
           !user ? (
             <OnboardingWizard
               onComplete={isGoogleOnboarding ? handleGoogleOnboardingComplete : handleOnboardingComplete}
-              onSwitchToSignIn={() => navigate("/login", { replace: true })}
+              onSwitchToSignIn={switchToSignIn}
               firstName={firstName} setFirstName={setFirstName}
               lastName={lastName} setLastName={setLastName}
               mockEmail={mockEmail} setMockEmail={setMockEmail}
@@ -450,7 +450,7 @@ export default function App() {
                   </div>
                 }>
                 <AnimatePresence mode="wait">
-                  {activeTab === 'shop' && renderShopHome()}
+                  {activeTab === 'shop' && shopHome}
                   {activeTab === 'messages' && (
                     <motion.div key="messages" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="messages-panel">
                       <StreamTriage />
