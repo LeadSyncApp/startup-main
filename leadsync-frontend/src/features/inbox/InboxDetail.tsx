@@ -12,6 +12,7 @@ interface InboxDetailProps {
 import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe, Menu, Plus, CreditCard, Copy, Zap, MoreVertical, Eraser, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
+import { onEvent } from "../../lib/socketClient";
 import AiSuggestionPanel from "./AiSuggestionPanel";
 import { ProductPickerModal } from "./ProductPickerModal";
 import { PaymentRequestModal } from "./PaymentRequestModal";
@@ -59,6 +60,29 @@ export interface ConversationDetail {
   tags?: string[];
   city?: string;
   state?: string;
+}
+
+// ── Client-side message cache ──
+// Persists across conversation switches within a session. Each entry is keyed
+// by leadId and expires after CACHE_FRESHNESS_MS. The cache lets us show
+// previously-loaded data instantly when switching back to a conversation,
+// eliminating the "frozen old conversation" flash even before the fetch returns.
+const CACHE_FRESHNESS_MS = 30_000; // 30 seconds
+const messageCache = new Map<string, { data: ConversationDetail; timestamp: number }>();
+
+function getCachedDetail(leadId: string): ConversationDetail | null {
+  const entry = messageCache.get(leadId);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_FRESHNESS_MS) return null;
+  return entry.data;
+}
+
+function setCachedDetail(leadId: string, data: ConversationDetail) {
+  messageCache.set(leadId, { data, timestamp: Date.now() });
+}
+
+function invalidateCacheForLead(leadId: string) {
+  messageCache.delete(leadId);
 }
 
 const CHANNEL_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -126,6 +150,10 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   // Tracks the last known message count so we can mark the conversation read
   // whenever a NEW message arrives while it's open (keeps unread at 0 live).
   const lastMsgCountRef = useRef<number>(0);
+  // Tracks the currently-selected leadId. Every in-flight fetch checks this
+  // after each await — if the user has switched conversations, the stale
+  // fetch's result is discarded entirely (data, error state, and loading).
+  const currentLeadIdRef = useRef<string | null>(null);
   // Idempotency key: stored as ref so it persists across retries within the same send attempt
   const clientMessageIdRef = useRef<string | null>(null);
   // Track the message content that's currently being retried (to show retry affordance)
@@ -149,9 +177,19 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
     if (!leadId) return;
     try {
       const res = await authedFetch(`/api/leads/${leadId}/messages`);
+
+      // Race guard: user switched conversations while this fetch was in-flight.
+      // Discard this stale result — the newer fetch (or cache) owns the UI now.
+      if (currentLeadIdRef.current !== leadId) return;
+
       if (!res.ok) throw new Error("Failed to fetch messages");
       const data: ConversationDetail = await res.json();
+
+      // Second race guard after JSON parse (another await boundary)
+      if (currentLeadIdRef.current !== leadId) return;
+
       setDetail(data);
+      setCachedDetail(leadId, data); // populate cache
       setNetworkError(null);
 
       // While this conversation is open and live, any newly-arrived message is
@@ -166,9 +204,16 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
         lastMsgCountRef.current = newCount;
       }
     } catch (e: any) {
+      // Don't set error state for a stale fetch — the active conversation
+      // has its own error handling.
+      if (currentLeadIdRef.current !== leadId) return;
       setNetworkError(e.message || "Failed to load messages");
     } finally {
-      setLoading(false);
+      // Don't clear loading for a stale fetch — the active conversation
+      // controls its own loading state.
+      if (currentLeadIdRef.current === leadId) {
+        setLoading(false);
+      }
     }
   }, [leadId]);
 
@@ -187,15 +232,33 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   }, [leadId]);
 
   // Initial fetch + polling
+  // This effect re-runs only when leadId changes (fetchMessages/markAsRead depend on leadId).
+  // setLoading(true) here ensures the loading spinner shows on every conversation switch,
+  // not just on initial mount. If we have a fresh cache entry, we skip the spinner and show
+  // cached data instantly while refreshing in the background.
   useEffect(() => {
+    // Publish the new leadId BEFORE any async work or cache reads.
+    // In-flight fetches from the previous leadId will see this has changed
+    // and discard their results via the race guard in fetchMessages.
+    currentLeadIdRef.current = leadId ?? null;
     lastMsgCountRef.current = 0; // reset baseline so the first fetch marks read
+
+    // Check cache for instant display when revisiting a conversation
+    const cached = leadId ? getCachedDetail(leadId) : null;
+    if (cached) {
+      setDetail(cached);
+      setLoading(false); // show cached data instantly, no spinner
+    } else {
+      setLoading(true); // show spinner while fetching fresh data
+    }
+
     fetchMessages();
     markAsRead();
     pollIntervalRef.current = setInterval(fetchMessages, 6000);
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [fetchMessages, markAsRead]);
+  }, [fetchMessages, markAsRead, leadId]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -212,6 +275,31 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
       .then((data) => setHistory(data))
       .catch(() => {});
   }, [leadId]);
+
+  // Invalidate message cache and re-fetch when a new message arrives via socket.
+  // This ensures we never serve stale cached data after a real-time update.
+  useEffect(() => {
+    if (!leadId || !detail?.conversationId) return;
+    const conversationId = detail.conversationId;
+
+    const handleNewMessage = (payload: { conversationId?: string }) => {
+      if (payload.conversationId === conversationId) {
+        invalidateCacheForLead(leadId);
+        fetchMessages();
+      }
+    };
+
+    const handleConversationUpdated = (payload: { conversationId?: string }) => {
+      if (payload.conversationId === conversationId) {
+        invalidateCacheForLead(leadId);
+        fetchMessages();
+      }
+    };
+
+    const unsub1 = onEvent("new_message", handleNewMessage);
+    const unsub2 = onEvent("conversation_updated", handleConversationUpdated);
+    return () => { unsub1(); unsub2(); };
+  }, [leadId, detail?.conversationId, fetchMessages]);
 
   // Sync mode state from backend
   useEffect(() => {
@@ -262,18 +350,24 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
       const res = await authedFetch(`/api/leads/${leadId}/messages`, {
         method: "DELETE"
       });
+      // Race guard: user switched conversations during the DELETE
+      if (currentLeadIdRef.current !== leadId) return;
       if (res.ok) {
         toast.success("Message history cleared");
         setDetail(prev => prev ? { ...prev, messages: [] } : prev);
+        invalidateCacheForLead(leadId);
         setShowClearConfirm(false);
       } else {
         const err = await res.json().catch(() => ({}));
         toast.error(err.message || "Failed to clear messages");
       }
     } catch (e) {
+      if (currentLeadIdRef.current !== leadId) return;
       toast.error("Network error clearing messages");
     } finally {
-      setActionLoading(false);
+      if (currentLeadIdRef.current === leadId) {
+        setActionLoading(false);
+      }
     }
   };
 
@@ -354,11 +448,19 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
           clientMessageId: clientMessageIdRef.current,
         }),
       });
+
+      // Race guard: user switched conversations during the POST
+      if (currentLeadIdRef.current !== leadId) return;
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || "Failed to send");
       }
       const sent: BackendMessage = await res.json();
+
+      // Second race guard after JSON parse
+      if (currentLeadIdRef.current !== leadId) return;
+
       setDetail((prev) => {
         if (!prev) return prev;
         const exists = prev.messages.some((m) => m.id === sent.id);
@@ -373,12 +475,15 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
         setFailedMessageContent(textToSend); // show retry button
       }
     } catch (e: any) {
+      if (currentLeadIdRef.current !== leadId) return;
       setNetworkError("Couldn't send — please try again.");
       toast.error("Failed to send message");
       // Keep clientMessageIdRef so retry does NOT create a duplicate row
       setFailedMessageContent(textToSend);
     } finally {
-      setSending(false);
+      if (currentLeadIdRef.current === leadId) {
+        setSending(false);
+      }
     }
   };
 
