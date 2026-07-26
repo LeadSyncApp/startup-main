@@ -452,6 +452,7 @@ model Message {
   deliveryError     String?
   clientMessageId   String?
   dedupKey          String?       @unique
+  deletedAt         DateTime?
   Company           Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversation      Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -459,6 +460,7 @@ model Message {
   @@index([conversationId, isRead])
   @@index([companyId])
   @@index([conversationId, createdAt])
+  @@index([conversationId, deletedAt])
 }
 
 model BotKnowledge {
