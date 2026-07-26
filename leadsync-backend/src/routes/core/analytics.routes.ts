@@ -377,7 +377,7 @@ router.get("/export-leads", authMiddleware, authorizeRoles("OWNER", "MANAGER"), 
         if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
         const leads = await prisma.lead.findMany({
-            where: { companyId: req.user.companyId },
+            where: { companyId: req.user.companyId, deletedAt: null },
             include: {
                 conversations: {
                     select: { channel: true, updatedAt: true },

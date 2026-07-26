@@ -27,31 +27,38 @@ router.post('/leads', async (req, res) => {
       return res.status(500).json({ message: 'No company configured' })
     }
 
-    const lead = await prisma.lead.upsert({
+    // First check for an existing active (non-deleted) lead
+    const existingLead = await prisma.lead.findFirst({
       where: {
-        contact_channel_companyId: {
-          contact,
-          channel: Channel.WEBSITE,
-          companyId: company.id,
-        },
-      },
-      update: {},
-      create: {
-        name,
         contact,
         channel: Channel.WEBSITE,
         companyId: company.id,
-        conversations: {
-          create: {
-            channel: Channel.WEBSITE,
-            companyId: company.id, // ✅ REQUIRED
+        deletedAt: null,
+      },
+      include: { conversations: true },
+    });
+
+    let lead;
+    if (existingLead) {
+      lead = existingLead;
+    } else {
+      // No active lead found (either never existed or was soft-deleted) — create fresh
+      lead = await prisma.lead.create({
+        data: {
+          name,
+          contact,
+          channel: Channel.WEBSITE,
+          companyId: company.id,
+          conversations: {
+            create: {
+              channel: Channel.WEBSITE,
+              companyId: company.id,
+            },
           },
         },
-      },
-      include: {
-        conversations: true,
-      },
-    })
+        include: { conversations: true },
+      });
+    }
 
     res.json({ success: true, leadId: lead.id })
   } catch (err) {

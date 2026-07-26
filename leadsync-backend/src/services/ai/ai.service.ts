@@ -1062,7 +1062,7 @@ export async function generateReplySuggestion(
   try {
     // 1. Fetch the lead with its conversation
     const lead = await prisma.lead.findFirst({
-      where: { id: leadId, companyId },
+      where: { id: leadId, companyId, deletedAt: null },
       select: {
         id: true,
         name: true,

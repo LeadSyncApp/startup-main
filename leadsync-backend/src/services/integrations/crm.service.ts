@@ -27,8 +27,8 @@ export async function recalculateLeadCRM(leadId: string, companyId: string): Pro
     const totalSpend = orders.reduce((sum: any, o: any) => sum + o.amount, 0);
 
     // Retrieve existing lead and its latest conversation for priority calculation
-    const currentLead = await prisma.lead.findUnique({
-      where: { id: leadId },
+    const currentLead = await prisma.lead.findFirst({
+      where: { id: leadId, deletedAt: null },
       include: {
         conversations: {
           orderBy: { updatedAt: "desc" },

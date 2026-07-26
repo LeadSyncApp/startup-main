@@ -90,7 +90,7 @@ router.get(
       /* =====================================================
          OPTIMIZED: Sequential Queries to hold/release 1 DB connection
       ===================================================== */
-      const leads = await prisma.lead.count({ where: { companyId } });
+      const leads = await prisma.lead.count({ where: { companyId, deletedAt: null } });
       const conversations = await prisma.conversation.count({ where: { companyId } });
       const agents = await prisma.user.count({ where: { companyId } });
       const orders = await prisma.order.count({ where: { companyId } });
@@ -735,6 +735,7 @@ router.get(
       const newOrderArrivals = await (prisma.lead as any).count({
         where: {
           companyId,
+          deletedAt: null,
           pendingOrderState: "PENDING_APPROVAL"
         },
       }).catch(() => 0);
@@ -762,10 +763,10 @@ router.get("/funnel", authMiddleware, async (req: AuthRequest, res: Response) =>
   try {
     const { companyId } = req.user!;
 
-    const newCount = await (prisma.lead as any).count({ where: { companyId, segment: "NEW" } });
-    const regularCount = await (prisma.lead as any).count({ where: { companyId, segment: "REGULAR" } });
-    const vipCount = await (prisma.lead as any).count({ where: { companyId, segment: "VIP" } });
-    const churnCount = await (prisma.lead as any).count({ where: { companyId, segment: "CHURN_RISK" } });
+    const newCount = await (prisma.lead as any).count({ where: { companyId, deletedAt: null, segment: "NEW" } });
+    const regularCount = await (prisma.lead as any).count({ where: { companyId, deletedAt: null, segment: "REGULAR" } });
+    const vipCount = await (prisma.lead as any).count({ where: { companyId, deletedAt: null, segment: "VIP" } });
+    const churnCount = await (prisma.lead as any).count({ where: { companyId, deletedAt: null, segment: "CHURN_RISK" } });
     const totalOrders = await (prisma.order as any).count({ where: { companyId, isDeleted: false, status: { notIn: ["BOT_CREATED_ORDER", "REJECTED", "CANCELLED"] } } });
 
     const total = newCount + regularCount + vipCount + churnCount;

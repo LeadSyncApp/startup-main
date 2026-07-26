@@ -146,7 +146,7 @@ router.post("/message", widgetPostLimiter, companyWidgetPostLimiter, async (req:
 
     // Find existing conversation ID if available for socket room joining
     const existingLead = await prisma.lead.findFirst({
-      where: { companyId, contact: sanitizedPhone, channel: Channel.WEBSITE },
+      where: { companyId, contact: sanitizedPhone, channel: Channel.WEBSITE, deletedAt: null },
       select: { conversations: { where: { companyId, deletedAt: null }, select: { id: true }, orderBy: { updatedAt: "desc" }, take: 1 } }
     });
     const conversationId = existingLead?.conversations?.[0]?.id || null;
@@ -188,7 +188,8 @@ router.get("/messages", widgetGetLimiter, async (req: Request, res: Response): P
       where: {
         companyId: companyId as string,
         channel: Channel.WEBSITE,
-        contact: searchContact
+        contact: searchContact,
+        deletedAt: null
       },
       include: {
         conversations: {

@@ -100,8 +100,8 @@ async function resolveOrCreateLeadAndConversation(
     try {
       P("fast-path resolveOrCreate: resolvePromise start - before prisma.lead.findUnique");
       // Re-check DB inside lock to guarantee no concurrent creation
-      let lead = await prisma.lead.findUnique({
-        where: { contact_channel_companyId: { contact, channel, companyId } },
+      let lead = await prisma.lead.findFirst({
+        where: { contact, channel, companyId, deletedAt: null },
         include: {
           conversations: { where: { companyId, deletedAt: null }, orderBy: { updatedAt: "desc" }, take: 5 }
         }
@@ -126,8 +126,8 @@ async function resolveOrCreateLeadAndConversation(
         } catch (createErr: any) {
           if (createErr.code === "P2002") {
             console.warn(`⚠️ [Orchestrator] P2002 race on lead create (${contact}:${channel}:${companyId}) — re-fetching`);
-            lead = await prisma.lead.findUnique({
-              where: { contact_channel_companyId: { contact, channel, companyId } },
+            lead = await prisma.lead.findFirst({
+              where: { contact, channel, companyId, deletedAt: null },
               include: {
                 conversations: { where: { companyId, deletedAt: null }, orderBy: { updatedAt: "desc" }, take: 5 }
               }
@@ -273,13 +273,12 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     P("fast-path starting lead lookup");
     const tStartLead = performance.now();
 
-    const existingLead = await prisma.lead.findUnique({
+    const existingLead = await prisma.lead.findFirst({
       where: {
-        contact_channel_companyId: {
-          contact,
-          channel: frame.channel,
-          companyId
-        }
+        contact,
+        channel: frame.channel,
+        companyId,
+        deletedAt: null
       },
       select: {
         id: true,
@@ -372,7 +371,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       include: { botConfiguration: true }
     }),
     prisma.lead.findFirst({
-      where: { companyId, contact: frame.externalChatId.trim(), channel: frame.channel },
+      where: { companyId, contact: frame.externalChatId.trim(), channel: frame.channel, deletedAt: null },
       include: {
         conversations: { where: { companyId, deletedAt: null }, orderBy: { updatedAt: "desc" }, take: 5 }
       }

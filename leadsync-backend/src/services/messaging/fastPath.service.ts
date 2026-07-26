@@ -104,7 +104,7 @@ export class FastPathService {
 
         // 2. Resolve/Create Lead
         let lead = await prisma.lead.findFirst({
-          where: { companyId, contact: chatId, channel: Channel.TELEGRAM },
+          where: { companyId, contact: chatId, channel: Channel.TELEGRAM, deletedAt: null },
           include: { conversations: { where: { companyId, deletedAt: null }, orderBy: { updatedAt: "desc" }, take: 1 } }
         });
 
