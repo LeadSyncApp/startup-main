@@ -66,10 +66,13 @@ export async function syncLeadPendingOrderState(
 
   if (activeDraft && activeDraft.totalAmount > 0) {
     if (leadId) {
-      await prisma.lead.update({
-        where: { id: leadId },
-        data: { pendingOrderAmount: activeDraft.totalAmount }
-      });
+      const lead = await prisma.lead.findFirst({ where: { id: leadId, deletedAt: null }, select: { id: true } });
+      if (lead) {
+        await prisma.lead.update({
+          where: { id: leadId },
+          data: { pendingOrderAmount: activeDraft.totalAmount }
+        });
+      }
     }
     await prisma.conversation.update({
       where: { id: conversationId },
@@ -78,10 +81,13 @@ export async function syncLeadPendingOrderState(
   } else {
     // Reset path when active draft order is gone/abandoned/confirmed
     if (leadId) {
-      await prisma.lead.update({
-        where: { id: leadId },
-        data: { pendingOrderAmount: null }
-      });
+      const lead = await prisma.lead.findFirst({ where: { id: leadId, deletedAt: null }, select: { id: true } });
+      if (lead) {
+        await prisma.lead.update({
+          where: { id: leadId },
+          data: { pendingOrderAmount: null }
+        });
+      }
     }
     // Re-triage conversation using actual recent messages instead of hardcoding BROWSING
     // Fire-and-forget: triage was already triggered at the top of the orchestrator

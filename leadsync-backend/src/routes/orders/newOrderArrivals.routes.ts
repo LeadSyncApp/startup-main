@@ -25,28 +25,36 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     // All roles can see unclaimed orders for claiming
     // No additional filtering needed - this is the universal intake queue
 
-    const orders = await prisma.order.findMany({
-      where: whereCondition,
-      include: {
-        lead: {
-          select: {
-            id: true,
-            name: true,
-            contact: true,
-            channel: true,
-            totalSpend: true,
-            orderCount: true,
-            segment: true,
-            status: true
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 50));
+    const skip = (page - 1) * limit;
+
+    const [total, orders] = await Promise.all([
+      prisma.order.count({ where: whereCondition }),
+      prisma.order.findMany({
+        where: whereCondition,
+        include: {
+          lead: {
+            select: {
+              id: true,
+              name: true,
+              contact: true,
+              channel: true,
+              totalSpend: true,
+              orderCount: true,
+              segment: true,
+              status: true
+            }
           }
-        }
-      },
-      orderBy: [
-        { priorityScore: "desc" }, // High priority first
-        { createdAt: "desc" } // Then by recency
-      ],
-      take: 100,
-    });
+        },
+        orderBy: [
+          { priorityScore: "desc" }, // High priority first
+          { createdAt: "desc" } // Then by recency
+        ],
+        skip,
+        take: limit,
+      })
+    ]);
 
     // Enrich with customer history using optimized batch fetcher
     const leadIds = orders.map(o => o.leadId).filter((id): id is string => id !== null);
@@ -71,7 +79,16 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       };
     });
 
-    res.json(enrichedOrders);
+    res.json({
+      data: enrichedOrders,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasMore: skip + enrichedOrders.length < total,
+      }
+    });
   } catch (error) {
     console.error("Fetch new order arrivals error:", error);
     res.status(500).json({ message: "Failed to fetch new order arrivals" });
@@ -132,32 +149,49 @@ router.get("/claimed", authMiddleware, async (req: AuthRequest, res: Response) =
     }
     // Admins and owners see all claimed orders
 
-    const orders = await prisma.order.findMany({
-      where: whereCondition,
-      include: {
-        lead: {
-          select: {
-            id: true,
-            name: true,
-            contact: true,
-            channel: true,
-            totalSpend: true,
-            orderCount: true,
-            segment: true
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 50));
+    const skip = (page - 1) * limit;
+
+    const [total, orders] = await Promise.all([
+      prisma.order.count({ where: whereCondition }),
+      prisma.order.findMany({
+        where: whereCondition,
+        include: {
+          lead: {
+            select: {
+              id: true,
+              name: true,
+              contact: true,
+              channel: true,
+              totalSpend: true,
+              orderCount: true,
+              segment: true
+            }
+          },
+          processedBy: {
+            select: { id: true, firstName: true, lastName: true }
           }
         },
-        processedBy: {
-          select: { id: true, firstName: true, lastName: true }
-        }
-      },
-      orderBy: [
-        { priorityScore: "desc" },
-        { updatedAt: "desc" }
-      ],
-      take: 50,
-    });
+        orderBy: [
+          { priorityScore: "desc" },
+          { updatedAt: "desc" }
+        ],
+        skip,
+        take: limit,
+      })
+    ]);
 
-    res.json(orders);
+    res.json({
+      data: orders,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasMore: skip + orders.length < total,
+      }
+    });
   } catch (error) {
     console.error("Fetch claimed orders error:", error);
     res.status(500).json({ message: "Failed to fetch claimed orders" });

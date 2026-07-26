@@ -1,10 +1,10 @@
 import { Router, Response } from "express";
-import { prisma } from "../../lib/prisma";
+import { prisma, directPrisma } from "../../lib/prisma";
 import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
 import { notificationService } from "../../services/infrastructure/notification.service";
 import { safeEmitConversationUpdate, emitToAgent, emitToCompany } from "../../lib/socket";
 import { validateAndSanitizeCustomFields } from "../../utils/custom-fields.validator";
-import { applyDataSharingRules } from "../../lib/sharing.engine";
+import { applyDataSharingRules, getSubordinateIds } from "../../lib/sharing.engine";
 import { asyncHandler } from "../../middleware/error.middleware";
 import { ConversationStatus, ConversationMode, MessageSender, Channel as PrismaChannel } from "@prisma/client";
 import { outboundDispatcherService } from "../../services/outbound.dispatcher";
@@ -28,135 +28,158 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     }
 
     const companyId = req.user.companyId;
-
-    // 🔍 Fetch Data Sharing Rules for this user
-    const sharingConditions = await applyDataSharingRules(req.user.userId, companyId, req.user.role);
-
-    // 🔍 Filter Logic for Shared Inbox
     const filter = req.query.filter as string; // 'unclaimed', 'mine', 'all', 'resolved'
     const search = req.query.search as string;
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
     const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 50));
     const skip = (page - 1) * limit;
 
-    const whereCondition: any = { companyId, ...sharingConditions };
+    const countOnly = req.query.countOnly === 'true' || req.query.countOnly === '1';
 
-    // We filter Leads based on their conversations
+    // Build base filter conditions for raw SQL
+    const params: any[] = [companyId];
+    let paramIndex = 2;
+
+    const whereClauses: string[] = [
+      `l."companyId" = $1`,
+      `l."deletedAt" IS NULL`
+    ];
+
+    // Data Sharing Rules
+    if (req.user.role !== "OWNER" && req.user.role !== "MANAGER") {
+      const subordinateIds = await getSubordinateIds(req.user.userId, companyId);
+      const allowedUserIds = [req.user.userId, ...subordinateIds];
+      const allowedParamIdx = paramIndex++;
+      params.push(allowedUserIds);
+      whereClauses.push(`(l."isPrivate" = false OR EXISTS (SELECT 1 FROM "Conversation" c_sh WHERE c_sh."leadId" = l.id AND c_sh."claimedById" = ANY($${allowedParamIdx}::text[])))`);
+    }
+
+    // Inbox Filters
     if (filter === 'mine' || filter === 'me') {
-      // Only leads where I am assigned to at least one conversation
-      whereCondition.conversations = { some: { claimedById: req.user.userId } };
+      const userParamIdx = paramIndex++;
+      params.push(req.user.userId);
+      whereClauses.push(`EXISTS (SELECT 1 FROM "Conversation" c_fl WHERE c_fl."leadId" = l.id AND c_fl."claimedById" = $${userParamIdx})`);
     } else if (filter === 'unclaimed' || filter === 'unassigned') {
-      // Only leads with unassigned and open conversations
-      whereCondition.conversations = { some: { claimedById: null, status: 'OPEN' } };
+      whereClauses.push(`EXISTS (SELECT 1 FROM "Conversation" c_fl WHERE c_fl."leadId" = l.id AND c_fl."claimedById" IS NULL AND c_fl.status = 'OPEN')`);
     } else if (filter === 'resolved') {
-      // Fix: Only match leads whose MOST RECENT conversation (by updatedAt) has status RESOLVED.
-      // Using raw SQL subquery because Prisma does not support ordering in relation filter conditions
-      // (conversations: { some: { status: 'RESOLVED' } } matches ANY resolved conversation, not just
-      // the most recent one — causing leads with old resolved + newer non-resolved to wrongly appear).
-      const resolvedLeadIds = await prisma.$queryRawUnsafe<{ id: string }[]>(
-        `SELECT l.id FROM "Lead" l
-         WHERE l."companyId" = $1
-         AND 'RESOLVED' = (
-           SELECT c.status FROM "Conversation" c
-           WHERE c."leadId" = l.id
-           ORDER BY c."updatedAt" DESC
-           LIMIT 1
-         )`,
-        companyId
-      );
-      whereCondition.id = { in: resolvedLeadIds.map(r => r.id) };
-    }
-    // 'all' or no filter: no conversation-level filtering
-
-    // Search by lead name or contact - combines with data-sharing rules via AND
-    if (search) {
-      const searchOR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { contact: { contains: search, mode: 'insensitive' } },
-      ];
-      if (whereCondition.OR) {
-        // Combine existing sharing-rule OR with search OR via AND
-        // This ensures BOTH restrictions apply (not either/or)
-        whereCondition.AND = [
-          { OR: whereCondition.OR },
-          { OR: searchOR },
-        ];
-        delete whereCondition.OR;
-      } else {
-        whereCondition.OR = searchOR;
-      }
+      whereClauses.push(`'RESOLVED' = (SELECT c_res.status FROM "Conversation" c_res WHERE c_res."leadId" = l.id ORDER BY c_res."updatedAt" DESC LIMIT 1)`);
     }
 
-    // Count total matching leads
-    const total = await (prisma.lead as any).count({ where: whereCondition });
+    // Search
+    if (search && search.trim() !== '') {
+      const searchParamIdx = paramIndex++;
+      params.push(`%${search.trim()}%`);
+      whereClauses.push(`(l.name ILIKE $${searchParamIdx} OR l.contact ILIKE $${searchParamIdx})`);
+    }
 
-    // Forceful cast to bypass stale types (IDE context lag)
-    const leads = await (prisma.lead as any).findMany({
-      where: whereCondition,
-      include: {
-          conversations: {
-            select: {
-              id: true,
-              updatedAt: true,
-              status: true,
-              claimedById: true,
-              lastViewedAt: true,
-              matchedProduct: true,
-              matchedProductAt: true,
-              claimedBy: {
-                select: { id: true, firstName: true, lastName: true }
-              },
-              messages: {
-                orderBy: { createdAt: "desc" },
-                take: 10,
-                select: { content: true, sender: true, createdAt: true }
-              }
-            },
-            orderBy: { updatedAt: "desc" },
-            take: 50,
-          },
-      },
-      orderBy: { lastActiveAt: "desc" },
-      skip,
-      take: limit,
-    });
+    // Fast-path for countOnly request
+    if (countOnly) {
+      const countSql = `SELECT CAST(COUNT(*) AS bigint) AS count FROM "Lead" l WHERE ${whereClauses.join(" AND ")}`;
+      const countRows = await directPrisma.$queryRawUnsafe<{ count: bigint }[]>(countSql, ...params);
+      const total = countRows.length > 0 ? Number(countRows[0].count) : 0;
 
-    // ── Batch pre-compute unread counts for ALL conversations in one query ──
-    // Instead of N individual prisma.message.count() calls, we use a single
-    // GROUP BY query. The lastViewedAt join handles the "messages after last view"
-    // logic correctly: when lastViewedAt is NULL, all CLIENT/BOT messages count.
-    const conversationIds = leads
-      .map((l: any) => l.conversations?.[0]?.id)
-      .filter(Boolean);
-    const unreadCountMap = new Map<string, number>();
-    if (conversationIds.length > 0) {
-      const unreadRows = await prisma.$queryRaw<
-        { conversationId: string; count: bigint }[]
-      >`
-        SELECT m."conversationId", CAST(COUNT(*) AS bigint) AS count
-        FROM "Message" m
-        INNER JOIN "Conversation" c ON m."conversationId" = c.id
-        WHERE m."conversationId" = ANY(${conversationIds}::text[])
-          AND m."sender" IN ('CLIENT', 'BOT')
-          AND (c."lastViewedAt" IS NULL OR m."createdAt" > c."lastViewedAt")
-        GROUP BY m."conversationId"
-      `;
-      for (const row of unreadRows) {
-        unreadCountMap.set(row.conversationId, Number(row.count));
-      }
+      return res.json({
+        data: [],
+        meta: {
+          total,
+          page,
+          limit,
+          hasMore: false,
+        },
+      });
+    }
+
+    const limitParamIdx = paramIndex++;
+    params.push(limit);
+    const offsetParamIdx = paramIndex++;
+    params.push(skip);
+
+    const sql = `
+      WITH filtered_leads AS (
+        SELECT 
+          l.id,
+          l.name,
+          l.contact,
+          l.channel,
+          l."createdAt",
+          l."lastActiveAt",
+          l."totalSpend",
+          l."orderCount",
+          l.segment,
+          l."aiPriority",
+          l."pendingOrderState",
+          l."pendingOrderId",
+          l."pendingOrderClaimedById",
+          l."pendingOrderClaimedAt",
+          l."pendingOrderSummary",
+          l."pendingOrderAmount",
+          COUNT(*) OVER() AS total_count
+        FROM "Lead" l
+        WHERE ${whereClauses.join(" AND ")}
+        ORDER BY l."lastActiveAt" DESC
+        LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}
+      )
+      SELECT 
+        fl.*,
+        c.id AS conversation_id,
+        c."updatedAt" AS conversation_updated_at,
+        c.status AS conversation_status,
+        c."claimedById" AS conversation_claimed_by_id,
+        c."lastViewedAt" AS conversation_last_viewed_at,
+        c."matchedProduct" AS conversation_matched_product,
+        c."matchedProductAt" AS conversation_matched_product_at,
+        c."sentimentScore" AS conversation_sentiment_score,
+        c.intent AS conversation_intent,
+        u.id AS agent_id,
+        u."firstName" AS agent_first_name,
+        u."lastName" AS agent_last_name,
+        (
+          SELECT COALESCE(json_agg(m_sub), '[]'::json)
+          FROM (
+            SELECT m.content, m.sender, m."createdAt"
+            FROM "Message" m
+            WHERE m."conversationId" = c.id
+            ORDER BY m."createdAt" DESC
+            LIMIT 10
+          ) m_sub
+        ) AS messages_json,
+        (
+          SELECT CAST(COUNT(*) AS integer)
+          FROM "Message" m_un
+          WHERE m_un."conversationId" = c.id
+            AND m_un.sender IN ('CLIENT', 'BOT')
+            AND (c."lastViewedAt" IS NULL OR m_un."createdAt" > c."lastViewedAt")
+        ) AS unread_count
+      FROM filtered_leads fl
+      LEFT JOIN LATERAL (
+        SELECT * FROM "Conversation" conv
+        WHERE conv."leadId" = fl.id
+        ORDER BY conv."updatedAt" DESC
+        LIMIT 1
+      ) c ON true
+      LEFT JOIN "User" u ON u.id = c."claimedById"
+      ORDER BY fl."lastActiveAt" DESC;
+    `;
+
+    const rawRows = await directPrisma.$queryRawUnsafe<any[]>(sql, ...params);
+    let total = rawRows.length > 0 ? Number(rawRows[0].total_count) : 0;
+
+    // Fallback for empty paginated result sets beyond bounds
+    if (rawRows.length === 0 && page > 1) {
+      const countSql = `SELECT CAST(COUNT(*) AS bigint) AS count FROM "Lead" l WHERE ${whereClauses.join(" AND ")}`;
+      const countParams = params.slice(0, paramIndex - 3);
+      const countRows = await directPrisma.$queryRawUnsafe<{ count: bigint }[]>(countSql, ...countParams);
+      total = countRows.length > 0 ? Number(countRows[0].count) : 0;
     }
 
     // ── Batch pre-fetch matched products for ALL conversations in one query ──
-    // Collect unique cached productIds from conversation.matchedProduct,
-    // fetch all at once via WHERE id IN (...), then resolve inside the loop
-    // using the precomputed map — no per-lead inventoryProduct.findFirst.
-    const productIds = leads
-      .map((l: any) => l.conversations?.[0]?.matchedProduct?.productId)
+    const productIds = rawRows
+      .map((r: any) => r.conversation_matched_product?.productId)
       .filter(Boolean);
     const uniqueProductIds = [...new Set<string>(productIds)];
     const productBatchMap = new Map<string, any>();
     if (uniqueProductIds.length > 0) {
-      const batchProducts = await prisma.inventoryProduct.findMany({
+      const batchProducts = await directPrisma.inventoryProduct.findMany({
         where: { id: { in: uniqueProductIds }, companyId, isActive: true },
         select: {
           id: true,
@@ -179,159 +202,135 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Resolve matched product from the batch pre-fetched map (O(1) per lead)
-    const resolveMatchedProductFromBatch = (conversation: any) => {
-      const cached = conversation?.matchedProduct as
-        | { productId?: string; name?: string; variant?: string; thumbnailUrl?: string }
-        | null
-        | undefined;
-      if (!cached || !cached.productId) return null;
-      const batch = productBatchMap.get(cached.productId);
+    const resolveMatchedProductFromBatch = (matchedProduct: any) => {
+      if (!matchedProduct || !matchedProduct.productId) return null;
+      const batch = productBatchMap.get(matchedProduct.productId);
       if (!batch) return null;
       return {
-        name: cached.name || batch.name,
-        variant: cached.variant || "",
+        name: matchedProduct.name || batch.name,
+        variant: matchedProduct.variant || "",
         stock: batch.stock,
         stockStatus: batch.stockStatus,
-        thumbnailUrl: cached.thumbnailUrl || batch.thumbnailUrl,
+        thumbnailUrl: matchedProduct.thumbnailUrl || batch.thumbnailUrl,
       };
     };
 
-    const formatted = leads.map((lead: any) => {
-      const conversation = lead.conversations[0];
-
-      // Read-ahead mapped directly from DB (O(1))
-      // Map AI Priority to UI String Labels
+    const formatted = rawRows.map((row: any) => {
       let priority = "NORMAL";
-      if (lead.aiPriority === "HIGH") {
-        // High could be URGENT if sentiment is terribly negative
-        priority = (conversation?.sentimentScore !== undefined && conversation.sentimentScore < -3) ? "URGENT" : "HIGH";
-      } else if (lead.aiPriority === "LOW") {
+      if (row.aiPriority === "HIGH") {
+        priority = (row.conversation_sentiment_score !== null && row.conversation_sentiment_score < -3) ? "URGENT" : "HIGH";
+      } else if (row.aiPriority === "LOW") {
         priority = "LOW";
       }
 
-      const daysSinceActive = lead.lastActiveAt ? Math.floor((Date.now() - new Date(lead.lastActiveAt).getTime()) / 86400000) : 999;
-
-      // Real AI score computed from CRM formula (same as crm.service.ts recalculateLeadCRM)
+      const daysSinceActive = row.lastActiveAt ? Math.floor((Date.now() - new Date(row.lastActiveAt).getTime()) / 86400000) : 999;
       const recencyScore = Math.max(0, 30 - daysSinceActive) / 30 * 30;
-      const spendScore = Math.min((lead.totalSpend || 0) / 500, 30);
-      const orderScore = Math.min((lead.orderCount || 0) * 5, 20);
+      const spendScore = Math.min((row.totalSpend || 0) / 500, 30);
+      const orderScore = Math.min((row.orderCount || 0) * 5, 20);
       const aiScore = Math.round(recencyScore + spendScore + orderScore);
 
-      // Suggested action — ordered from highest to lowest priority
       let suggestedAction = "Monitor";
-      if (lead.pendingOrderState === "PENDING_APPROVAL") suggestedAction = "Claim order";
-      else if (lead.pendingOrderState === "CLAIMED_FOR_APPROVAL") suggestedAction = "Process order";
-      else if (conversation?.intent === "ORDERING") suggestedAction = "Close order";
-      else if (lead.segment === "CHURN_RISK") suggestedAction = "Win back";
-      else if (lead.segment === "VIP") suggestedAction = "Retain & reward";
+      if (row.pendingOrderState === "PENDING_APPROVAL") suggestedAction = "Claim order";
+      else if (row.pendingOrderState === "CLAIMED_FOR_APPROVAL") suggestedAction = "Process order";
+      else if (row.conversation_intent === "ORDERING") suggestedAction = "Close order";
+      else if (row.segment === "CHURN_RISK") suggestedAction = "Win back";
+      else if (row.segment === "VIP") suggestedAction = "Retain & reward";
       else if (daysSinceActive > 14) suggestedAction = "Re-engage";
-      else if (lead.segment === "REGULAR" && lead.totalSpend > 3000) suggestedAction = "Upsell to VIP";
-      else if (lead.segment === "NEW") suggestedAction = "Qualify lead";
-      else if (conversation?.intent === "COMPLAINT") suggestedAction = "Resolve issue";
+      else if (row.segment === "REGULAR" && row.totalSpend > 3000) suggestedAction = "Upsell to VIP";
+      else if (row.segment === "NEW") suggestedAction = "Qualify lead";
+      else if (row.conversation_intent === "COMPLAINT") suggestedAction = "Resolve issue";
 
-      const agentName = conversation?.claimedBy ? `${conversation.claimedBy.firstName} ${conversation.claimedBy.lastName || ""}`.trim() : null;
+      const agentName = row.agent_id ? `${row.agent_first_name} ${row.agent_last_name || ""}`.trim() : null;
+      const claimedBy = row.agent_id ? { id: row.agent_id, firstName: row.agent_first_name, lastName: row.agent_last_name } : null;
 
-      // Get all messages for this conversation
-      const allMessages = conversation?.messages || [];
+      const allMessages = Array.isArray(row.messages_json) ? row.messages_json : [];
+      const mostRecent = allMessages[0];
+      const hasAutoReply = mostRecent?.sender === "SYSTEM" || mostRecent?.sender === "BOT";
+      let botRepliedAt: string | null = null;
+      if (hasAutoReply) {
+        const lastSystemMessage = allMessages.find((m: any) => m.sender === "SYSTEM" || m.sender === "BOT");
+        if (lastSystemMessage) {
+          botRepliedAt = new Date(lastSystemMessage.createdAt).toISOString();
+        }
+      }
 
-       // Find the most recent message that is NOT from SYSTEM (true last customer message)
-       const lastCustomerMessage = allMessages.find((m: any) => m.sender !== "SYSTEM" && m.sender !== "BOT");
+      const isUnread = row.conversation_last_viewed_at
+        ? new Date(row.lastActiveAt) > new Date(row.conversation_last_viewed_at)
+        : true;
 
-       // Check if most recent message overall is from SYSTEM (hasAutoReply)
-       const mostRecent = allMessages[0];
-       const hasAutoReply = mostRecent?.sender === "SYSTEM" || mostRecent?.sender === "BOT";
-
-       // botRepliedAt: timestamp of most recent SYSTEM message if hasAutoReply is true
-       let botRepliedAt: string | null = null;
-       if (hasAutoReply) {
-         const lastSystemMessage = allMessages.find((m: any) => m.sender === "SYSTEM" || m.sender === "BOT");
-         if (lastSystemMessage) {
-           botRepliedAt = lastSystemMessage.createdAt.toISOString();
-         }
-       }
-
-        // isUnread: true if lastActiveAt > lastViewedAt OR lastViewedAt is null
-        const isUnread = conversation?.lastViewedAt
-          ? new Date(lead.lastActiveAt) > new Date(conversation.lastViewedAt)
-          : true;
-
-        // unreadCount: resolved from precomputed batch map (zero queries per lead)
-        const unreadCount = conversation?.id
-          ? (unreadCountMap.get(conversation.id) ?? (conversation.lastViewedAt ? 0 : (allMessages.filter((m: any) => m.sender === "CLIENT" || m.sender === "BOT").length)))
-          : 0;
+      const unreadCount = row.conversation_id ? Number(row.unread_count || 0) : 0;
 
       return {
-        id: lead.id,
-        name: lead.name || "Customer",
-        contact: lead.contact,
-        channel: lead.channel || "WEBSITE",
-        createdAt: lead.createdAt,
-        lastActiveAt: lead.lastActiveAt,
+        id: row.id,
+        name: row.name || "Customer",
+        contact: row.contact,
+        channel: row.channel || "WEBSITE",
+        createdAt: row.createdAt,
+        lastActiveAt: row.lastActiveAt,
 
         // CRM Data
-        totalSpend: lead.totalSpend,
-        orderCount: lead.orderCount,
-        segment: lead.segment,
+        totalSpend: row.totalSpend,
+        orderCount: row.orderCount,
+        segment: row.segment,
 
-        conversationId: conversation?.id || null,
+        conversationId: row.conversation_id || null,
         lastMessage: mostRecent?.content || "",
         lastMessageSender: mostRecent?.sender || null,
-        sentimentScore: conversation?.sentimentScore || 0,
-        intent: conversation?.intent || "BROWSING",
+        sentimentScore: row.conversation_sentiment_score || 0,
+        intent: row.conversation_intent || "BROWSING",
 
         // Multi-Agent Data
-        status: conversation?.status || ConversationStatus.OPEN,
-        assignedTo: conversation?.claimedBy || null,
+        status: row.conversation_status || ConversationStatus.OPEN,
+        assignedTo: claimedBy,
 
         priority,
         agentAssigned: agentName,
 
         // 🆕 New Order Arrivals Data
-        hasPendingOrderApproval: lead.pendingOrderState !== "NONE",
-        pendingOrderState: lead.pendingOrderState,
-        pendingOrderId: lead.pendingOrderId,
-        pendingOrderClaimedById: lead.pendingOrderClaimedById,
-        pendingOrderClaimedAt: lead.pendingOrderClaimedAt,
-        pendingOrderSummary: lead.pendingOrderSummary,
-        pendingOrderAmount: lead.pendingOrderAmount,
+        hasPendingOrderApproval: row.pendingOrderState !== "NONE",
+        pendingOrderState: row.pendingOrderState,
+        pendingOrderId: row.pendingOrderId,
+        pendingOrderClaimedById: row.pendingOrderClaimedById,
+        pendingOrderClaimedAt: row.pendingOrderClaimedAt,
+        pendingOrderSummary: row.pendingOrderSummary,
+        pendingOrderAmount: row.pendingOrderAmount,
 
         // 🆕 Agent assignment info for new order arrivals
-        canCurrentUserClaim: lead.pendingOrderState === "PENDING_APPROVAL" && !lead.pendingOrderClaimedById,
-        isPendingOrderOwnedByCurrentAgent: lead.pendingOrderClaimedById === req.user?.userId,
+        canCurrentUserClaim: row.pendingOrderState === "PENDING_APPROVAL" && !row.pendingOrderClaimedById,
+        isPendingOrderOwnedByCurrentAgent: row.pendingOrderClaimedById === req.user?.userId,
 
         // 🆕 Customer history context
-        isExistingCustomer: lead.orderCount > 0,
-        previousOrderCount: lead.orderCount,
-        previousSpend: lead.totalSpend,
+        isExistingCustomer: row.orderCount > 0,
+        previousOrderCount: row.orderCount,
+        previousSpend: row.totalSpend,
 
-         // AI Intelligence
-         aiScore,
-         suggestedAction,
-         daysSinceActive,
-         hasAutoReply,
-         botRepliedAt,
+        // AI Intelligence
+        aiScore,
+        suggestedAction,
+        daysSinceActive,
+        hasAutoReply,
+        botRepliedAt,
 
-          // 🆕 Unread indicator
-          isUnread,
-          unreadCount,
+        // 🆕 Unread indicator
+        isUnread,
+        unreadCount,
 
-          // Stream Triage fields
-          pastOrders: lead.orderCount || 0,
-          lifetimeValue: lead.totalSpend || 0,
-          reasoning: (() => {
-            if (lead.pendingOrderAmount && lead.pendingOrderAmount > 0) return `Customer has a pending order of ₹${lead.pendingOrderAmount} — high conversion priority.`;
-            if (conversation?.intent === "ORDERING") return "Customer expressed intent to place an order — strong buy signal.";
-            if (conversation?.intent === "SUPPORT") return "Customer needs assistance — resolving quickly builds trust.";
-            if (conversation?.intent === "COMPLAINT") return "Customer raised a complaint — needs immediate attention.";
-            if (lead.segment === "VIP") return "VIP customer — prioritize for retention and personalized service.";
-            if (lead.segment === "CHURN_RISK") return "Customer at risk of churning — proactive win-back recommended.";
-            if (lead.orderCount > 0) return "Returning customer — maintain relationship and explore upsell.";
-            return "New conversation — monitor for engagement signals.";
-          })(),
-          matchedProduct: resolveMatchedProductFromBatch(conversation),
-          dropOffMinutes: null, // Drop-off prediction not yet implemented
-        };
+        // Stream Triage fields
+        pastOrders: row.orderCount || 0,
+        lifetimeValue: row.totalSpend || 0,
+        reasoning: (() => {
+          if (row.pendingOrderAmount && row.pendingOrderAmount > 0) return `Customer has a pending order of ₹${row.pendingOrderAmount} — high conversion priority.`;
+          if (row.conversation_intent === "ORDERING") return "Customer expressed intent to place an order — strong buy signal.";
+          if (row.conversation_intent === "SUPPORT") return "Customer needs assistance — resolving quickly builds trust.";
+          if (row.conversation_intent === "COMPLAINT") return "Customer raised a complaint — needs immediate attention.";
+          if (row.segment === "VIP") return "VIP customer — prioritize for retention and personalized service.";
+          if (row.segment === "CHURN_RISK") return "Customer at risk of churning — proactive win-back recommended.";
+          if (row.orderCount > 0) return "Returning customer — maintain relationship and explore upsell.";
+          return "New conversation — monitor for engagement signals.";
+        })(),
+        matchedProduct: resolveMatchedProductFromBatch(row.conversation_matched_product),
+        dropOffMinutes: null, // Drop-off prediction not yet implemented
+      };
     });
 
     res.json({
@@ -509,6 +508,7 @@ router.patch("/:id", authMiddleware, asyncHandler(async (req: AuthRequest, res: 
     where: { 
       id, 
       companyId,
+      deletedAt: null,
       ...sharingConditions
     } 
   });
@@ -554,6 +554,7 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
       where: {
         id,
         companyId,
+        deletedAt: null,
         pendingOrderState: "PENDING_APPROVAL", // lock condition
         pendingOrderClaimedById: null // lock condition
       },
@@ -567,7 +568,7 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
     if (updateResult.count === 0) {
       // Find if already claimed by this agent:
       const checkLead = await (prisma.lead as any).findFirst({
-        where: { id, companyId }
+        where: { id, companyId, deletedAt: null }
       });
       if (checkLead && checkLead.pendingOrderClaimedById === userId) {
         // Return existing lead for idempotency
@@ -712,7 +713,7 @@ router.post("/:id/assign", authMiddleware, async (req: AuthRequest, res: Respons
 
     // Find the lead with its conversation
     const lead = await (prisma.lead as any).findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       include: {
         conversations: {
           select: {
@@ -827,7 +828,7 @@ router.post("/:id/mode", authMiddleware, async (req: AuthRequest, res: Response)
 
     // Find the lead with its conversation (same shape as /assign)
     const lead = await (prisma.lead as any).findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       include: {
         conversations: {
           select: {
@@ -893,7 +894,7 @@ router.post("/:id/ai-suggest", authMiddleware, async (req: AuthRequest, res: Res
 
     // Validate leadId belongs to req.user.companyId (tenant-scoping)
     const lead = await (prisma.lead as any).findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
     });
 
     if (!lead) {
@@ -925,7 +926,7 @@ router.post("/:id/skip", authMiddleware, async (req: AuthRequest, res: Response)
     }
 
     const lead = await (prisma.lead as any).findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       select: {
         conversations: {
           select: { id: true, status: true },
@@ -980,7 +981,7 @@ router.post("/:id/resolve", authMiddleware, async (req: AuthRequest, res: Respon
     }
 
     const lead = await (prisma.lead as any).findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       select: {
         conversations: {
           select: { id: true, status: true },
@@ -1029,7 +1030,7 @@ router.delete("/:id", authMiddleware, authorizeRoles("MANAGER", "OWNER"), async 
     const { companyId } = req.user!;
     const { id } = req.params;
 
-    const lead = await (prisma.lead as any).findFirst({ where: { id, companyId } });
+    const lead = await (prisma.lead as any).findFirst({ where: { id, companyId, deletedAt: null } });
     if (!lead) return res.status(404).json({ message: "Lead not found" });
 
     // Soft delete by marking as deleted (if your schema supports it)
@@ -1054,7 +1055,7 @@ router.post("/:id/convert", authMiddleware, async (req: AuthRequest, res: Respon
     const { accountName, dealName, pipelineId, stageId, amount } = req.body;
 
     const lead = await (prisma.lead as any).findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
     });
 
     if (!lead) return res.status(404).json({ message: "Lead not found" });
@@ -1134,7 +1135,7 @@ router.post("/bulk-assign", authMiddleware, async (req: AuthRequest, res: Respon
     // Success — return assigned list and notify the rest of the company live
     try {
       const assignedLeads = await (prisma.lead as any).findMany({
-        where: { id: { in: claimResults }, companyId },
+        where: { id: { in: claimResults }, companyId, deletedAt: null },
         select: { id: true, name: true, contact: true, channel: true, lastActiveAt: true },
       });
       const conversations = await (prisma.conversation as any).findMany({
@@ -1181,7 +1182,7 @@ router.post("/bulk-priority", authMiddleware, async (req: AuthRequest, res: Resp
     // Assuming Lead has segment or we update conversation metadata
     // For now, let's update conversation sentiment/priority logic or lead directly if field exists
     await (prisma.lead as any).updateMany({
-      where: { id: { in: ids }, companyId },
+      where: { id: { in: ids }, companyId, deletedAt: null },
       data: { 
         // Logic for priority updates (e.g., updating segment or a custom field)
         // If 'priority' isn't a direct field, we might just update updated_at to bump them
@@ -1238,7 +1239,7 @@ router.post("/bulk-tag", authMiddleware, async (req: AuthRequest, res: Response)
 
     if (action === 'ADD') {
       await (prisma.lead as any).updateMany({
-        where: { id: { in: ids }, companyId },
+        where: { id: { in: ids }, companyId, deletedAt: null },
         data: {
           tags: { push: tag }
         }
@@ -1282,7 +1283,7 @@ router.post("/bulk-segment", authMiddleware, async (req: AuthRequest, res: Respo
     }
 
     await (prisma.lead as any).updateMany({
-      where: { id: { in: ids }, companyId },
+      where: { id: { in: ids }, companyId, deletedAt: null },
       data: { segment }
     });
 
@@ -1325,7 +1326,7 @@ router.get("/:id/messages", authMiddleware, async (req: AuthRequest, res: Respon
     // Single query: fetch lead + its latest conversation (with messages) + orders
     // in one round-trip instead of three sequential queries.
     const lead = await prisma.lead.findFirst({
-      where: { id: req.params.id, companyId },
+      where: { id: req.params.id, companyId, deletedAt: null },
       select: {
         id: true,
         name: true,
@@ -1412,7 +1413,7 @@ router.delete("/:id/messages", authMiddleware, async (req: AuthRequest, res: Res
     const { id } = req.params;
 
     const lead = await prisma.lead.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       select: {
         id: true,
         conversations: {
@@ -1455,7 +1456,7 @@ router.delete("/:id/conversation", authMiddleware, async (req: AuthRequest, res:
     const { id } = req.params;
 
     const lead = await prisma.lead.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       select: {
         id: true,
         conversations: {
@@ -1510,7 +1511,7 @@ router.post("/:id/read", authMiddleware, async (req: AuthRequest, res: Response)
     const { id } = req.params;
 
     const lead = await prisma.lead.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       select: {
         id: true,
         conversations: {
@@ -1567,7 +1568,7 @@ router.post("/:id/reply", authMiddleware, async (req: AuthRequest, res: Response
 
     // 1. Find the lead with multi-tenant safety, include conversation + contact info
     const lead = await prisma.lead.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       select: {
         id: true,
         contact: true,
@@ -1706,7 +1707,7 @@ router.get("/:id/history", authMiddleware, async (req: AuthRequest, res: Respons
 
     // Verify lead exists and belongs to this company
     const lead = await prisma.lead.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       select: { id: true },
     });
 

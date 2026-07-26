@@ -115,7 +115,7 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
     // If conversation has no lead yet, create or find one for this conversation
     if (!leadId) {
       let lead = await prisma.lead.findFirst({
-        where: { companyId, contact: `conv_${conversationId.slice(0, 8)}` }
+        where: { companyId, contact: `conv_${conversationId.slice(0, 8)}`, deletedAt: null }
       });
       if (!lead) {
         lead = await prisma.lead.create({
@@ -335,37 +335,35 @@ router.post("/:id/simulate-success", authMiddleware, async (req: AuthRequest, re
 });
 
 /* ===============================
-   MARK ORDER AS PAID
+   UPDATE STATUS (Lifecycle)
 ================================== */
 router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const { status, version } = req.body;
     const { id } = req.params;
-    const { status } = req.body;
-    const { companyId } = req.user!;
 
-    const order = await prisma.order.findUnique({
-      where: { id, companyId }
-    });
+    const result = await orderWorkflowService.transitionStatus(
+      req.user!.companyId,
+      id,
+      status as OrderStatus,
+      {
+        id: req.user!.userId,
+        name: "Agent",
+        role: req.user!.role
+      },
+      version
+    );
 
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
+    return res.json(result.order);
+  } catch (error: any) {
+    if (error.message?.includes("Invalid transition")) {
+      return res.status(400).json({ message: error.message });
     }
-
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: { 
-        status: status as OrderStatus,
-        completedAt: status === OrderStatus.PAID ? new Date() : order.completedAt
-      }
-    });
-
-    // Notify event bus (e.g. for analytics)
-    eventBus.emit(Events.ORDER_UPDATED, { order: updatedOrder });
-
-    res.json({ message: `Order status updated to ${status}`, order: updatedOrder });
-  } catch (error) {
-    console.error("Order status update error:", error);
-    res.status(500).json({ message: "Failed to update order status" });
+    if (error.message?.includes("CONCURRENCY")) {
+      return res.status(409).json({ message: error.message });
+    }
+    console.error("Update status error:", error);
+    return res.status(500).json({ message: "Failed to update order" });
   }
 });
 
@@ -392,7 +390,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 
       // Find or create Lead
       let lead = await prisma.lead.findFirst({
-        where: { contact: phoneNumber, companyId }
+        where: { contact: phoneNumber, companyId, deletedAt: null }
       });
 
       if (!lead) {
@@ -565,42 +563,59 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const orders = await tenantDb.order.findMany({
-      where: whereCondition,
-      include: {
-        lead: {
-          select: {
-            id: true,
-            name: true,
-            contact: true,
-            channel: true,
-            totalSpend: true,
-            segment: true,
-            orderCount: true,
-            status: true,
-            createdAt: true,
-          lastActiveAt: true,
-          conversations: {
-            select: { id: true }
-          }
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 50));
+    const skip = (page - 1) * limit;
+
+    const [total, orders] = await Promise.all([
+      tenantDb.order.count({ where: whereCondition }),
+      tenantDb.order.findMany({
+        where: whereCondition,
+        include: {
+          lead: {
+            select: {
+              id: true,
+              name: true,
+              contact: true,
+              channel: true,
+              totalSpend: true,
+              segment: true,
+              orderCount: true,
+              status: true,
+              createdAt: true,
+              lastActiveAt: true,
+              conversations: {
+                select: { id: true }
+              }
+            }
+          },
+          processedBy: {
+            select: { id: true, firstName: true, lastName: true }
+          },
+          orderItems: true,
+          invoice: {
+            select: { pdfUrl: true, invoiceNumber: true }
           }
         },
-        processedBy: {
-          select: { id: true, firstName: true, lastName: true }
-        },
-        orderItems: true,
-        invoice: {
-          select: { pdfUrl: true, invoiceNumber: true }
-        }
-      },
-      orderBy: view === "history"
-        ? [{ completedAt: "desc" }, { createdAt: "desc" }]
-        : [{ priorityScore: "desc" }, { createdAt: "desc" }],
-      take: 100,
-    });
+        orderBy: view === "history"
+          ? [{ completedAt: "desc" }, { createdAt: "desc" }]
+          : [{ priorityScore: "desc" }, { createdAt: "desc" }],
+        skip,
+        take: limit,
+      })
+    ]);
 
     console.log(`[DEBUG] Orders returned:`, orders.map((o: any) => ({ id: o.id, status: o.status, summary: o.summary })));
-    return res.json(orders);
+    return res.json({
+      data: orders,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasMore: skip + orders.length < total,
+      }
+    });
   } catch (error) {
     console.error("Fetch orders error:", error);
     return res.status(500).json({ message: "Failed to fetch orders" });
@@ -685,39 +700,6 @@ router.post("/:id/reject", authMiddleware, async (req: AuthRequest, res: Respons
 });
 
 /* ===============================
-   UPDATE STATUS (Lifecycle)
-================================== */
-router.patch("/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const { status, version } = req.body; // Now expects status AND version
-    const { id } = req.params;
-
-    const result = await orderWorkflowService.transitionStatus(
-      req.user!.companyId,
-      id,
-      status as OrderStatus,
-      {
-        id: req.user!.userId,
-        name: "Agent",
-        role: req.user!.role
-      },
-      version
-    );
-
-    return res.json(result.order);
-  } catch (error: any) {
-    if (error.message?.includes("Invalid transition")) {
-      return res.status(400).json({ message: error.message });
-    }
-    if (error.message?.includes("CONCURRENCY")) {
-      return res.status(409).json({ message: error.message });
-    }
-    console.error("Update status error:", error);
-    return res.status(500).json({ message: "Failed to update order" });
-  }
-});
-
-/* ===============================
    CLAIM ORDER (Agent Assignment)
 ================================== */
 router.post("/:id/claim", authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -792,31 +774,48 @@ router.get("/awaiting", authMiddleware, async (req: AuthRequest, res: Response) 
       whereCondition.processedById = userId;
     }
 
-    const orders = await prisma.order.findMany({
-      where: whereCondition,
-      include: {
-        lead: {
-          select: {
-            id: true,
-            name: true,
-            contact: true,
-            channel: true,
-            totalSpend: true,
-            segment: true,
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 50));
+    const skip = (page - 1) * limit;
+
+    const [total, orders] = await Promise.all([
+      prisma.order.count({ where: whereCondition }),
+      prisma.order.findMany({
+        where: whereCondition,
+        include: {
+          lead: {
+            select: {
+              id: true,
+              name: true,
+              contact: true,
+              channel: true,
+              totalSpend: true,
+              segment: true,
+            }
+          },
+          processedBy: {
+            select: { id: true, firstName: true, lastName: true }
           }
         },
-        processedBy: {
-          select: { id: true, firstName: true, lastName: true }
-        }
-      },
-      orderBy: [
-        { priorityScore: "desc" },
-        { createdAt: "desc" }
-      ],
-      take: 50,
-    });
+        orderBy: [
+          { priorityScore: "desc" },
+          { createdAt: "desc" }
+        ],
+        skip,
+        take: limit,
+      })
+    ]);
 
-    return res.json(orders);
+    return res.json({
+      data: orders,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasMore: skip + orders.length < total,
+      }
+    });
   } catch (error) {
     console.error("Fetch awaiting orders error:", error);
     return res.status(500).json({ message: "Failed to fetch awaiting orders" });

@@ -134,8 +134,8 @@ export class OrderWorkflowService {
             ].includes(newStatus as any);
 
             if (isNoLongerPending) {
-                const currentLead = await tenantDb.lead.findUnique({
-                    where: { id: order.leadId },
+                const currentLead = await tenantDb.lead.findFirst({
+                    where: { id: order.leadId, deletedAt: null },
                     select: { pendingOrderId: true }
                 });
                 if (currentLead && currentLead.pendingOrderId === orderId) {
@@ -286,7 +286,7 @@ export class OrderWorkflowService {
         const eventName = `${ORDER_EVENT_PREFIX}${String(next).toLowerCase()}`;
         const conv = order.conversation;
         if (conv?.leadId) {
-          const lead = await prisma.lead.findUnique({ where: { id: conv.leadId } });
+          const lead = await prisma.lead.findFirst({ where: { id: conv.leadId, deletedAt: null } });
           if (lead) {
             conversationalAutoReplyService.fireEventRules(eventName, {
               companyId,

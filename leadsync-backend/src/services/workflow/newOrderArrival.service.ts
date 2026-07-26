@@ -443,8 +443,8 @@ export class NewOrderArrivalService {
             });
         }
 
-        const updatedLead = await tenantDb.lead.findUnique({
-            where: { id: order.leadId },
+        const updatedLead = await tenantDb.lead.findFirst({
+            where: { id: order.leadId, deletedAt: null },
             select: { totalSpend: true, orderCount: true, segment: true }
         });
 
