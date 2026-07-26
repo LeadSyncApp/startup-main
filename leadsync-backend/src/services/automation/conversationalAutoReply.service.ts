@@ -11,6 +11,7 @@
  * Keyword specificity rewards longer/exact-phrase trigger keyword matches.
  */
 
+import Groq from "groq-sdk";
 import { prisma } from "../../lib/prisma";
 import { OutboundDispatcher } from "../outbound.dispatcher";
 import { retrieveSimilarChunks } from "../knowledge/knowledgeRetriever.service";
@@ -45,7 +46,7 @@ interface RuleMatchResult {
 }
 
 // BlockedReason values for non-confident-match paths
-type BlockedReason = "ineligible_time" | "ineligible_language" | "ineligible_segment" | "gap_below_threshold" | "rule_not_found" | "ambiguous";
+type BlockedReason = "ineligible_time" | "ineligible_language" | "ineligible_segment" | "gap_below_threshold" | "rule_not_found" | "ambiguous" | "sanity_check_rejected" | "below_single_rule_threshold";
 
 // Valid pathTaken values including escalation
 type PathTaken = "confident_match" | "ai_fallback" | "escalation";
@@ -72,7 +73,7 @@ export class ConversationalAutoReplyService {
 
   // Threshold for confident rule match (configurable via env)
   private readonly CONFIDENCE_GAP_THRESHOLD = parseFloat(process.env.CONFIDENCE_GAP_THRESHOLD || "0.04");
-  private readonly SINGLE_RULE_MIN_SCORE = parseFloat(process.env.SINGLE_RULE_MIN_SCORE || "0.70");
+  private readonly SINGLE_RULE_MIN_SCORE = parseFloat(process.env.SINGLE_RULE_MIN_SCORE || "0.85");
   // Rule type constants (same as orchestrator for consistency)
   private readonly RULE_TYPE_CANNED_REPLY = 1;
   private readonly RULE_TYPE_OTTO_QUERY = 2;
@@ -89,6 +90,113 @@ export class ConversationalAutoReplyService {
 
   // How many candidate rules to surface for ambiguity logging
   private readonly AMBIGUITY_LOG_TOP_N = 3;
+
+  // Lazy-initialized Groq client for sanity-check LLM calls
+  private groqClient: Groq | null = null;
+
+  private getGroq(): Groq {
+    if (!this.groqClient) {
+      const apiKey = process.env.GROQ_API_KEY;
+      if (!apiKey) {
+        throw new Error("GROQ_API_KEY environment variable is required for sanity check");
+      }
+      this.groqClient = new Groq({ apiKey });
+    }
+    return this.groqClient;
+  }
+
+  /**
+   * Fast LLM sanity check: asks llama-3.1-8b-instant whether a proposed canned reply
+   * actually makes sense as a response to the customer's message.
+   * Returns { passes: boolean, reason: string }.
+   * Never throws — failures default to passes=true (fail-open) to avoid blocking replies.
+   */
+  private async sanityCheckCannedReply(
+    customerMessage: string,
+    proposedReply: string,
+    ruleName: string,
+    companyId: string
+  ): Promise<{ passes: boolean; reason: string }> {
+    try {
+      const groq = this.getGroq();
+      const result = await groq.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a reply-quality gate for a merchant auto-reply system. You receive a customer message and a proposed canned reply from an automated rule. " +
+              "Determine whether the reply is a sensible, relevant response to what the customer asked.\n" +
+              "CRITICAL PRODUCT INQUIRY GATE: If the customer is asking whether a specific product exists, is sold, or is available (e.g. 'do you sell X?', 'is X available?'), a canned promotion or generic discount reply does NOT answer whether the item exists. Reject canned replies for direct product availability inquiries so the query can be checked against real inventory.\n" +
+              "Answer ONLY with a JSON object: { \"passes\": true/false, \"reason\": \"short explanation\" }. " +
+              "Be lenient — only reject if the reply is clearly off-topic, nonsensical, or harmful.",
+          },
+          {
+            role: "user",
+            content: `Customer asked: "${customerMessage}"\nProposed canned reply (rule: ${ruleName}): "${proposedReply}"\n\nDoes this reply make sense as a response?`,
+          },
+        ],
+        model: "llama-3.1-8b-instant",
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+        max_tokens: 100,
+      });
+
+      const text = result.choices[0]?.message?.content || '{"passes":true,"reason":"parse_error"}';
+      const parsed = JSON.parse(text);
+      const passes = parsed.passes !== false; // default true if missing
+      return { passes, reason: parsed.reason || "no reason provided" };
+    } catch (err: any) {
+      // Fail-open: don't block replies if the sanity check LLM fails
+      console.warn(`[ConversationalAutoReply] Sanity check failed (fail-open): ${err.message}`);
+      return { passes: true, reason: `llm_error: ${err.message}` };
+    }
+  }
+
+  /**
+   * Fire-and-forget structured audit log for every rule evaluation attempt.
+   * Writes a single JSON line to stdout — grep by [RULE_AUDIT] to aggregate.
+   * Does NOT block the response path.
+   */
+  private logAudit(params: {
+    companyId: string;
+    conversationId?: string;
+    messageText: string;
+    activeRuleIds: string[];
+    eligibleRuleIds: string[];
+    scores?: { ruleId: string; ruleName: string; finalScore: number; baseSimilarity: number; specificityBonus: number }[];
+    topScore?: number;
+    secondScore?: number;
+    gap?: number;
+    decision: string;
+    matchedRuleId?: string | null;
+    sanityCheckPassed?: boolean;
+    blockedReason?: string;
+  }): void {
+    try {
+      const entry = {
+        event: "RULE_AUDIT",
+        timestamp: new Date().toISOString(),
+        companyId: params.companyId,
+        conversationId: params.conversationId,
+        messageText: params.messageText.substring(0, 500),
+        activeRuleCount: params.activeRuleIds.length,
+        eligibleRuleCount: params.eligibleRuleIds.length,
+        activeRuleIds: params.activeRuleIds,
+        eligibleRuleIds: params.eligibleRuleIds,
+        scores: params.scores || [],
+        topScore: params.topScore,
+        secondScore: params.secondScore,
+        gap: params.gap,
+        decision: params.decision,
+        matchedRuleId: params.matchedRuleId || null,
+        sanityCheckPassed: params.sanityCheckPassed ?? null,
+        blockedReason: params.blockedReason || null,
+      };
+      console.log(`[RULE_AUDIT] ${JSON.stringify(entry)}`);
+    } catch {
+      // Audit logging should never throw
+    }
+  }
 
   /**
    * Log decision to RuleDecisionLog table for observability
@@ -457,6 +565,11 @@ export class ConversationalAutoReplyService {
     const rateLimitKey = `${companyId}:${conversationId}`;
     const lastTrigger = this.lastTriggerTimestamps.get(rateLimitKey);
     if (lastTrigger && Date.now() - lastTrigger < this.RATE_LIMIT_COOLDOWN_MS) {
+      this.logAudit({
+        companyId, conversationId, messageText,
+        activeRuleIds: [], eligibleRuleIds: [],
+        decision: "rate_limited",
+      });
       return { matched: false, responseAlreadySent: false };
     }
     this.lastTriggerTimestamps.set(rateLimitKey, Date.now());
@@ -464,6 +577,11 @@ export class ConversationalAutoReplyService {
     // Load active rules
     const activeRules = await this.getActiveRules(companyId);
     if (activeRules.length === 0) {
+      this.logAudit({
+        companyId, conversationId, messageText,
+        activeRuleIds: [], eligibleRuleIds: [],
+        decision: "no_rules",
+      });
       return { matched: false, responseAlreadySent: false };
     }
 
@@ -518,6 +636,15 @@ export class ConversationalAutoReplyService {
               matchedRuleId: null,
               blockedReason: bestRuleEligibility.blockedReason,
             });
+            this.logAudit({
+              companyId, conversationId, messageText,
+              activeRuleIds: activeRules.map((r: any) => r.id),
+              eligibleRuleIds: eligibleRules.map((r: any) => r.id),
+              topScore, secondScore, gap,
+              decision: "ai_fallback",
+              matchedRuleId: null,
+              blockedReason: bestRuleEligibility.blockedReason || undefined,
+            });
             return { matched: false, responseAlreadySent: false };
           }
         }
@@ -539,6 +666,14 @@ export class ConversationalAutoReplyService {
         gap,
         pathTaken: "ai_fallback",
         matchedRuleId: null,
+        blockedReason: "rule_not_found",
+      });
+      this.logAudit({
+        companyId, conversationId, messageText,
+        activeRuleIds: activeRules.map((r: any) => r.id),
+        eligibleRuleIds: [],
+        topScore, secondScore, gap,
+        decision: "ai_fallback",
         blockedReason: "rule_not_found",
       });
       return { matched: false, responseAlreadySent: false };
@@ -599,15 +734,58 @@ export class ConversationalAutoReplyService {
             matchedRuleId: null,
             blockedReason: "ambiguous",
           });
+          this.logAudit({
+            companyId, conversationId, messageText,
+            activeRuleIds: activeRules.map((r: any) => r.id),
+            eligibleRuleIds: eligibleRules.map((r: any) => r.id),
+            scores: scoredCandidates.map((c: CandidateInfo) => ({
+              ruleId: c.ruleId, ruleName: c.ruleName,
+              finalScore: c.finalScore, baseSimilarity: c.baseSimilarity, specificityBonus: c.specificityBonus,
+            })),
+            topScore: scoredCandidates[0].finalScore,
+            secondScore: scoredCandidates[1].finalScore,
+            gap,
+            decision: "ai_fallback",
+            blockedReason: "ambiguous",
+          });
 
           return { matched: false, responseAlreadySent: false };
         }
       }
 
-      // Either no eligible chunks at all, or only one (handled by SINGLE_RULE_MIN_SCORE above)
-      const topScore = allEligibleChunks.length >= 1 ? allEligibleChunks[0].similarity : undefined;
-      const secondScore = allEligibleChunks.length >= 2 ? allEligibleChunks[1].similarity : undefined;
-      const gap = allEligibleChunks.length >= 2 ? topScore! - secondScore! : undefined;
+      // Build scored candidates for any remaining eligible chunks to log accurate scores and blockedReason
+      const scoredCandidates: CandidateInfo[] = allEligibleChunks.map(chunk => {
+        const rule = eligibleRules.find(r => r.id === chunk.sourceId);
+        if (!rule) return null;
+        const triggerKeywords = (rule.triggerKeywords as string[]) || [];
+        const { bonus: specificityBonus, matchedKeywords } = this.calculateKeywordSpecificity(messageText, triggerKeywords);
+        const finalScore = chunk.similarity + specificityBonus;
+        return {
+          ruleId: rule.id,
+          ruleName: rule.name,
+          triggerKeywords,
+          matchedKeywords,
+          baseSimilarity: chunk.similarity,
+          specificityBonus,
+          finalScore,
+        };
+      }).filter((c): c is CandidateInfo => c !== null);
+
+      scoredCandidates.sort((a, b) => b.finalScore - a.finalScore || b.baseSimilarity - a.baseSimilarity);
+
+      const topCandidate = scoredCandidates.length >= 1 ? scoredCandidates[0] : undefined;
+      const topScore = topCandidate?.finalScore;
+      const secondScore = scoredCandidates.length >= 2 ? scoredCandidates[1].finalScore : undefined;
+      const gap = scoredCandidates.length >= 2 && topScore !== undefined && secondScore !== undefined ? topScore - secondScore : undefined;
+
+      let blockedReason: BlockedReason;
+      if (scoredCandidates.length === 0) {
+        blockedReason = "rule_not_found";
+      } else if (scoredCandidates.length === 1) {
+        blockedReason = "below_single_rule_threshold";
+      } else {
+        blockedReason = "gap_below_threshold";
+      }
 
       await this.logDecision({
         companyId,
@@ -618,7 +796,19 @@ export class ConversationalAutoReplyService {
         gap,
         pathTaken: "ai_fallback",
         matchedRuleId: null,
-        blockedReason: gap !== undefined ? "gap_below_threshold" : "rule_not_found",
+        blockedReason,
+      });
+      this.logAudit({
+        companyId, conversationId, messageText,
+        activeRuleIds: activeRules.map((r: any) => r.id),
+        eligibleRuleIds: eligibleRules.map((r: any) => r.id),
+        scores: scoredCandidates.map((c: CandidateInfo) => ({
+          ruleId: c.ruleId, ruleName: c.ruleName,
+          finalScore: c.finalScore, baseSimilarity: c.baseSimilarity, specificityBonus: c.specificityBonus,
+        })),
+        topScore, secondScore, gap,
+        decision: "ai_fallback",
+        blockedReason,
       });
       return { matched: false, responseAlreadySent: false };
     }
@@ -638,6 +828,19 @@ export class ConversationalAutoReplyService {
     });
 
     if (existingLog) {
+      this.logAudit({
+        companyId, conversationId, messageText,
+        activeRuleIds: activeRules.map((r: any) => r.id),
+        eligibleRuleIds: eligibleRules.map((r: any) => r.id),
+        scores: candidates.map((c: CandidateInfo) => ({
+          ruleId: c.ruleId, ruleName: c.ruleName,
+          finalScore: c.finalScore, baseSimilarity: c.baseSimilarity, specificityBonus: c.specificityBonus,
+        })),
+        topScore, secondScore, gap,
+        decision: "confident_match",
+        matchedRuleId: rule.id,
+        blockedReason: "idempotent_skip",
+      });
       return {
         matched: true,
         ruleId: rule.id,
@@ -656,6 +859,50 @@ export class ConversationalAutoReplyService {
     if (!isRagRule) {
       // Generate response using the rule's template for Type 1 (canned reply) rules
       response = await this.generateResponse(rule, context);
+
+      // Step 2: AI sanity-check gate — verify the canned reply makes sense for the customer's message
+      const sanityCheck = await this.sanityCheckCannedReply(
+        context.messageText,
+        response,
+        rule.name,
+        companyId
+      );
+      console.log(
+        `[ConversationalAutoReply] Sanity check for rule "${rule.name}": passes=${sanityCheck.passes}, reason="${sanityCheck.reason}"`
+      );
+
+      if (!sanityCheck.passes) {
+        // Sanity check rejected the canned reply — log and fall through to main AI path
+        console.log(
+          `[ConversationalAutoReply] Rule "${rule.name}" rejected by sanity gate: ${sanityCheck.reason}`
+        );
+        await this.logDecision({
+          companyId,
+          conversationId,
+          messageText,
+          topScore,
+          secondScore,
+          gap,
+          pathTaken: "ai_fallback",
+          matchedRuleId: rule.id,
+          blockedReason: "sanity_check_rejected",
+        });
+        this.logAudit({
+          companyId, conversationId, messageText,
+          activeRuleIds: activeRules.map((r: any) => r.id),
+          eligibleRuleIds: eligibleRules.map((r: any) => r.id),
+          scores: candidates.map((c: CandidateInfo) => ({
+            ruleId: c.ruleId, ruleName: c.ruleName,
+            finalScore: c.finalScore, baseSimilarity: c.baseSimilarity, specificityBonus: c.specificityBonus,
+          })),
+          topScore, secondScore, gap,
+          decision: "ai_fallback",
+          matchedRuleId: rule.id,
+          sanityCheckPassed: false,
+          blockedReason: "sanity_check_rejected",
+        });
+        return { matched: false, responseAlreadySent: false };
+      }
 
       // Send the response via outbound dispatcher
       await this.sendResponse(context, response);
@@ -693,6 +940,20 @@ export class ConversationalAutoReplyService {
         triggerCount: { increment: 1 },
         lastTriggeredAt: new Date(),
       },
+    });
+
+    this.logAudit({
+      companyId, conversationId, messageText,
+      activeRuleIds: activeRules.map((r: any) => r.id),
+      eligibleRuleIds: eligibleRules.map((r: any) => r.id),
+      scores: candidates.map((c: CandidateInfo) => ({
+        ruleId: c.ruleId, ruleName: c.ruleName,
+        finalScore: c.finalScore, baseSimilarity: c.baseSimilarity, specificityBonus: c.specificityBonus,
+      })),
+      topScore, secondScore, gap,
+      decision: "confident_match",
+      matchedRuleId: rule.id,
+      sanityCheckPassed: isRagRule ? undefined : true,
     });
 
     return {

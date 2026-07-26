@@ -2,13 +2,20 @@
  * Knowledge Retriever Service
  *
  * Standalone similarity-search function for retrieving relevant knowledge chunks.
- * Uses pgvector's cosine distance operator (<=>) with normalized embeddings.
+ * Uses in-memory cache with vector similarity + BM25 FTS when the company's
+ * chunk count is within threshold, falling back to direct DB queries otherwise.
  * Never throws - logs errors and returns empty array to protect live message flows.
  */
 
 import { embedText } from "../../utils/embedding";
-import { prisma } from "../../lib/prisma";
+import { directPrisma } from "../../lib/prisma";
 import { stepProfiler } from "../../utils/stepProfiler";
+import {
+  getOrLoadCache,
+  searchVectorInMemory,
+  searchFtsInMemory,
+  hybridSearchInMemory,
+} from "./chunkCache";
 
 export interface RetrievedChunk {
   sourceId: string | null;
@@ -41,6 +48,24 @@ export async function retrieveSimilarChunks(
       () => embedText("query: " + messageText)
     );
 
+    // Try in-memory cache first
+    const cacheEntry = await getOrLoadCache(companyId);
+    if (cacheEntry) {
+      const results = searchVectorInMemory(
+        companyId,
+        new Float32Array(embedding),
+        topN,
+        sourceType
+      );
+      return results.map((r) => ({
+        sourceId: r.sourceId,
+        sourceType: r.sourceType,
+        content: r.content,
+        similarity: r.similarity,
+      }));
+    }
+
+    // Fallback: direct DB query
     const embeddingLiteral = `[${embedding.join(",")}]`;
 
     const rows = await stepProfiler.time(
@@ -51,7 +76,7 @@ export async function retrieveSimilarChunks(
       false,
       async () => {
         if (sourceType) {
-          return await prisma.$queryRaw<
+          return await directPrisma.$queryRaw<
             { sourceId: string | null; sourceType: string; content: string; distance: number }[]
           >`
             SELECT
@@ -67,7 +92,7 @@ export async function retrieveSimilarChunks(
             LIMIT ${topN}
           `;
         } else {
-          return await prisma.$queryRaw<
+          return await directPrisma.$queryRaw<
             { sourceId: string | null; sourceType: string; content: string; distance: number }[]
           >`
             SELECT
@@ -118,12 +143,8 @@ export async function retrieveProductChunks(
 /**
  * Retrieve the top N knowledge chunks matching a full-text search query.
  *
- * Uses Postgres tsvector/tsquery via the `contentTsv` generated column.
- * `websearch_to_tsquery` is used instead of `plainto_tsquery` because it
- * handles natural user input more forgivingly — quotes for exact phrases,
- * OR for alternatives, - for exclusion — without erroring on malformed input.
- *
- * Returns results ranked by `ts_rank` (BM25-style TF/IDF scoring).
+ * Uses in-memory MiniSearch BM25 when the company's chunk count is within
+ * threshold, falling back to Postgres tsvector/tsquery otherwise.
  * Same companyId + isActive scoping and optional sourceType filter as vector search.
  * Never throws — logs errors and returns empty array.
  *
@@ -139,6 +160,19 @@ export async function searchByFullText(
   topN: number = 20
 ): Promise<RetrievedChunk[]> {
   try {
+    // Try in-memory cache first
+    const cacheEntry = await getOrLoadCache(companyId);
+    if (cacheEntry) {
+      const results = searchFtsInMemory(companyId, queryText, topN, sourceType);
+      return results.map((r) => ({
+        sourceId: r.sourceId,
+        sourceType: r.sourceType,
+        content: r.content,
+        similarity: r.score,
+      }));
+    }
+
+    // Fallback: direct DB query
     const rows = await stepProfiler.time(
       "Postgres tsvector FTS query",
       "knowledgeRetriever.service.ts:133",
@@ -147,7 +181,7 @@ export async function searchByFullText(
       false,
       async () => {
         if (sourceType) {
-          return await prisma.$queryRaw<
+          return await directPrisma.$queryRaw<
             { sourceId: string | null; sourceType: string; content: string; rank: number }[]
           >`
             SELECT
@@ -165,7 +199,7 @@ export async function searchByFullText(
             LIMIT ${topN}
           `;
         } else {
-          return await prisma.$queryRaw<
+          return await directPrisma.$queryRaw<
             { sourceId: string | null; sourceType: string; content: string; rank: number }[]
           >`
             SELECT
@@ -203,7 +237,7 @@ export async function searchByFullText(
 
 /**
  * Hybrid search: merge vector similarity and full-text search via Reciprocal Rank
- * Fusion (RRF). Runs both retrieval paths in parallel, merges by RRF score.
+ * Fusion (RRF). Uses in-memory cache when available, falls back to DB otherwise.
  *
  * RRF formula: for each chunk id appearing in either list,
  *   rrf_score = (1 / (k + vector_rank)) + (1 / (k + fts_rank))
@@ -227,7 +261,37 @@ export async function hybridSearch(
   const RRF_K = 60;
 
   try {
-    // Run both retrieval paths in parallel
+    // Try in-memory hybrid search first
+    const cacheEntry = await getOrLoadCache(companyId);
+    if (cacheEntry) {
+      // Need the query embedding for vector search
+      const embedding = await stepProfiler.time(
+        "embedText (Xenova/multilingual-e5-small) for hybrid",
+        "knowledgeRetriever.service.ts:hybrid-cache",
+        "In-process compute",
+        "ONNX feature-extraction model inference for hybrid search",
+        false,
+        () => embedText("query: " + queryText)
+      );
+
+      const inMemoryResults = hybridSearchInMemory(
+        companyId,
+        queryText,
+        new Float32Array(embedding),
+        topN,
+        sourceType
+      );
+
+      return inMemoryResults.map((r) => ({
+        sourceId: r.sourceId,
+        sourceType: r.sourceType,
+        content: r.content,
+        similarity: r.similarity,
+        rrf_score: r.rrf_score,
+      }));
+    }
+
+    // Fallback: DB-based hybrid search
     const [vectorResults, ftsResults] = await Promise.all([
       retrieveSimilarChunks(companyId, queryText, 30, sourceType),
       searchByFullText(companyId, queryText, sourceType, 30),

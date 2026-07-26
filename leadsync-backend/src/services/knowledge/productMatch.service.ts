@@ -366,32 +366,53 @@ export async function matchProductForMessage(
     // Step 2: Sort all scored chunks by reranker score (highest first)
     scored.sort((a, b) => b.rerank_score - a.rerank_score);
 
-    // Step 3: Resolve scored chunks to distinct candidate products
-    const candidateProducts: ProductMatchCandidate[] = [];
-    const seenProductIds = new Set<string>();
+    // Step 3: Resolve scored chunks to distinct candidate products (Batched in 1 query)
+    const candidateSourceIds: string[] = [];
+    const candidateNames: string[] = [];
 
     for (const chunk of scored) {
-      const sourceId = chunk.sourceId;
-      let product: any = null;
+      if (chunk.sourceId) candidateSourceIds.push(chunk.sourceId);
+      const nameFromContent = parseProductNameFromContent(chunk.content);
+      if (nameFromContent) candidateNames.push(nameFromContent);
+    }
 
-      if (sourceId && !seenProductIds.has(sourceId)) {
-        product = await prisma.inventoryProduct.findFirst({
-          where: { id: sourceId, companyId, isActive: true },
+    const fetchedProducts = await stepProfiler.time(
+      "Batch fetch candidate products DB query",
+      "productMatch.service.ts:375",
+      "DB query",
+      `Batch fetch ${candidateSourceIds.length} candidate IDs and ${candidateNames.length} names`,
+      false,
+      async () => {
+        return await prisma.inventoryProduct.findMany({
+          where: {
+            companyId,
+            isActive: true,
+            OR: [
+              ...(candidateSourceIds.length > 0 ? [{ id: { in: candidateSourceIds } }] : []),
+              ...(candidateNames.length > 0 ? [{ name: { in: candidateNames } }] : []),
+            ],
+          },
           include: {
             variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } },
           },
         });
       }
+    );
+
+    const productByIdMap = new Map<string, any>(fetchedProducts.map((p) => [p.id, p]));
+    const productByNameMap = new Map<string, any>(fetchedProducts.map((p) => [p.name.toLowerCase(), p]));
+
+    const candidateProducts: ProductMatchCandidate[] = [];
+    const seenProductIds = new Set<string>();
+
+    for (const chunk of scored) {
+      const sourceId = chunk.sourceId;
+      let product: any = sourceId ? productByIdMap.get(sourceId) : null;
 
       if (!product) {
         const nameFromContent = parseProductNameFromContent(chunk.content);
         if (nameFromContent) {
-          product = await prisma.inventoryProduct.findFirst({
-            where: { name: nameFromContent, companyId, isActive: true },
-            include: {
-              variants: { where: { isActive: true }, orderBy: { attributeValue: "asc" } },
-            },
-          });
+          product = productByNameMap.get(nameFromContent.toLowerCase());
         }
       }
 

@@ -22,6 +22,7 @@ import { prisma } from "../../lib/prisma";
 import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
 import multer from "multer";
 import { supabase } from "../../lib/supabase";
+import { invalidateChunkCache } from "../../services/knowledge/chunkCache";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -308,6 +309,9 @@ router.delete("/:id/inventory/:productId", authMiddleware, async (req: AuthReque
       },
       data: { isActive: false }
     });
+
+    // 4. Invalidate in-memory knowledge chunk cache
+    invalidateChunkCache(companyId);
 
     res.json({ success: true, message: "Product deleted successfully" });
   } catch (error: any) {

@@ -178,9 +178,15 @@ function VariantSpreadsheetTable({
 
   const updateTableState = (newCols: string[], newRows: ProductVariantData[]) => {
     setTableData({ columns: newCols, rows: newRows });
+    const variantDimensions = newCols.map(col => ({
+      name: col,
+      options: [...new Set(newRows.map(r => r.attributes?.[col]).filter(Boolean))] as string[]
+    }));
     onUpdateProduct(productIdx, {
       variants: newRows,
-      hasVariants: newRows.length > 0
+      hasVariants: newRows.length > 0,
+      variantAttributeNames: newCols.length > 0 ? newCols : undefined,
+      variant_dimensions: variantDimensions.length > 0 ? variantDimensions : undefined
     });
   };
 

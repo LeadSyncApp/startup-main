@@ -136,20 +136,30 @@ export async function getActiveDraftOrder(companyId: string, conversationId: str
 /**
  * 🛒 Strictly READ-ONLY matching of extracted items against InventoryProduct and InventoryVariant.
  * Ensures items get canonical base prices from DB, not hallucinated prices.
+ *
+ * Batched optimization: loads full product catalog once, runs exact+fuzzy queries
+ * in parallel across all items, and batches variant lookups — reducing ~12-14
+ * sequential DB round-trips to ~3-4 total.
  */
 export async function resolveAndValidateItems(companyId: string, rawItems: any[]): Promise<ResolveItemsResult> {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     return { resolvedItems: [], allMatched: false, resolvedTotal: 0 };
   }
 
-  const resolvedItems: DraftOrderItem[] = [];
-  let resolvedTotal = 0;
-  let allMatched = true;
+  // Filter out items with empty names upfront
+  const validItems = rawItems.filter((item) => (item.name || "").trim());
+  if (validItems.length === 0) {
+    return { resolvedItems: [], allMatched: false, resolvedTotal: 0 };
+  }
 
-  for (const item of rawItems) {
+  // ── STEP 1: Load full product catalog ONCE (covers reverse-match for all items) ──
+  const allProducts = await prisma.inventoryProduct.findMany({
+    where: { companyId, isActive: true }
+  });
+
+  // ── STEP 2: Run all exact+fuzzy findFirst queries in parallel ──
+  const matchPromises = validItems.map(async (item) => {
     const itemName = (item.name || "").trim();
-    const qty = Math.max(1, parseInt(item.quantity) || 1);
-    if (!itemName) continue;
 
     // 1. Exact match (case insensitive)
     let dbProduct = await prisma.inventoryProduct.findFirst({
@@ -164,21 +174,54 @@ export async function resolveAndValidateItems(companyId: string, rawItems: any[]
     }
 
     // 3. Reverse search: item string contains product name or product name contains item string
+    // Uses pre-fetched catalog instead of re-querying DB
     if (!dbProduct) {
-      const allProducts = await prisma.inventoryProduct.findMany({
-        where: { companyId, isActive: true }
-      });
       dbProduct = allProducts.find((p) =>
         itemName.toLowerCase().includes(p.name.toLowerCase()) ||
         p.name.toLowerCase().includes(itemName.toLowerCase())
       ) || null;
     }
 
+    return { item, dbProduct };
+  });
+
+  const matchResults = await Promise.all(matchPromises);
+
+  // ── STEP 3: Batch variant lookups for all products that need them ──
+  const productIdsNeedingVariants = [
+    ...new Set(
+      matchResults
+        .filter((r) => r.dbProduct?.hasVariants)
+        .map((r) => r.dbProduct!.id)
+    )
+  ];
+
+  let variantMap = new Map<string, any[]>();
+  if (productIdsNeedingVariants.length > 0) {
+    const allVariants = await prisma.inventoryVariant.findMany({
+      where: { productId: { in: productIdsNeedingVariants }, isActive: true }
+    });
+
+    // Group variants by productId for O(1) lookup
+    for (const variant of allVariants) {
+      const existing = variantMap.get(variant.productId) || [];
+      existing.push(variant);
+      variantMap.set(variant.productId, existing);
+    }
+  }
+
+  // ── STEP 4: Build resolved items using batched results ──
+  const resolvedItems: DraftOrderItem[] = [];
+  let resolvedTotal = 0;
+  let allMatched = true;
+
+  for (const { item, dbProduct } of matchResults) {
+    const itemName = (item.name || "").trim();
+    const qty = Math.max(1, parseInt(item.quantity) || 1);
+
     let matchedVariantId: string | null = null;
     if (dbProduct?.hasVariants) {
-      const variants = await prisma.inventoryVariant.findMany({
-        where: { productId: dbProduct.id, isActive: true }
-      });
+      const variants = variantMap.get(dbProduct.id) || [];
       const matched = variants.find((v) =>
         new RegExp(`\\b${v.attributeValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(itemName)
       );

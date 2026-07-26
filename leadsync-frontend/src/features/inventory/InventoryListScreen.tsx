@@ -26,6 +26,7 @@ interface ProductVariant {
   stock: number | null;
   stockStatus?: string | null;
   sku?: string | null;
+  attributes?: Record<string, string> | null;
 }
 
 interface ProductImage {
@@ -46,6 +47,7 @@ interface SavedProduct {
   images?: ProductImage[];
   hasVariants: boolean;
   variantAttributeName: string | null;
+  variantAttributeNames?: string[];
   variants: ProductVariant[];
   stockStatus?: string | null;
   isActive: boolean;

@@ -469,15 +469,11 @@ If the customer has not supplied a valid, clean 6-digit pincode or clear landmar
     - Never reply with a plain "out of stock" without offering the available in-stock variant options of the product when they exist!
 - If <MatchedProduct> says "No matched product.":
   - The customer asked for something that does NOT exist in this catalog.
-  - Politely state that the specific item is not available.
-  - THEN, if the <ActiveMerchantMenuSnapshot> lists other available products,
-    briefly offer them as alternatives to keep the customer engaged:
-    "We don't have [item], but we do carry [product1] and [product2]. Would you
-    like to know more about those?"
-  - Do NOT fabricate or invent products — only list products explicitly present
-    in the <ActiveMerchantMenuSnapshot>.
-  - Keep the alternative suggestion to 1-2 sentences. The primary message is
-    "not available" — alternatives are secondary.
+  - CRITICAL PHRASING ORDER FOR ALTERNATIVES: You MUST first clearly and explicitly state that the customer's specifically requested product is not available/not in the catalog (e.g., "We don't carry [item]", "We don't have [item] in our catalog") BEFORE pivoting to suggest any alternative products. NEVER skip straight to suggesting alternatives (e.g., NEVER say "We have options that might interest you..." or "We carry..." without first explicitly confirming that the requested product is not available).
+  - Example: "We don't carry adl shirts, but we do have vas shirts and wss shirts which might interest you."
+  - THEN, if the <ActiveMerchantMenuSnapshot> lists other available products, briefly offer them as alternatives to keep the customer engaged.
+  - Do NOT fabricate or invent products — only list products explicitly present in the <ActiveMerchantMenuSnapshot>.
+  - Keep the alternative suggestion to 1-2 sentences. The primary message is "not available" — alternatives are secondary.
 
 # STRUCTURED DRAFT ORDER & CONVERSATIONAL MEMORY RULES
 - The active transactional state of the customer's order is provided in <ActiveDraftOrder> tags.
@@ -487,6 +483,16 @@ If the customer has not supplied a valid, clean 6-digit pincode or clear landmar
 - If status is AWAITING_CONFIRMATION, inform the customer of the total price and ask them to confirm if they haven't already.
 - Recent dialogue turns are provided in <RecentConversationHistory> tags to maintain smooth tone and natural back-and-forth without repeating yourself.
 - Do NOT generate intent_type "OrderConfirmed" unless the customer has explicitly confirmed AND an active draft order exists in AWAITING_CONFIRMATION status.
+
+# ACTIVE CONVERSATIONAL RULES RELEVANCE CONSTRAINT
+- Active custom merchant rules, promo offers, and canned instructions are provided in <ActiveConversationalRules> tags.
+- INTENT, NOT KEYWORDS: Only reference or mention content from <ActiveConversationalRules> (including any promotions, discounts, or offer details) if the customer is actually asking about that rule's topic (e.g. asking about offers, discounts, or promotions). The mere presence of a product name or keyword from the rule inside the customer's message does NOT make it relevant — judge relevance by what the customer is actually asking, not by keyword overlap.
+- EXAMPLE: If a rule's keyword is "adl shirts" and the customer asks "Where is your store located to buy adl shirts?", this is a STORE LOCATION question, not a promo question — do NOT mention the discount, even though "adl shirts" appears in their message.
+- NEVER VOLUNTEER PROMOS UNPROMPTED: Never proactively volunteer promo, discount, or offer information in replies to customer queries on unrelated topics (e.g. store location, operating hours, shipping policy, or unrelated product inquiries), even if a rule's trigger keyword appears in the customer's message.
+- RULE VS PRODUCT GROUNDING CONSTRAINT (CRITICAL):
+  - A rule in <ActiveConversationalRules> is ONLY a promo/policy instruction — it is NOT proof that a product exists or is available in stock.
+  - NEVER state, imply, or assert that a product exists, is sold, or can be purchased (online or in-store) unless <MatchedProduct> contains a valid matched product OR the product is explicitly listed in <ActiveMerchantMenuSnapshot>.
+  - If <MatchedProduct> is "No matched product." (and the product is absent from <ActiveMerchantMenuSnapshot>), you MUST state that the item is not available in our catalog BEFORE mentioning any alternative products, EVEN IF a matching rule exists in <ActiveConversationalRules>. A rule match alone does NOT imply the product exists.
 `;
 }
 
@@ -620,25 +626,76 @@ ${contextBoundaryBlock}
 CHAT MESSAGE SENT BY CUSTOMER: "${payload.user_message}"
 `.trim();
 
-    const result = await stepProfiler.time(
-      "generateShopReply main Groq LLM generation call",
-      "ai.service.ts:585",
-      "External call",
-      `Groq chat.completions API call (${context?.aiModelTarget || "llama-3.1-8b-instant"})`,
-      false,
-      () => groq.chat.completions.create({
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        model: context?.aiModelTarget || "llama-3.1-8b-instant",
-        response_format: { type: "json_object" },
-        temperature: 0.1,
-      })
-    );
+    let parsedResponse: UnifiedShopResponse | null = null;
+    let lastError: any = null;
 
-    const text = result.choices[0]?.message?.content || "{}";
-    const parsedResponse: UnifiedShopResponse = JSON.parse(text);
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        if (attempt === 2) {
+          console.warn(`⚠️ [Groq Hub] Retrying generateShopReply API call (attempt 2/2) after failure... Prior error: ${lastError?.message || lastError}`);
+          await new Promise(res => setTimeout(res, 750));
+        }
+
+        const result = await stepProfiler.time(
+          `generateShopReply main Groq LLM generation call${attempt > 1 ? " (retry)" : ""}`,
+          "ai.service.ts:585",
+          "External call",
+          `Groq chat.completions API call (${context?.aiModelTarget || "llama-3.1-8b-instant"})`,
+          false,
+          () => groq.chat.completions.create({
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt }
+            ],
+            model: context?.aiModelTarget || "llama-3.1-8b-instant",
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+          })
+        );
+
+        const text = result.choices[0]?.message?.content || "{}";
+        parsedResponse = JSON.parse(text);
+        break; // Success! Exit retry loop
+      } catch (err: any) {
+        lastError = err;
+        const errMeta = {
+          attempt,
+          message: err?.message || "Unknown",
+          status: err?.status || (err instanceof TypeError ? "NETWORK" : "UNKNOWN"),
+          errorData: err?.error || err?.data || null,
+        };
+        if (attempt === 1) {
+          console.warn(`⚠️ [Groq Hub] Attempt 1 failed for generateShopReply:`, JSON.stringify(errMeta));
+        } else {
+          console.error(`❌ [Groq Hub] Attempt 2 (retry) failed for generateShopReply:`, JSON.stringify(errMeta));
+        }
+      }
+    }
+
+    if (!parsedResponse) {
+      const groqError = {
+        message: lastError?.message || "Unknown",
+        status: lastError?.status || (lastError instanceof TypeError ? "NETWORK" : "UNKNOWN"),
+        errorData: lastError?.error || lastError?.data || null,
+        stack: lastError?.stack?.split("\n").slice(0, 3).join("\n") || "no stack",
+      };
+      console.error("❌ [Groq Hub] Enterprise Single-Turn Routine failed after retry:", JSON.stringify(groqError, null, 2));
+
+      const lang = (payload?.detected_language || "en").toLowerCase();
+      const fallbackReply = lang.startsWith("hi")
+        ? "Kripya thoda samay dein, main check karke batata hoon."
+        : "Give me just a moment to check that for you.";
+
+      return {
+        intent_type: "Query",
+        tool_call: null,
+        replyText: fallbackReply,
+        thread_summary: `Groq error (after retry): ${groqError.message} (status=${groqError.status})`,
+        suggested_human_response: `Groq error: ${groqError.message}`,
+        detected_meta: { language: payload?.detected_language || "en", sentiment: "NEUTRAL", confidence: 0 },
+        extracted_order: { items: [], total_amount: 0, needs_follow_up: false }
+      };
+    }
 
     // 🛡️ BHARAT-CONTEXT GEO-INTEGRITY & DEDURABILITY PARSING
     if (parsedResponse.extracted_order && parsedResponse.extracted_order.address_details) {

@@ -14,6 +14,7 @@ import { conversationalAutoReplyService } from "../../services/automation/conver
 import { embedRuleToKnowledgeChunk } from "../../services/knowledge/ruleEmbedding.service";
 import { telegramSurfaceAdapter } from "../../services/automation/telegramSurface.adapter";
 import { MAX_SURFACED_RULES, KNOWN_EVENTS, ORDER_EVENT_PREFIX } from "../../services/automation/conversationalRule.constants";
+import { invalidateChunkCache } from "../../services/knowledge/chunkCache";
 
 const router = Router();
 
@@ -642,6 +643,8 @@ router.delete("/:id", authMiddleware as any, async (req: any, res: any) => {
           AND "sourceType" = 'RULE'::"KnowledgeSourceType"
           AND "sourceId" = ${id}
       `;
+      // Invalidate in-memory knowledge chunk cache after rule deletion
+      invalidateChunkCache(existing.companyId);
     } catch (kcErr: any) {
       console.error("[ConversationalRules] KnowledgeChunk cleanup failed:", kcErr.message);
     }

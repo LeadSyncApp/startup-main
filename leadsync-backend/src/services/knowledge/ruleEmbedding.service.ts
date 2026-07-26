@@ -8,6 +8,7 @@
 import { embedText } from "../../utils/embedding";
 import { prisma } from "../../lib/prisma";
 import { randomUUID } from "crypto";
+import { invalidateChunkCache } from "./chunkCache";
 
 interface RuleForEmbedding {
   id: string;
@@ -48,6 +49,9 @@ export async function embedRuleToKnowledgeChunk(rule: RuleForEmbedding): Promise
         "isActive" = true,
         "updatedAt" = ${now}
     `;
+
+    // Invalidate in-memory knowledge chunk cache after rule upsert
+    invalidateChunkCache(rule.companyId);
   } catch (err: any) {
     console.error(`[ruleEmbedding] Failed to embed rule ${rule.id}:`, err.message);
     // Do not throw - this must never break rule creation/update

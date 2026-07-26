@@ -88,11 +88,18 @@ class StepProfiler {
     const store = asyncLocalStorage.getStore();
     const effectiveTraceId = traceId || store?.traceId || this.fallbackTraceId;
     const effectiveRunId = store?.runId ?? this.fallbackRunId;
-    const start = performance.now();
+    const startTimeMs = Date.now();
+    const startIso = new Date(startTimeMs).toISOString();
+    const startPerf = performance.now();
+
+    console.log(`⏱️ [PIPELINE_TIMING] [START] [${effectiveTraceId || "no-trace"}] ${stepName} at ${startIso} (${startTimeMs} ms)`);
     try {
       return await fn();
     } finally {
-      const durationMs = performance.now() - start;
+      const endPerf = performance.now();
+      const endTimeMs = Date.now();
+      const endIso = new Date(endTimeMs).toISOString();
+      const durationMs = Math.round((endPerf - startPerf) * 100) / 100;
       const record: StepProfileRecord = {
         runId: effectiveRunId,
         traceId: effectiveTraceId,
@@ -100,7 +107,7 @@ class StepProfiler {
         fileLine,
         category,
         queryOrDetails,
-        durationMs: Math.round(durationMs * 100) / 100,
+        durationMs,
         isSequential,
         notes
       };
@@ -114,7 +121,7 @@ class StepProfiler {
         }
         this.traces.get(effectiveTraceId)!.push(record);
       }
-      console.log(`⏱️ [TRACE ${effectiveTraceId}] [RUN ${effectiveRunId}] [${category}] ${stepName} (${fileLine}): ${record.durationMs} ms`);
+      console.log(`⏱️ [PIPELINE_TIMING] [END]   [${effectiveTraceId || "no-trace"}] ${stepName} at ${endIso} (${endTimeMs} ms) | Duration: ${durationMs} ms`);
     }
   }
 

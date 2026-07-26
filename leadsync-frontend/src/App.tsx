@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap, MessageSquare, ShoppingBag, Store } from "lucide-react";
 import { useNavigate, useLocation, useParams, Routes, Route, Navigate } from "react-router-dom";
@@ -10,23 +10,23 @@ import { SignInForm } from "./components/auth/SignInForm";
 import { SimulationController } from "./simulation/SimulationController";
 import { connectSocket, disconnectSocket, onNotification } from "./lib/socketClient";
 import { useNotificationStore } from "./features/notifications/useNotificationStore";
-
-import { AutoRepliesPage } from "./features/configurations/AutoRepliesPage";
-import { CustomerList } from "./features/audience-crm/CustomerList";
-import { BroadcastEngine } from "./features/broadcast/BroadcastEngine";
-import { OrderFulfillmentBoard } from "./features/orders/OrderFulfillmentBoard";
-import { StreamTriage } from "./features/stream-triage/StreamTriage";
-import InboxSplitView from "./features/inbox/InboxSplitView";
-import { InventoryPage } from "./features/inventory/InventoryPage";
-import { DailyCollectionStats } from "./features/dashboard/DailyCollectionStats";
-import { DailyPulseAdaptiveWidget } from "./features/dashboard/DailyPulseAdaptiveWidget";
-import { ConfigurationsPage } from "./features/configurations/ConfigurationsPage";
 import { AcceptInvitePage } from "./features/team/AcceptInvitePage";
 import { activityToast as activityToast } from "./features/activity-ledger/useActivityStore";
 import { IntelligentButton } from "./components/IntelligentButton";
 import { Card, CardHeader } from "./components/ui";
 import { GuidedTour } from "./components/tour/GuidedTour";
 import { Users, Plus, Mail, X } from "lucide-react";
+
+const AutoRepliesPage = lazy(() => import("./features/configurations/AutoRepliesPage").then(m => ({ default: m.AutoRepliesPage })));
+const CustomerList = lazy(() => import("./features/audience-crm/CustomerList").then(m => ({ default: m.CustomerList })));
+const BroadcastEngine = lazy(() => import("./features/broadcast/BroadcastEngine").then(m => ({ default: m.BroadcastEngine })));
+const OrderFulfillmentBoard = lazy(() => import("./features/orders/OrderFulfillmentBoard").then(m => ({ default: m.OrderFulfillmentBoard })));
+const StreamTriage = lazy(() => import("./features/stream-triage/StreamTriage").then(m => ({ default: m.StreamTriage })));
+const InboxSplitView = lazy(() => import("./features/inbox/InboxSplitView"));
+const InventoryPage = lazy(() => import("./features/inventory/InventoryPage").then(m => ({ default: m.InventoryPage })));
+const DailyCollectionStats = lazy(() => import("./features/dashboard/DailyCollectionStats").then(m => ({ default: m.DailyCollectionStats })));
+const DailyPulseAdaptiveWidget = lazy(() => import("./features/dashboard/DailyPulseAdaptiveWidget").then(m => ({ default: m.DailyPulseAdaptiveWidget })));
+const ConfigurationsPage = lazy(() => import("./features/configurations/ConfigurationsPage").then(m => ({ default: m.ConfigurationsPage })));
 
 // NOTE FOR REVIEW: InboxSplitWithParam reads the :leadId URL param and passes it
 // as initialLeadId to InboxSplitView. This preserves deep-link / notification
@@ -441,6 +441,14 @@ export default function App() {
             >
               <div className="w-full h-full min-h-0 flex flex-col">
                 <GuidedTour activeTab={activeTab} />
+                <Suspense fallback={
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="h-8 w-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "var(--brand-saffron)", borderTopColor: "transparent" }} />
+                      <p className="text-xs font-medium" style={{ color: "var(--app-text-muted)" }}>Loading...</p>
+                    </div>
+                  </div>
+                }>
                 <AnimatePresence mode="wait">
                   {activeTab === 'shop' && renderShopHome()}
                   {activeTab === 'messages' && (
@@ -485,6 +493,7 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
+                </Suspense>
               </div>
             </MasterDashboardLayout>
           ) : (
