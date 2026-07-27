@@ -4,7 +4,7 @@ import {
   Globe, Key, RefreshCw, Copy, Check, AlertTriangle,
   ChevronDown, ChevronUp, ExternalLink, RotateCw,
   Loader2, Clock, XCircle, CheckCircle2, AlertCircle,
-  Code, Webhook, Info, X
+  Code, Webhook, Info, X, ArrowLeft
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "../auth-tenancy/AuthContext";
@@ -22,6 +22,10 @@ interface DeliveryLog {
   reason: string | null;
   statusCode: number;
   createdAt: string;
+}
+
+export interface WebsiteIntegrationProps {
+  onBack?: () => void;
 }
 
 /* ── Helper ────────────────────────────────────────────────────────── */
@@ -122,7 +126,7 @@ fetch("${webhookUrl}", {
 
 /* ── Main Component ────────────────────────────────────────────────── */
 
-export function WebsiteIntegration() {
+export function WebsiteIntegration({ onBack }: WebsiteIntegrationProps = {}) {
   const { user, company } = useAuth();
   const companyId = company?.id || "";
   const webhookUrl = `${window.location.origin}/api/webhook/${companyId}`;
@@ -144,8 +148,8 @@ export function WebsiteIntegration() {
   // Replay state
   const [replayingId, setReplayingId] = useState<string | null>(null);
 
-  // Instructions collapse
-  const [showInstructions, setShowInstructions] = useState(false);
+  // Advanced Setup collapsed by default
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const LOG_PAGE_SIZE = 15;
 
@@ -156,11 +160,6 @@ export function WebsiteIntegration() {
     setSecretStatus("loading");
     try {
       await apiClient.get("/company/webhook-logs", { params: { limit: 1 } });
-      // If we can access logs, the company exists. Check if secret exists via company data.
-      // The company object from auth context doesn't include webhook secrets (security).
-      // We'll infer from whether any accepted deliveries exist.
-      // A better approach: add a status endpoint. For now, show "Generate" always
-      // since secrets are never displayed after creation.
       setSecretStatus("unset");
     } catch {
       setSecretStatus("unset");
@@ -246,6 +245,27 @@ export function WebsiteIntegration() {
 
   return (
     <div className="space-y-8">
+      {/* Header & Back Navigation */}
+      {onBack && (
+        <div className="flex items-center justify-between flex-wrap gap-4 pt-2">
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer hover:opacity-80 active:scale-95"
+            style={{
+              backgroundColor: "var(--app-bg-soft)",
+              borderColor: "var(--app-border)",
+              color: "var(--app-text)"
+            }}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back to Connections</span>
+          </button>
+          <div className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>
+            Connections Hub &gt; <span style={{ color: "var(--app-text)" }}>Store Webhooks Integration</span>
+          </div>
+        </div>
+      )}
+
       {/* Hero Banner */}
       <div className="rounded-[2.5rem] p-8 sm:p-10 shadow-lg text-white relative overflow-hidden group"
            style={{ background: "linear-gradient(135deg, #1a3a2a 0%, #0d1f17 100%)" }}>
@@ -256,113 +276,73 @@ export function WebsiteIntegration() {
         <div className="relative z-10 max-w-2xl space-y-4">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider"
                 style={{ backgroundColor: "rgba(34, 197, 94, 0.15)", color: "#86efac" }}>
-            <Webhook className="h-3 w-3" /> Webhook API
+            <Webhook className="h-3.5 w-3.5" /> Automatic Store Orders
           </span>
           <h2 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight text-white">
             Website Integration
           </h2>
           <p className="font-medium text-base sm:text-lg leading-relaxed"
-             style={{ color: "rgba(241, 245, 249, 0.8)" }}>
-            Receive leads from your website, Shopify, or WooCommerce store via signed webhook.
+             style={{ color: "rgba(241, 245, 249, 0.85)" }}>
+            Connect your online store (Shopify, WooCommerce, or custom site) to automatically receive orders directly into LeadSync.
           </p>
         </div>
       </div>
 
-      {/* ─── Section 1: Webhook URL + Secret ─── */}
-      <Card className="p-8 space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl flex items-center justify-center"
-               style={{ backgroundColor: "var(--brand-saffron-soft)", color: "var(--brand-saffron)" }}>
-            <Globe className="h-5 w-5 stroke-[2.2]" />
+      {/* Plain-language explanation block */}
+      <Card className="p-6 sm:p-8 space-y-4">
+        <div className="flex items-start gap-4">
+          <div className="h-10 w-10 rounded-xl shrink-0 flex items-center justify-center"
+               style={{ backgroundColor: "rgba(34, 197, 94, 0.1)", color: "#22c55e" }}>
+            <Info className="h-5 w-5 stroke-[2.2]" />
           </div>
-          <div>
+          <div className="space-y-2">
             <h3 className="text-lg font-black tracking-tight" style={{ color: "var(--app-text)" }}>
-              Webhook Endpoint
+              How Website Order Syncing Works
             </h3>
-            <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-              POST signed payloads to this URL
+            <p className="text-sm font-medium leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+              This feature lets new orders and customer updates from your online store (Shopify, WooCommerce, or a custom website) automatically show up in LeadSync in real time.
             </p>
-          </div>
-        </div>
-
-        {/* Webhook URL */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 rounded-xl px-4 py-3 font-mono text-sm font-bold border overflow-x-auto"
-               style={{ backgroundColor: "var(--app-input-bg)", borderColor: "var(--app-border)", color: "var(--app-text)" }}>
-            {webhookUrl}
-          </div>
-          <Button
-            variant="secondary"
-            onClick={handleCopyUrl}
-            className="shrink-0 px-4 py-3 text-xs font-black uppercase tracking-widest rounded-xl"
-          >
-            {urlCopied ? <Check className="h-4 w-4" style={{ color: "var(--success-green)" }} /> : <Copy className="h-4 w-4" />}
-            <span className="ml-1">{urlCopied ? "Copied" : "Copy"}</span>
-          </Button>
-        </div>
-
-        {/* Secret Management */}
-        <div className="flex items-center justify-between pt-4" style={{ borderTop: "1px solid var(--app-border)" }}>
-          <div className="flex items-center gap-3">
-            <Key className="h-4 w-4" style={{ color: "var(--text-secondary)" }} />
-            <div>
-              <p className="text-sm font-bold" style={{ color: "var(--app-text)" }}>
-                Webhook Secret
-              </p>
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                {isOwner ? "HMAC-SHA256 key for signature verification" : "Only the Owner can manage the webhook secret"}
-              </p>
+            <div className="p-4 rounded-xl border text-xs sm:text-sm font-medium leading-relaxed flex items-start gap-2.5"
+                 style={{ backgroundColor: "var(--app-bg-soft)", borderColor: "var(--app-border)", color: "var(--app-text)" }}>
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "var(--brand-saffron)" }} />
+              <span>
+                <strong>Need help with setup?</strong> Connecting your store usually requires assistance from whoever built or manages your website. You can expand the <strong>Advanced Setup</strong> section below to copy and share the technical details with your developer.
+              </span>
             </div>
           </div>
-          {isOwner && (
-            <Button
-              variant={secretStatus === "set" ? "secondary" : "primary"}
-              onClick={handleRotate}
-              disabled={isRotating}
-              className="px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl"
-            >
-              {isRotating ? (
-                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Generating...</>
-              ) : secretStatus === "set" ? (
-                <><RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Rotate Secret</>
-              ) : (
-                <><Key className="h-3.5 w-3.5 mr-1.5" /> Generate Secret</>
-              )}
-            </Button>
-          )}
         </div>
       </Card>
 
-      {/* ─── Section 2: Integration Instructions ─── */}
+      {/* ─── Single Collapsed Section: Advanced Setup (for your developer) ─── */}
       <Card className="overflow-hidden">
         <button
-          onClick={() => setShowInstructions(!showInstructions)}
-          className="w-full px-8 py-5 flex items-center justify-between cursor-pointer transition-colors"
-          style={{ backgroundColor: showInstructions ? "var(--app-bg-soft)" : "transparent" }}
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="w-full px-6 sm:px-8 py-6 flex items-center justify-between cursor-pointer transition-colors"
+          style={{ backgroundColor: showAdvanced ? "var(--app-bg-soft)" : "transparent" }}
         >
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl flex items-center justify-center"
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
                  style={{ backgroundColor: "rgba(59, 130, 246, 0.1)", color: "#3b82f6" }}>
               <Code className="h-5 w-5 stroke-[2.2]" />
             </div>
             <div className="text-left">
               <h3 className="text-lg font-black tracking-tight" style={{ color: "var(--app-text)" }}>
-                Integration Instructions
+                Advanced Setup (for your developer)
               </h3>
               <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                Code examples for computing HMAC signatures
+                Webhook Endpoint URL, Secret Key, Signature Verification & Code Examples
               </p>
             </div>
           </div>
-          {showInstructions ? (
-            <ChevronUp className="h-5 w-5" style={{ color: "var(--text-secondary)" }} />
+          {showAdvanced ? (
+            <ChevronUp className="h-5 w-5 shrink-0" style={{ color: "var(--text-secondary)" }} />
           ) : (
-            <ChevronDown className="h-5 w-5" style={{ color: "var(--text-secondary)" }} />
+            <ChevronDown className="h-5 w-5 shrink-0" style={{ color: "var(--text-secondary)" }} />
           )}
         </button>
 
         <AnimatePresence>
-          {showInstructions && (
+          {showAdvanced && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
@@ -370,9 +350,70 @@ export function WebsiteIntegration() {
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <div className="px-8 pb-8 space-y-6">
-                {/* Payload format */}
+              <div className="px-6 sm:px-8 pb-8 space-y-8 pt-4 border-t" style={{ borderColor: "var(--app-border)" }}>
+
+                {/* Sub-block 1: Webhook Endpoint URL */}
                 <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4" style={{ color: "var(--brand-saffron)" }} />
+                    <h4 className="text-sm font-black" style={{ color: "var(--app-text)" }}>
+                      Webhook Endpoint URL
+                    </h4>
+                  </div>
+                  <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                    POST signed JSON payloads to this URL from your website backend or store webhooks.
+                  </p>
+                  <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+                    <div className="flex-1 min-w-0 rounded-xl px-4 py-3 font-mono text-sm font-bold border overflow-x-auto select-all"
+                         style={{ backgroundColor: "var(--app-input-bg)", borderColor: "var(--app-border)", color: "var(--app-text)" }}>
+                      {webhookUrl}
+                    </div>
+                    <Button
+                      variant="secondary"
+                      onClick={handleCopyUrl}
+                      className="shrink-0 px-4 py-3 text-xs font-black uppercase tracking-widest rounded-xl"
+                    >
+                      {urlCopied ? <Check className="h-4 w-4" style={{ color: "var(--success-green)" }} /> : <Copy className="h-4 w-4" />}
+                      <span className="ml-1">{urlCopied ? "Copied" : "Copy"}</span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Sub-block 2: Secret Management */}
+                <div className="space-y-3 pt-4 border-t" style={{ borderColor: "var(--app-border)" }}>
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-2">
+                      <Key className="h-4 w-4 shrink-0" style={{ color: "var(--brand-saffron)" }} />
+                      <div>
+                        <h4 className="text-sm font-black" style={{ color: "var(--app-text)" }}>
+                          Webhook Secret
+                        </h4>
+                        <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                          {isOwner ? "HMAC-SHA256 key for verifying payload signatures" : "Only the Owner can manage the webhook secret"}
+                        </p>
+                      </div>
+                    </div>
+                    {isOwner && (
+                      <Button
+                        variant={secretStatus === "set" ? "secondary" : "primary"}
+                        onClick={handleRotate}
+                        disabled={isRotating}
+                        className="px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl"
+                      >
+                        {isRotating ? (
+                          <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Generating...</>
+                        ) : secretStatus === "set" ? (
+                          <><RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Rotate Secret</>
+                        ) : (
+                          <><Key className="h-3.5 w-3.5 mr-1.5" /> Generate Secret</>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sub-block 3: Payload Format */}
+                <div className="space-y-3 pt-4 border-t" style={{ borderColor: "var(--app-border)" }}>
                   <h4 className="text-sm font-black" style={{ color: "var(--app-text)" }}>Payload Format</h4>
                   <div className="rounded-xl p-4 text-xs font-medium leading-relaxed border"
                        style={{ backgroundColor: "rgba(59, 130, 246, 0.06)", borderColor: "rgba(59, 130, 246, 0.1)", color: "#1e40af" }}>
@@ -386,8 +427,8 @@ export function WebsiteIntegration() {
                   </div>
                 </div>
 
-                {/* Signature format */}
-                <div className="space-y-3">
+                {/* Sub-block 4: Signature Header */}
+                <div className="space-y-3 pt-4 border-t" style={{ borderColor: "var(--app-border)" }}>
                   <h4 className="text-sm font-black" style={{ color: "var(--app-text)" }}>Signature Header</h4>
                   <div className="rounded-xl p-4 text-xs font-medium leading-relaxed border"
                        style={{ backgroundColor: "rgba(34, 197, 94, 0.06)", borderColor: "rgba(34, 197, 94, 0.1)", color: "#166534" }}>
@@ -400,23 +441,26 @@ export function WebsiteIntegration() {
                   </div>
                 </div>
 
-                {/* Code snippet */}
-                <div className="space-y-3">
+                {/* Sub-block 5: Code snippet */}
+                <div className="space-y-3 pt-4 border-t" style={{ borderColor: "var(--app-border)" }}>
                   <h4 className="text-sm font-black" style={{ color: "var(--app-text)" }}>Node.js Example</h4>
                   <CodeSnippet webhookUrl={webhookUrl} />
                 </div>
 
-                {/* Full docs link */}
-                <a
-                  href="https://github.com/LeadSyncApp/leadsync-backend/blob/main/docs/website-webhook-integration.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl border transition-all hover:opacity-80"
-                  style={{ color: "var(--brand-saffron)", borderColor: "rgba(212, 168, 67, 0.3)", backgroundColor: "rgba(212, 168, 67, 0.06)" }}
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  View Full Documentation
-                </a>
+                {/* Sub-block 6: Full docs link */}
+                <div className="pt-2">
+                  <a
+                    href="https://github.com/LeadSyncApp/leadsync-backend/blob/main/docs/website-webhook-integration.md"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl border transition-all hover:opacity-80"
+                    style={{ color: "var(--brand-saffron)", borderColor: "rgba(212, 168, 67, 0.3)", backgroundColor: "rgba(212, 168, 67, 0.06)" }}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    View Full Documentation
+                  </a>
+                </div>
+
               </div>
             </motion.div>
           )}
@@ -425,172 +469,172 @@ export function WebsiteIntegration() {
 
       {/* ─── Section 3: Delivery Logs (OWNER only) ─── */}
       {isOwner && (
-      <Card className="p-8 space-y-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl flex items-center justify-center"
-                 style={{ backgroundColor: "rgba(168, 85, 247, 0.1)", color: "#a855f7" }}>
-              <Clock className="h-5 w-5 stroke-[2.2]" />
+        <Card className="p-6 sm:p-8 space-y-5">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
+                   style={{ backgroundColor: "rgba(168, 85, 247, 0.1)", color: "#a855f7" }}>
+                <Clock className="h-5 w-5 stroke-[2.2]" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black tracking-tight" style={{ color: "var(--app-text)" }}>
+                  Delivery Logs
+                </h3>
+                <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                  This shows whether your store's order updates are reaching LeadSync successfully. ({logTotal} total attempt{logTotal !== 1 ? "s" : ""})
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-black tracking-tight" style={{ color: "var(--app-text)" }}>
-                Delivery Logs
-              </h3>
-              <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                {logTotal} total delivery attempt{logTotal !== 1 ? "s" : ""}
+
+            {/* Filter chips */}
+            <div className="flex gap-2 flex-wrap">
+              {["accepted", "rejected", "error", "ignored"].map((outcome) => {
+                const active = filterOutcomes.includes(outcome);
+                return (
+                  <button
+                    key={outcome}
+                    onClick={() => {
+                      setFilterOutcomes(prev =>
+                        active ? prev.filter(o => o !== outcome) : [...prev, outcome]
+                      );
+                      setLogPage(0);
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer",
+                      active
+                        ? "border-current opacity-100"
+                        : "border-transparent opacity-40 hover:opacity-70"
+                    )}
+                    style={{
+                      color: active ? outcomeVariant(outcome) === "success" ? "#16a34a"
+                        : outcomeVariant(outcome) === "error" ? "#dc2626"
+                        : outcomeVariant(outcome) === "warning" ? "#d97706"
+                        : outcomeVariant(outcome) === "info" ? "#2563eb"
+                        : "#64748b" : "var(--text-secondary)",
+                      backgroundColor: active ? "var(--app-bg-soft)" : "transparent",
+                    }}
+                  >
+                    {outcome}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Logs table */}
+          {logLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin" style={{ color: "var(--brand-saffron)" }} />
+            </div>
+          ) : logs.length === 0 ? (
+            <div className="text-center py-12 space-y-2">
+              <Clock className="h-10 w-10 mx-auto opacity-30" style={{ color: "var(--text-secondary)" }} />
+              <p className="text-sm font-bold" style={{ color: "var(--text-secondary)" }}>
+                {filterOutcomes.length > 0 ? "No logs match the selected filters" : "No delivery logs yet"}
+              </p>
+              <p className="text-xs" style={{ color: "var(--app-text-muted)" }}>
+                {filterOutcomes.length > 0 ? "Try removing some filters" : "Send a test webhook to see deliveries here"}
               </p>
             </div>
-          </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left" style={{ borderBottom: "1px solid var(--app-border)" }}>
+                    <th className="pb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--app-text-muted)" }}>Time</th>
+                    <th className="pb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--app-text-muted)" }}>Platform</th>
+                    <th className="pb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--app-text-muted)" }}>Outcome</th>
+                    <th className="pb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--app-text-muted)" }}>Reason</th>
+                    <th className="pb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--app-text-muted)" }}>Status</th>
+                    <th className="pb-3 text-[10px] font-black uppercase tracking-widest text-right" style={{ color: "var(--app-text-muted)" }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((log) => {
+                    const isRetryable = log.outcome === "error" || log.outcome === "rejected";
+                    const time = new Date(log.createdAt);
+                    const timeStr = time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                    const dateStr = time.toLocaleDateString([], { month: "short", day: "numeric" });
 
-          {/* Filter chips */}
-          <div className="flex gap-2">
-            {["accepted", "rejected", "error", "ignored"].map((outcome) => {
-              const active = filterOutcomes.includes(outcome);
-              return (
-                <button
-                  key={outcome}
-                  onClick={() => {
-                    setFilterOutcomes(prev =>
-                      active ? prev.filter(o => o !== outcome) : [...prev, outcome]
+                    return (
+                      <tr key={log.id} className="group" style={{ borderBottom: "1px solid var(--app-border)" }}>
+                        <td className="py-3.5 pr-4">
+                          <div className="text-xs font-bold" style={{ color: "var(--app-text)" }}>{timeStr}</div>
+                          <div className="text-[10px]" style={{ color: "var(--app-text-muted)" }}>{dateStr}</div>
+                        </td>
+                        <td className="py-3.5 pr-4">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider"
+                                style={{ backgroundColor: `${platformColor(log.platform)}15`, color: platformColor(log.platform) }}>
+                            {log.platform}
+                          </span>
+                        </td>
+                        <td className="py-3.5 pr-4">
+                          <Badge variant={outcomeVariant(log.outcome)} className="gap-1">
+                            <OutcomeIcon outcome={log.outcome} />
+                            {log.outcome}
+                          </Badge>
+                        </td>
+                        <td className="py-3.5 pr-4 text-xs max-w-[200px] truncate" style={{ color: "var(--text-secondary)" }}>
+                          {log.reason || "—"}
+                        </td>
+                        <td className="py-3.5 pr-4">
+                          <span className="text-xs font-mono font-bold" style={{ color: "var(--app-text)" }}>
+                            {log.statusCode}
+                          </span>
+                        </td>
+                        <td className="py-3.5 text-right">
+                          {isRetryable && (
+                            <Button
+                              variant="ghost"
+                              onClick={() => handleReplay(log.id)}
+                              disabled={replayingId === log.id}
+                              className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                              style={{ color: "var(--brand-saffron)" }}
+                            >
+                              {replayingId === log.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <RotateCw className="h-3 w-3 mr-1" />
+                              )}
+                              Retry
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
                     );
-                    setLogPage(0);
-                  }}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer",
-                    active
-                      ? "border-current opacity-100"
-                      : "border-transparent opacity-40 hover:opacity-70"
-                  )}
-                  style={{
-                    color: active ? outcomeVariant(outcome) === "success" ? "#16a34a"
-                      : outcomeVariant(outcome) === "error" ? "#dc2626"
-                      : outcomeVariant(outcome) === "warning" ? "#d97706"
-                      : outcomeVariant(outcome) === "info" ? "#2563eb"
-                      : "#64748b" : "var(--text-secondary)",
-                    backgroundColor: active ? "var(--app-bg-soft)" : "transparent",
-                  }}
-                >
-                  {outcome}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Logs table */}
-        {logLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin" style={{ color: "var(--brand-saffron)" }} />
-          </div>
-        ) : logs.length === 0 ? (
-          <div className="text-center py-12 space-y-2">
-            <Clock className="h-10 w-10 mx-auto opacity-30" style={{ color: "var(--text-secondary)" }} />
-            <p className="text-sm font-bold" style={{ color: "var(--text-secondary)" }}>
-              {filterOutcomes.length > 0 ? "No logs match the selected filters" : "No delivery logs yet"}
-            </p>
-            <p className="text-xs" style={{ color: "var(--app-text-muted)" }}>
-              {filterOutcomes.length > 0 ? "Try removing some filters" : "Send a test webhook to see deliveries here"}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left" style={{ borderBottom: "1px solid var(--app-border)" }}>
-                  <th className="pb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--app-text-muted)" }}>Time</th>
-                  <th className="pb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--app-text-muted)" }}>Platform</th>
-                  <th className="pb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--app-text-muted)" }}>Outcome</th>
-                  <th className="pb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--app-text-muted)" }}>Reason</th>
-                  <th className="pb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--app-text-muted)" }}>Status</th>
-                  <th className="pb-3 text-[10px] font-black uppercase tracking-widest text-right" style={{ color: "var(--app-text-muted)" }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log) => {
-                  const isRetryable = log.outcome === "error" || log.outcome === "rejected";
-                  const time = new Date(log.createdAt);
-                  const timeStr = time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                  const dateStr = time.toLocaleDateString([], { month: "short", day: "numeric" });
-
-                  return (
-                    <tr key={log.id} className="group" style={{ borderBottom: "1px solid var(--app-border)" }}>
-                      <td className="py-3.5 pr-4">
-                        <div className="text-xs font-bold" style={{ color: "var(--app-text)" }}>{timeStr}</div>
-                        <div className="text-[10px]" style={{ color: "var(--app-text-muted)" }}>{dateStr}</div>
-                      </td>
-                      <td className="py-3.5 pr-4">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider"
-                              style={{ backgroundColor: `${platformColor(log.platform)}15`, color: platformColor(log.platform) }}>
-                          {log.platform}
-                        </span>
-                      </td>
-                      <td className="py-3.5 pr-4">
-                        <Badge variant={outcomeVariant(log.outcome)} className="gap-1">
-                          <OutcomeIcon outcome={log.outcome} />
-                          {log.outcome}
-                        </Badge>
-                      </td>
-                      <td className="py-3.5 pr-4 text-xs max-w-[200px] truncate" style={{ color: "var(--text-secondary)" }}>
-                        {log.reason || "—"}
-                      </td>
-                      <td className="py-3.5 pr-4">
-                        <span className="text-xs font-mono font-bold" style={{ color: "var(--app-text)" }}>
-                          {log.statusCode}
-                        </span>
-                      </td>
-                      <td className="py-3.5 text-right">
-                        {isRetryable && (
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleReplay(log.id)}
-                            disabled={replayingId === log.id}
-                            className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                            style={{ color: "var(--brand-saffron)" }}
-                          >
-                            {replayingId === log.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <RotateCw className="h-3 w-3 mr-1" />
-                            )}
-                            Retry
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination */}
-        {logTotal > LOG_PAGE_SIZE && (
-          <div className="flex items-center justify-between pt-4" style={{ borderTop: "1px solid var(--app-border)" }}>
-            <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>
-              Showing {logPage * LOG_PAGE_SIZE + 1}–{Math.min((logPage + 1) * LOG_PAGE_SIZE, logTotal)} of {logTotal}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => setLogPage(p => Math.max(0, p - 1))}
-                disabled={logPage === 0}
-                className="px-4 py-2 text-xs font-bold rounded-lg"
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => setLogPage(p => p + 1)}
-                disabled={(logPage + 1) * LOG_PAGE_SIZE >= logTotal}
-                className="px-4 py-2 text-xs font-bold rounded-lg"
-              >
-                Next
-              </Button>
+                  })}
+                </tbody>
+              </table>
             </div>
-          </div>
-        )}
-      </Card>
+          )}
+
+          {/* Pagination */}
+          {logTotal > LOG_PAGE_SIZE && (
+            <div className="flex items-center justify-between pt-4" style={{ borderTop: "1px solid var(--app-border)" }}>
+              <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>
+                Showing {logPage * LOG_PAGE_SIZE + 1}–{Math.min((logPage + 1) * LOG_PAGE_SIZE, logTotal)} of {logTotal}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => setLogPage(p => Math.max(0, p - 1))}
+                  disabled={logPage === 0}
+                  className="px-4 py-2 text-xs font-bold rounded-lg"
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setLogPage(p => p + 1)}
+                  disabled={(logPage + 1) * LOG_PAGE_SIZE >= logTotal}
+                  className="px-4 py-2 text-xs font-bold rounded-lg"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
       )}
 
       {/* ─── Secret Revealed Warning Modal ─── */}
@@ -608,7 +652,7 @@ export function WebsiteIntegration() {
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 30 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 30 }}
+              exit={{ opacity: 0, scale: 1, y: 0 }}
               className="relative w-full max-w-lg rounded-[2.5rem] shadow-[0_48px_80px_-24px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col z-10"
               style={{ backgroundColor: "var(--app-surface)", border: "1px solid var(--app-border)" }}
             >

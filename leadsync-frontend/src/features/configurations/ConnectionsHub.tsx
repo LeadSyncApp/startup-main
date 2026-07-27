@@ -22,6 +22,12 @@ export function ConnectionsHub() {
   const [isLoadingBot, setIsLoadingBot] = useState(false);
   const [isConnectingTelegram, setIsConnectingTelegram] = useState(false);
 
+  // Subview navigation:
+  // "grid" = main connections list,
+  // "widget-config" = dedicated website widget setup page,
+  // "webhook-config" = dedicated store order webhooks page
+  const [activeSubView, setActiveSubView] = useState<"grid" | "widget-config" | "webhook-config">("grid");
+
   // Modals
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   const [isDisconnectConfirmOpen, setIsDisconnectConfirmOpen] = useState(false);
@@ -116,467 +122,482 @@ export function ConnectionsHub() {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Hero Banner */}
-      <div className="rounded-[2.5rem] p-8 sm:p-10 shadow-lg text-white relative overflow-hidden group"
-           style={{ background: 'linear-gradient(135deg, var(--brand-navy) 0%, #0F1F33 100%)' }}>
-        <div className="absolute top-0 right-0 w-[45%] h-full pointer-events-none"
-             style={{ background: 'linear-gradient(to left, rgba(212, 168, 67, 0.08), transparent)' }} />
-        <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-[150px] translate-y-1/3 translate-x-1/3 opacity-20 pointer-events-none"
-             style={{ backgroundColor: 'var(--brand-saffron)' }} />
-        <div className="relative z-10 max-w-2xl space-y-4">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider"
-                style={{ backgroundColor: 'rgba(212, 168, 67, 0.15)', color: 'var(--brand-saffron-light)' }}>
-            <Shield className="h-3 w-3" /> Secure Multi-channel Access
-          </span>
-          <h2 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight text-white">
-            Sync Your Conversations
-          </h2>
-          <p className="font-medium text-base sm:text-lg leading-relaxed"
-             style={{ color: 'rgba(241, 245, 249, 0.8)' }}>
-            Link digital messaging channels to synchronize client chats directly into your workspace.
-            Automate catalog browsing, parse checkout intents, and route leads live.
-          </p>
-        </div>
-      </div>
-
-      {/* Platform Connection Grid */}
-      <div data-tour="connections-hub" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-
-        {/* Telegram Card */}
-        <Card data-tour="telegram-connect" className="p-8 flex flex-col justify-between">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between">
-              <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
-                   style={{ backgroundColor: 'rgba(0, 136, 204, 0.1)', color: '#0088cc', border: '1px solid rgba(0, 136, 204, 0.15)' }}>
-                <Send className="h-7 w-7 stroke-[2.2] translate-x-[-1px] translate-y-[1px]" />
-              </div>
-              {telegramConnected ? (
-                <Badge variant="success" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full animate-pulse mr-1.5"
-                        style={{ backgroundColor: 'var(--success-green)' }} />
-                  Connected
-                </Badge>
-              ) : (
-                <Badge variant="info" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
-                  Offline
-                </Badge>
-              )}
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
-                Telegram Bot
-              </h3>
-              {telegramConnected && telegramBotUsername && (
-                <p className="text-[11px] font-bold font-mono tracking-wider inline-block px-2.5 py-1 rounded-lg"
-                   style={{ color: '#0088cc', backgroundColor: 'rgba(0, 136, 204, 0.08)' }}>
-                  @{telegramBotUsername}
-                </p>
-              )}
-              <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Collect automatic checkouts, display structured menus, and respond in real-time using a dedicated Telegram bot.
+    <AnimatePresence mode="wait">
+      {activeSubView === "widget-config" ? (
+        <motion.div
+          key="widget-config"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.2 }}
+        >
+          <WebsiteWidgetConfig onBack={() => setActiveSubView("grid")} />
+        </motion.div>
+      ) : activeSubView === "webhook-config" ? (
+        <motion.div
+          key="webhook-config"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.2 }}
+        >
+          <WebsiteIntegration onBack={() => setActiveSubView("grid")} />
+        </motion.div>
+      ) : (
+        <motion.div
+          key="grid"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 20 }}
+          transition={{ duration: 0.2 }}
+          className="space-y-8"
+        >
+          {/* Hero Banner */}
+          <div className="rounded-[2.5rem] p-8 sm:p-10 shadow-lg text-white relative overflow-hidden group"
+               style={{ background: 'linear-gradient(135deg, var(--brand-navy) 0%, #0F1F33 100%)' }}>
+            <div className="absolute top-0 right-0 w-[45%] h-full pointer-events-none"
+                 style={{ background: 'linear-gradient(to left, rgba(212, 168, 67, 0.08), transparent)' }} />
+            <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-[150px] translate-y-1/3 translate-x-1/3 opacity-20 pointer-events-none"
+                 style={{ backgroundColor: 'var(--brand-saffron)' }} />
+            <div className="relative z-10 max-w-2xl space-y-4">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider"
+                    style={{ backgroundColor: 'rgba(212, 168, 67, 0.15)', color: 'var(--brand-saffron-light)' }}>
+                <Shield className="h-3 w-3" /> Secure Multi-channel Access
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight text-white">
+                Sync Your Conversations
+              </h2>
+              <p className="font-medium text-base sm:text-lg leading-relaxed"
+                 style={{ color: 'rgba(241, 245, 249, 0.8)' }}>
+                Link digital messaging channels to synchronize client chats directly into your workspace.
+                Automate catalog browsing, parse checkout intents, and route leads live.
               </p>
             </div>
           </div>
-          <div className="mt-8 pt-6 flex items-center justify-between gap-3"
-               style={{ borderTop: '1px solid var(--app-border)' }}>
-            <span className="text-[10px] font-black uppercase tracking-wider"
-                  style={{ color: 'var(--app-text-muted)' }}>
-              Immediate Activation
-            </span>
-            {telegramConnected ? (
-              <Button
-                variant="secondary"
-                onClick={handleDisconnectTelegram}
-                disabled={isLoadingBot}
-                className="px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl"
-                style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)', backgroundColor: 'rgba(239, 68, 68, 0.06)' }}
-              >
-                {isLoadingBot ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
-                Disconnect
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                onClick={() => setIsTelegramModalOpen(true)}
-                className="px-6 py-3 text-xs font-black uppercase tracking-widest rounded-xl"
-              >
-                Connect
-              </Button>
-            )}
-          </div>
-        </Card>
 
-        {/* Website Chat Widget Card (Zero-Code Script) */}
-        <Card data-tour="website-widget" className="p-8 flex flex-col justify-between">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between">
-              <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
-                   style={{ backgroundColor: 'var(--brand-saffron-soft)', color: 'var(--brand-saffron)', border: '1px solid rgba(212, 168, 67, 0.2)' }}>
-                <MessageSquare className="h-7 w-7 stroke-[2.2]" />
-              </div>
-              <Badge variant="success" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
-                ⚡ Active Widget
-              </Badge>
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
-                Website Chat Widget
-              </h3>
-              <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Single embed script tag to render a live floating chat bubble on any site (Shopify, WordPress, HTML).
-              </p>
-            </div>
-          </div>
-          <div className="mt-8 pt-6 flex items-center justify-between gap-3"
-               style={{ borderTop: '1px solid var(--app-border)' }}>
-            <span className="text-[10px] font-black uppercase tracking-wider"
-                  style={{ color: 'var(--app-text-muted)' }}>
-              Zero-Code Embed Tag
-            </span>
-            <Button
-              variant="primary"
-              onClick={() => {
-                const el = document.getElementById("website-widget-section");
-                if (el) el.scrollIntoView({ behavior: "smooth" });
-              }}
-              className="px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl"
-            >
-              <FileCode className="h-4 w-4 mr-1.5" />
-              Get Script Tag
-            </Button>
-          </div>
-        </Card>
+          {/* Platform Connection Grid */}
+          <div data-tour="connections-hub" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
 
-        {/* Website Store Webhooks Card */}
-        <Card className="p-8 flex flex-col justify-between">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between">
-              <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
-                   style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-                <Globe className="h-7 w-7 stroke-[2.2]" />
-              </div>
-              <Badge variant="success" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
-                ⚡ Store Webhooks
-              </Badge>
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
-                Store Order Webhooks
-              </h3>
-              <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Receive order updates from Shopify, WooCommerce, or custom sites via signed HMAC webhooks.
-              </p>
-            </div>
-          </div>
-          <div className="mt-8 pt-6 flex items-center justify-between gap-3"
-               style={{ borderTop: '1px solid var(--app-border)' }}>
-            <span className="text-[10px] font-black uppercase tracking-wider"
-                  style={{ color: 'var(--app-text-muted)' }}>
-              HMAC API & Logs
-            </span>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                const el = document.getElementById("website-integration-section");
-                if (el) el.scrollIntoView({ behavior: "smooth" });
-              }}
-              className="px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl"
-            >
-              <FileCode className="h-4 w-4 mr-1.5" />
-              Configure
-            </Button>
-          </div>
-        </Card>
-
-        {/* WhatsApp Card */}
-        <Card className="p-8 flex flex-col justify-between opacity-85">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between">
-              <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
-                   style={{ backgroundColor: 'rgba(37, 211, 102, 0.1)', color: '#25D366', border: '1px solid rgba(37, 211, 102, 0.15)' }}>
-                <MessageCircle className="h-7 w-7 stroke-[2.2]" />
-              </div>
-              {whatsAppConnected ? (
-                <Badge variant="success" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full animate-pulse mr-1.5"
-                        style={{ backgroundColor: 'var(--success-green)' }} />
-                  Connected
-                </Badge>
-              ) : (
-                <Badge variant="info" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
-                  Coming Soon
-                </Badge>
-              )}
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
-                WhatsApp Business
-              </h3>
-              <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Scale conversions using WhatsApp API templates. Synchronize customer numbers to a unified shop workbench.
-              </p>
-            </div>
-          </div>
-          <div className="mt-8 pt-6 flex items-center justify-between gap-3"
-               style={{ borderTop: '1px solid var(--app-border)' }}>
-            <span className="text-[10px] font-black uppercase tracking-wider"
-                  style={{ color: 'var(--app-text-muted)' }}>
-              Scheduled Rollout
-            </span>
-            <Button
-              variant="secondary"
-              onClick={() => openMetaStubDialog("WhatsApp API")}
-              className="px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg"
-            >
-              View Status
-            </Button>
-          </div>
-        </Card>
-
-        {/* Instagram Card */}
-        <Card className="p-8 flex flex-col justify-between opacity-85">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between">
-              <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
-                   style={{ backgroundColor: 'rgba(225, 48, 108, 0.1)', color: '#E1306C', border: '1px solid rgba(225, 48, 108, 0.15)' }}>
-                <InstagramIcon className="h-7 w-7 stroke-[2.2]" />
-              </div>
-              <Badge variant="info" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
-                Coming Soon
-              </Badge>
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
-                Instagram Direct
-              </h3>
-              <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Trigger direct messaging flows when customers mention stories or reply to product posts.
-              </p>
-            </div>
-          </div>
-          <div className="mt-8 pt-6 flex items-center justify-between gap-3"
-               style={{ borderTop: '1px solid var(--app-border)' }}>
-            <span className="text-[10px] font-black uppercase tracking-wider"
-                  style={{ color: 'var(--app-text-muted)' }}>
-              Scheduled Rollout
-            </span>
-            <Button
-              variant="secondary"
-              onClick={() => openMetaStubDialog("Instagram DM")}
-              className="px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg"
-            >
-              View Status
-            </Button>
-          </div>
-        </Card>
-
-        {/* Messenger Card */}
-        <Card className="p-8 flex flex-col justify-between opacity-85">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between">
-              <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
-                   style={{ backgroundColor: 'rgba(24, 119, 242, 0.1)', color: '#1877F2', border: '1px solid rgba(24, 119, 242, 0.15)' }}>
-                <MessageSquare className="h-7 w-7 stroke-[2.2]" />
-              </div>
-              <Badge variant="info" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
-                Coming Soon
-              </Badge>
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
-                Messenger Link
-              </h3>
-              <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Sync page chat inquiries to the central workbench, facilitating fast checkouts on Facebook.
-              </p>
-            </div>
-          </div>
-          <div className="mt-8 pt-6 flex items-center justify-between gap-3"
-               style={{ borderTop: '1px solid var(--app-border)' }}>
-            <span className="text-[10px] font-black uppercase tracking-wider"
-                  style={{ color: 'var(--app-text-muted)' }}>
-              Scheduled Rollout
-            </span>
-            <Button
-              variant="secondary"
-              onClick={() => openMetaStubDialog("Messenger Sync")}
-              className="px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg"
-            >
-              View Status
-            </Button>
-          </div>
-        </Card>
-      </div>
-
-      {/* Website Chat Widget Section (Embed Script Tag & Live Simulator) */}
-      <div id="website-widget-section" className="pt-6">
-        <WebsiteWidgetConfig />
-      </div>
-
-      {/* Website Integration Section (Full Webhook Setup & Delivery Logs) */}
-      <div id="website-integration-section" className="pt-6">
-        <WebsiteIntegration />
-      </div>
-
-      {/* Telegram Token Pairing Modal */}
-      <AnimatePresence>
-        {isTelegramModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsTelegramModalOpen(false)}
-              className="absolute inset-0 backdrop-blur-md"
-              style={{ backgroundColor: 'var(--app-backdrop)' }}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 30 }}
-              className="relative w-full max-w-lg rounded-[2.5rem] shadow-[0_48px_80px_-24px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col z-10"
-              style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}
-            >
-              <div className="px-8 py-6 flex justify-between items-center"
-                   style={{ borderBottom: '1px solid var(--app-border)', backgroundColor: 'var(--app-bg-soft)' }}>
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-lg flex items-center justify-center"
-                       style={{ backgroundColor: 'rgba(0, 136, 204, 0.1)', color: '#0088cc' }}>
-                    <Send className="h-5 w-5 stroke-[2.2]" />
+            {/* Telegram Card */}
+            <Card data-tour="telegram-connect" className="p-8 flex flex-col justify-between">
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
+                       style={{ backgroundColor: 'rgba(0, 136, 204, 0.1)', color: '#0088cc', border: '1px solid rgba(0, 136, 204, 0.15)' }}>
+                    <Send className="h-7 w-7 stroke-[2.2] translate-x-[-1px] translate-y-[1px]" />
                   </div>
-                  <div>
-                    <h3 className="text-xl font-black" style={{ color: 'var(--app-text)' }}>Telegram Pairing</h3>
-                    <p className="text-[10px] font-black uppercase tracking-widest mt-0.5" style={{ color: '#0088cc' }}>
-                      Live API Webhook Binding
+                  {telegramConnected ? (
+                    <Badge variant="success" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full animate-pulse mr-1.5"
+                            style={{ backgroundColor: 'var(--success-green)' }} />
+                      Connected
+                    </Badge>
+                  ) : (
+                    <Badge variant="info" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
+                      Offline
+                    </Badge>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
+                    Telegram Bot
+                  </h3>
+                  {telegramConnected && telegramBotUsername && (
+                    <p className="text-[11px] font-bold font-mono tracking-wider inline-block px-2.5 py-1 rounded-lg"
+                       style={{ color: '#0088cc', backgroundColor: 'rgba(0, 136, 204, 0.08)' }}>
+                      @{telegramBotUsername}
                     </p>
-                  </div>
+                  )}
+                  <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    Collect automatic checkouts, display structured menus, and respond in real-time using a dedicated Telegram bot.
+                  </p>
                 </div>
-                <button onClick={() => setIsTelegramModalOpen(false)}
-                        className="h-10 w-10 rounded-xl flex items-center justify-center transition-transform active:scale-95 cursor-pointer"
-                        style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)', color: 'var(--app-text-muted)' }}>
-                  <X className="h-5 w-5" />
-                </button>
               </div>
-              <form onSubmit={handleConnectTelegram} className="p-8 space-y-6">
-                <div className="space-y-4">
-                  <div className="p-4 rounded-2xl border text-xs font-medium space-y-2 leading-relaxed"
-                       style={{ backgroundColor: 'rgba(0, 136, 204, 0.06)', borderColor: 'rgba(0, 136, 204, 0.1)', color: '#0369a1' }}>
-                    <div className="flex items-center gap-2 font-bold mb-1">
-                      <HelpCircle className="h-4 w-4" /> Obtaining credentials:
-                    </div>
-                    <div>1. Open Telegram and search for @BotFather.</div>
-                    <div>2. Send <code className="px-1 py-0.5 rounded font-mono font-black" style={{backgroundColor: 'rgba(0, 136, 204, 0.1)'}}>/newbot</code></div>
-                    <div>3. Copy the HTTP API Token and paste it below.</div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest pl-1" style={{ color: 'var(--app-text-muted)' }}>
-                      BotFather API Token
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={telegramToken}
-                      onChange={(e) => setTelegramToken(e.target.value)}
-                      placeholder="e.g. 123456789:AAHd8H_KlsJnC7S0-u_7X"
-                      className="w-full text-sm font-mono font-black rounded-2xl px-5 py-4 outline-none transition-all"
-                      style={{
-                        backgroundColor: 'var(--app-input-bg)',
-                        border: '2px solid var(--app-border)',
-                        color: 'var(--app-text)'
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-4 pt-4 justify-end" style={{ borderTop: '1px solid var(--app-border)' }}>
-                  <Button variant="secondary" type="button" onClick={() => setIsTelegramModalOpen(false)}
-                          className="px-5 py-3.5 text-xs font-black uppercase tracking-widest rounded-xl">
-                    Cancel
+              <div className="mt-8 pt-6 flex items-center justify-between gap-3"
+                   style={{ borderTop: '1px solid var(--app-border)' }}>
+                <span className="text-[10px] font-black uppercase tracking-wider"
+                      style={{ color: 'var(--app-text-muted)' }}>
+                  Immediate Activation
+                </span>
+                {telegramConnected ? (
+                  <Button
+                    variant="secondary"
+                    onClick={handleDisconnectTelegram}
+                    disabled={isLoadingBot}
+                    className="px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl"
+                    style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)', backgroundColor: 'rgba(239, 68, 68, 0.06)' }}
+                  >
+                    {isLoadingBot ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
+                    Disconnect
                   </Button>
-                  <Button variant="primary" type="submit" disabled={isConnectingTelegram}
-                          className="px-6 py-3.5 text-xs font-black uppercase tracking-widest rounded-xl">
-                    {isConnectingTelegram ? (
-                      <><Loader2 className="h-4.5 w-4.5 animate-spin mr-2" /> Pairing...</>
-                    ) : (
-                      <><Check className="h-4.5 w-4.5 mr-2" /> Link Bot Token</>
-                    )}
+                ) : (
+                  <Button
+                    variant="primary"
+                    onClick={() => setIsTelegramModalOpen(true)}
+                    className="px-6 py-3 text-xs font-black uppercase tracking-widest rounded-xl"
+                  >
+                    Connect
                   </Button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+                )}
+              </div>
+            </Card>
 
-      {/* Meta Stub Warning Modal */}
-      <AnimatePresence>
-        {isMetaStubModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsMetaStubModalOpen(false)}
-              className="absolute inset-0 backdrop-blur-md"
-              style={{ backgroundColor: 'var(--app-backdrop)' }}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 30 }}
-              className="relative w-full max-w-md rounded-[2.5rem] shadow-[0_48px_80px_-24px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col z-10"
-              style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}
-            >
-              <div className="px-8 py-6 flex justify-between items-center"
-                   style={{ borderBottom: '1px solid var(--app-border)', backgroundColor: 'var(--app-bg-soft)' }}>
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-lg flex items-center justify-center"
-                       style={{ backgroundColor: 'var(--brand-saffron-soft)', color: 'var(--brand-saffron)' }}>
-                    <MessageSquare className="h-5 w-5 stroke-[2.2]" />
+            {/* Website Chat Widget Card (Zero-Code Script) */}
+            <Card data-tour="website-widget" className="p-8 flex flex-col justify-between">
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
+                       style={{ backgroundColor: 'var(--brand-saffron-soft)', color: 'var(--brand-saffron)', border: '1px solid rgba(212, 168, 67, 0.2)' }}>
+                    <MessageSquare className="h-7 w-7 stroke-[2.2]" />
                   </div>
-                  <div>
-                    <h3 className="text-xl font-black" style={{ color: 'var(--app-text)' }}>Coming Soon</h3>
-                    <p className="text-[10px] font-black uppercase tracking-widest mt-0.5"
-                       style={{ color: 'var(--brand-saffron)' }}>
-                      Integration Queue
-                    </p>
-                  </div>
+                  <Badge variant="success" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
+                    ⚡ Active Widget
+                  </Badge>
                 </div>
-                <button onClick={() => setIsMetaStubModalOpen(false)}
-                        className="h-10 w-10 rounded-xl flex items-center justify-center transition-transform active:scale-95 cursor-pointer"
-                        style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)', color: 'var(--app-text-muted)' }}>
-                  <X className="h-5 w-5" />
-                </button>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
+                    Website Chat Widget
+                  </h3>
+                  <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    Single embed script tag to render a live floating chat bubble on any site (Shopify, WordPress, HTML).
+                  </p>
+                </div>
               </div>
-              <div className="p-8 space-y-6">
-                <div className="flex gap-4 items-start p-4 rounded-2xl border text-xs leading-relaxed font-semibold"
-                     style={{ backgroundColor: 'var(--brand-saffron-soft)', borderColor: 'rgba(212, 168, 67, 0.2)', color: 'var(--brand-navy)' }}>
-                  <HelpCircle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: 'var(--brand-saffron)' }} />
-                  <div>
-                    The <strong>{activeMetaPlatform}</strong> direct channel integration is part of our upcoming scale rollout.
-                  </div>
-                </div>
-                <Button variant="primary" onClick={() => setIsMetaStubModalOpen(false)}
-                        className="w-full py-3.5 text-xs font-black uppercase tracking-widest rounded-xl">
-                  Close
+              <div className="mt-8 pt-6 flex items-center justify-between gap-3"
+                   style={{ borderTop: '1px solid var(--app-border)' }}>
+                <span className="text-[10px] font-black uppercase tracking-wider"
+                      style={{ color: 'var(--app-text-muted)' }}>
+                  Zero-Code Embed Tag
+                </span>
+                <Button
+                  variant="primary"
+                  onClick={() => setActiveSubView("widget-config")}
+                  className="px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl"
+                >
+                  <FileCode className="h-4 w-4 mr-1.5" />
+                  Get Script Tag
                 </Button>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+            </Card>
 
-      <ConfirmDialog
-        isOpen={isDisconnectConfirmOpen}
-        onClose={() => setIsDisconnectConfirmOpen(false)}
-        onConfirm={triggerDisconnectTelegram}
-        title="Disconnect Bot"
-        message="Are you sure you want to disconnect this Telegram bot? This will clear the bot token and stop automatic message routing."
-        confirmLabel="Disconnect"
-        cancelLabel="Cancel"
-        isDestructive={true}
-      />
-    </div>
+            {/* Store Order Webhooks Card */}
+            <Card className="p-8 flex flex-col justify-between">
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
+                       style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                    <Globe className="h-7 w-7 stroke-[2.2]" />
+                  </div>
+                  <Badge variant="success" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
+                    ⚡ Store Webhooks
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
+                    Store Order Webhooks
+                  </h3>
+                  <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    Receive order updates from Shopify, WooCommerce, or custom sites via signed HMAC webhooks.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-8 pt-6 flex items-center justify-between gap-3"
+                   style={{ borderTop: '1px solid var(--app-border)' }}>
+                <span className="text-[10px] font-black uppercase tracking-wider"
+                      style={{ color: 'var(--app-text-muted)' }}>
+                  HMAC API & Logs
+                </span>
+                <Button
+                  variant="secondary"
+                  onClick={() => setActiveSubView("webhook-config")}
+                  className="px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl"
+                >
+                  <FileCode className="h-4 w-4 mr-1.5" />
+                  Configure
+                </Button>
+              </div>
+            </Card>
+
+            {/* WhatsApp Card */}
+            <Card className="p-8 flex flex-col justify-between opacity-85">
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
+                       style={{ backgroundColor: 'rgba(37, 211, 102, 0.1)', color: '#25D366', border: '1px solid rgba(37, 211, 102, 0.15)' }}>
+                    <MessageCircle className="h-7 w-7 stroke-[2.2]" />
+                  </div>
+                  {whatsAppConnected ? (
+                    <Badge variant="success" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full animate-pulse mr-1.5"
+                            style={{ backgroundColor: 'var(--success-green)' }} />
+                      Connected
+                    </Badge>
+                  ) : (
+                    <Badge variant="info" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
+                      Coming Soon
+                    </Badge>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
+                    WhatsApp Business
+                  </h3>
+                  <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    Scale conversions using WhatsApp API templates. Synchronize customer numbers to a unified shop workbench.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-8 pt-6 flex items-center justify-between gap-3"
+                   style={{ borderTop: '1px solid var(--app-border)' }}>
+                <span className="text-[10px] font-black uppercase tracking-wider"
+                      style={{ color: 'var(--app-text-muted)' }}>
+                  Scheduled Rollout
+                </span>
+                <Button
+                  variant="secondary"
+                  onClick={() => openMetaStubDialog("WhatsApp API")}
+                  className="px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg"
+                >
+                  View Status
+                </Button>
+              </div>
+            </Card>
+
+            {/* Instagram Card */}
+            <Card className="p-8 flex flex-col justify-between opacity-85">
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
+                       style={{ backgroundColor: 'rgba(225, 48, 108, 0.1)', color: '#E1306C', border: '1px solid rgba(225, 48, 108, 0.15)' }}>
+                    <InstagramIcon className="h-7 w-7 stroke-[2.2]" />
+                  </div>
+                  <Badge variant="info" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
+                    Coming Soon
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
+                    Instagram Direct
+                  </h3>
+                  <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    Trigger direct messaging flows when customers mention stories or reply to product posts.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-8 pt-6 flex items-center justify-between gap-3"
+                   style={{ borderTop: '1px solid var(--app-border)' }}>
+                <span className="text-[10px] font-black uppercase tracking-wider"
+                      style={{ color: 'var(--app-text-muted)' }}>
+                  Scheduled Rollout
+                </span>
+                <Button
+                  variant="secondary"
+                  onClick={() => openMetaStubDialog("Instagram DM")}
+                  className="px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg"
+                >
+                  View Status
+                </Button>
+              </div>
+            </Card>
+
+            {/* Messenger Card */}
+            <Card className="p-8 flex flex-col justify-between opacity-85">
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
+                       style={{ backgroundColor: 'rgba(24, 119, 242, 0.1)', color: '#1877F2', border: '1px solid rgba(24, 119, 242, 0.15)' }}>
+                    <MessageSquare className="h-7 w-7 stroke-[2.2]" />
+                  </div>
+                  <Badge variant="info" className="uppercase tracking-widest text-[10px] px-3 py-1.5">
+                    Coming Soon
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
+                    Messenger Link
+                  </h3>
+                  <p className="font-semibold text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    Sync page chat inquiries to the central workbench, facilitating fast checkouts on Facebook.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-8 pt-6 flex items-center justify-between gap-3"
+                   style={{ borderTop: '1px solid var(--app-border)' }}>
+                <span className="text-[10px] font-black uppercase tracking-wider"
+                      style={{ color: 'var(--app-text-muted)' }}>
+                  Scheduled Rollout
+                </span>
+                <Button
+                  variant="secondary"
+                  onClick={() => openMetaStubDialog("Messenger Sync")}
+                  className="px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg"
+                >
+                  View Status
+                </Button>
+              </div>
+            </Card>
+          </div>
+
+          {/* Telegram Token Pairing Modal */}
+          <AnimatePresence>
+            {isTelegramModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setIsTelegramModalOpen(false)}
+                  className="absolute inset-0 backdrop-blur-md"
+                  style={{ backgroundColor: 'var(--app-backdrop)' }}
+                />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 30 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 30 }}
+                  className="relative w-full max-w-lg rounded-[2.5rem] shadow-[0_48px_80px_-24px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col z-10"
+                  style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}
+                >
+                  <div className="px-8 py-6 flex justify-between items-center"
+                       style={{ borderBottom: '1px solid var(--app-border)', backgroundColor: 'var(--app-bg-soft)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-lg flex items-center justify-center"
+                           style={{ backgroundColor: 'rgba(0, 136, 204, 0.1)', color: '#0088cc' }}>
+                        <Send className="h-5 w-5 stroke-[2.2]" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-black" style={{ color: 'var(--app-text)' }}>Telegram Pairing</h3>
+                        <p className="text-[10px] font-black uppercase tracking-widest mt-0.5" style={{ color: '#0088cc' }}>
+                          Live API Webhook Binding
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={() => setIsTelegramModalOpen(false)}
+                            className="h-10 w-10 rounded-xl flex items-center justify-center transition-transform active:scale-95 cursor-pointer"
+                            style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)', color: 'var(--app-text-muted)' }}>
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <form onSubmit={handleConnectTelegram} className="p-8 space-y-6">
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-2xl border text-xs font-medium space-y-2 leading-relaxed"
+                           style={{ backgroundColor: 'rgba(0, 136, 204, 0.06)', borderColor: 'rgba(0, 136, 204, 0.1)', color: '#0369a1' }}>
+                        <div className="flex items-center gap-2 font-bold mb-1">
+                          <HelpCircle className="h-4 w-4" /> Obtaining credentials:
+                        </div>
+                        <div>1. Open Telegram and search for @BotFather.</div>
+                        <div>2. Send <code className="px-1 py-0.5 rounded font-mono font-black" style={{backgroundColor: 'rgba(0, 136, 204, 0.1)'}}>/newbot</code></div>
+                        <div>3. Copy the HTTP API Token and paste it below.</div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest pl-1" style={{ color: 'var(--app-text-muted)' }}>
+                          BotFather API Token
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={telegramToken}
+                          onChange={(e) => setTelegramToken(e.target.value)}
+                          placeholder="e.g. 123456789:AAHd8H_KlsJnC7S0-u_7X"
+                          className="w-full text-sm font-mono font-black rounded-2xl px-5 py-4 outline-none transition-all"
+                          style={{
+                            backgroundColor: 'var(--app-input-bg)',
+                            border: '2px solid var(--app-border)',
+                            color: 'var(--app-text)'
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-4 pt-4 justify-end" style={{ borderTop: '1px solid var(--app-border)' }}>
+                      <Button variant="secondary" type="button" onClick={() => setIsTelegramModalOpen(false)}
+                              className="px-5 py-3.5 text-xs font-black uppercase tracking-widest rounded-xl">
+                        Cancel
+                      </Button>
+                      <Button variant="primary" type="submit" disabled={isConnectingTelegram}
+                              className="px-6 py-3.5 text-xs font-black uppercase tracking-widest rounded-xl">
+                        {isConnectingTelegram ? (
+                          <><Loader2 className="h-4.5 w-4.5 animate-spin mr-2" /> Pairing...</>
+                        ) : (
+                          <><Check className="h-4.5 w-4.5 mr-2" /> Link Bot Token</>
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Meta Stub Warning Modal */}
+          <AnimatePresence>
+            {isMetaStubModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setIsMetaStubModalOpen(false)}
+                  className="absolute inset-0 backdrop-blur-md"
+                  style={{ backgroundColor: 'var(--app-backdrop)' }}
+                />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 30 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 30 }}
+                  className="relative w-full max-w-md rounded-[2.5rem] shadow-[0_48px_80px_-24px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col z-10"
+                  style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}
+                >
+                  <div className="px-8 py-6 flex justify-between items-center"
+                       style={{ borderBottom: '1px solid var(--app-border)', backgroundColor: 'var(--app-bg-soft)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-lg flex items-center justify-center"
+                           style={{ backgroundColor: 'var(--brand-saffron-soft)', color: 'var(--brand-saffron)' }}>
+                        <MessageSquare className="h-5 w-5 stroke-[2.2]" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-black" style={{ color: 'var(--app-text)' }}>Coming Soon</h3>
+                        <p className="text-[10px] font-black uppercase tracking-widest mt-0.5"
+                           style={{ color: 'var(--brand-saffron)' }}>
+                          Integration Queue
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={() => setIsMetaStubModalOpen(false)}
+                            className="h-10 w-10 rounded-xl flex items-center justify-center transition-transform active:scale-95 cursor-pointer"
+                            style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)', color: 'var(--app-text-muted)' }}>
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <div className="p-8 space-y-6">
+                    <div className="flex gap-4 items-start p-4 rounded-2xl border text-xs leading-relaxed font-semibold"
+                         style={{ backgroundColor: 'var(--brand-saffron-soft)', borderColor: 'rgba(212, 168, 67, 0.2)', color: 'var(--brand-navy)' }}>
+                      <HelpCircle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: 'var(--brand-saffron)' }} />
+                      <div>
+                        The <strong>{activeMetaPlatform}</strong> direct channel integration is part of our upcoming scale rollout.
+                      </div>
+                    </div>
+                    <Button variant="primary" onClick={() => setIsMetaStubModalOpen(false)}
+                            className="w-full py-3.5 text-xs font-black uppercase tracking-widest rounded-xl">
+                      Close
+                    </Button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          <ConfirmDialog
+            isOpen={isDisconnectConfirmOpen}
+            onClose={() => setIsDisconnectConfirmOpen(false)}
+            onConfirm={triggerDisconnectTelegram}
+            title="Disconnect Bot"
+            message="Are you sure you want to disconnect this Telegram bot? This will clear the bot token and stop automatic message routing."
+            confirmLabel="Disconnect"
+            cancelLabel="Cancel"
+            isDestructive={true}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
