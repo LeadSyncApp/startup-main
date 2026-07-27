@@ -91,9 +91,9 @@ router.get(
          OPTIMIZED: Sequential Queries to hold/release 1 DB connection
       ===================================================== */
       const leads = await prisma.lead.count({ where: { companyId, deletedAt: null } });
-      const conversations = await prisma.conversation.count({ where: { companyId } });
-      const agents = await prisma.user.count({ where: { companyId } });
-      const orders = await prisma.order.count({ where: { companyId } });
+      const conversations = await prisma.conversation.count({ where: { companyId, deletedAt: null } });
+      const agents = await prisma.user.count({ where: { companyId, isActive: true } });
+      const orders = await prisma.order.count({ where: { companyId, isDeleted: false } });
 
       // CRM Stats
       const openDeals = 0;
@@ -119,7 +119,7 @@ router.get(
 
       // 4. Revenue Aggregate
       const revenueData = await prisma.order.aggregate({
-        where: { companyId, status: { in: ["DELIVERED", "PAID"] } },
+        where: { companyId, isDeleted: false, status: { in: ["DELIVERED", "PAID"] } },
         _sum: { amount: true },
       });
 
@@ -726,9 +726,14 @@ router.get(
     try {
       const { companyId } = req.user!;
 
-      // Conversations with negative sentiment → shown as "urgent leads"
+      // Unclaimed active conversations → shown as "urgent leads" (needs human attention)
       const urgentLeads = await prisma.conversation.count({
-        where: { companyId },
+        where: {
+          companyId,
+          deletedAt: null,
+          lifecycleStatus: "active",
+          claimedById: null,
+        },
       }).catch(() => 0);
 
       // New Order Arrivals (replaces pending orders)
@@ -740,10 +745,13 @@ router.get(
         },
       }).catch(() => 0);
 
-      // Conversations count
+      // Active conversations being handled by bot (mode = BOT, not yet escalated to human)
       const botConversations = await prisma.conversation.count({
-        where: { 
+        where: {
           companyId,
+          deletedAt: null,
+          lifecycleStatus: "active",
+          mode: "BOT",
         },
       }).catch(() => 0);
 
@@ -763,10 +771,24 @@ router.get("/funnel", authMiddleware, async (req: AuthRequest, res: Response) =>
   try {
     const { companyId } = req.user!;
 
-    const newCount = await (prisma.lead as any).count({ where: { companyId, deletedAt: null, segment: "NEW" } });
-    const regularCount = await (prisma.lead as any).count({ where: { companyId, deletedAt: null, segment: "REGULAR" } });
-    const vipCount = await (prisma.lead as any).count({ where: { companyId, deletedAt: null, segment: "VIP" } });
-    const churnCount = await (prisma.lead as any).count({ where: { companyId, deletedAt: null, segment: "CHURN_RISK" } });
+    // Single groupBy query instead of 5 separate count queries
+    const segmentCounts = await prisma.lead.groupBy({
+      by: ["segment"],
+      where: { companyId, deletedAt: null },
+      _count: { _all: true },
+    });
+
+    const countMap = new Map<string, number>();
+    segmentCounts.forEach(s => {
+      countMap.set(s.segment, s._count._all || 0);
+    });
+
+    const newCount = countMap.get("NEW") || 0;
+    const regularCount = countMap.get("REGULAR") || 0;
+    const vipCount = countMap.get("VIP") || 0;
+    const churnCount = countMap.get("CHURN_RISK") || 0;
+
+    // Separate query for Order table (different model)
     const totalOrders = await (prisma.order as any).count({ where: { companyId, isDeleted: false, status: { notIn: ["BOT_CREATED_ORDER", "REJECTED", "CANCELLED"] } } });
 
     const total = newCount + regularCount + vipCount + churnCount;

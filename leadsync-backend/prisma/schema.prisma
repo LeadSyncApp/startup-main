@@ -296,6 +296,7 @@ model Order {
   @@index([completedAt])
   @@index([conversationId])
   @@index([isDeleted])
+  @@index([companyId, status, createdAt])
 }
 
 model CompanyAnalyticsRollup {

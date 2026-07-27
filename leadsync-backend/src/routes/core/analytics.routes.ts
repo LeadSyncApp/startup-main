@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
 import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
+import { cacheService } from "../../services/infrastructure/cache.service";
 import ExcelJS from "exceljs";
 
 const router = Router();
@@ -14,6 +15,13 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
         if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
         const companyId = req.user.companyId;
+
+        // Check cache
+        const cacheKey = `analytics_dashboard_${companyId}`;
+        const cached = await cacheService.get(cacheKey);
+        if (cached) {
+            return res.json(cached);
+        }
 
         // 1. Date Ranges
         const now = new Date();
@@ -112,7 +120,7 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
         // 7. Average Order Value
         const aov = orders.length > 0 ? Math.round(totalRevenue30d / orders.length) : 0;
 
-        res.json({
+        const responseData = {
             revenueChart,
             topProducts,
             topAgents,
@@ -121,7 +129,12 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
                 orders30d: orders.length,
                 aov
             }
-        });
+        };
+
+        // Set cache (60 seconds TTL)
+        await cacheService.set(cacheKey, responseData, 60);
+
+        res.json(responseData);
 
     } catch (error) {
         console.error("Dashboard Analytics Error:", error);
@@ -138,6 +151,14 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
         if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
         const companyId = req.user.companyId;
+
+        // Check cache
+        const cacheKey = `analytics_revenue_${companyId}`;
+        const cached = await cacheService.get(cacheKey);
+        if (cached) {
+            return res.json(cached);
+        }
+
         const now = new Date();
 
         const thirtyDaysAgo = new Date(now);
@@ -256,7 +277,12 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
             percentage: totalRevenue > 0 ? Math.round((d.revenue / totalRevenue) * 100) : 0
         }));
 
-        res.json({ totalRevenue, orderCount, avgOrderValue, trend, timeline, forecast, recentOrders, agentPerformance, channelAttribution });
+        const responseData = { totalRevenue, orderCount, avgOrderValue, trend, timeline, forecast, recentOrders, agentPerformance, channelAttribution };
+
+        // Set cache (60 seconds TTL)
+        await cacheService.set(cacheKey, responseData, 60);
+
+        res.json(responseData);
 
     } catch (error) {
         console.error("Revenue Analytics Error:", error);

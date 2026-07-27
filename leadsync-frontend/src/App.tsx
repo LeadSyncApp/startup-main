@@ -1,6 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, MessageSquare, ShoppingBag, Store } from "lucide-react";
 import { useNavigate, useLocation, useParams, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./features/auth-tenancy/AuthContext";
 import { Toaster, toast } from "react-hot-toast";
@@ -11,10 +10,9 @@ import { connectSocket, disconnectSocket, onNotification } from "./lib/socketCli
 import { useNotificationStore } from "./features/notifications/useNotificationStore";
 import { AcceptInvitePage } from "./features/team/AcceptInvitePage";
 import { activityToast as activityToast } from "./features/activity-ledger/useActivityStore";
-import { IntelligentButton } from "./components/IntelligentButton";
-import { Card, CardHeader } from "./components/ui";
 import { GuidedTour } from "./components/tour/GuidedTour";
-import { Users, Plus, Mail, X } from "lucide-react";
+import { WizardProvider } from "./contexts/WizardContext";
+import { X } from "lucide-react";
 
 const AutoRepliesPage = lazy(() => import("./features/configurations/AutoRepliesPage").then(m => ({ default: m.AutoRepliesPage })));
 const CustomerList = lazy(() => import("./features/audience-crm/CustomerList").then(m => ({ default: m.CustomerList })));
@@ -23,7 +21,6 @@ const OrderFulfillmentBoard = lazy(() => import("./features/orders/OrderFulfillm
 const StreamTriage = lazy(() => import("./features/stream-triage/StreamTriage").then(m => ({ default: m.StreamTriage })));
 const InboxSplitView = lazy(() => import("./features/inbox/InboxSplitView"));
 const InventoryPage = lazy(() => import("./features/inventory/InventoryPage").then(m => ({ default: m.InventoryPage })));
-const DailyPulseAdaptiveWidget = lazy(() => import("./features/dashboard/DailyPulseAdaptiveWidget").then(m => ({ default: m.DailyPulseAdaptiveWidget })));
 const MyShopPage = lazy(() => import("./features/dashboard/MyShopPage").then(m => ({ default: m.MyShopPage })));
 const ConfigurationsPage = lazy(() => import("./features/configurations/ConfigurationsPage").then(m => ({ default: m.ConfigurationsPage })));
 
@@ -49,14 +46,10 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [, setBusinessScale] = useState<"HOME" | "SME">("HOME");
   const [businessType, setBusinessType] = useState("Retailer");
-  const [dailyRevenueTarget, setDailyRevenueTarget] = useState("5000");
+  const [, setDailyRevenueTarget] = useState("5000");
   const [, setTrackInventory] = useState(true);
   const [, setChannelVerified] = useState({ telegram: false, whatsapp: false });
-  const [, setShouldShake] = useState(false);
-  const [currentWorkflow, setCurrentWorkflow] = useState<"PAPER" | "SPREADSHEET" | "CRM">("PAPER");
-  const [invitedMembers, setInvitedMembers] = useState<string[]>([]);
-  const [newMemberEmail, setNewMemberEmail] = useState("");
-  const [inputError, setInputError] = useState(false);
+  const [, setCurrentWorkflow] = useState<"PAPER" | "SPREADSHEET" | "CRM">("PAPER");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -245,157 +238,7 @@ export default function App() {
   // Dashboard home ("My Shop") content
   const shopHome = (
     <div className="space-y-6">
-      <MyShopPage />
-
-      {/* Quick actions grid for new users */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" data-tour="quick-actions">
-        <Card hover padding="md" className="text-center !bg-[var(--app-surface)] !border-[var(--app-border)] hover:!border-[var(--brand-saffron)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[rgba(200,90,50,0.08)] transition-all duration-200 cursor-pointer">
-          <div className="h-10 w-10 rounded-xl bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)] flex items-center justify-center mx-auto mb-3">
-            <MessageSquare className="h-5 w-5" />
-          </div>
-          <h3 className="font-semibold text-sm text-[var(--text-primary)]">Reply to Messages</h3>
-          <p className="text-xs mt-1 text-[var(--text-secondary)]">Chat with customers</p>
-        </Card>
-        <Card hover padding="md" className="text-center !bg-[var(--app-surface)] !border-[var(--app-border)] hover:!border-[var(--brand-saffron)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[rgba(200,90,50,0.08)] transition-all duration-200 cursor-pointer">
-          <div className="h-10 w-10 rounded-xl bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)] flex items-center justify-center mx-auto mb-3">
-            <ShoppingBag className="h-5 w-5" />
-          </div>
-          <h3 className="font-semibold text-sm text-[var(--text-primary)]">View Orders</h3>
-          <p className="text-xs mt-1 text-[var(--text-secondary)]">Track & fulfill</p>
-        </Card>
-        <Card hover padding="md" className="text-center !bg-[var(--app-surface)] !border-[var(--app-border)] hover:!border-[var(--brand-saffron)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[rgba(200,90,50,0.08)] transition-all duration-200 cursor-pointer">
-          <div className="h-10 w-10 rounded-xl bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)] flex items-center justify-center mx-auto mb-3">
-            <Users className="h-5 w-5" />
-          </div>
-          <h3 className="font-semibold text-sm text-[var(--text-primary)]">Customers</h3>
-          <p className="text-xs mt-1 text-[var(--text-secondary)]">View your list</p>
-        </Card>
-        <Card hover padding="md" className="text-center !bg-[var(--app-surface)] !border-[var(--app-border)] hover:!border-[var(--brand-saffron)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[rgba(200,90,50,0.08)] transition-all duration-200 cursor-pointer">
-          <div className="h-10 w-10 rounded-xl bg-[var(--brand-saffron-soft)] text-[var(--brand-saffron)] flex items-center justify-center mx-auto mb-3">
-            <Zap className="h-5 w-5" />
-          </div>
-          <h3 className="font-semibold text-sm text-[var(--text-primary)]">Broadcast</h3>
-          <p className="text-xs mt-1 text-[var(--text-secondary)]">Send offers</p>
-        </Card>
-      </div>
-
-      {/* Today's Pulse */}
-      <Card padding="lg" data-tour="todays-activity" className="!bg-[var(--tile-bg)] !border-[var(--tile-border)] backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
-        <CardHeader
-          title="Today's Activity"
-          subtitle="Real-time updates from your shop"
-        />
-        <DailyPulseAdaptiveWidget dailyRevenueTarget={dailyRevenueTarget}>
-          <div className="h-40 flex items-end gap-3 justify-between mt-4">
-            {[40, 70, 45, 90, 65, 80, 50, 40].map((h, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
-                <div
-                  className="w-full bg-[var(--app-bg-soft)] rounded-lg group-hover:bg-[var(--brand-saffron-soft)] transition-all"
-                  style={{ height: `${h}%` }}
-                />
-                <span className="text-2xs" style={{ color: 'var(--text-secondary)' }}>{i+9}:05</span>
-              </div>
-            ))}
-          </div>
-        </DailyPulseAdaptiveWidget>
-      </Card>
-
-      {/* Migration / Getting Started Card */}
-      <Card padding="lg" data-tour="getting-started" className="!bg-[var(--tile-bg)] !border-[var(--tile-border)] backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
-        <div className="flex items-start gap-4">
-          <div className="h-12 w-12 rounded-xl bg-[var(--brand-saffron)] text-[var(--app-bg)] flex items-center justify-center shrink-0">
-            <Store className="h-6 w-6" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-bold text-base" style={{ color: 'var(--sidebar-text)' }}>
-              {currentWorkflow === "PAPER"
-                ? "Start your digital journey"
-                : currentWorkflow === "SPREADSHEET"
-                  ? "Import your spreadsheet"
-                  : "Connect your current system"}
-            </h3>
-            <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.6)' }}>
-              {currentWorkflow === "PAPER"
-                ? "Move from pen and paper to digital. Log your first customer today."
-                : currentWorkflow === "SPREADSHEET"
-                  ? "Upload your Excel or Sheets file and we'll map everything automatically."
-                  : "Sync your existing data from other tools."}
-            </p>
-          </div>
-          <IntelligentButton
-            onAsyncClick={async () => {
-              await new Promise(resolve => setTimeout(resolve, 800));
-              activityToast.success("Getting started guide opened!");
-              return true;
-            }}
-            successText="Done!"
-            className="btn-primary text-sm whitespace-nowrap"
-          >
-            Get Started
-          </IntelligentButton>
-        </div>
-      </Card>
-
-      {/* Team Invite */}
-      <Card padding="lg">
-        <CardHeader
-          title="Invite Team Members"
-          subtitle="Add family, staff or partners to help manage"
-          action={<span className="text-2xs px-2 py-1 rounded-full font-medium" style={{ backgroundColor: 'var(--app-bg-soft)', color: 'var(--app-text-muted)' }}>Optional</span>}
-        />
-        <div className="flex gap-2 mt-2">
-          <div className="relative flex-1">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: 'var(--app-text-muted)' }} />
-            <input
-              type="email"
-              value={newMemberEmail}
-              onChange={(e) => { setNewMemberEmail(e.target.value); if (inputError) setInputError(false); }}
-              placeholder="partner@mybusiness.com"
-              className="input-field pl-9"
-            />
-          </div>
-          <IntelligentButton
-            onAsyncClick={async () => {
-              await new Promise(resolve => setTimeout(resolve, 800));
-              if (!newMemberEmail.includes("@")) {
-                setInputError(true); setShouldShake(true);
-                setTimeout(() => setShouldShake(false), 650);
-                activityToast.error("Please enter a valid email.");
-                return false;
-              }
-              if (invitedMembers.includes(newMemberEmail)) {
-                setInputError(true); setShouldShake(true);
-                setTimeout(() => setShouldShake(false), 650);
-                activityToast.error("Already invited!");
-                return false;
-              }
-              setInvitedMembers([...invitedMembers, newMemberEmail]);
-              activityToast.success(`Invite sent to ${newMemberEmail}!`);
-              setNewMemberEmail("");
-              return true;
-            }}
-            successText="Sent!"
-            className="btn-saffron text-sm"
-          >
-            <Plus className="h-4 w-4" /> Invite
-          </IntelligentButton>
-        </div>
-        {invitedMembers.length > 0 && (
-          <div className="mt-3 space-y-1.5">
-            {invitedMembers.map((email, idx) => (
-              <div key={idx} className="flex items-center justify-between p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--app-bg-soft)' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{email}</span>
-                <div className="flex items-center gap-2">
-                  <span className="badge-warning text-2xs">Pending</span>
-                  <button onClick={() => setInvitedMembers(invitedMembers.filter((_, i) => i !== idx))} className="cursor-pointer" style={{ color: 'var(--app-text-muted)' }}>
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+      <MyShopPage onNavigate={handleTabChange} />
     </div>
   );
 
@@ -439,6 +282,7 @@ export default function App() {
               merchantName={mockCompany}
               onLogout={logout}
             >
+              <WizardProvider>
               <div className="w-full h-full min-h-0 flex flex-col">
                 <GuidedTour activeTab={activeTab} />
                 <Suspense fallback={
@@ -495,6 +339,7 @@ export default function App() {
                 </AnimatePresence>
                 </Suspense>
               </div>
+              </WizardProvider>
             </MasterDashboardLayout>
           ) : (
             <Navigate to="/onboarding" replace />
