@@ -260,43 +260,47 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
    return (
     <div className="flex flex-col h-full min-h-0">
       {/* Search input */}
-      <form onSubmit={handleSearchSubmit} className="flex gap-2 px-4 pt-4">
-        <input
-          type="text"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search leads..."
-          className="flex-1 input-field text-xs"
-        />
-        <button type="submit" className="px-3 py-1.5 bg-[var(--app-surface-alt)] border border-[var(--app-border)] rounded text-xs font-black text-[var(--app-text)] hover:bg-[var(--app-bg-soft)] transition cursor-pointer">
-          Search
-        </button>
-        {search && (
-          <button
-            type="button"
-            onClick={() => { setSearch(""); setSearchInput(""); }}
-            className="px-2 py-1.5 text-xs font-black text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition cursor-pointer"
-          >
-            Clear
+      <div className="px-4 pt-4">
+        <form onSubmit={handleSearchSubmit} className="flex gap-2" data-tour="search-input">
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search leads..."
+            className="flex-1 input-field text-xs"
+          />
+          <button type="submit" className="px-3 py-1.5 bg-[var(--app-surface-alt)] border border-[var(--app-border)] rounded text-xs font-black text-[var(--app-text)] hover:bg-[var(--app-bg-soft)] transition cursor-pointer">
+            Search
           </button>
-        )}
-      </form>
+          {search && (
+            <button
+              type="button"
+              onClick={() => { setSearch(""); setSearchInput(""); }}
+              className="px-2 py-1.5 text-xs font-black text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition cursor-pointer"
+            >
+              Clear
+            </button>
+          )}
+        </form>
+      </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 border-b border-[var(--app-border)] px-4 pb-2 mt-3">
-        {FILTER_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => { setLeads([]); setFilter(tab.key); }}
-            className={`px-3 py-1 text-xs font-black rounded-t transition cursor-pointer ${
-              filter === tab.key
-                ? "bg-[var(--app-surface-alt)] text-[var(--app-text)] border-b-2 border-brand-saffron"
-                : "text-[var(--app-text-muted)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-soft)]"
-            }`}
-          >
-            {tab.label} ({tabTotals[tab.key]})
-          </button>
-        ))}
+      <div className="border-b border-[var(--app-border)] px-4 pb-2 mt-3">
+        <div className="flex gap-1" data-tour="filter-tabs">
+          {FILTER_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => { setLeads([]); setFilter(tab.key); }}
+              className={`px-3 py-1 text-xs font-black rounded-t transition cursor-pointer ${
+                filter === tab.key
+                  ? "bg-[var(--app-surface-alt)] text-[var(--app-text)] border-b-2 border-brand-saffron"
+                  : "text-[var(--app-text-muted)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-soft)]"
+              }`}
+            >
+              {tab.label} ({tabTotals[tab.key]})
+            </button>
+          ))}
+        </div>
       </div>
 
       {leads.length === 0 ? (
@@ -311,7 +315,8 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
         </div>
       ) : (
         <>
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 px-4 pb-4">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+            <div className="space-y-2" data-tour="conversation-row">
             {leads.map((lead) => {
                const ChannelIcon = CHANNEL_ICON[lead.channel.toUpperCase()] || Globe;
               const displayName = lead.name || lead.contact || "Customer";
@@ -380,6 +385,7 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
                       {!lead.assignedTo && (
                         <button
                           onClick={(e) => handleClaim(e, lead.id)}
+                          data-tour="claim-chat"
                           className="shrink-0 flex items-center gap-1 px-2 py-0.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 rounded text-[10px] font-black transition cursor-pointer border border-indigo-500/30"
                           title="Claim this conversation"
                         >
@@ -392,6 +398,7 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
                 </button>
               );
             })}
+            </div>
           </div>
 
           {/* Load more button or end message */}

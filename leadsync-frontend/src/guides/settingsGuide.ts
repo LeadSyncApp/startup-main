@@ -1,0 +1,90 @@
+import type { PageGuide } from './types';
+import {
+  AppWindow,
+  Users,
+  Store,
+  Braces,
+  Wifi,
+  UserPlus,
+  Shield,
+  CreditCard,
+  Building2,
+  Layers,
+} from 'lucide-react';
+
+export const settingsGuide: PageGuide = {
+  pageId: 'settings',
+  pageTitle: 'Settings',
+  sections: [
+    {
+      id: 'connections-hub',
+      title: 'Connections Hub',
+      description: 'This is where you connect your messaging channels. Each platform has its own card showing whether it is connected or coming soon. Telegram and Website Chat are live now. WhatsApp, Instagram, and Messenger are coming soon.',
+      whyItMatters: 'Connect at least one channel so customers can message you — Telegram and the Website widget are available right now.',
+      icon: AppWindow,
+    },
+    {
+      id: 'telegram-connect',
+      title: 'Telegram Bot Connection',
+      description: 'Tap "Connect" on the Telegram card and enter the BotFather token you received when creating your bot on Telegram. Follow the 3-step instructions in the popup. Once connected, the badge turns green and messages start flowing in.',
+      whyItMatters: 'Telegram is the fastest channel to set up — you can be receiving customer messages within 5 minutes.',
+      icon: Wifi,
+    },
+    {
+      id: 'website-widget',
+      title: 'Website Chat Widget',
+      description: 'Shows "Active Widget" when your website chat is live. Tap "Get Script Tag" to copy the code snippet you need to paste into your website. Customers visiting your site will see a chat bubble.',
+      whyItMatters: 'The widget turns your website visitors into customers by letting them message you directly.',
+      icon: Store,
+    },
+    {
+      id: 'team-staff-list',
+      title: 'Staff Directory',
+      description: 'A table listing all team members with their name, role (Manager or Staff), contact details, staff ID, and last seen time. The kebab menu on each row lets you promote someone to Manager, demote to Staff, or remove them from the team.',
+      whyItMatters: 'Keep your team list accurate so you know who has access and who can handle customer conversations.',
+      icon: Users,
+    },
+    {
+      id: 'team-onboarding',
+      title: 'Team Onboarding Tab',
+      description: 'Shows two sub-tabs: "Onboarded" lists team members who have accepted their invite and are active. "Pending" lists people you invited but have not yet joined. You can revoke pending invites from here.',
+      whyItMatters: 'Check Pending regularly — if someone has not accepted, send them a reminder or revoke and re-invite.',
+      icon: UserPlus,
+    },
+    {
+      id: 'team-activity',
+      title: "Team Activity Tab",
+      description: 'Shows each team member\'s real-time status: "Online & Available" (green), "Online Busy" (amber), or "Offline" (grey). Also shows their current workload — how many conversations and orders they are handling. You can toggle your own availability.',
+      whyItMatters: 'Use this to balance workload — if one person is overloaded, redirect conversations to someone available.',
+      icon: Layers,
+    },
+    {
+      id: 'shop-profile',
+      title: 'Shop Profile',
+      description: 'Your business information displayed to customers. The tier card shows whether you are on "Home Grown" or "SME Retail" tier. Below that, you can edit your Formal Business Name, UPI ID for payments, and GSTIN tax number (SME only). Changes save automatically when you click away from the field.',
+      whyItMatters: 'Keep your business name and UPI ID accurate — customers see this on invoices and payment requests.',
+      icon: Building2,
+    },
+    {
+      id: 'tier-status',
+      title: 'Tier Status Card',
+      description: 'Shows your current plan: "Home Grown" is the free tier for small shops. "SME Retail" unlocks advanced features. Tap "Manage Scale" to see what features are unlocked and upgrade if needed.',
+      whyItMatters: 'Check your tier to know which features you have access to — upgrading unlocks more automation and reporting.',
+      icon: Shield,
+    },
+    {
+      id: 'product-fields',
+      title: 'Product Fields',
+      description: 'Define custom fields for your products beyond the standard name, price, and stock. Add fields like "Fabric Type", "Occasion", or "Wash Care" with types like Text, Number, Boolean, or Select dropdown. These fields appear when editing products in your inventory.',
+      whyItMatters: 'Custom fields help you describe products in detail, making it easier for customers to find what they need.',
+      icon: Braces,
+    },
+    {
+      id: 'product-fields-form',
+      title: 'Add New Field Form',
+      description: 'Enter a field name (like "Fabric Type"), choose a type (Text for words, Number for quantities, Boolean for yes/no, Select for dropdown options), decide whether it applies to the product or each variant, and set the display order. Tap "Add Field" to save.',
+      whyItMatters: 'Only add fields you actually use — too many fields make product editing tedious for your team.',
+      icon: CreditCard,
+    },
+  ],
+};

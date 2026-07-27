@@ -6,6 +6,7 @@ export interface GuideSection {
   description: string;
   whyItMatters: string;
   icon: ComponentType<{ className?: string }>;
+  wizardStep?: string;
 }
 
 export interface PageGuide {

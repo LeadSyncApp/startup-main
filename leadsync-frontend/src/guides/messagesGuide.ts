@@ -1,0 +1,98 @@
+import type { PageGuide } from './types';
+import {
+  Filter,
+  AlertTriangle,
+  MessageSquare,
+  Bot,
+  Sparkles,
+  IndianRupee,
+  UserCheck,
+  Package,
+  Clock,
+  Hand,
+  XCircle,
+} from 'lucide-react';
+
+export const messagesGuide: PageGuide = {
+  pageId: 'messages',
+  pageTitle: 'New Customers',
+  sections: [
+    {
+      id: 'platform-filter',
+      title: 'Platform Filter',
+      description: 'Filter conversations by where the customer messaged you from — WhatsApp, Instagram, Telegram, or your website. Tap a chip to show only that platform, or leave "All Platforms" selected to see everything.',
+      whyItMatters: 'If you only handle WhatsApp orders, filter to WhatsApp so you are not distracted by other channels.',
+      icon: Filter,
+    },
+    {
+      id: 'tier-badge',
+      title: 'Urgency Level',
+      description: 'Every conversation is colour-coded by how urgently it needs attention. Orange means the customer is ready to buy now. Amber means they are waiting for a reply. Teal means they are just browsing.',
+      whyItMatters: 'Start with orange conversations first — these are customers most likely to place an order if you reply quickly.',
+      icon: AlertTriangle,
+    },
+    {
+      id: 'last-customer-message',
+      title: 'Last Customer Message',
+      description: 'This shows the most recent thing the customer wrote to you. Read this before replying so you know exactly what they are asking about.',
+      whyItMatters: 'A quick, relevant reply to their actual question is far more effective than a generic greeting.',
+      icon: MessageSquare,
+    },
+    {
+      id: 'bot-reply-indicator',
+      title: 'Bot Reply Indicator',
+      description: 'If you see "Bot replied Xm ago", it means our auto-reply system already sent a response to this customer. You can still jump in and reply manually if needed.',
+      whyItMatters: 'Knowing the bot already replied helps you avoid sending a duplicate message that might confuse the customer.',
+      icon: Bot,
+    },
+    {
+      id: 'ai-intelligence',
+      title: 'AI Intelligence',
+      description: 'The yellow panel shows what our AI understood from the customer message. It includes their intent (what they want), a confidence score (how sure the AI is), and a short explanation of its reasoning.',
+      whyItMatters: 'Read this before replying — it gives you context like "high purchase intent" or "returning customer" so you can respond appropriately.',
+      icon: Sparkles,
+    },
+    {
+      id: 'pending-order-amount',
+      title: 'Pending Order Amount',
+      description: 'If this customer has an unpaid order, the amount is shown here in large text. This tells you there is money waiting to be collected from this person.',
+      whyItMatters: 'Follow up on pending payments promptly — this directly affects your daily revenue.',
+      icon: IndianRupee,
+    },
+    {
+      id: 'customer-history',
+      title: 'Customer History',
+      description: 'Shows whether this is a new or returning customer, how many orders they have placed, and how much they have spent with you in total. Repeat customers are shown with their order count and lifetime value.',
+      whyItMatters: 'Knowing a customer has ordered before helps you personalise your reply and offer relevant products.',
+      icon: UserCheck,
+    },
+    {
+      id: 'product-match',
+      title: 'Product Match',
+      description: 'If the customer asked about a specific product, a card appears showing the product image, name, variant, and current stock count. This is what the conversation is about.',
+      whyItMatters: 'Check stock before confirming availability — never promise a product that is out of stock.',
+      icon: Package,
+    },
+    {
+      id: 'drop-off-warning',
+      title: 'Drop-off Warning',
+      description: 'A timer shows how long the customer has been waiting. If it says "customers like this typically go cold after 30m", it means this lead is at risk of being lost if you do not reply soon.',
+      whyItMatters: 'Treat these as urgent — every minute of delay reduces the chance of making the sale.',
+      icon: Clock,
+    },
+    {
+      id: 'claim-button',
+      title: 'Claim Conversation',
+      description: 'Tap this button to take ownership of the conversation. Once claimed, you are responsible for replying to this customer. The conversation moves from the queue to your personal inbox.',
+      whyItMatters: 'Claiming a conversation signals to your team that you are handling this customer, preventing duplicate replies.',
+      icon: Hand,
+    },
+    {
+      id: 'skip-spam-button',
+      title: 'Skip / Mark as Spam',
+      description: 'If a conversation is not relevant — spam, wrong number, or not a real enquiry — tap this button to dismiss it. It removes the conversation from the queue without claiming it.',
+      whyItMatters: 'Keeping the queue clean means you spend time on real customers instead of junk messages.',
+      icon: XCircle,
+    },
+  ],
+};

@@ -421,3 +421,11 @@
     transform: translateY(0);
   }
 }
+
+/* ── Guide drawer open: reflow main content so nothing hides behind 400px drawer ── */
+@media (min-width: 768px) {
+  html[data-guide-drawer="open"] main[data-layout-main] {
+    margin-right: 400px;
+    transition: margin-right 0.3s ease;
+  }
+}
