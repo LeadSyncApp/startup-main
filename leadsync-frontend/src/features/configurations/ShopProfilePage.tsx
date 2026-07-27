@@ -78,7 +78,7 @@ export function ShopProfilePage() {
   return (
     <div className="space-y-8">
       {/* Tier Status Section */}
-      <Card className="p-8 sm:p-10 relative overflow-hidden">
+      <Card data-tour="tier-status" className="p-8 sm:p-10 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none"
              style={{ backgroundColor: 'var(--app-bg-soft)' }} />
 
@@ -199,7 +199,7 @@ export function ShopProfilePage() {
       </Card>
 
       {/* Shop Core Identity */}
-      <Card className="p-8 sm:p-10 space-y-10">
+      <Card data-tour="shop-profile" className="p-8 sm:p-10 space-y-10">
         <div>
           <h2 className="text-2xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
             Core Shop Profile

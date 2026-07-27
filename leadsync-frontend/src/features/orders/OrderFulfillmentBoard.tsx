@@ -138,7 +138,7 @@ export const OrderFulfillmentBoard: React.FC = () => {
           <p className="text-sm text-slate-500 font-medium">Manage your paid orders and logistics</p>
         </div>
 
-        <div className="flex bg-slate-100 p-1 rounded-xl items-center gap-1">
+        <div data-tour="tab-bar" className="flex bg-slate-100 p-1 rounded-xl items-center gap-1">
           <button 
             onClick={() => setTab('READY')}
             className={`px-4 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 ${tab === 'READY' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
@@ -161,6 +161,7 @@ export const OrderFulfillmentBoard: React.FC = () => {
             Wait for Payment ({pendingCount})
           </button>
           <button 
+            data-tour="order-refresh"
             onClick={fetchOrders}
             title="Refresh orders from server"
             className="p-1.5 hover:bg-white text-slate-500 hover:text-slate-900 rounded-lg transition"
@@ -170,7 +171,7 @@ export const OrderFulfillmentBoard: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-3xl p-4 flex items-center gap-3 shadow-sm">
+      <div data-tour="order-search" className="bg-white border border-slate-200 rounded-3xl p-4 flex items-center gap-3 shadow-sm">
         <Search className="size-4 text-slate-400" />
         <input 
           type="text" 
@@ -189,7 +190,7 @@ export const OrderFulfillmentBoard: React.FC = () => {
           <div className="size-8 border-3 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
         </div>
       ) : filteredOrders.length === 0 ? (
-        <div className="bg-white border-2 border-dashed border-slate-100 rounded-3xl p-16 text-center">
+        <div data-tour="order-empty-state" className="bg-white border-2 border-dashed border-slate-100 rounded-3xl p-16 text-center">
             <ClipboardList className="size-12 text-slate-100 mx-auto mb-4" />
             <h3 className="text-slate-400 font-black text-sm">No orders found here</h3>
             <p className="text-slate-300 text-[10px] font-bold uppercase tracking-widest mt-1">
@@ -204,6 +205,7 @@ export const OrderFulfillmentBoard: React.FC = () => {
 
               return (
                 <motion.div 
+                  data-tour="order-card"
                   layout
                   key={order.id}
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -220,11 +222,11 @@ export const OrderFulfillmentBoard: React.FC = () => {
                           {order.status}
                         </span>
                         {(order.priorityScore > 70 || order.isUrgent) ? (
-                          <span className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-red-50 text-red-600 border-red-100">
+                          <span data-tour="priority-badge" className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-red-50 text-red-600 border-red-100">
                             URGENT
                           </span>
                         ) : (
-                          <span className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-slate-50 text-slate-600 border-slate-100">
+                          <span data-tour="priority-badge" className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-slate-50 text-slate-600 border-slate-100">
                             STANDARD
                           </span>
                         )}
@@ -273,6 +275,7 @@ export const OrderFulfillmentBoard: React.FC = () => {
                       )}
                       {['READY', 'PAID', 'APPROVED', 'CONFIRMED', 'PROCESSING', 'PREPARING'].includes(order.status) && (
                         <button 
+                           data-tour="status-action-button"
                            onClick={() => updateStatus(order.id, 'SHIPPED')}
                            disabled={isUpdating}
                            className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
@@ -283,6 +286,7 @@ export const OrderFulfillmentBoard: React.FC = () => {
                       )}
                       {['SHIPPED'].includes(order.status) && (
                          <button 
+                            data-tour="status-action-button"
                             onClick={() => updateStatus(order.id, 'DELIVERED')}
                             disabled={isUpdating}
                             className="flex-1 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
@@ -301,7 +305,7 @@ export const OrderFulfillmentBoard: React.FC = () => {
                           <Clock className="size-3" />
                           {new Date(order.createdAt).toLocaleDateString()}
                        </div>
-                       <button className="text-[10px] font-black uppercase text-indigo-600 hover:underline flex items-center gap-1">
+                       <button data-tour="view-chat-link" className="text-[10px] font-black uppercase text-indigo-600 hover:underline flex items-center gap-1">
                           View Chat
                           <ChevronRight className="size-3" />
                        </button>

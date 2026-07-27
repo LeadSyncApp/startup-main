@@ -351,6 +351,7 @@ export function TeamMembersPage() {
         {tabConfig.map(tab => (
           <button
             key={tab.key}
+            data-tour={tab.key === "onboarding" ? "team-onboarding" : tab.key === "activity" ? "team-activity" : undefined}
             onClick={() => setActiveTab(tab.key)}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-[0.1em] transition-all cursor-pointer ${
               activeTab === tab.key ? '' : 'opacity-60 hover:opacity-100'
@@ -377,7 +378,7 @@ export function TeamMembersPage() {
           TAB 1: TEAM DIRECTORY
           ================================ */}
       {activeTab === "directory" && (
-        <>
+        <div data-tour="team-staff-list">
           {/* Stats Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <Card className="p-5 flex items-center gap-4">
@@ -581,7 +582,7 @@ export function TeamMembersPage() {
               </div>
             )}
           </Card>
-        </>
+        </div>
       )}
 
       {/* ================================

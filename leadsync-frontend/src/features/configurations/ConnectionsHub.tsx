@@ -141,10 +141,10 @@ export function ConnectionsHub() {
       </div>
 
       {/* Platform Connection Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+      <div data-tour="connections-hub" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
 
         {/* Telegram Card */}
-        <Card className="p-8 flex flex-col justify-between">
+        <Card data-tour="telegram-connect" className="p-8 flex flex-col justify-between">
           <div className="space-y-5">
             <div className="flex items-center justify-between">
               <div className="h-14 w-14 rounded-2xl flex items-center justify-center"
@@ -208,7 +208,7 @@ export function ConnectionsHub() {
         </Card>
 
         {/* Website Chat Widget Card (Zero-Code Script) */}
-        <Card className="p-8 flex flex-col justify-between">
+        <Card data-tour="website-widget" className="p-8 flex flex-col justify-between">
           <div className="space-y-5">
             <div className="flex items-center justify-between">
               <div className="h-14 w-14 rounded-2xl flex items-center justify-center"

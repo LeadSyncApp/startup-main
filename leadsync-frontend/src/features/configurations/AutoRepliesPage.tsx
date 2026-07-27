@@ -469,7 +469,7 @@ export function AutoRepliesPage() {
       </div>
 
       {/* Surfaced-rule counter */}
-      <div className="flex items-center justify-between bg-white rounded-2xl border-2 border-slate-200 px-4 py-3">
+      <div className="flex items-center justify-between bg-white rounded-2xl border-2 border-slate-200 px-4 py-3" data-tour="slot-counter">
         <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
           <CommandIcon className="w-4 h-4 text-purple-600" />
           Telegram buttons / commands
@@ -479,7 +479,7 @@ export function AutoRepliesPage() {
         </span>
       </div>
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3" data-tour="flow-list">
         {ruleGroups.length === 0 && !ruleGroupsLoading && (
           <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center">
             <div className="text-3xl mb-3">🧠</div>
@@ -535,6 +535,7 @@ export function AutoRepliesPage() {
               }}
               className={`relative w-11 h-6 rounded-full transition-all cursor-pointer shrink-0 ${_flowEnabled ? "bg-green-500" : "bg-slate-300"}`}
               title={_flowEnabled ? "Flow is active — click to disable" : "Flow is disabled — click to enable"}
+              data-tour="flow-toggle"
             >
               <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${_flowEnabled ? "translate-x-5" : ""}`} />
             </button>
@@ -665,7 +666,7 @@ export function AutoRepliesPage() {
       </div>
 
       {isFirstTimeSetup ? (
-        <div className="bg-white rounded-3xl border-2 border-purple-200 p-5 md:p-6 space-y-4">
+        <div className="bg-white rounded-3xl border-2 border-purple-200 p-5 md:p-6 space-y-4" data-tour="describe-flow">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white shadow-lg shrink-0">
               <Sparkles className="w-5 h-5" />
@@ -709,7 +710,7 @@ export function AutoRepliesPage() {
         </div>
       ) : (
         <>
-          <div className="bg-white rounded-3xl border-2 border-purple-200 p-5 md:p-6 space-y-4">
+          <div className="bg-white rounded-3xl border-2 border-purple-200 p-5 md:p-6 space-y-4" data-tour="describe-flow">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white shadow-lg shrink-0">
@@ -825,7 +826,7 @@ export function AutoRepliesPage() {
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4" data-tour="instruction-cards">
                 {(() => {
                   const _flowEnabled = !selectedGroupId || (ruleGroups.find((g: any) => g.id === selectedGroupId)?.isEnabled !== false);
                   return instructions.map((inst) => {
@@ -980,7 +981,7 @@ export function AutoRepliesPage() {
                             {/* Side-by-Side 2-Panel Layout: Example Conversation (Left) & Test With Your Inputs (Right) */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
                               {/* LEFT PANEL: Example Conversation */}
-                              <div className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 space-y-3">
+                              <div className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 space-y-3" data-tour="example-conversation">
                                 <div className="flex items-center justify-between">
                                   <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                                     <Brain className="w-3.5 h-3.5 text-purple-600" />
@@ -1066,7 +1067,7 @@ export function AutoRepliesPage() {
                               </div>
 
                               {/* RIGHT PANEL: Test With Your Inputs */}
-                              <div className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 space-y-3">
+                              <div className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 space-y-3" data-tour="test-panel">
                                 <div className="flex items-center justify-between">
                                   <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                                     <Sparkles className="w-3.5 h-3.5 text-purple-600" />
@@ -1433,7 +1434,7 @@ function SurfaceEditor({
   const isSurfaced = !!(draft.showAsButton || draft.showAsCommand);
 
   return (
-    <div className="mt-3 pt-3 border-t border-slate-100 space-y-4 bg-slate-50/60 rounded-xl p-4">
+    <div className="mt-3 pt-3 border-t border-slate-100 space-y-4 bg-slate-50/60 rounded-xl p-4" data-tour="instruction-editor">
       {/* 1. AI Behavior Section */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-xs">
         <div className="flex items-center gap-2">

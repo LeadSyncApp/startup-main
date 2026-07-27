@@ -131,7 +131,7 @@ export const BroadcastEngine: React.FC = () => {
           <p className="text-sm text-slate-500 font-medium">Message all your customers at once</p>
         </div>
         
-        <div className="flex bg-slate-100 p-1 rounded-xl">
+        <div data-tour="compose-history-toggle" className="flex bg-slate-100 p-1 rounded-xl">
           <button 
             onClick={() => setView('compose')}
             className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${view === 'compose' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -162,6 +162,7 @@ export const BroadcastEngine: React.FC = () => {
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Campaign Title (Optional)</label>
                     <input 
+                      data-tour="campaign-title"
                       type="text" 
                       placeholder="e.g. Fresh Brownies Batch"
                       value={title}
@@ -173,6 +174,7 @@ export const BroadcastEngine: React.FC = () => {
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Your Message</label>
                     <textarea 
+                      data-tour="message-textarea"
                       placeholder="Type the message you want to send to your customers..."
                       rows={6}
                       value={message}
@@ -186,6 +188,7 @@ export const BroadcastEngine: React.FC = () => {
                   </div>
 
                   <button 
+                    data-tour="send-broadcast-button"
                     type="submit"
                     disabled={sending || !message}
                     className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 hover:bg-slate-800 transition disabled:opacity-50 shadow-xl shadow-slate-900/20"
@@ -202,7 +205,7 @@ export const BroadcastEngine: React.FC = () => {
                 </form>
               </div>
 
-              <div className="bg-amber-50/50 border border-amber-100 rounded-3xl p-6 flex gap-4">
+              <div data-tour="guidelines-banner" className="bg-amber-50/50 border border-amber-100 rounded-3xl p-6 flex gap-4">
                 <AlertCircle className="size-6 text-amber-500 shrink-0" />
                 <div>
                   <h4 className="text-sm font-black text-amber-900">Broadcast Guidelines</h4>
@@ -214,13 +217,13 @@ export const BroadcastEngine: React.FC = () => {
             </div>
 
             <div className="space-y-6">
-              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+              <div data-tour="target-audience" className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
                 <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
                   <Users className="size-4 text-slate-400" />
                   Target Audience
                 </h3>
 
-                <div className="space-y-6">
+                <div data-tour="filter-segments" className="space-y-6">
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">By Segment</label>
                     <div className="flex flex-wrap gap-2">
@@ -260,7 +263,7 @@ export const BroadcastEngine: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="mt-8 pt-6 border-t border-slate-100">
+                <div data-tour="recipient-estimate" className="mt-8 pt-6 border-t border-slate-100">
                   <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
                     <span>Recipients Estimate</span>
                     <span className="text-slate-900">~{selectedTags.length > 0 || selectedSegments.length > 0 ? 'Loading...' : 'All Customers'}</span>
@@ -283,6 +286,7 @@ export const BroadcastEngine: React.FC = () => {
           </motion.div>
         ) : (
           <motion.div 
+            data-tour="history-table"
             key="history"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}

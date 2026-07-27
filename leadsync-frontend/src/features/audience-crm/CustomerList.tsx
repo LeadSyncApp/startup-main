@@ -146,11 +146,11 @@ export const CustomerList: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition shadow-sm">
+          <button data-tour="export-csv" className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition shadow-sm">
             <Download className="size-4" />
             Export CSV
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-md shadow-slate-900/10">
+          <button data-tour="add-manual-lead" className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-md shadow-slate-900/10">
             <Plus className="size-4" />
             Add Manual Lead
           </button>
@@ -160,7 +160,7 @@ export const CustomerList: React.FC = () => {
       {/* Filters Bar */}
       <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm">
         <form onSubmit={handleSearch} className="flex flex-wrap items-center gap-4">
-          <div className="relative flex-1 min-w-[240px]">
+          <div data-tour="search-customer" className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
             <input 
               type="text" 
@@ -173,6 +173,7 @@ export const CustomerList: React.FC = () => {
 
           <div className="flex items-center gap-2 flex-wrap">
             <select 
+              data-tour="state-dropdown"
               value={stateFilter}
               onChange={(e) => setStateFilter(e.target.value)}
               className="px-3 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium text-slate-600 outline-none hover:border-slate-200 transition"
@@ -182,6 +183,7 @@ export const CustomerList: React.FC = () => {
             </select>
 
             <select 
+              data-tour="segment-dropdown"
               value={segmentFilter}
               onChange={(e) => setSegmentFilter(e.target.value)}
               className="px-3 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium text-slate-600 outline-none hover:border-slate-200 transition"
@@ -193,7 +195,7 @@ export const CustomerList: React.FC = () => {
               <option value="CHURN_RISK">Churn Risk</option>
             </select>
 
-            <div className="flex items-center gap-1 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+            <div data-tour="min-spend-filter" className="flex items-center gap-1 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
               <span className="text-xs font-bold text-slate-400">Total Business {'>'}</span>
               <input 
                 type="number" 
@@ -204,7 +206,7 @@ export const CustomerList: React.FC = () => {
               />
             </div>
 
-            <button type="submit" className="p-2.5 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition">
+            <button data-tour="apply-filter" type="submit" className="p-2.5 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition">
               <Filter className="size-5" />
             </button>
           </div>
@@ -215,6 +217,7 @@ export const CustomerList: React.FC = () => {
       <AnimatePresence>
         {selectedLeads.length > 0 && (
           <motion.div 
+            data-tour="bulk-actions"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
@@ -251,7 +254,7 @@ export const CustomerList: React.FC = () => {
       </AnimatePresence>
 
       {/* Grid Table */}
-      <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+      <div data-tour="data-table" className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
