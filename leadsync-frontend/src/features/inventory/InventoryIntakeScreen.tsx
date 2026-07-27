@@ -298,6 +298,7 @@ export function InventoryIntakeScreen({ companyId, onProceedToConfirm }: Invento
             {/* CTA Button */}
             <div className="pt-2">
               <motion.button
+                data-tour="ai-parse"
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
                 onClick={handleParse}
@@ -333,6 +334,7 @@ export function InventoryIntakeScreen({ companyId, onProceedToConfirm }: Invento
 
             {/* Manual Entry Button */}
             <button
+              data-tour="manual-entry"
               onClick={handleAddManualItem}
               className="w-full p-4 rounded-xl border flex items-center gap-3 text-left transition-all hover:scale-[1.01] cursor-pointer group"
               style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)' }}
@@ -352,6 +354,7 @@ export function InventoryIntakeScreen({ companyId, onProceedToConfirm }: Invento
 
             {/* Import Excel / CSV Box */}
             <div
+              data-tour="excel-import"
               className="w-full p-4 rounded-xl border-2 border-dashed flex flex-col items-center justify-center text-center space-y-2 transition-all hover:border-brand-saffron cursor-pointer"
               style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)' }}
               onClick={() => alert("Excel / CSV batch import feature ready for file selection. Drag & drop file to import.")}

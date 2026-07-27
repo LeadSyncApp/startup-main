@@ -3,12 +3,13 @@
  * Business-agnostic orchestrator for inventory management
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ProductData } from "./InventoryIntakeScreen";
 import { InventoryIntakeScreen } from "./InventoryIntakeScreen";
 import { InventoryConfirmationScreen } from "./InventoryConfirmationScreen";
 import { InventoryListScreen } from "./InventoryListScreen";
+import { useWizardStep } from "../../contexts/WizardContext";
 
 interface InventoryPageProps {
   companyId?: string;
@@ -17,6 +18,15 @@ interface InventoryPageProps {
 
 export function InventoryPage({ companyId, businessType }: InventoryPageProps) {
   const [step, setStep] = useState<"list" | "intake" | "confirm">("list");
+  const { setStep: setWizardStep } = useWizardStep();
+
+  useEffect(() => {
+    setWizardStep(step);
+  }, [step, setWizardStep]);
+
+  useEffect(() => {
+    return () => setWizardStep(null);
+  }, [setWizardStep]);
   const [products, setProducts] = useState<ProductData[]>([]);
 
   const handleProceedToConfirm = (parsedProducts: ProductData[]) => {

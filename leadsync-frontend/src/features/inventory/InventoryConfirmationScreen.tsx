@@ -156,11 +156,13 @@ export function buildInitialSpreadsheetData(product: ProductData): SpreadsheetTa
 function VariantSpreadsheetTable({
   productIdx,
   product,
-  onUpdateProduct
+  onUpdateProduct,
+  "data-tour": dataTour
 }: {
   productIdx: number;
   product: ProductData;
   onUpdateProduct: (idx: number, updates: Partial<ProductData>) => void;
+  "data-tour"?: string;
 }) {
   const [tableData, setTableData] = useState<SpreadsheetTableData>(() => buildInitialSpreadsheetData(product));
   const [newColInput, setNewColInput] = useState("");
@@ -270,7 +272,7 @@ function VariantSpreadsheetTable({
   };
 
   return (
-    <div className="space-y-4 pt-3 border-t" style={{ borderColor: 'var(--app-border)' }}>
+    <div className="space-y-4 pt-3 border-t" {...(dataTour ? { "data-tour": dataTour } : {})} style={{ borderColor: 'var(--app-border)' }}>
       {/* SPREADSHEET HEADER BANNER */}
       <div className="flex items-center justify-between p-3 rounded-xl border" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
         <div className="flex items-center gap-2">
@@ -868,7 +870,7 @@ export function InventoryConfirmationScreen({
       </div>
 
       {/* Top Financial & Queue Summary Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div data-tour="confirmation-summary" className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* Metric 1: Queue Items */}
         <div className="p-4 rounded-xl border flex items-center gap-3 shadow-sm" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
           <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(211, 107, 70, 0.1)', color: 'var(--brand-saffron)' }}>
@@ -1358,6 +1360,7 @@ export function InventoryConfirmationScreen({
 
                       {/* SPREADSHEET VARIANT TABLE SECTION */}
                       <VariantSpreadsheetTable
+                        data-tour="variant-table"
                         productIdx={idx}
                         product={product}
                         onUpdateProduct={updateProduct}
@@ -1452,7 +1455,7 @@ export function InventoryConfirmationScreen({
 
       {/* Duplicate Warning Banner */}
       {showDuplicateWarning && duplicates.length > 0 && (
-        <div className="flex items-start gap-3 p-4 rounded-xl border" style={{ backgroundColor: 'rgba(251, 191, 36, 0.1)', borderColor: 'rgba(251, 191, 36, 0.3)' }}>
+        <div data-tour="duplicate-warning" className="flex items-start gap-3 p-4 rounded-xl border" style={{ backgroundColor: 'rgba(251, 191, 36, 0.1)', borderColor: 'rgba(251, 191, 36, 0.3)' }}>
           <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm font-bold text-amber-800">
@@ -1482,6 +1485,7 @@ export function InventoryConfirmationScreen({
         </button>
 
         <motion.button
+          data-tour="confirm-save-button"
           whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.99 }}
           onClick={handleSave}

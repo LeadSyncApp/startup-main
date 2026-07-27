@@ -165,7 +165,7 @@ export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }:
   };
 
   return (
-    <div className="p-4 bg-slate-950 rounded-2xl border border-slate-900 shadow-2xl selection:bg-indigo-500/10 text-xs">
+    <div data-tour="product-fields" className="p-4 bg-slate-950 rounded-2xl border border-slate-900 shadow-2xl selection:bg-indigo-500/10 text-xs">
       {/* Upper bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-900 pb-4 mb-5 gap-3">
         <div>
@@ -186,7 +186,7 @@ export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }:
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Form declaration */}
-        <form onSubmit={handleAddField} className="lg:col-span-4 space-y-4 font-mono">
+        <form data-tour="product-fields-form" onSubmit={handleAddField} className="lg:col-span-4 space-y-4 font-mono">
           <h3 className="font-extrabold text-[10px] uppercase tracking-wider text-slate-400 flex items-center gap-1.5 pb-2 border-b border-slate-900">
             <Layers className="h-4 w-4 text-slate-500" />
             Add New Field

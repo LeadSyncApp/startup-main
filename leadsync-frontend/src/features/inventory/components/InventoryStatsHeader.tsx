@@ -94,7 +94,7 @@ export function InventoryStatsHeader({ products }: InventoryStatsHeaderProps) {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
       {statCards.map((card, idx) => {
         const Icon = card.icon;
         return (

@@ -229,6 +229,7 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
             Refresh
           </button>
           <motion.button
+            data-tour="add-products-button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={onAddNew}
@@ -250,6 +251,7 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
           <div className="relative w-full sm:w-80">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             <input
+              data-tour="inventory-search"
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -269,6 +271,7 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
               Sort by:
             </span>
             <select
+              data-tour="inventory-sort"
               value={sortBy}
               onChange={e => setSortBy(e.target.value as any)}
               className="text-xs font-medium px-3 py-2 rounded-xl border transition cursor-pointer focus:outline-none"
@@ -288,7 +291,7 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
 
         {/* Category Filter Chips — Preserves exact original implementation */}
         {allCategories.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 px-1 pt-1">
+          <div data-tour="category-filter" className="flex flex-wrap items-center gap-1.5 px-1 pt-1">
             <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--app-text-muted)" }}>
               Categories:
             </span>
@@ -388,7 +391,7 @@ export function InventoryListScreen({ companyId, onAddNew, onSelectProduct }: In
                   <th className="px-4 py-3">Categories</th>
                   <th className="px-4 py-3">Stock</th>
                   <th className="px-4 py-3">Base Price</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th data-tour="inventory-status-badge" className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
