@@ -9,6 +9,7 @@ import { SignInForm } from "./components/auth/SignInForm";
 import { connectSocket, disconnectSocket, onNotification } from "./lib/socketClient";
 import { useNotificationStore } from "./features/notifications/useNotificationStore";
 import { AcceptInvitePage } from "./features/team/AcceptInvitePage";
+import MarketingHomePage from "./pages/MarketingHomePage";
 import { activityToast as activityToast } from "./features/activity-ledger/useActivityStore";
 import { GuidedTour } from "./components/tour/GuidedTour";
 import { WizardProvider } from "./contexts/WizardContext";
@@ -64,8 +65,8 @@ export default function App() {
 
   const handleTabChange = useCallback((tabId: TabID) => {
     setActiveTab(tabId);
-    if (window.location.pathname !== "/") {
-      navigate("/");
+    if (window.location.pathname !== "/dashboard") {
+      navigate("/dashboard");
     }
   }, [navigate]);
 
@@ -77,7 +78,7 @@ export default function App() {
     lastHandledPathRef.current = path;
     if (user) {
       if (path === "/login" || path === "/onboarding" || path === "/auth-callback" || path === "/") {
-        navigate("/", { replace: true });
+        navigate("/dashboard", { replace: true });
       }
     }
   }, [user, navigate, location.pathname]);
@@ -253,7 +254,7 @@ export default function App() {
               onSwitchToSignup={switchToSignup}
             />
           ) : (
-            <Navigate to="/" replace />
+            <Navigate to="/dashboard" replace />
           )
         } />
         <Route path="/onboarding" element={
@@ -270,10 +271,11 @@ export default function App() {
               skipStep1={isGoogleOnboarding}
             />
           ) : (
-            <Navigate to="/" replace />
+            <Navigate to="/dashboard" replace />
           )
         } />
-        <Route path="/" element={
+        <Route path="/" element={<MarketingHomePage />} />
+        <Route path="/dashboard" element={
           user ? (
             <MasterDashboardLayout
               activeTab={activeTab}
@@ -367,10 +369,10 @@ export default function App() {
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-saffron" />
             </div>
           ) : (
-            <Navigate to="/" replace />
+            <Navigate to="/dashboard" replace />
           )
         } />
-        <Route path="*" element={<Navigate to={user ? "/" : "/onboarding"} replace />} />
+        <Route path="*" element={<Navigate to={user ? "/dashboard" : "/onboarding"} replace />} />
       </Routes>
     </div>
   );
