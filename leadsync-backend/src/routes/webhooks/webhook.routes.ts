@@ -7,6 +7,7 @@ import { queueProvider } from "../../services/infrastructure/queue-provider/queu
 import instagramRoutes from "./instagram.routes";
 import { orderWorkflowService } from "../../services/workflow/orderWorkflow.service";
 import { PDF_JOB_NAME } from "../../services/infrastructure/pgboss/jobs/pdf.job";
+import { businessNotificationService } from "../../services/infrastructure/businessNotification.service";
 
 
 const router = Router();
@@ -100,6 +101,13 @@ router.post("/razorpay", async (req: Request, res: Response) => {
                 }
 
                 console.log(`✅ Existing Order ${targetOrder.id} marked as PAID via Razorpay webhook.`);
+                businessNotificationService.notifyPaymentStatus({
+                    companyId: targetOrder.companyId,
+                    orderId: targetOrder.id,
+                    customerName: targetOrder.lead?.name || targetOrder.lead?.contact,
+                    amount: targetOrder.amount,
+                    isSuccess: true,
+                }).catch((err) => console.error("❌ Payment notification error:", err));
             } else if (notes.conversation_id || notes.company_id) {
                 // Deferred Order Creation: Create PAID order in DB upon real payment confirmation
                 const companyId = notes.company_id;
@@ -149,8 +157,31 @@ router.post("/razorpay", async (req: Request, res: Response) => {
                     });
                     emitToConversation(conv.id, "new_message", sysMsg);
 
+                    businessNotificationService.notifyPaymentStatus({
+                        companyId: createdOrder.companyId,
+                        orderId: createdOrder.id,
+                        amount: createdOrder.amount,
+                        isSuccess: true,
+                    }).catch((err) => console.error("❌ Payment notification error:", err));
+
                     console.log(`✅ Deferred Order ${createdOrder.id} created as PAID via Razorpay webhook.`);
                 }
+            }
+        } else if (event.event === "payment_link.cancelled" || event.event === "payment.failed") {
+            const paymentEntity = event.payload?.payment_link?.entity || event.payload?.payment?.entity;
+            const notes = paymentEntity?.notes || {};
+            const companyId = notes.company_id || notes.companyId;
+            const orderId = notes.order_id || notes.orderId || "N/A";
+            const amount = paymentEntity?.amount ? paymentEntity.amount / 100 : parseFloat(notes.amount || "0");
+
+            if (companyId) {
+                businessNotificationService.notifyPaymentStatus({
+                    companyId,
+                    orderId,
+                    amount,
+                    isSuccess: false,
+                    reason: event.event === "payment_link.cancelled" ? "Payment link cancelled" : "Payment failed",
+                }).catch((err) => console.error("❌ Payment failure notification error:", err));
             }
         }
 

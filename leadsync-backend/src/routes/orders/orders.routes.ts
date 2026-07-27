@@ -17,6 +17,7 @@ import { decrementStockForOrder } from "../../services/knowledge/inventory.servi
 import { orderWorkflowService } from "../../services/workflow/orderWorkflow.service";
 import { queueProvider } from "../../services/infrastructure/queue-provider/queue-provider.factory";
 import { PDF_JOB_NAME } from "../../services/infrastructure/pgboss/jobs/pdf.job";
+import { businessNotificationService } from "../../services/infrastructure/businessNotification.service";
 
 const router = Router();
 
@@ -254,6 +255,14 @@ router.post("/fulfill-payment-request", authMiddleware, async (req: AuthRequest,
       emitToConversation(conv.id, "new_message", sysMsg);
       safeEmitConversationUpdate(conv as any, "payment_confirmed", order);
     }
+
+    businessNotificationService.notifyPaymentStatus({
+      companyId,
+      orderId: order.id,
+      customerName: (order as any).lead?.name || (order as any).lead?.contact,
+      amount: order.amount,
+      isSuccess: true,
+    }).catch((err) => console.error("❌ Payment notification error:", err));
 
     res.json({
       message: "Payment confirmed and Order created as PAID!",
