@@ -407,6 +407,7 @@ model Conversation {
   claimedByName                        String?
   previousHandledById                  String?
   previousConversationId               String?
+  slaNotifiedAt                        DateTime?
   claimLogs                            ClaimLog[]
   User_Conversation_assignedToIdToUser User?               @relation("Conversation_assignedToIdToUser", fields: [assignedToId], references: [id])
   claimedBy                            User?               @relation("ClaimedConversations", fields: [claimedById], references: [id])
