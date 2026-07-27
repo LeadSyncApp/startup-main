@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Globe, Key, RefreshCw, Copy, Check, AlertTriangle,
-  ChevronDown, ChevronUp, ExternalLink, RotateCw,
+  ChevronDown, ChevronUp, RotateCw,
   Loader2, Clock, XCircle, CheckCircle2, AlertCircle,
   Code, Webhook, Info, X, ArrowLeft, Store, ShoppingBag,
   Sparkles, HelpCircle
@@ -102,27 +102,29 @@ fetch("${webhookUrl}", {
   };
 
   return (
-    <div className="relative rounded-2xl overflow-hidden shadow-inner font-mono text-xs border"
-         style={{ backgroundColor: "#0F172A", borderColor: "#1E293B", color: "rgba(212, 168, 67, 0.7)" }}>
-      <div className="absolute top-3 left-4 flex gap-1.5 pointer-events-none">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "rgba(239, 68, 68, 0.8)" }} />
-        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "rgba(245, 158, 11, 0.8)" }} />
-        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "rgba(34, 197, 94, 0.8)" }} />
+    <div className="relative rounded-2xl overflow-hidden font-mono text-xs border p-5"
+         style={{ backgroundColor: "#0F172A", borderColor: "#1E293B", color: "#F8FAFC" }}>
+      <div className="flex items-center justify-between pb-3 mb-3 border-b" style={{ borderColor: "#1E293B" }}>
+        <div className="flex gap-1.5 pointer-events-none">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "rgba(239, 68, 68, 0.8)" }} />
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "rgba(245, 158, 11, 0.8)" }} />
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "rgba(34, 197, 94, 0.8)" }} />
+        </div>
+        <button
+          onClick={handleCopy}
+          className="p-1.5 px-3 rounded-lg transition-all border flex items-center gap-1.5 cursor-pointer active:scale-95 text-[10px] font-bold"
+          style={{ backgroundColor: "#1E293B", color: "var(--brand-saffron)", borderColor: "#334155" }}
+        >
+          {copied ? (
+            <><Check className="h-3.5 w-3.5 text-emerald-400" /><span className="uppercase text-emerald-400">Copied</span></>
+          ) : (
+            <><Copy className="h-3.5 w-3.5" /><span className="uppercase">Copy</span></>
+          )}
+        </button>
       </div>
-      <pre className="pt-4 pb-4 px-5 overflow-x-auto leading-relaxed whitespace-pre-wrap select-all">
+      <pre className="overflow-x-auto leading-relaxed whitespace-pre-wrap select-all font-mono text-xs" style={{ color: "#F8FAFC" }}>
         {snippet}
       </pre>
-      <button
-        onClick={handleCopy}
-        className="absolute right-3 top-3 p-2 rounded-lg transition-all border flex items-center gap-1.5 cursor-pointer active:scale-95"
-        style={{ backgroundColor: "#1E293B", color: "rgba(212, 168, 67, 0.7)", borderColor: "#334155" }}
-      >
-        {copied ? (
-          <><Check className="h-4 w-4" style={{ color: "var(--success-green)" }} /><span className="text-[10px] uppercase font-bold" style={{ color: "var(--success-green)" }}>Copied</span></>
-        ) : (
-          <><Copy className="h-4 w-4" /><span className="text-[10px] uppercase font-bold">Copy</span></>
-        )}
-      </button>
     </div>
   );
 }
@@ -259,7 +261,7 @@ export function WebsiteIntegration({ onBack }: WebsiteIntegrationProps = {}) {
           {onBack && (
             <button
               onClick={onBack}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer hover:opacity-80 active:scale-95"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer hover:opacity-80 active:scale-95"
               style={{
                 backgroundColor: "var(--app-bg-soft)",
                 borderColor: "var(--app-border)",
@@ -754,14 +756,14 @@ export function WebsiteIntegration({ onBack }: WebsiteIntegrationProps = {}) {
                     {/* Payload Format */}
                     <div className="space-y-3 pt-4 border-t" style={{ borderColor: "var(--app-border)" }}>
                       <h4 className="text-sm font-black" style={{ color: "var(--app-text)" }}>Payload Format</h4>
-                      <div className="rounded-xl p-4 text-xs font-medium leading-relaxed border"
-                           style={{ backgroundColor: "rgba(59, 130, 246, 0.06)", borderColor: "rgba(59, 130, 246, 0.1)", color: "#1e40af" }}>
-                        <p className="mb-2 font-bold">Required fields:</p>
-                        <ul className="space-y-1 list-disc list-inside">
-                          <li><code className="font-mono font-black px-1 rounded" style={{ backgroundColor: "rgba(59, 130, 246, 0.1)" }}>phone</code> — Contact phone (required)</li>
-                          <li><code className="font-mono font-black px-1 rounded" style={{ backgroundColor: "rgba(59, 130, 246, 0.1)" }}>name</code> — Contact name (optional)</li>
-                          <li><code className="font-mono font-black px-1 rounded" style={{ backgroundColor: "rgba(59, 130, 246, 0.1)" }}>email</code> — Email (optional)</li>
-                          <li><code className="font-mono font-black px-1 rounded" style={{ backgroundColor: "rgba(59, 130, 246, 0.1)" }}>message</code> — Inquiry text (optional)</li>
+                      <div className="relative rounded-2xl overflow-hidden font-mono text-xs border p-5 space-y-2 leading-relaxed"
+                           style={{ backgroundColor: "#0F172A", borderColor: "#1E293B", color: "#F8FAFC" }}>
+                        <p className="font-bold text-xs" style={{ color: "var(--brand-saffron)" }}>Required fields:</p>
+                        <ul className="space-y-1.5 list-disc list-inside">
+                          <li><code className="font-mono font-black px-1.5 py-0.5 rounded" style={{ backgroundColor: "#1E293B", color: "#38BDF8" }}>phone</code> — Contact phone (required)</li>
+                          <li><code className="font-mono font-black px-1.5 py-0.5 rounded" style={{ backgroundColor: "#1E293B", color: "#38BDF8" }}>name</code> — Contact name (optional)</li>
+                          <li><code className="font-mono font-black px-1.5 py-0.5 rounded" style={{ backgroundColor: "#1E293B", color: "#38BDF8" }}>email</code> — Email (optional)</li>
+                          <li><code className="font-mono font-black px-1.5 py-0.5 rounded" style={{ backgroundColor: "#1E293B", color: "#38BDF8" }}>message</code> — Inquiry text (optional)</li>
                         </ul>
                       </div>
                     </div>
@@ -769,14 +771,20 @@ export function WebsiteIntegration({ onBack }: WebsiteIntegrationProps = {}) {
                     {/* Signature Header */}
                     <div className="space-y-3 pt-4 border-t" style={{ borderColor: "var(--app-border)" }}>
                       <h4 className="text-sm font-black" style={{ color: "var(--app-text)" }}>Signature Header</h4>
-                      <div className="rounded-xl p-4 text-xs font-medium leading-relaxed border"
-                           style={{ backgroundColor: "rgba(34, 197, 94, 0.06)", borderColor: "rgba(34, 197, 94, 0.1)", color: "#166534" }}>
-                        <p className="mb-2 font-bold">Custom websites:</p>
-                        <code className="font-mono font-black px-1 rounded" style={{ backgroundColor: "rgba(34, 197, 94, 0.1)" }}>X-Webhook-Signature: sha256=&lt;hex-digest&gt;</code>
-                        <p className="mt-3 mb-2 font-bold">Shopify (auto-detected):</p>
-                        <code className="font-mono font-black px-1 rounded" style={{ backgroundColor: "rgba(34, 197, 94, 0.1)" }}>X-Shopify-Hmac-SHA256: &lt;base64-digest&gt;</code>
-                        <p className="mt-3 mb-2 font-bold">WooCommerce (auto-detected):</p>
-                        <code className="font-mono font-black px-1 rounded" style={{ backgroundColor: "rgba(34, 197, 94, 0.1)" }}>X-WC-Webhook-Signature: &lt;base64-digest&gt;</code>
+                      <div className="relative rounded-2xl overflow-hidden font-mono text-xs border p-5 space-y-3 leading-relaxed"
+                           style={{ backgroundColor: "#0F172A", borderColor: "#1E293B", color: "#F8FAFC" }}>
+                        <div>
+                          <p className="font-bold text-xs mb-1" style={{ color: "var(--brand-saffron)" }}>Custom websites:</p>
+                          <code className="font-mono font-black px-2 py-1 rounded inline-block" style={{ backgroundColor: "#1E293B", color: "#4ADE80" }}>X-Webhook-Signature: sha256=&lt;hex-digest&gt;</code>
+                        </div>
+                        <div>
+                          <p className="font-bold text-xs mb-1" style={{ color: "var(--brand-saffron)" }}>Shopify (auto-detected):</p>
+                          <code className="font-mono font-black px-2 py-1 rounded inline-block" style={{ backgroundColor: "#1E293B", color: "#4ADE80" }}>X-Shopify-Hmac-SHA256: &lt;base64-digest&gt;</code>
+                        </div>
+                        <div>
+                          <p className="font-bold text-xs mb-1" style={{ color: "var(--brand-saffron)" }}>WooCommerce (auto-detected):</p>
+                          <code className="font-mono font-black px-2 py-1 rounded inline-block" style={{ backgroundColor: "#1E293B", color: "#4ADE80" }}>X-WC-Webhook-Signature: &lt;base64-digest&gt;</code>
+                        </div>
                       </div>
                     </div>
 
@@ -784,20 +792,6 @@ export function WebsiteIntegration({ onBack }: WebsiteIntegrationProps = {}) {
                     <div className="space-y-3 pt-4 border-t" style={{ borderColor: "var(--app-border)" }}>
                       <h4 className="text-sm font-black" style={{ color: "var(--app-text)" }}>Node.js Example</h4>
                       <CodeSnippet webhookUrl={webhookUrl} />
-                    </div>
-
-                    {/* Full docs link */}
-                    <div className="pt-2">
-                      <a
-                        href="https://github.com/LeadSyncApp/leadsync-backend/blob/main/docs/website-webhook-integration.md"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl border transition-all hover:opacity-80"
-                        style={{ color: "var(--brand-saffron)", borderColor: "rgba(212, 168, 67, 0.3)", backgroundColor: "rgba(212, 168, 67, 0.06)" }}
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        View Full Documentation
-                      </a>
                     </div>
 
                   </div>
