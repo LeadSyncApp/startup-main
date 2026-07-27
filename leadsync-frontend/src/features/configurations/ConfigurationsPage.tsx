@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  AppWindow, Store, Users, Braces
+  AppWindow, Store, Users, Braces, Bell
 } from "lucide-react";
 import { useAuth } from "../auth-tenancy/AuthContext";
 import { ConnectionsHub } from "./ConnectionsHub";
 import { ShopProfilePage } from "./ShopProfilePage";
 import { TeamMembersPage } from "../team/TeamMembersPage";
 import { ProductFieldEditor } from "../inventory/ProductFieldEditor";
+import { NotificationPreferences } from "../notifications/NotificationPreferences";
 
-export type SettingsTab = "connections" | "team" | "profile" | "product-fields";
+export type SettingsTab = "connections" | "team" | "profile" | "product-fields" | "notifications";
 
 export function ConfigurationsPage() {
   const { user } = useAuth();
@@ -114,6 +115,25 @@ export function ConfigurationsPage() {
             />
           )}
         </button>
+
+        <button
+          onClick={() => setActiveSettingsTab("notifications")}
+          className={`pb-4 px-6 font-bold text-sm tracking-tight relative transition-all duration-200 cursor-pointer whitespace-nowrap`}
+          style={{ color: activeSettingsTab === "notifications" ? 'var(--brand-saffron)' : 'var(--text-secondary)' }}
+        >
+          <div className="flex items-center gap-2">
+            <Bell className="h-4.5 w-4.5" />
+            <span>Notifications</span>
+          </div>
+          {activeSettingsTab === "notifications" && (
+            <motion.div
+              layoutId="settingsTabUnderline"
+              className="absolute bottom-0 left-0 right-0 h-0.5"
+              style={{ backgroundColor: 'var(--brand-saffron)' }}
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            />
+          )}
+        </button>
       </div>
 
       <AnimatePresence mode="wait">
@@ -159,6 +179,17 @@ export function ConfigurationsPage() {
             transition={{ duration: 0.2 }}
           >
             <ProductFieldEditor />
+          </motion.div>
+        )}
+        {activeSettingsTab === "notifications" && (
+          <motion.div
+            key="notifications"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.2 }}
+          >
+            <NotificationPreferences />
           </motion.div>
         )}
       </AnimatePresence>

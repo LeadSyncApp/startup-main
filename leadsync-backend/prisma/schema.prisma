@@ -67,6 +67,7 @@ model Company {
   merchantFiles            MerchantFile[]
   Message                  Message[]
   notifications            Notification[]
+  notificationPreferences NotificationPreference[]
   notificationTemplates    NotificationTemplate[]
   orders                   Order[]
   orderItems               OrderItem[]
@@ -1114,6 +1115,22 @@ model DraftOrder {
   @@index([conversationId])
   @@index([conversationId, status])
   @@index([updatedAt])
+}
+
+model NotificationPreference {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  companyId String
+  ORDER     Boolean  @default(true)
+  MESSAGE   Boolean  @default(true)
+  ALERT     Boolean  @default(true)
+  SYSTEM    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
 }
 
 model WebhookDeliveryLog {

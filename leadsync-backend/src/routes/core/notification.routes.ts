@@ -35,6 +35,86 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 /* =========================================
+   GET NOTIFICATION PREFERENCES
+   ========================================= */
+router.get("/preferences", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.userId;
+        const companyId = req.user!.companyId;
+
+        // Auto-create default row if none exists (all true)
+        const pref = await prisma.notificationPreference.upsert({
+            where: { userId },
+            create: {
+                userId,
+                companyId,
+                ORDER: true,
+                MESSAGE: true,
+                ALERT: true,
+                SYSTEM: true
+            },
+            update: {}
+        });
+
+        res.json({
+            ORDER: pref.ORDER,
+            MESSAGE: pref.MESSAGE,
+            ALERT: pref.ALERT,
+            SYSTEM: pref.SYSTEM
+        });
+    } catch (error) {
+        console.error("Fetch notification preferences error:", error);
+        res.status(500).json({ message: "Failed to fetch notification preferences" });
+    }
+});
+
+/* =========================================
+   UPDATE NOTIFICATION PREFERENCES
+   ========================================= */
+router.patch("/preferences", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.userId;
+        const companyId = req.user!.companyId;
+        const { ORDER, MESSAGE, ALERT, SYSTEM } = req.body;
+
+        // Build update data — only include provided fields
+        const updateData: Record<string, boolean> = {};
+        if (typeof ORDER === "boolean") updateData.ORDER = ORDER;
+        if (typeof MESSAGE === "boolean") updateData.MESSAGE = MESSAGE;
+        if (typeof ALERT === "boolean") updateData.ALERT = ALERT;
+        if (typeof SYSTEM === "boolean") updateData.SYSTEM = SYSTEM;
+
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({ message: "No valid preference fields provided" });
+        }
+
+        // Upsert — create with defaults if row doesn't exist, then update
+        const pref = await prisma.notificationPreference.upsert({
+            where: { userId },
+            create: {
+                userId,
+                companyId,
+                ORDER: true,
+                MESSAGE: true,
+                ALERT: true,
+                SYSTEM: true
+            },
+            update: updateData
+        });
+
+        res.json({
+            ORDER: pref.ORDER,
+            MESSAGE: pref.MESSAGE,
+            ALERT: pref.ALERT,
+            SYSTEM: pref.SYSTEM
+        });
+    } catch (error) {
+        console.error("Update notification preferences error:", error);
+        res.status(500).json({ message: "Failed to update notification preferences" });
+    }
+});
+
+/* =========================================
    MARK AS READ (Single)
    ========================================= */
 router.patch("/:id/read", authMiddleware, async (req: AuthRequest, res: Response) => {
