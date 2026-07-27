@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { 
   MessageSquare, 
   Settings, 
-  Store,
   LogOut,
   Users,
   ShoppingBag,
@@ -220,9 +219,11 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
         {/* Brand Header */}
         <div className="p-5 border-b border-[var(--app-border)]">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-[var(--brand-saffron)] flex items-center justify-center text-[var(--app-bg)] shrink-0 btn-interactive">
-              <Store className="h-5 w-5" />
-            </div>
+            <img 
+              src="/salira-logo.png" 
+              alt="SaLira" 
+              className="h-9 w-9 rounded-lg object-contain shrink-0 btn-interactive" 
+            />
               <div className="min-w-0">
                <h1 className="text-sm font-bold text-[var(--text-primary)] truncate" style={{fontFamily: "'Fraunces', serif"}}>{merchantName || company?.name || "My Business"}</h1>
                <p className="text-xs text-[var(--text-secondary)] capitalize">{displayRole}</p>
@@ -301,7 +302,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
           <Menu className="h-5 w-5" />
         </button>
         <div className="flex items-center gap-2">
-          <Store className="h-5 w-5 text-[var(--brand-saffron)]" />
+          <img src="/salira-logo.png" alt="SaLira" className="h-6 w-6 rounded-md object-contain" />
           <span className="font-bold text-[var(--app-text)] text-sm">{merchantName}</span>
         </div>
         <button

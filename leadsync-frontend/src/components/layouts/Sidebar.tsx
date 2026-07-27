@@ -6,8 +6,7 @@ import {
   TrendingUp, 
   Brain, 
   Tags, 
-  SlidersHorizontal, 
-  Store
+  SlidersHorizontal
 } from 'lucide-react';
 
 type UserRole = 'OWNER' | 'MANAGER' | 'STAFF';
@@ -42,7 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Header Panel */}
       <div className="mb-8">
         <h1 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-          <Store className="size-5" />
+          <img src="/salira-logo.png" alt="SaLira" className="size-6 object-contain rounded-md" />
           {merchantName}
         </h1>
         <div className="flex gap-2 mb-3">

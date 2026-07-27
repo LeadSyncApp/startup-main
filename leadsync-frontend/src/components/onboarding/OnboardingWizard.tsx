@@ -4,7 +4,7 @@ import {
   ArrowRight, Shield, Check, Sparkles,
   Utensils, ShoppingBag, Stethoscope, 
   User, 
-  Component, ZapIcon,
+  Component,
   Eye, EyeOff, AlertTriangle,
   Scissors, Store
 } from "lucide-react";
@@ -118,11 +118,9 @@ export function OnboardingWizard({
         </div>
 
         <div className="relative z-10 flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-teal-500 to-teal-400 flex items-center justify-center text-white shadow-xl shadow-teal-500/20">
-            <ZapIcon className="h-5 w-5 fill-current text-white" />
-          </div>
+          <img src="/salira-logo.png" alt="SaLira" className="h-10 w-10 rounded-xl object-contain shadow-xl shadow-orange-500/20" />
           <div>
-            <span className="font-black tracking-tight text-xl text-[var(--app-text)]">LeadSync</span>
+            <span className="font-black tracking-tight text-xl text-[var(--app-text)]">SaLira</span>
             <span className="text-[10px] font-bold ml-2 uppercase tracking-widest px-2 py-0.5 rounded-full border text-[var(--brand-saffron)]" style={{ backgroundColor: 'var(--brand-saffron-soft)', borderColor: 'var(--brand-saffron)', opacity: 0.8 }}>Sandbox</span>
           </div>
         </div>

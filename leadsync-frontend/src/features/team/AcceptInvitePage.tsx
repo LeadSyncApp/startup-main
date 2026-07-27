@@ -113,7 +113,7 @@ export function AcceptInvitePage() {
 
       // Redirect to workspace after a brief delay
       setTimeout(() => {
-        window.location.href = "/";
+        window.location.href = "/dashboard";
       }, 2500);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to accept invitation");
@@ -219,10 +219,7 @@ export function AcceptInvitePage() {
         <Card className="overflow-hidden">
           {/* Header */}
           <div className="p-8 sm:p-10 text-center border-b" style={{ borderColor: 'var(--app-border)' }}>
-            <div className="h-16 w-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                 style={{ backgroundColor: 'rgba(212, 168, 67, 0.1)', color: 'var(--brand-saffron)' }}>
-              <Store className="h-8 w-8" />
-            </div>
+            <img src="/salira-logo.png" alt="SaLira" className="h-16 w-16 rounded-2xl object-contain mx-auto mb-4" />
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
               Join {invite?.company.name}
             </h1>

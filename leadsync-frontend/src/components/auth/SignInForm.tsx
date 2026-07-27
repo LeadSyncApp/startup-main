@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Store } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { apiClient } from "../../api/client";
 
@@ -59,9 +59,7 @@ export function SignInForm({ onSuccess, onSwitchToSignup }: SignInFormProps) {
       >
         {/* Brand */}
         <div className="text-center mb-8">
-          <div className="h-12 w-12 rounded-xl bg-brand-navy flex items-center justify-center mx-auto mb-4">
-            <Store className="h-6 w-6 text-white" />
-          </div>
+          <img src="/salira-logo.png" alt="SaLira" className="h-12 w-12 rounded-xl object-contain mx-auto mb-4" />
           <h1 className="text-2xl font-bold" style={{ color: 'var(--app-text)' }}>Welcome back</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--app-text-muted)' }}>Sign in to your shop account</p>
         </div>
@@ -154,7 +152,7 @@ export function SignInForm({ onSuccess, onSwitchToSignup }: SignInFormProps) {
             </button>
 
             <p className="text-center text-sm" style={{ color: 'var(--app-text-muted)' }}>
-              New to LeadSync?{" "}
+              New to SaLira?{" "}
               <button
                 onClick={onSwitchToSignup}
                 className="text-brand-navy font-semibold hover:underline cursor-pointer"
