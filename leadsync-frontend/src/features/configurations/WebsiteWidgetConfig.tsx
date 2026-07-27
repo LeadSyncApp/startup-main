@@ -118,7 +118,7 @@ export function WebsiteWidgetConfig({ onBack }: WebsiteWidgetConfigProps = {}) {
               What does this do?
             </h3>
             <p className="text-sm font-medium leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-              This adds a chat bubble to your website so customers can message you directly. Any visitor typing a message on your site will automatically connect to your LeadSync team inbox.
+              This adds a chat bubble to your website so customers can message you directly. Any visitor typing a message on your site will automatically connect to your SaLira team inbox.
             </p>
           </div>
         </Card>

@@ -149,7 +149,7 @@ export function OnboardingWizard({
                   What are we<br/>building today?
                 </h1>
                 <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
-                  Whether you're running a home-grown boutique or a high-traffic retail outlet, LeadSync adapts structurally to your vertical.
+                  Whether you're running a home-grown boutique or a high-traffic retail outlet, SaLira adapts structurally to your vertical.
                 </p>
              </motion.div>
           )}
@@ -163,7 +163,7 @@ export function OnboardingWizard({
                   Welcome aboard,<br/>{mockCompany || "your business"} 👋
                 </h1>
                 <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
-                  Big things start here — welcome to LeadSync.
+                  Big things start here — welcome to SaLira.
                 </p>
              </motion.div>
           )}
@@ -367,7 +367,7 @@ export function OnboardingWizard({
                   
                   <div className="text-center">
                     <p className="text-xs font-medium text-[var(--app-text-muted)]">
-                      Already using LeadSync?{" "}
+                      Already using SaLira?{" "}
                       <button 
                         onClick={onSwitchToSignIn}
                         className="font-black hover:underline cursor-pointer text-[var(--brand-saffron)]"
@@ -533,7 +533,7 @@ export function OnboardingWizard({
                     Welcome aboard, {mockCompany || "your business"} 👋
                   </h2>
                   <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">
-                    Big things start here — welcome to LeadSync.
+                    Big things start here — welcome to SaLira.
                   </p>
                 </div>
 

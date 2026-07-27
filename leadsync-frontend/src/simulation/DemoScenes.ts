@@ -149,7 +149,7 @@ export const DEMO_SCENES: DemoScene[] = [
   {
     id: 'complete',
     title: 'Demo Complete! 🎉',
-    description: 'You\'ve seen how LeadSync unifies orders, auto-assigns staff, handles conversations, and updates your dashboard in real time!',
+    description: 'You\'ve seen how SaLira unifies orders, auto-assigns staff, handles conversations, and updates your dashboard in real time!',
     duration: 4000,
   },
 ];

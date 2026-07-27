@@ -311,7 +311,7 @@ export function WebsiteIntegration({ onBack }: WebsiteIntegrationProps = {}) {
           </h2>
           <p className="font-medium text-base sm:text-lg leading-relaxed"
              style={{ color: "rgba(241, 245, 249, 0.85)" }}>
-            Automatically receive orders from your Shopify, WooCommerce, or custom website directly into LeadSync.
+            Automatically receive orders from your Shopify, WooCommerce, or custom website directly into SaLira.
           </p>
         </div>
       </div>
@@ -533,7 +533,7 @@ export function WebsiteIntegration({ onBack }: WebsiteIntegrationProps = {}) {
                  style={{ backgroundColor: "rgba(34, 197, 94, 0.06)", borderColor: "rgba(34, 197, 94, 0.2)", color: "#166534" }}>
               <CheckCircle2 className="h-5 w-5 shrink-0" style={{ color: "#22c55e" }} />
               <span className="text-sm font-bold">
-                That's it — new orders will now automatically appear in LeadSync.
+                That's it — new orders will now automatically appear in SaLira.
               </span>
             </div>
           </Card>
@@ -617,7 +617,7 @@ export function WebsiteIntegration({ onBack }: WebsiteIntegrationProps = {}) {
                  style={{ backgroundColor: "rgba(34, 197, 94, 0.06)", borderColor: "rgba(34, 197, 94, 0.2)", color: "#166534" }}>
               <CheckCircle2 className="h-5 w-5 shrink-0" style={{ color: "#22c55e" }} />
               <span className="text-sm font-bold">
-                That's it — new orders will now automatically appear in LeadSync.
+                That's it — new orders will now automatically appear in SaLira.
               </span>
             </div>
           </Card>
@@ -814,7 +814,7 @@ export function WebsiteIntegration({ onBack }: WebsiteIntegrationProps = {}) {
                       Delivery Logs
                     </h3>
                     <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                      This shows whether your store's order updates are reaching LeadSync successfully. ({logTotal} total attempt{logTotal !== 1 ? "s" : ""})
+                      This shows whether your store's order updates are reaching SaLira successfully. ({logTotal} total attempt{logTotal !== 1 ? "s" : ""})
                     </p>
                   </div>
                 </div>

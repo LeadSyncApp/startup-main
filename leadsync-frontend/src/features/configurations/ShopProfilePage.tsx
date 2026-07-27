@@ -93,7 +93,7 @@ export function ShopProfilePage() {
                 Active Tier: {scale === 'SME_RETAIL' ? 'SME Retail' : 'Home Grown'}
               </h2>
               <p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                Your current configuration tier on LeadSync.
+                Your current configuration tier on SaLira.
               </p>
             </div>
           </div>

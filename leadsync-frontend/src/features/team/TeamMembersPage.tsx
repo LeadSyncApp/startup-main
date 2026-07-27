@@ -162,7 +162,7 @@ export function TeamMembersPage() {
       const { inviteUrl, staffId } = res.data.invitation;
 
       if (method === "WhatsApp") {
-        const text = `Hi! You've been invited to join ${company?.name || "our shop"} on LeadSync as ${inviteRole.toLowerCase()}. Your Staff ID: ${staffId}. Click here to accept: ${inviteUrl}`;
+        const text = `Hi! You've been invited to join ${company?.name || "our shop"} on SaLira as ${inviteRole.toLowerCase()}. Your Staff ID: ${staffId}. Click here to accept: ${inviteUrl}`;
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
       }
 

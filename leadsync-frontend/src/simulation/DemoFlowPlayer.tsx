@@ -579,7 +579,7 @@ export const DemoFlowPlayer: React.FC<DemoFlowPlayerProps> = ({ onNavigate, onCl
             <div className="text-5xl mb-4">🎉</div>
             <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Demo Complete!</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              You've seen how LeadSync handles orders, conversations, team assignment, and real-time dashboard updates.
+              You've seen how SaLira handles orders, conversations, team assignment, and real-time dashboard updates.
             </p>
             <button
               onClick={onClose}
