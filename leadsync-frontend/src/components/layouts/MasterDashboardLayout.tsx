@@ -390,7 +390,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
       </nav>
 
       {/* Main Content */}
-      <main className={`flex-1 h-full overflow-y-auto pt-14 md:pt-0 pb-16 md:pb-0 ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex flex-col min-h-0' : ''}`}>
+      <main data-layout-main className={`flex-1 h-full overflow-y-auto pt-14 md:pt-0 pb-16 md:pb-0 ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex flex-col min-h-0' : ''}`}>
         <div className={`w-full ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex-1 min-h-0' : 'p-4 md:p-6 lg:p-8 max-w-7xl mx-auto'}`}>
           {children}
         </div>
