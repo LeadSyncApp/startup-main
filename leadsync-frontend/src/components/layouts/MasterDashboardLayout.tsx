@@ -69,7 +69,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const { gatewayStatus, events } = useActivityStore();
   const { theme, toggleTheme } = useTheme();
-  const { companyId } = useAuth();
+  const { companyId, company } = useAuth();
   const unreadCount = events.filter(e => !e.read).length;
 
   // Real badge counts — reuse the same endpoints that power InboxList
@@ -224,7 +224,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
               <Store className="h-5 w-5" />
             </div>
               <div className="min-w-0">
-               <h1 className="text-sm font-bold text-[var(--text-primary)] truncate" style={{fontFamily: "'Fraunces', serif"}}>{merchantName}</h1>
+               <h1 className="text-sm font-bold text-[var(--text-primary)] truncate" style={{fontFamily: "'Fraunces', serif"}}>{merchantName || company?.name || "My Business"}</h1>
                <p className="text-xs text-[var(--text-secondary)] capitalize">{displayRole}</p>
             </div>
           </div>

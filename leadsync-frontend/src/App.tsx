@@ -35,14 +35,14 @@ function InboxSplitWithParam() {
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, token, login, logout, isPendingOnboarding, pendingToken, completeOnboarding } = useAuth();
+  const { user, company, token, login, logout, isPendingOnboarding, pendingToken, completeOnboarding } = useAuth();
 
   // Onboarding state
-  const [firstName, setFirstName] = useState("Rahul");
-  const [lastName, setLastName] = useState("Verma");
-  const [mockEmail, setMockEmail] = useState("rahul@omsaiboutique.in");
-  const [mockCompany, setMockCompany] = useState("Om Sai Silk Boutique");
-  const [phone, setPhone] = useState("9876543210");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [mockEmail, setMockEmail] = useState("");
+  const [mockCompany, setMockCompany] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [, setBusinessScale] = useState<"HOME" | "SME">("HOME");
   const [businessType, setBusinessType] = useState("Retailer");
@@ -279,7 +279,7 @@ export default function App() {
               activeTab={activeTab}
               setActiveTab={handleTabChange}
               userRole={user.role}
-              merchantName={mockCompany}
+              merchantName={company?.name || mockCompany || "My Business"}
               onLogout={logout}
             >
               <WizardProvider>
