@@ -494,8 +494,8 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     // In HUMAN mode (staff takeover) we still persist the inbound client message
     // and emit realtime updates, but we do NOT run rule matching or LLM reply.
     if ((conversation as any).mode !== "BOT") {
-      const clientMsg = await ConcurrencyLock.withConcurrencyLock(`conv:${conversation.id}`, async () => {
-        return await (directPrisma as any).message.create({
+      const clientMsg = await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
+        return await tx.message.create({
           data: {
             companyId,
             conversationId: conversation.id,

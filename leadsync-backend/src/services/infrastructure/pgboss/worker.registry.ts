@@ -14,7 +14,7 @@ import {
   RECOVER_WEBHOOK_JOB_NAME
 } from './jobs/cleanup.job';
 import { PROCESS_AI_TASK_JOB_NAME } from './jobs/ai.job';
-import { MISSED_REPLY_SLA_JOB_NAME } from './jobs/slaMonitor.job';
+import { MISSED_REPLY_SLA_JOB_NAME, processSlaCheckJob } from './jobs/slaMonitor.job';
 import { tenantContextStorage, resolveTenantContext } from '../../context/tenantContext.provider';
 import { outboundDispatcherService } from '../../outbound.dispatcher';
 
@@ -171,7 +171,6 @@ export class WorkerRegistry {
 
     // Process SLA Check
     await boss.work(MISSED_REPLY_SLA_JOB_NAME, async () => {
-      const { processSlaCheckJob } = await import('./jobs/slaMonitor.job');
       await processSlaCheckJob();
     });
   }
