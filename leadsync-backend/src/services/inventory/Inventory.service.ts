@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prisma";
 import { eventBus, Events } from "../infrastructure/eventBus";
 import { emitToCompany } from "../../lib/socket";
+import { businessNotificationService } from "../infrastructure/businessNotification.service";
 
 export class InventoryService {
     constructor() {
@@ -48,6 +49,19 @@ export class InventoryService {
                             productId: item.productId,
                             newStock: newStock
                         });
+
+                        // 🔔 Trigger Low Stock / Out of Stock Notification on transition
+                        const productDetails = await prisma.product.findUnique({
+                            where: { id: item.productId },
+                            select: { name: true, sku: true }
+                        });
+                        await businessNotificationService.notifyStockLevelChange({
+                            companyId,
+                            productName: productDetails?.name || item.name || "Product",
+                            sku: productDetails?.sku || item.sku,
+                            currentStock,
+                            newStock
+                        }).catch((e: any) => console.error("❌ Failed low stock notification:", e));
                     } else {
                         console.log(`📦 [InventoryMicroservice] Skipping stock deduction for ${item.productId} (trackInventory: false)`);
                     }

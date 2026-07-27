@@ -17,6 +17,7 @@ import {
 import { normalizeProductsArray, ProductData, ProductVariantData, ParsedData } from "../ai/numeralConverter";
 import { randomUUID } from "crypto";
 import { validateVariantDimensions } from "../../utils/variantValidation";
+import { businessNotificationService } from "../infrastructure/businessNotification.service";
 
 export const LOW_STOCK_THRESHOLD = 5;
 
@@ -663,6 +664,14 @@ export async function decrementStockForOrder(orderId: string, companyId: string)
             actorName: `Order ${order.id}`
           }
         });
+
+        businessNotificationService.notifyStockLevelChange({
+          companyId,
+          productName: `${product.name} (${targetVariant.attributeValue})`,
+          sku: targetVariant.sku || product.sku,
+          currentStock: actualOldStock,
+          newStock: actualNewStock,
+        }).catch((e: any) => console.error("❌ Low stock notification error:", e));
 
         console.log(`📦 [StockDecrement] Variant ${targetVariant.id} ("${targetVariant.attributeValue}"): ${actualOldStock} → ${actualNewStock} (ordered ${item.quantity})`);
       } catch (historyErr) {
