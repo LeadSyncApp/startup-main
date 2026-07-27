@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma";
 import { ConversationStatus, ConversationMode, Prisma } from "@prisma/client";
 import { safeEmitConversationUpdate } from "../lib/socket";
 import type { Server as SocketIOServer } from "socket.io";
+import { businessNotificationService } from "./infrastructure/businessNotification.service";
 
 /**
  * Find the staff member with the fewest active HUMAN conversations
@@ -166,6 +167,17 @@ export async function escalateToHuman(
   };
 
   safeEmitConversationUpdate(updated, "conversation.escalated", eventPayload);
+
+  // 6. Trigger notification
+  const lead = updated.leadId
+    ? await prisma.lead.findUnique({ where: { id: updated.leadId }, select: { name: true, contact: true } })
+    : null;
+  businessNotificationService.notifyCustomerInquiry({
+    companyId: updated.companyId,
+    leadNameOrContact: lead?.name || lead?.contact || "Customer",
+    messageText: reason || "Handed off to human agent",
+    assignedToId: updated.claimedById,
+  }).catch((err) => console.error("❌ Failed to send escalation notification:", err));
 
   console.log(
     `[assignment] ${conversationId} self-assigned to ${fullName ?? "unassigned"} (reason: ${reason})`

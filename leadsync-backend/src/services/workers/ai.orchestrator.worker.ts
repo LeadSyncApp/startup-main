@@ -20,6 +20,7 @@ import { newOrderArrivalService } from "../workflow/newOrderArrival.service";
 import { getActiveDraftOrder, syncDraftOrderFromAi, confirmActiveDraftOrder, syncLeadPendingOrderState } from "../draftOrder/draftOrder.service";
 import crypto from "crypto";
 import { stepProfiler } from "../../utils/stepProfiler";
+import { businessNotificationService } from "../infrastructure/businessNotification.service";
 
 // Thread-safe Profiling — log elapsed from entry at each major boundary per trace
 function P(label: string): void {
@@ -493,8 +494,8 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     // In HUMAN mode (staff takeover) we still persist the inbound client message
     // and emit realtime updates, but we do NOT run rule matching or LLM reply.
     if ((conversation as any).mode !== "BOT") {
-      const clientMsg = await ConcurrencyLock.withConversationLock(conversation.id, async (tx) => {
-        return await tx.message.create({
+      const clientMsg = await ConcurrencyLock.withConcurrencyLock(`conv:${conversation.id}`, async () => {
+        return await (directPrisma as any).message.create({
           data: {
             companyId,
             conversationId: conversation.id,
@@ -505,12 +506,19 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       });
       emitToConversation(conversation.id, "new_message", { ...clientMsg, conversationId: conversation.id });
       await tenantPrisma.lead.update({ where: { id: lead.id }, data: { lastActiveAt: new Date() } }).catch(() => {});
-      await tenantPrisma.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } }).catch(() => {});
+      await tenantPrisma.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date(), slaNotifiedAt: null } }).catch(() => {});
       safeEmitConversationUpdate(conversation, "conversation_updated", {
         conversationId: conversation.id,
         lastContent: text,
         updatedAt: new Date().toISOString(),
       });
+      businessNotificationService.notifyCustomerInquiry({
+        companyId,
+        leadNameOrContact: (lead as any).name || (lead as any).contact || "Customer",
+        messageText: text,
+        assignedToId: (conversation as any).claimedById || (conversation as any).assignedToId,
+      }).catch((err) => console.error("❌ Failed to send customer inquiry notification:", err));
+
       console.log(`🤚 [Orchestrator] Conversation ${conversation.id} is in HUMAN mode — skipping AI auto-reply.`);
       return { skipped: true, reason: "HUMAN_MODE" };
     }
@@ -977,6 +985,14 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     const priority = evaluateTenantPriorityRules(priorityInput, activeContext.priorityRules);
     const { replyText, detected_meta, tool_call, thread_summary, suggested_human_response, intent_type: rawIntentType } = aiTurnResult;
     const intent_type = rawIntentType as string;
+    if (intent_type === "HUMAN_HANDOFF") {
+      businessNotificationService.notifyCustomerInquiry({
+        companyId,
+        leadNameOrContact: (lead as any).name || (lead as any).contact || "Customer",
+        messageText: processingText || text,
+        assignedToId: (conversation as any).claimedById || (conversation as any).assignedToId,
+      }).catch((err) => console.error("❌ Failed to send human handoff notification:", err));
+    }
     const sentimentScoreMap: Record<string, number> = { "POSITIVE": 1, "NEUTRAL": 0, "NEGATIVE": -1 };
     const resolvedScore = sentimentScoreMap[detected_meta?.sentiment] ?? 0;
 
