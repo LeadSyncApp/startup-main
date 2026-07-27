@@ -19,7 +19,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
-  merchantName = "Om Sai Silk Boutique", 
+  merchantName = "My Business", 
   userRole = 'OWNER', 
   gstinActive = true 
 }) => {

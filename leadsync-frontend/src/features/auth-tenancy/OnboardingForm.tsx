@@ -101,7 +101,7 @@ export function OnboardingForm() {
           <input
             type="text"
             required
-            placeholder="e.g. Om Sai Silk Boutique"
+            placeholder="Your brand/company name"
             value={businessName}
             onChange={(e) => setBusinessName(e.target.value)}
             className="w-full bg-slate-900/60 border border-slate-800 rounded-lg px-3.5 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-all font-mono"

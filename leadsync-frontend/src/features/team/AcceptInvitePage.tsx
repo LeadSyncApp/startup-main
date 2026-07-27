@@ -249,7 +249,7 @@ export function AcceptInvitePage() {
                   type="text"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Rahul"
+                  placeholder=""
                   required
                   className="w-full text-sm font-bold rounded-xl px-4 py-3.5 outline-none transition-all"
                   style={{
@@ -267,7 +267,7 @@ export function AcceptInvitePage() {
                   type="text"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Verma"
+                  placeholder=""
                   className="w-full text-sm font-bold rounded-xl px-4 py-3.5 outline-none transition-all"
                   style={{
                     backgroundColor: 'var(--app-input-bg)',
