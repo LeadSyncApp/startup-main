@@ -1,17 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  ArrowRight, Shield, Check,
+  ArrowRight, Shield, Check, Sparkles,
   Utensils, ShoppingBag, Stethoscope, 
   User, 
-  Component, Globe, ZapIcon,
+  Component, ZapIcon,
   Eye, EyeOff, AlertTriangle,
-  Scissors, Store,
-  Send,
-  Loader2
+  Scissors, Store
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { apiClient } from "../../api/client";
 
 interface OnboardingWizardProps {
   onComplete: (data: any) => void;
@@ -66,12 +63,6 @@ export function OnboardingWizard({
   const [businessScale, setBusinessScale] = useState<"HOME" | "SME">("HOME");
   const [businessType, setBusinessType] = useState("Retail / Shop");
 
-  // Demo chat state
-  const [chatMessages, setChatMessages] = useState<Array<{ role: "user" | "ai"; text: string }>>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
   const handleNextStep1 = () => {
     if (!firstName.trim()) {
       toast.error("Please enter your first name.");
@@ -108,25 +99,6 @@ export function OnboardingWizard({
       trackInventory: true,
       channels: { telegram: false, whatsapp: false }
     });
-  };
-
-  const handleChatSubmit = async () => {
-    const msg = chatInput.trim();
-    if (!msg || chatLoading) return;
-
-    setChatMessages((prev) => [...prev, { role: "user", text: msg }]);
-    setChatInput("");
-    setChatLoading(true);
-
-    try {
-      const res = await apiClient.post("/onboarding/demo-reply", { user_message: msg });
-      const { replyText } = res.data;
-      setChatMessages((prev) => [...prev, { role: "ai", text: replyText || "Hello! How can I help you today?" }]);
-    } catch {
-      setChatMessages((prev) => [...prev, { role: "ai", text: "Hello! How can I help you today?" }]);
-    } finally {
-      setChatLoading(false);
-    }
   };
 
   return (
@@ -187,43 +159,14 @@ export function OnboardingWizard({
           {step === 3 && (
              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
-                  <Send className="w-3.5 h-3.5" /> Live Preview
+                  <Sparkles className="w-3.5 h-3.5" /> All Set
                 </div>
                 <h1 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-[var(--app-text)]">
-                  See LeadSync<br/>in action
+                  Welcome aboard,<br/>{mockCompany || "your business"} 👋
                 </h1>
                 <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
-                  Type a customer message below and watch the AI reply — no setup needed.
+                  Big things start here — welcome to LeadSync.
                 </p>
-
-                {/* Chat Preview Card */}
-                <div className="mt-8 rounded-2xl p-6 backdrop-blur-sm" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', borderWidth: 1 }}>
-                   <div className="flex flex-col gap-3 mb-4">
-                     <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--app-text-muted)' }}>Sample conversation</span>
-                     <div className="flex items-center gap-2">
-                       <div className="h-2 w-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--brand-saffron)' }} />
-                       <span className="text-[11px] font-bold" style={{ color: 'var(--app-text-muted)' }}>AI-powered replies</span>
-                     </div>
-                   </div>
-                   <div className="space-y-2">
-                     <div className="flex justify-start">
-                       <div className="max-w-[85%] rounded-2xl rounded-bl-md px-3.5 py-2" style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}>
-                         <p className="text-[11px] leading-relaxed" style={{ color: 'var(--app-text)' }}>Do you have silk sarees?</p>
-                       </div>
-                     </div>
-                     <div className="flex justify-end">
-                       <div className="max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 bg-teal-600/90 text-white">
-                         <p className="text-[11px] leading-relaxed">Hi! Yes, we have a beautiful collection of silk sarees. Would you like to see our options?</p>
-                       </div>
-                     </div>
-                   </div>
-                   <div className="mt-5 pt-4 flex items-center gap-3" style={{ borderTopWidth: 1, borderTopColor: 'var(--app-border)' }}>
-                     <Globe className="h-5 w-5" style={{ color: 'var(--brand-saffron)' }} />
-                     <span className="text-sm font-medium text-[var(--app-text-muted)]">
-                       Try it yourself on the right →
-                     </span>
-                   </div>
-                </div>
              </motion.div>
           )}
         </div>
@@ -577,7 +520,7 @@ export function OnboardingWizard({
               </motion.div>
             )}
 
-            {/* STEP 3 - Live Demo Chat */}
+            {/* STEP 3 - Welcome */}
             {step === 3 && (
               <motion.div
                 key="step3"
@@ -585,82 +528,27 @@ export function OnboardingWizard({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
-                className="space-y-6"
+                className="space-y-8"
               >
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">Try It Live</h2>
-                    <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--brand-saffron-soft)', color: 'var(--brand-saffron)' }}>Preview</span>
-                  </div>
-                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">Type a sample customer message and see how LeadSync responds.</p>
+                  <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">
+                    Welcome aboard, {mockCompany || "your business"} 👋
+                  </h2>
+                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">
+                    Big things start here — welcome to LeadSync.
+                  </p>
                 </div>
 
-                {/* Chat Area */}
-                <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
-                  {/* Chat Messages */}
-                  <div className="h-64 overflow-y-auto p-4 space-y-3" style={{ backgroundColor: 'var(--app-bg)' }}>
-                    {chatMessages.length === 0 && (
-                      <div className="h-full flex flex-col items-center justify-center text-center gap-2">
-                        <Send className="h-6 w-6" style={{ color: 'var(--app-text-muted)', opacity: 0.4 }} />
-                        <p className="text-xs font-medium" style={{ color: 'var(--app-text-muted)' }}>Start a conversation below</p>
-                      </div>
-                    )}
-                    {chatMessages.map((msg, i) => (
-                      <div key={i} className={`flex ${msg.role === "user" ? "justify-start" : "justify-end"}`}>
-                        <div
-                          className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
-                            msg.role === "user"
-                              ? "rounded-bl-md"
-                              : "bg-teal-600/90 text-white rounded-br-md"
-                          }`}
-                          style={msg.role === "user" ? { backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)', color: 'var(--app-text)' } : {}}
-                        >
-                          <p className="text-sm leading-relaxed">{msg.text}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {chatLoading && (
-                      <div className="flex justify-end">
-                        <div className="bg-teal-600/90 text-white rounded-2xl rounded-br-md px-4 py-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-white/70 animate-bounce" style={{ animationDelay: "0ms" }} />
-                            <span className="h-1.5 w-1.5 rounded-full bg-white/70 animate-bounce" style={{ animationDelay: "150ms" }} />
-                            <span className="h-1.5 w-1.5 rounded-full bg-white/70 animate-bounce" style={{ animationDelay: "300ms" }} />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <div ref={chatEndRef} />
-                  </div>
-
-                  {/* Chat Input */}
-                  <div className="p-3 flex gap-2 items-center" style={{ borderTop: '1px solid var(--app-border)', backgroundColor: 'var(--app-bg-soft)' }}>
-                    <input
-                      type="text"
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") handleChatSubmit(); }}
-                      placeholder='e.g. "Do you have this in blue, size M?"'
-                      className="flex-1 px-4 py-3 rounded-xl text-sm font-medium outline-none transition-all"
-                      style={{ backgroundColor: 'var(--app-bg)', border: '1px solid var(--app-border)', color: 'var(--app-text)' }}
-                      disabled={chatLoading}
-                    />
-                    <button
-                      onClick={handleChatSubmit}
-                      disabled={chatLoading || !chatInput.trim()}
-                      className="h-10 w-10 rounded-xl flex items-center justify-center transition-all shrink-0"
-                      style={{ backgroundColor: chatInput.trim() && !chatLoading ? 'var(--brand-saffron)' : 'var(--app-bg-soft)', color: chatInput.trim() && !chatLoading ? 'var(--app-bg)' : 'var(--app-text-muted)' }}
-                    >
-                      {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    </button>
-                  </div>
+                <div className="rounded-2xl border p-6 space-y-3" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--app-text)' }}>
+                    Everything's set up and ready when you are.
+                  </p>
+                  <p className="text-xs font-medium" style={{ color: 'var(--app-text-muted)' }}>
+                    Connect a channel anytime from Settings to go live.
+                  </p>
                 </div>
 
-                <p className="text-[10px] font-semibold text-center" style={{ color: 'var(--app-text-muted)' }}>
-                  Preview — using a sample AI reply. Configure real channels in Settings → Connections.
-                </p>
-
-                <div className="pt-2 flex gap-3">
+                <div className="pt-4 flex gap-3">
                   <button 
                     onClick={() => setStep(2)}
                     className="px-6 py-4.5 rounded-2xl font-bold transition-all text-sm border cursor-pointer"
@@ -677,7 +565,7 @@ export function OnboardingWizard({
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-primary-strong)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--brand-saffron)'; }}
                   >
-                    Deploy Dashboard <ArrowRight className="h-4 w-4" />
+                    Go to my Dashboard <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
               </motion.div>
