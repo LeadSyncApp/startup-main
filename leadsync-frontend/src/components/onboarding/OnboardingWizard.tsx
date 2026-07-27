@@ -1,14 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  ArrowRight, Shield, 
+  ArrowRight, Shield, Check,
   Utensils, ShoppingBag, Stethoscope, 
-  Cake, Sparkles, User, 
-  Target, Component, LineChart, Globe, ZapIcon,
-  Eye, EyeOff, AlertTriangle, Braces
+  User, 
+  Component, Globe, ZapIcon,
+  Eye, EyeOff, AlertTriangle,
+  Scissors, Store,
+  Send,
+  Loader2
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { ProductFieldEditor, ProductField } from "../../features/inventory/ProductFieldEditor";
+import { apiClient } from "../../api/client";
 
 interface OnboardingWizardProps {
   onComplete: (data: any) => void;
@@ -61,17 +64,17 @@ export function OnboardingWizard({
   }, []);
   const [showPassword, setShowPassword] = useState(false);
   const [businessScale, setBusinessScale] = useState<"HOME" | "SME">("HOME");
-  const [businessType, setBusinessType] = useState("Fashion & Retail");
-  const [currentWorkflow, setCurrentWorkflow] = useState<"PAPER" | "SPREADSHEET" | "CRM">("PAPER");
-  const [productFields, setProductFields] = useState<ProductField[]>([]);
+  const [businessType, setBusinessType] = useState("Retail / Shop");
+
+  // Demo chat state
+  const [chatMessages, setChatMessages] = useState<Array<{ role: "user" | "ai"; text: string }>>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const handleNextStep1 = () => {
     if (!firstName.trim()) {
       toast.error("Please enter your first name.");
-      return;
-    }
-    if (!lastName.trim()) {
-      toast.error("Please enter your last name.");
       return;
     }
     if (phone.length < 10) {
@@ -97,20 +100,33 @@ export function OnboardingWizard({
     setStep(3);
   };
 
-  const handleNextStep3 = () => {
-    setStep(4);
-  };
-
   const handleFinalize = () => {
     onComplete({
       businessScale,
       businessType,
-      currentWorkflow,
-      productFields,
       dailyRevenueTarget: "5000",
       trackInventory: true,
       channels: { telegram: false, whatsapp: false }
     });
+  };
+
+  const handleChatSubmit = async () => {
+    const msg = chatInput.trim();
+    if (!msg || chatLoading) return;
+
+    setChatMessages((prev) => [...prev, { role: "user", text: msg }]);
+    setChatInput("");
+    setChatLoading(true);
+
+    try {
+      const res = await apiClient.post("/onboarding/demo-reply", { user_message: msg });
+      const { replyText } = res.data;
+      setChatMessages((prev) => [...prev, { role: "ai", text: replyText || "Hello! How can I help you today?" }]);
+    } catch {
+      setChatMessages((prev) => [...prev, { role: "ai", text: "Hello! How can I help you today?" }]);
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   return (
@@ -171,72 +187,40 @@ export function OnboardingWizard({
           {step === 3 && (
              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
-                  <Braces className="w-3.5 h-3.5" /> Inventory Schema
+                  <Send className="w-3.5 h-3.5" /> Live Preview
                 </div>
                 <h1 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-[var(--app-text)]">
-                  What fields do<br/>your products have?
+                  See LeadSync<br/>in action
                 </h1>
                 <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
-                  Define custom fields like brand, color, size, or material. These fields will appear when you add products to your inventory.
+                  Type a customer message below and watch the AI reply — no setup needed.
                 </p>
 
-                {/* Live Preview Card */}
+                {/* Chat Preview Card */}
                 <div className="mt-8 rounded-2xl p-6 backdrop-blur-sm" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', borderWidth: 1 }}>
-                   <div className="flex flex-col gap-2 mb-4">
-                     <span className="text-xs font-bold uppercase tracking-widest text-[var(--app-text-muted)]">Example Fields</span>
-                     <span className="text-sm font-bold text-[var(--brand-saffron)]">
-                       {businessType === "Fashion & Retail" && "Brand, Size, Color, Material"}
-                       {businessType === "Bakery & Food" && "Flavor, Weight, Ingredients"}
-                       {businessType === "Client Agency" && "Service Type, Duration, Package"}
-                       {businessType === "Café & Food Outlet" && "Size, Temperature, Customization"}
-                     </span>
+                   <div className="flex flex-col gap-3 mb-4">
+                     <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--app-text-muted)' }}>Sample conversation</span>
+                     <div className="flex items-center gap-2">
+                       <div className="h-2 w-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--brand-saffron)' }} />
+                       <span className="text-[11px] font-bold" style={{ color: 'var(--app-text-muted)' }}>AI-powered replies</span>
+                     </div>
                    </div>
-                   <div className="space-y-3">
-                     <div className="h-2 rounded-full w-3/4" style={{ backgroundColor: 'var(--app-surface-alt)' }} />
-                     <div className="h-2 rounded-full w-1/2" style={{ backgroundColor: 'var(--app-surface-alt)' }} />
-                     <div className="h-2 rounded-full w-5/6" style={{ backgroundColor: 'var(--app-surface-alt)' }} />
+                   <div className="space-y-2">
+                     <div className="flex justify-start">
+                       <div className="max-w-[85%] rounded-2xl rounded-bl-md px-3.5 py-2" style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}>
+                         <p className="text-[11px] leading-relaxed" style={{ color: 'var(--app-text)' }}>Do you have silk sarees?</p>
+                       </div>
+                     </div>
+                     <div className="flex justify-end">
+                       <div className="max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 bg-teal-600/90 text-white">
+                         <p className="text-[11px] leading-relaxed">Hi! Yes, we have a beautiful collection of silk sarees. Would you like to see our options?</p>
+                       </div>
+                     </div>
                    </div>
-                   <div className="mt-6 pt-4 flex items-center gap-3" style={{ borderTopWidth: 1, borderTopColor: 'var(--app-border)' }}>
+                   <div className="mt-5 pt-4 flex items-center gap-3" style={{ borderTopWidth: 1, borderTopColor: 'var(--app-border)' }}>
                      <Globe className="h-5 w-5" style={{ color: 'var(--brand-saffron)' }} />
                      <span className="text-sm font-medium text-[var(--app-text-muted)]">
-                       You can add more fields later in Settings.
-                     </span>
-                   </div>
-                </div>
-             </motion.div>
-          )}
-
-          {step === 4 && (
-             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
-                  <LineChart className="w-3.5 h-3.5" /> Migration Path
-                </div>
-                <h1 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-[var(--app-text)]">
-                  Start exactly<br/>where you left off.
-                </h1>
-                <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
-                  Whether you're switching from scribbled notebooks or massive excel sheets, we'll configure your dashboard to make the transition perfectly seamless.
-                </p>
-
-                {/* Live Preview Card */}
-                <div className="mt-8 rounded-2xl p-6 backdrop-blur-sm" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', borderWidth: 1 }}>
-                   <div className="flex flex-col gap-2 mb-4">
-                     <span className="text-xs font-bold uppercase tracking-widest text-[var(--app-text-muted)]">Recommended Action</span>
-                     <span className="text-sm font-bold text-[var(--brand-saffron)]">
-                       {currentWorkflow === "PAPER" && "Prepare for digital logging 📝"}
-                       {currentWorkflow === "SPREADSHEET" && "Ready CSV for import 📊"}
-                       {currentWorkflow === "CRM" && "Initialize CRM Sync 🔄"}
-                     </span>
-                   </div>
-                   <div className="space-y-3">
-                     <div className="h-2 rounded-full w-3/4" style={{ backgroundColor: 'var(--app-surface-alt)' }} />
-                     <div className="h-2 rounded-full w-1/2" style={{ backgroundColor: 'var(--app-surface-alt)' }} />
-                     <div className="h-2 rounded-full w-5/6" style={{ backgroundColor: 'var(--app-surface-alt)' }} />
-                   </div>
-                   <div className="mt-6 pt-4 flex items-center gap-3" style={{ borderTopWidth: 1, borderTopColor: 'var(--app-border)' }}>
-                     <Globe className="h-5 w-5" style={{ color: 'var(--brand-saffron)' }} />
-                     <span className="text-sm font-medium text-[var(--app-text-muted)]">
-                       Setting up tailored empty states.
+                       Try it yourself on the right →
                      </span>
                    </div>
                 </div>
@@ -257,7 +241,7 @@ export function OnboardingWizard({
           {/* Header Progress for Mobile (Hidden on Desktop since left handles context, but good for progress) */}
           <div className="mb-12">
             <div className="flex gap-2 mb-4">
-              {[1, 2, 3, 4].map((s) => (
+              {[1, 2, 3].map((s) => (
                 <div 
                   key={s} 
                   className={`h-1.5 rounded-full transition-all duration-500 ease-out ${s <= step ? 'w-full' : 'w-full'}`}
@@ -265,7 +249,7 @@ export function OnboardingWizard({
                 />
               ))}
             </div>
-            <p className="text-xs font-black uppercase tracking-widest text-[var(--app-text-muted)]">Step {step} of 4</p>
+            <p className="text-xs font-black uppercase tracking-widest text-[var(--app-text-muted)]">Step {step} of 3</p>
           </div>
 
           <AnimatePresence mode="wait">
@@ -330,14 +314,16 @@ export function OnboardingWizard({
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">First Name</label>
+                        <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">
+                          First Name <span className="text-red-500 ml-0.5">*</span>
+                        </label>
                         <input
                           type="text"
                           value={firstName}
                           onChange={(e) => setFirstName(e.target.value)}
                           className="w-full border-2 rounded-2xl px-5 py-4 font-medium transition-all"
                           style={{ backgroundColor: 'var(--app-input-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                          placeholder="John"
+                          placeholder=""
                           onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--brand-saffron)'; }}
                           onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--app-border)'; }}
                         />
@@ -350,7 +336,7 @@ export function OnboardingWizard({
                           onChange={(e) => setLastName(e.target.value)}
                           className="w-full border-2 rounded-2xl px-5 py-4 font-medium transition-all"
                           style={{ backgroundColor: 'var(--app-input-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                          placeholder="Doe"
+                          placeholder=""
                           onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--brand-saffron)'; }}
                           onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--app-border)'; }}
                         />
@@ -358,9 +344,14 @@ export function OnboardingWizard({
                     </div>
 
                     <div>
-                      <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">Mobile Number</label>
-                      <div className="flex rounded-2xl border-2 overflow-hidden transition-all" style={{ borderColor: 'var(--app-border)' }}>
-                        <div className="px-5 flex items-center text-sm font-bold text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderRightWidth: 2, borderRightColor: 'var(--app-border)' }}>
+                      <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">
+                        Mobile Number <span className="text-red-500 ml-0.5">*</span>
+                      </label>
+                      <div className="flex gap-3">
+                        <div 
+                          className="w-20 border-2 rounded-2xl px-4 py-4 font-bold text-sm flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                        >
                           +91
                         </div>
                         <input
@@ -370,29 +361,35 @@ export function OnboardingWizard({
                             const v = e.target.value.replace(/\D/g, "");
                             if (v.length <= 10) setPhone(v);
                           }}
-                          className="flex-1 px-5 py-4 font-medium tracking-wide transition-all"
-                          style={{ backgroundColor: 'var(--app-input-bg)', color: 'var(--app-text)' }}
-                          placeholder="98765 43210"
+                          className="flex-1 border-2 rounded-2xl px-5 py-4 font-medium tracking-wide transition-all"
+                          style={{ backgroundColor: 'var(--app-input-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                          placeholder=""
+                          onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--brand-saffron)'; }}
+                          onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--app-border)'; }}
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">Work Email</label>
+                      <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">
+                        Work Email <span className="text-red-500 ml-0.5">*</span>
+                      </label>
                       <input
                         type="email"
                         value={mockEmail}
                         onChange={(e) => setMockEmail(e.target.value)}
                         className="w-full border-2 rounded-2xl px-5 py-4 font-medium transition-all"
                         style={{ backgroundColor: 'var(--app-input-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                        placeholder="john@company.com"
+                        placeholder=""
                         onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--brand-saffron)'; }}
                         onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--app-border)'; }}
                       />
                     </div>
 
                     <div>
-                      <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">Email Password</label>
+                      <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">
+                        Email Password <span className="text-red-500 ml-0.5">*</span>
+                      </label>
                       <div className="relative">
                         <input
                           type={showPassword ? "text" : "password"}
@@ -460,14 +457,16 @@ export function OnboardingWizard({
                 <div className="space-y-6">
                   {/* Business Name */}
                   <div>
-                    <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">Brand or Organization Name</label>
+                    <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">
+                      Brand or Organization Name <span className="text-red-500 ml-0.5">*</span>
+                    </label>
                     <input
                       type="text"
                       value={mockCompany}
                       onChange={(e) => setMockCompany(e.target.value)}
                       className="w-full border-2 rounded-2xl px-5 py-4 font-bold text-lg transition-all"
                       style={{ backgroundColor: 'var(--app-input-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                      placeholder="e.g. Acme Corp"
+                      placeholder="Your brand/company name"
                       onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--brand-saffron)'; }}
                       onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--app-border)'; }}
                     />
@@ -494,26 +493,50 @@ export function OnboardingWizard({
                     </div>
                   </div>
 
+                  {/* Scale Helper Feedback */}
+                  <motion.div
+                    key={businessScale}
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="rounded-2xl border p-4 space-y-3"
+                    style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}
+                  >
+                    <p className="text-xs font-semibold leading-relaxed" style={{ color: 'var(--app-text-muted)' }}>
+                      {businessScale === "HOME"
+                        ? "No GST needed. Simple setup for personal/home sellers."
+                        : "GST invoicing enabled. Built for registered businesses."}
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {(businessScale === "HOME"
+                        ? ["Quick setup", "No tax fields", "Upgrade anytime"]
+                        : ["GST invoice field", "Business-grade profile", "Tax-ready orders"]
+                      ).map((item) => (
+                        <div key={item} className="flex items-center gap-2">
+                          <div className="h-4 w-4 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--brand-saffron-soft)' }}>
+                            <Check className="h-2.5 w-2.5" style={{ color: 'var(--brand-saffron)' }} />
+                          </div>
+                          <span className="text-[11px] font-bold" style={{ color: 'var(--app-text-muted)' }}>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+
                   {/* Vertical */}
                   <div>
                     <label className="text-xs font-bold mb-3 block text-[var(--app-text-muted)]">Primary Vertical</label>
                     <div className="grid grid-cols-2 gap-3">
                       {[
-                        { id: "Fashion & Retail", icon: ShoppingBag, label: "Fashion & Retail" },
-                        { id: "Bakery & Food", icon: Cake, label: "Bakery & Food" },
-                        { id: "Client Agency", icon: Stethoscope, label: "Service / Clinic" },
-                        { id: "Café & Food Outlet", icon: Utensils, label: "F&B Outlet" }
+                        { id: "Retail / Shop", icon: ShoppingBag, label: "Retail / Shop" },
+                        { id: "Handmade / Crafts", icon: Scissors, label: "Handmade / Crafts" },
+                        { id: "Food & Beverage", icon: Utensils, label: "Food & Beverage" },
+                        { id: "Services / Appointments", icon: Stethoscope, label: "Services / Appointments" },
+                        { id: "Other / General", icon: Store, label: "Other / General" }
                       ].map((v) => (
                         <button
                           key={v.id}
                           onClick={() => {
                             setBusinessType(v.id);
-                            if (!mockCompany || mockCompany.includes("Boutique") || mockCompany.includes("Cakes")) {
-                               if (v.id === "Bakery & Food") setMockCompany("Om Sai Cakes");
-                               else if (v.id === "Fashion & Retail") setMockCompany("Om Sai Silk Boutique");
-                               else if (v.id === "Client Agency") setMockCompany("Om Sai Advisory");
-                               else setMockCompany("Om Sai Cafe");
-                            }
                           }}
                           className={`flex items-center flex-col justify-center text-center gap-3 p-5 rounded-2xl border-2 transition-all`}
                           style={{
@@ -554,7 +577,7 @@ export function OnboardingWizard({
               </motion.div>
             )}
 
-            {/* STEP 3 - Product Fields */}
+            {/* STEP 3 - Live Demo Chat */}
             {step === 3 && (
               <motion.div
                 key="step3"
@@ -562,90 +585,84 @@ export function OnboardingWizard({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
-                className="space-y-8"
+                className="space-y-6"
               >
                 <div className="space-y-2">
-                  <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">Product Fields</h2>
-                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">Define the fields your products need (brand, size, color, etc.).</p>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">Try It Live</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--brand-saffron-soft)', color: 'var(--brand-saffron)' }}>Preview</span>
+                  </div>
+                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">Type a sample customer message and see how LeadSync responds.</p>
                 </div>
 
-                <ProductFieldEditor onFieldsChange={setProductFields} />
+                {/* Chat Area */}
+                <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
+                  {/* Chat Messages */}
+                  <div className="h-64 overflow-y-auto p-4 space-y-3" style={{ backgroundColor: 'var(--app-bg)' }}>
+                    {chatMessages.length === 0 && (
+                      <div className="h-full flex flex-col items-center justify-center text-center gap-2">
+                        <Send className="h-6 w-6" style={{ color: 'var(--app-text-muted)', opacity: 0.4 }} />
+                        <p className="text-xs font-medium" style={{ color: 'var(--app-text-muted)' }}>Start a conversation below</p>
+                      </div>
+                    )}
+                    {chatMessages.map((msg, i) => (
+                      <div key={i} className={`flex ${msg.role === "user" ? "justify-start" : "justify-end"}`}>
+                        <div
+                          className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                            msg.role === "user"
+                              ? "rounded-bl-md"
+                              : "bg-teal-600/90 text-white rounded-br-md"
+                          }`}
+                          style={msg.role === "user" ? { backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)', color: 'var(--app-text)' } : {}}
+                        >
+                          <p className="text-sm leading-relaxed">{msg.text}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {chatLoading && (
+                      <div className="flex justify-end">
+                        <div className="bg-teal-600/90 text-white rounded-2xl rounded-br-md px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-white/70 animate-bounce" style={{ animationDelay: "0ms" }} />
+                            <span className="h-1.5 w-1.5 rounded-full bg-white/70 animate-bounce" style={{ animationDelay: "150ms" }} />
+                            <span className="h-1.5 w-1.5 rounded-full bg-white/70 animate-bounce" style={{ animationDelay: "300ms" }} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
 
-                <div className="pt-4 flex gap-3">
+                  {/* Chat Input */}
+                  <div className="p-3 flex gap-2 items-center" style={{ borderTop: '1px solid var(--app-border)', backgroundColor: 'var(--app-bg-soft)' }}>
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleChatSubmit(); }}
+                      placeholder='e.g. "Do you have this in blue, size M?"'
+                      className="flex-1 px-4 py-3 rounded-xl text-sm font-medium outline-none transition-all"
+                      style={{ backgroundColor: 'var(--app-bg)', border: '1px solid var(--app-border)', color: 'var(--app-text)' }}
+                      disabled={chatLoading}
+                    />
+                    <button
+                      onClick={handleChatSubmit}
+                      disabled={chatLoading || !chatInput.trim()}
+                      className="h-10 w-10 rounded-xl flex items-center justify-center transition-all shrink-0"
+                      style={{ backgroundColor: chatInput.trim() && !chatLoading ? 'var(--brand-saffron)' : 'var(--app-bg-soft)', color: chatInput.trim() && !chatLoading ? 'var(--app-bg)' : 'var(--app-text-muted)' }}
+                    >
+                      {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-[10px] font-semibold text-center" style={{ color: 'var(--app-text-muted)' }}>
+                  Preview — using a sample AI reply. Configure real channels in Settings → Connections.
+                </p>
+
+                <div className="pt-2 flex gap-3">
                   <button 
                     onClick={() => setStep(2)}
-                    className="px-6 py-4.5 rounded-2xl font-bold transition-all text-sm border cursor-pointer"
-                    style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-surface)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-bg-soft)'; }}
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={handleNextStep3}
-                    className="flex-1 py-4.5 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer text-sm"
-                    style={{ backgroundColor: 'var(--brand-saffron)', color: 'var(--app-bg)' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-primary-strong)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--brand-saffron)'; }}
-                  >
-                    Continue <ArrowRight className="h-4 w-4" />
-                  </button>
-                </div>
-              </motion.div>
-            )}
-
-            {/* STEP 4 - Workflow */}
-            {step === 4 && (
-              <motion.div
-                key="step4"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
-                className="space-y-8"
-              >
-                <div className="space-y-2">
-                  <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">Your Current Workflow</h2>
-                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">How are you currently tracking your leads and orders?</p>
-                </div>
-
-                <div className="space-y-4">
-                  {(["PAPER", "SPREADSHEET", "CRM"] as const).map((wf) => {
-                    const isActive = currentWorkflow === wf;
-                    const icons = { PAPER: Target, SPREADSHEET: LineChart, CRM: Component } as const;
-                    const Icon = icons[wf];
-                    const labels = {
-                      PAPER: { title: "Pen, Paper & Notebooks", desc: "I'm manually writing things down or keeping it in my head." },
-                      SPREADSHEET: { title: "Excel / Google Sheets", desc: "I have digital records that I maintain manually in columns." },
-                      CRM: { title: "Another CRM or App", desc: "I need to migrate from an existing software tool." },
-                    };
-                    return (
-                      <button
-                        key={wf}
-                        onClick={() => setCurrentWorkflow(wf)}
-                        className="w-full flex items-start gap-4 p-5 rounded-2xl border-2 transition-all text-left cursor-pointer"
-                        style={{
-                          borderColor: isActive ? 'var(--brand-saffron)' : 'var(--app-border)',
-                          backgroundColor: isActive ? 'var(--brand-saffron-soft)' : 'var(--app-bg)',
-                        }}
-                        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.borderColor = 'var(--app-border-strong)'; }}
-                        onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.borderColor = 'var(--app-border)'; }}
-                      >
-                        <div className="p-2.5 rounded-xl" style={{ backgroundColor: isActive ? 'var(--brand-saffron)' : 'var(--app-surface)', color: isActive ? 'var(--app-bg)' : 'var(--app-text-muted)' }}>
-                          <Icon className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="font-bold text-sm" style={{ color: isActive ? 'var(--brand-saffron)' : 'var(--app-text)' }}>{labels[wf].title}</div>
-                          <div className="text-xs mt-1 leading-relaxed text-[var(--app-text-muted)]">{labels[wf].desc}</div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="pt-4 flex gap-3">
-                  <button 
-                    onClick={() => setStep(3)}
                     className="px-6 py-4.5 rounded-2xl font-bold transition-all text-sm border cursor-pointer"
                     style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-surface)'; }}
@@ -660,7 +677,7 @@ export function OnboardingWizard({
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-primary-strong)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--brand-saffron)'; }}
                   >
-                    Deploy Dashboard <Sparkles className="h-4 w-4" />
+                    Deploy Dashboard <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
               </motion.div>

@@ -17,8 +17,8 @@ const router = Router();
 // Remap a free-text business type (from dashboard settings) to the typed enum.
 function remapBusinessType(value: string | undefined): "RETAIL" | "RESTAURANT" | "SERVICES" | undefined {
   if (!value) return undefined;
-  if (value === "Bakery & Food" || value === "Café & Food Outlet" || value === "F&B Outlet") return "RESTAURANT";
-  if (value === "Client Agency" || value === "Service / Clinic") return "SERVICES";
+  if (value === "Food & Beverage" || value === "Bakery & Food" || value === "Café & Food Outlet" || value === "F&B Outlet") return "RESTAURANT";
+  if (value === "Services / Appointments" || value === "Client Agency" || value === "Service / Clinic") return "SERVICES";
   if (value === "RETAIL" || value === "RESTAURANT" || value === "SERVICES") return value;
   return "RETAIL";
 }

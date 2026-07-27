@@ -607,11 +607,14 @@ router.put("/complete-google-onboarding", authMiddleware as any, async (req: any
 
     // Map the wizard's free-text vertical label to the typed BusinessType enum.
     const dbBusinessType =
+      businessType === "Food & Beverage" ||
       businessType === "Bakery & Food" ||
       businessType === "Café & Food Outlet" ||
       businessType === "F&B Outlet"
         ? "RESTAURANT"
-        : businessType === "Client Agency" || businessType === "Service / Clinic"
+        : businessType === "Services / Appointments" ||
+          businessType === "Client Agency" ||
+          businessType === "Service / Clinic"
         ? "SERVICES"
         : "RETAIL";
 
