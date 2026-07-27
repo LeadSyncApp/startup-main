@@ -221,6 +221,7 @@ export async function resolveConversation(
       claimExpiresAt: null,
       lastClaimHeartbeat: null,
       needsStaffReason: null,
+      slaNotifiedAt: null,
       resolvedBy,
       updatedAt: new Date(),
     },

@@ -22,7 +22,8 @@ class PgBossService {
     'CLEANUP_WEBHOOKS',
     'menu.restructure.job',
     'knowledge.train.job',
-    'voice.process.job'
+    'voice.process.job',
+    'CHECK_MISSED_REPLY_SLA'
   ];
 
   private constructor() {}

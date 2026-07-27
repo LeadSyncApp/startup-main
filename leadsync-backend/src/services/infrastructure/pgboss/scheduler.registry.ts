@@ -4,6 +4,8 @@ import {
   CLEANUP_WEBHOOKS_JOB_NAME,
   RECOVER_WEBHOOK_JOB_NAME
 } from './jobs/cleanup.job';
+import { MISSED_REPLY_SLA_JOB_NAME } from './jobs/slaMonitor.job';
+
 export class SchedulerRegistry {
   private static isRegistered = false;
 
@@ -22,6 +24,7 @@ export class SchedulerRegistry {
       }); 
       await boss.schedule(CLEANUP_WEBHOOKS_JOB_NAME, '0 0 * * *'); // Every midnight
       await boss.schedule(RECOVER_WEBHOOK_JOB_NAME, '*/15 * * * *'); // Every 15 minutes
+      await boss.schedule(MISSED_REPLY_SLA_JOB_NAME, '*/15 * * * *'); // Every 15 minutes
 
       this.isRegistered = true;
       console.log('✅ [PgBoss] Schedules registered successfully');
