@@ -264,7 +264,9 @@ export const prisma = basePrisma.$extends({
             return undefined;
           })() ||
           (args as any)?.data?.companyId ||
-          (Array.isArray((args as any)?.data) ? (args as any)?.data[0]?.companyId : undefined);
+          (Array.isArray((args as any)?.data) ? (args as any)?.data[0]?.companyId : undefined) ||
+          (args as any)?.create?.companyId ||
+          (Array.isArray((args as any)?.create) ? (args as any)?.create[0]?.companyId : undefined);
 
         // Strict fallback enforcement check for critical transactional integrity
         // We allow bypasses for bulk queries, direct ID primary key queries, or if tenant context is provided
