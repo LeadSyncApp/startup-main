@@ -10,7 +10,10 @@ export class NotificationService {
      * Returns true (enabled) if no preference row exists yet (safe default).
      */
     private async isTypeEnabled(userId: string, type: NotificationType, companyId?: string): Promise<boolean> {
-        const db = companyId ? getTenantPrismaContext(companyId) : prisma;
+        let db: any = prisma;
+        if (companyId) {
+            db = getTenantPrismaContext(companyId);
+        }
         const pref = await db.notificationPreference.findUnique({
             where: { userId },
             select: { [type]: true }
