@@ -15,6 +15,7 @@ import { RecentOrdersWidget } from './widgets/RecentOrdersWidget';
 import { RevenueForecastWidget } from './widgets/RevenueForecastWidget';
 import { WorkloadOverviewWidget } from './widgets/WorkloadOverviewWidget';
 import { LowStockWidget } from './widgets/LowStockWidget';
+import { IntegrationHealthWidget } from './widgets/IntegrationHealthWidget';
 
 interface MyShopPageProps {
   onNavigate?: (tab: TabID) => void;
@@ -169,26 +170,36 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
         <TopStaffWidget staff={data.agentStats} />
       ) : null}
 
-      {/* Row 6: Compact stat tiles */}
-      {!loading && data?.automationRules && (() => {
-        const rules = data.automationRules.rules ?? [];
-        const activeCount = rules.filter((r: { isEnabled?: boolean }) => r.isEnabled).length;
-        if (activeCount === 0) return null;
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 px-4 py-3 rounded-xl"
-            style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}
-          >
-            <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(167,139,250,0.1)' }}>
-              <Zap className="h-4 w-4" style={{ color: '#a78bfa' }} />
-            </div>
-            <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--app-text)' }}>{activeCount}</span>
-            <span className="text-xs" style={{ color: 'var(--app-text-muted)' }}>active automation rules</span>
-          </motion.div>
-        );
-      })()}
+      {/* Row 6: Compact stat tiles — Integrations + Automation */}
+      {!loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <IntegrationHealthWidget
+            data={data?.companyStatus?.company ?? null}
+            loading={loading}
+          />
+          {data?.automationRules && (() => {
+            const rules = data.automationRules.rules ?? [];
+            const activeCount = rules.filter((r: { isEnabled?: boolean }) => r.isEnabled).length;
+            if (activeCount === 0) return null;
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="card-hover p-5 flex items-center gap-4"
+                style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}
+              >
+                <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(167,139,250,0.1)' }}>
+                  <Zap className="h-4 w-4" style={{ color: '#a78bfa' }} />
+                </div>
+                <div>
+                  <p className="text-lg font-bold tabular-nums" style={{ color: 'var(--app-text)' }}>{activeCount}</p>
+                  <p className="text-2xs" style={{ color: 'var(--app-text-muted)' }}>active automation rules</p>
+                </div>
+              </motion.div>
+            );
+          })()}
+        </div>
+      )}
     </motion.div>
   );
 };

@@ -14,6 +14,7 @@ interface ShopDashboardData {
   teamMembers: any;
   automationRules: any;
   lowStock: any;
+  companyStatus: any;
 }
 
 export function useShopDashboardData() {
@@ -51,6 +52,7 @@ export function useShopDashboardData() {
           authedFetch('/api/team/members'),
           getCompanyId() ? authedFetch(`/api/automation/conversational-rules/${getCompanyId()}`) : Promise.resolve(null),
           authedFetch('/api/dashboard/low-stock'),
+          authedFetch('/api/company/status'),
         ]);
 
         if (cancelledRef.current) return;
@@ -68,6 +70,7 @@ export function useShopDashboardData() {
           teamMembers,
           automationRules,
           lowStock,
+          companyStatus,
         ] = await Promise.all([
           analyticsDashboardRes.ok ? analyticsDashboardRes.json() : null,
           analyticsRevenueRes.ok ? analyticsRevenueRes.json() : null,
@@ -81,6 +84,7 @@ export function useShopDashboardData() {
           authedFetch('/api/team/members').then(r => r.ok ? r.json() : null).catch(() => null),
           (() => { const cid = getCompanyId(); return cid ? authedFetch(`/api/automation/conversational-rules/${cid}`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null); })(),
           authedFetch('/api/dashboard/low-stock').then(r => r.ok ? r.json() : null).catch(() => null),
+          authedFetch('/api/company/status').then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
 
         if (cancelledRef.current) return;
@@ -98,6 +102,7 @@ export function useShopDashboardData() {
           teamMembers,
           automationRules,
           lowStock,
+          companyStatus,
         });
     } catch (err) {
       if (!cancelledRef.current) {
