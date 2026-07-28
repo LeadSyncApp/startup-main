@@ -16,6 +16,9 @@ export const NeedsAttentionWidget: React.FC<NeedsAttentionWidgetProps> = ({ aler
   if (alerts.urgentLeads > 0) {
     items.push({ label: 'customers waiting for a reply', count: alerts.urgentLeads, tab: 'inbox', color: 'var(--info-blue)' });
   }
+  if (alerts.botConversations > 0) {
+    items.push({ label: 'conversations handled by bot', count: alerts.botConversations, tab: 'inbox', color: '#a78bfa' });
+  }
 
   if (items.length === 0) return null;
 
