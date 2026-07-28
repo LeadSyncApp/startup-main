@@ -172,10 +172,12 @@ app.use("/api", productFieldsRoutes);
 import teamRoutes from "./routes/team/team.routes";
 import invitationsRoutes from "./routes/team/invitations.routes";
 import companyRoutes from "./routes/team/company.routes";
+import staffRoutes from "./routes/staff/staff.routes";
 
 app.use("/api/team", teamRoutes);
 app.use("/api/team/invitations", invitationsRoutes);
 app.use("/api/company", companyRoutes);
+app.use("/api/staff", staffRoutes);
 
 /* 🩺 DIAGNOSTIC ROUTE */
 app.get("/api/debug/system", async (req, res) => {
