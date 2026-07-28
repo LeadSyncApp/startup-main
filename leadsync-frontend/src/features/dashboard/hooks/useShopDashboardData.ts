@@ -8,6 +8,7 @@ interface ShopDashboardData {
   agentStats: any;
   alerts: any;
   funnel: any;
+  forecast: any;
 }
 
 export function useShopDashboardData() {
@@ -30,6 +31,7 @@ export function useShopDashboardData() {
           agentStatsRes,
           alertsRes,
           funnelRes,
+          forecastRes,
         ] = await Promise.all([
           authedFetch('/api/analytics/dashboard'),
           authedFetch('/api/analytics/revenue'),
@@ -37,6 +39,7 @@ export function useShopDashboardData() {
           authedFetch('/api/dashboard/agent-stats'),
           authedFetch('/api/dashboard/alerts'),
           authedFetch('/api/dashboard/funnel'),
+          authedFetch('/api/dashboard/forecast'),
         ]);
 
         if (cancelled) return;
@@ -48,6 +51,7 @@ export function useShopDashboardData() {
           agentStats,
           alerts,
           funnel,
+          forecast,
         ] = await Promise.all([
           analyticsDashboardRes.ok ? analyticsDashboardRes.json() : null,
           analyticsRevenueRes.ok ? analyticsRevenueRes.json() : null,
@@ -55,6 +59,7 @@ export function useShopDashboardData() {
           agentStatsRes.ok ? agentStatsRes.json() : null,
           alertsRes.ok ? alertsRes.json() : null,
           funnelRes.ok ? funnelRes.json() : null,
+          forecastRes.ok ? forecastRes.json() : null,
         ]);
 
         if (cancelled) return;
@@ -66,6 +71,7 @@ export function useShopDashboardData() {
           agentStats,
           alerts,
           funnel,
+          forecast,
         });
       } catch (err) {
         if (!cancelled) {

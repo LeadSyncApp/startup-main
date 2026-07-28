@@ -10,6 +10,7 @@ import { TopProductsWidget } from './widgets/TopProductsWidget';
 import { TopStaffWidget } from './widgets/TopStaffWidget';
 import { ChannelBreakdownWidget } from './widgets/ChannelBreakdownWidget';
 import { RecentOrdersWidget } from './widgets/RecentOrdersWidget';
+import { RevenueForecastWidget } from './widgets/RevenueForecastWidget';
 
 interface MyShopPageProps {
   onNavigate?: (tab: TabID) => void;
@@ -51,7 +52,7 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
         <NeedsAttentionWidget alerts={data.alerts} onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined} />
       )}
 
-      {/* Row 3: Revenue + Channels — 2 columns */}
+      {/* Row 3: Revenue + Forecast — 2 columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {loading ? (
           <RevenueTrendWidget trend={null} chart={[]} loading />
@@ -62,18 +63,18 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
           />
         ) : <div />}
         {loading ? (
-          <ChannelBreakdownWidget channels={[]} loading />
-        ) : data?.analyticsRevenue ? (
-          <ChannelBreakdownWidget channels={data.analyticsRevenue.channelAttribution} />
+          <RevenueForecastWidget forecast={null} loading />
+        ) : data?.forecast ? (
+          <RevenueForecastWidget forecast={data.forecast} />
         ) : <div />}
       </div>
 
-      {/* Row 4: Products + Recent Orders — 2 columns */}
+      {/* Row 4: Channels + Recent Orders — 2 columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {loading ? (
-          <TopProductsWidget products={[]} loading />
-        ) : data?.analyticsDashboard ? (
-          <TopProductsWidget products={data.analyticsDashboard.topProducts} />
+          <ChannelBreakdownWidget channels={[]} loading />
+        ) : data?.analyticsRevenue ? (
+          <ChannelBreakdownWidget channels={data.analyticsRevenue.channelAttribution} />
         ) : <div />}
         {loading ? (
           <RecentOrdersWidget orders={[]} loading />
