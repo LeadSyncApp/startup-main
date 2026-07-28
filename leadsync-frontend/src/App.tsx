@@ -24,6 +24,7 @@ const InboxSplitView = lazy(() => import("./features/inbox/InboxSplitView"));
 const InventoryPage = lazy(() => import("./features/inventory/InventoryPage").then(m => ({ default: m.InventoryPage })));
 const MyShopPage = lazy(() => import("./features/dashboard/MyShopPage").then(m => ({ default: m.MyShopPage })));
 const ConfigurationsPage = lazy(() => import("./features/configurations/ConfigurationsPage").then(m => ({ default: m.ConfigurationsPage })));
+const StaffProfilePage = lazy(() => import("./features/staff/StaffProfilePage").then(m => ({ default: m.StaffProfilePage })));
 
 // NOTE FOR REVIEW: InboxSplitWithParam reads the :leadId URL param and passes it
 // as initialLeadId to InboxSplitView. This preserves deep-link / notification
@@ -31,6 +32,25 @@ const ConfigurationsPage = lazy(() => import("./features/configurations/Configur
 function InboxSplitWithParam() {
   const { leadId } = useParams<{ leadId: string }>();
   return <InboxSplitView initialLeadId={leadId} />;
+}
+
+const VALID_TABS: TabID[] = ["shop", "messages", "inbox", "customers", "broadcast", "orders", "automation", "inventory", "settings", "profile"];
+
+function getInitialTab(): TabID {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get("tab") as TabID;
+    if (tabParam && VALID_TABS.includes(tabParam)) {
+      return tabParam;
+    }
+    const saved = localStorage.getItem("leadsync_active_tab") as TabID;
+    if (saved && VALID_TABS.includes(saved)) {
+      return saved;
+    }
+  } catch {
+    // fallback
+  }
+  return "shop";
 }
 
 export default function App() {
@@ -60,15 +80,28 @@ export default function App() {
     }
   }, [navigate]);
 
-  // Active tab state - now using new TabID values
-  const [activeTab, setActiveTab] = useState<TabID>("shop");
+  // Active tab state - synced with URL search param ?tab= and localStorage
+  const [activeTab, setActiveTab] = useState<TabID>(getInitialTab);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get("tab") as TabID;
+    if (tabParam && VALID_TABS.includes(tabParam) && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [location.search, activeTab]);
 
   const handleTabChange = useCallback((tabId: TabID) => {
     setActiveTab(tabId);
-    if (window.location.pathname !== "/dashboard") {
-      navigate("/dashboard");
+    try {
+      localStorage.setItem("leadsync_active_tab", tabId);
+    } catch {}
+    if (location.pathname === "/dashboard") {
+      navigate(`/dashboard?tab=${tabId}`, { replace: true });
+    } else {
+      navigate(`/dashboard?tab=${tabId}`);
     }
-  }, [navigate]);
+  }, [navigate, location.pathname]);
 
   // Auth-based route guard
   const lastHandledPathRef = useRef<string | null>(null);
@@ -78,7 +111,8 @@ export default function App() {
     lastHandledPathRef.current = path;
     if (user) {
       if (path === "/login" || path === "/onboarding" || path === "/auth-callback" || path === "/") {
-        navigate("/dashboard", { replace: true });
+        const targetTab = getInitialTab();
+        navigate(`/dashboard?tab=${targetTab}`, { replace: true });
       }
     }
   }, [user, navigate, location.pathname]);
@@ -98,15 +132,6 @@ export default function App() {
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
-
-  // Redirect STAFF to messages
-  useEffect(() => {
-    if (user) {
-      if (user.role === 'STAFF' && activeTab === 'shop') {
-        setActiveTab('messages');
-      }
-    }
-  }, [user, activeTab]);
 
   // Initialize Socket.IO connection + notification store when user is authenticated
   useEffect(() => {
@@ -336,6 +361,11 @@ export default function App() {
                   {activeTab === 'inventory' && (
                     <motion.div key="inventory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="inventory-page">
                       <InventoryPage companyId={user?.companyId} businessType={businessType} />
+                    </motion.div>
+                  )}
+                  {activeTab === 'profile' && (
+                    <motion.div key="profile" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="staff-profile">
+                      <StaffProfilePage />
                     </motion.div>
                   )}
                 </AnimatePresence>

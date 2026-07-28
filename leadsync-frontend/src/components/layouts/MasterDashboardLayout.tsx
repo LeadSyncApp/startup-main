@@ -14,7 +14,8 @@ import {
   Sun,
   Moon,
   Inbox,
-  Package
+  Package,
+  User
 } from 'lucide-react';
 import { useActivityStore } from '../../features/activity-ledger/useActivityStore';
 import { ActivityFeedDrawer } from '../../features/activity-ledger/ActivityFeedDrawer';
@@ -23,28 +24,31 @@ import { useAuth } from '../../features/auth-tenancy/AuthContext';
 import { authedFetch } from '../../api/client';
 import { onEvent } from '../../lib/socketClient';
 import { NotificationBell } from '../../features/notifications/NotificationPanel';
+import { can, Permission } from '../../lib/permissions';
 
 export type UserRole = 'OWNER' | 'MANAGER' | 'STAFF';
-export type TabID = 'shop' | 'messages' | 'inbox' | 'customers' | 'broadcast' | 'orders' | 'automation' | 'inventory' | 'settings';
+export type TabID = 'shop' | 'messages' | 'inbox' | 'customers' | 'broadcast' | 'orders' | 'automation' | 'inventory' | 'settings' | 'profile';
 
 export interface TabItem {
   id: TabID;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   allowedRoles: UserRole[];
+  permission: Permission;
   badge?: string | number;
 }
 
 const tabConfig: TabItem[] = [
-  { id: 'shop', label: 'My Shop', icon: Home, allowedRoles: ['OWNER', 'MANAGER'] },
-  { id: 'messages', label: 'New Customers', icon: MessageSquare, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'] },
-  { id: 'inbox', label: 'My Chats', icon: Inbox, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'] },
-  { id: 'customers', label: 'Customers', icon: Users, allowedRoles: ['OWNER', 'MANAGER'] },
-  { id: 'broadcast', label: 'Broadcast', icon: Zap, allowedRoles: ['OWNER', 'MANAGER'] },
-  { id: 'orders', label: 'Orders', icon: ShoppingBag, allowedRoles: ['OWNER', 'MANAGER'] },
-  { id: 'automation', label: 'Automation', icon: MessageSquare, allowedRoles: ['OWNER', 'MANAGER'] },
-  { id: 'inventory', label: 'Inventory', icon: Package, allowedRoles: ['OWNER', 'MANAGER'] },
-  { id: 'settings', label: 'Settings', icon: Settings, allowedRoles: ['OWNER', 'MANAGER'] },
+  { id: 'shop', label: 'My Shop', icon: Home, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], permission: 'dashboard.view' },
+  { id: 'messages', label: 'New Customers', icon: MessageSquare, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], permission: 'conversations.reply' },
+  { id: 'inbox', label: 'My Chats', icon: Inbox, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], permission: 'conversations.reply' },
+  { id: 'customers', label: 'Customers', icon: Users, allowedRoles: ['OWNER', 'MANAGER'], permission: 'team.view' },
+  { id: 'broadcast', label: 'Broadcast', icon: Zap, allowedRoles: ['OWNER', 'MANAGER'], permission: 'broadcast.send' },
+  { id: 'orders', label: 'Orders', icon: ShoppingBag, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], permission: 'orders.fulfill' },
+  { id: 'automation', label: 'Automation', icon: MessageSquare, allowedRoles: ['OWNER', 'MANAGER'], permission: 'automation.manage' },
+  { id: 'inventory', label: 'Inventory', icon: Package, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], permission: 'inventory.manage' },
+  { id: 'settings', label: 'Settings', icon: Settings, allowedRoles: ['OWNER', 'MANAGER'], permission: 'settings.shop.edit' },
+  { id: 'profile', label: 'My Profile', icon: User, allowedRoles: ['OWNER', 'MANAGER', 'STAFF'], permission: 'team.viewOwn' },
 ];
 
 interface MasterDashboardLayoutProps {
@@ -185,13 +189,15 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
     inbox: myUnreadChats > 0 ? myUnreadChats : undefined,
   }), [unclaimedCount, myUnreadChats]);
 
+  const { user } = useAuth();
+
   const allowedTabs = useMemo(() => tabConfig
-    .filter(tab => tab.allowedRoles.includes(userRole))
+    .filter(tab => can(user || userRole, tab.permission))
     .map(tab =>
       tab.id in badgeFor
         ? { ...tab, badge: badgeFor[tab.id] }
         : tab
-    ), [userRole, badgeFor]);
+    ), [user, userRole, badgeFor]);
 
   const displayRole = userRole === 'STAFF' ? 'Staff' : userRole === 'MANAGER' ? 'Manager' : 'Owner';
 

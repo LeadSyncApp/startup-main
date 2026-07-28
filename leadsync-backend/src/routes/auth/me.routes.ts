@@ -21,6 +21,7 @@ router.get("/me", authMiddleware as any, async (req: any, res: any) => {
         role: true,
         staffId: true,
         isAvailable: true,
+        permissionOverrides: true,
         companyId: true,
         company: {
           select: {
@@ -46,6 +47,7 @@ router.get("/me", authMiddleware as any, async (req: any, res: any) => {
         role: user.role,
         companyId: user.companyId,
         isAvailable: user.isAvailable,
+        permissionOverrides: user.permissionOverrides ?? [],
       },
       company: {
         id: user.company.id,

@@ -23,6 +23,7 @@ export interface User {
   companyId: string;
   isAvailable?: boolean;
   staffId?: string;
+  permissionOverrides?: string[] | null;
 }
 
 export interface Company {
@@ -149,24 +150,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     handleGoogleCallback();
   }, [login]);
 
-  // Restore authenticated credentials from standard caches safely
+  // Restore authenticated credentials from standard caches safely + sync fresh permissions from /me
   useEffect(() => {
-    try {
-      const storedToken = localStorage.getItem("token") || localStorage.getItem("access_token");
-      const storedUser = localStorage.getItem("user");
-      const storedCompany = localStorage.getItem("company");
+    const initAuth = async () => {
+      try {
+        const storedToken = localStorage.getItem("token") || localStorage.getItem("access_token");
+        const storedUser = localStorage.getItem("user");
+        const storedCompany = localStorage.getItem("company");
 
-      if (storedToken && storedUser && storedCompany) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-        setCompany(JSON.parse(storedCompany));
+        if (storedToken && storedUser && storedCompany) {
+          setToken(storedToken);
+          setUser(JSON.parse(storedUser));
+          setCompany(JSON.parse(storedCompany));
+
+          // Fetch fresh user profile & permissions from backend to stay in sync
+          try {
+            const res = await fetch("/api/auth/me", {
+              headers: { Authorization: `Bearer ${storedToken}` },
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.user) {
+                setUser(data.user);
+                localStorage.setItem("user", JSON.stringify(data.user));
+              }
+              if (data.company) {
+                setCompany(data.company);
+                localStorage.setItem("company", JSON.stringify(data.company));
+              }
+            }
+          } catch {
+            // Ignore offline/network refresh failure, fallback to cached state
+          }
+        }
+      } catch (error) {
+        console.error("❌ Critical auth synchronization failure:", error);
+        localStorage.clear();
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("❌ Critical auth synchronization failure:", error);
-      localStorage.clear();
-    } finally {
-      setIsLoading(false);
-    }
+    };
+
+    initAuth();
   }, []);
 
   const logout = () => {
