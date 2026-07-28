@@ -1,6 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Download, RefreshCw } from 'lucide-react';
+import { Download, RefreshCw, Zap } from 'lucide-react';
 import { authedFetch } from '../../api/client';
 import { TabID } from '../../components/layouts/MasterDashboardLayout';
 import { useShopDashboardData } from './hooks/useShopDashboardData';
@@ -162,6 +162,27 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
       ) : data?.agentStats ? (
         <TopStaffWidget staff={data.agentStats} />
       ) : null}
+
+      {/* Row 6: Compact stat tiles */}
+      {!loading && data?.automationRules && (() => {
+        const rules = data.automationRules.rules ?? [];
+        const activeCount = rules.filter((r: { isEnabled?: boolean }) => r.isEnabled).length;
+        if (activeCount === 0) return null;
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl"
+            style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}
+          >
+            <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(167,139,250,0.1)' }}>
+              <Zap className="h-4 w-4" style={{ color: '#a78bfa' }} />
+            </div>
+            <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--app-text)' }}>{activeCount}</span>
+            <span className="text-xs" style={{ color: 'var(--app-text-muted)' }}>active automation rules</span>
+          </motion.div>
+        );
+      })()}
     </motion.div>
   );
 };

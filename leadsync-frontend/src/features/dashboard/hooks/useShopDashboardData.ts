@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { authedFetch } from '../../../api/client';
+import { authedFetch, getCompanyId } from '../../../api/client';
 
 interface ShopDashboardData {
   analyticsDashboard: any;
@@ -12,6 +12,7 @@ interface ShopDashboardData {
   conversationSummary: any;
   metrics: any;
   teamMembers: any;
+  automationRules: any;
 }
 
 export function useShopDashboardData() {
@@ -47,6 +48,7 @@ export function useShopDashboardData() {
           authedFetch('/api/dashboard/conversation-summary'),
           authedFetch('/api/dashboard/metrics'),
           authedFetch('/api/team/members'),
+          getCompanyId() ? authedFetch(`/api/automation/conversational-rules/${getCompanyId()}`) : Promise.resolve(null),
         ]);
 
         if (cancelledRef.current) return;
@@ -62,6 +64,7 @@ export function useShopDashboardData() {
           conversationSummary,
           metrics,
           teamMembers,
+          automationRules,
         ] = await Promise.all([
           analyticsDashboardRes.ok ? analyticsDashboardRes.json() : null,
           analyticsRevenueRes.ok ? analyticsRevenueRes.json() : null,
@@ -73,6 +76,7 @@ export function useShopDashboardData() {
           conversationSummaryRes.ok ? conversationSummaryRes.json() : null,
           metricsRes.ok ? metricsRes.json() : null,
           authedFetch('/api/team/members').then(r => r.ok ? r.json() : null).catch(() => null),
+          (() => { const cid = getCompanyId(); return cid ? authedFetch(`/api/automation/conversational-rules/${cid}`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null); })(),
         ]);
 
         if (cancelledRef.current) return;
@@ -88,6 +92,7 @@ export function useShopDashboardData() {
           conversationSummary,
           metrics,
           teamMembers,
+          automationRules,
         });
     } catch (err) {
       if (!cancelledRef.current) {
