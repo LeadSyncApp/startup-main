@@ -169,7 +169,7 @@ export async function escalateToHuman(
       actorId,
       actorName,
     },
-  }).catch((err) => console.error("❌ Failed to write ConversationActivity on claim:", err));
+  }).catch((err: any) => console.error("❌ Failed to write ConversationActivity on claim:", err));
 
   prisma.claimLog.create({
     data: {
@@ -179,7 +179,7 @@ export async function escalateToHuman(
       actorName,
       action: "CLAIMED",
     },
-  }).catch((err) => console.error("❌ Failed to write ClaimLog on claim:", err));
+  }).catch((err: any) => console.error("❌ Failed to write ClaimLog on claim:", err));
 
   // 6. Emit socket event
   const eventPayload = {
@@ -270,7 +270,7 @@ export async function resolveConversation(
       actorId,
       actorName,
     },
-  }).catch((err) => console.error("❌ Failed to write ConversationActivity on resolve:", err));
+  }).catch((err: any) => console.error("❌ Failed to write ConversationActivity on resolve:", err));
 
   prisma.claimLog.create({
     data: {
@@ -280,7 +280,7 @@ export async function resolveConversation(
       actorName,
       action: "RESOLVED",
     },
-  }).catch((err) => console.error("❌ Failed to write ClaimLog on resolve:", err));
+  }).catch((err: any) => console.error("❌ Failed to write ClaimLog on resolve:", err));
 
   // 4. Emit socket event
   safeEmitConversationUpdate(updated, "conversation.resolved", {
