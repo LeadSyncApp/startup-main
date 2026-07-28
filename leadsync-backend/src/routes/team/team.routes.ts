@@ -4,6 +4,7 @@ import { prisma } from "../../lib/prisma";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { can } from "../../services/auth/permissions.service";
 import { notificationService } from "../../services/infrastructure/notification.service";
+import { cacheService } from "../../services/infrastructure/cache.service";
 
 const STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
 
@@ -20,6 +21,14 @@ router.get("/members", authMiddleware as any, async (req: any, res: any) => {
 
     if (!can(userRole, "team.viewOwn")) {
       return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (companyId) {
+      const cacheKey = `team_members_${companyId}`;
+      const cached = await cacheService.get(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
     }
 
     const members = await prisma.user.findMany({
@@ -65,7 +74,13 @@ router.get("/members", authMiddleware as any, async (req: any, res: any) => {
       return { ...m, isOnline };
     });
 
-    res.json({ members: correctedMembers });
+    const responseData = { members: correctedMembers };
+
+    if (companyId) {
+      await cacheService.set(`team_members_${companyId}`, responseData, 60);
+    }
+
+    res.json(responseData);
   } catch (error: any) {
     console.error("List team members error:", error);
     res.status(500).json({ message: "Failed to list team members" });

@@ -15,6 +15,7 @@ import { embedRuleToKnowledgeChunk } from "../../services/knowledge/ruleEmbeddin
 import { telegramSurfaceAdapter } from "../../services/automation/telegramSurface.adapter";
 import { MAX_SURFACED_RULES, KNOWN_EVENTS, ORDER_EVENT_PREFIX } from "../../services/automation/conversationalRule.constants";
 import { invalidateChunkCache } from "../../services/knowledge/chunkCache";
+import { cacheService } from "../../services/infrastructure/cache.service";
 
 const router = Router();
 
@@ -409,6 +410,12 @@ router.get("/:companyId", authMiddleware as any, async (req: any, res: any) => {
     }
     const { groupId } = req.query;
 
+    const cacheKey = `conversational_rules_${companyId}${groupId ? `_${groupId}` : ''}`;
+    const cached = await cacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const where: any = { companyId };
     if (groupId) {
       where.groupId = groupId;
@@ -424,11 +431,15 @@ router.get("/:companyId", authMiddleware as any, async (req: any, res: any) => {
       orderBy: { createdAt: "desc" },
     });
 
-    // NOTE: Frontend expects top-level 'rules' key
-    res.json({
+    const responseData = {
       success: true,
       rules: rules,
-    });
+    };
+
+    await cacheService.set(cacheKey, responseData, 60);
+
+    // NOTE: Frontend expects top-level 'rules' key
+    res.json(responseData);
   } catch (err: any) {
     console.error("[ConversationalRules] list error:", err);
     res.status(500).json({

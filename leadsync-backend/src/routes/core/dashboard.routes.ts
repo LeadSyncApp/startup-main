@@ -726,6 +726,12 @@ router.get(
     try {
       const { companyId } = req.user!;
 
+      const cacheKey = `dashboard_alerts_${companyId}`;
+      const cachedData = await cacheService.get(cacheKey);
+      if (cachedData) {
+        return res.json(cachedData);
+      }
+
       // Unclaimed active conversations → shown as "urgent leads" (needs human attention)
       const urgentLeads = await prisma.conversation.count({
         where: {
@@ -755,7 +761,10 @@ router.get(
         },
       }).catch(() => 0);
 
-      res.json({ urgentLeads, pendingOrders: newOrderArrivals, botConversations });
+      const responseData = { urgentLeads, pendingOrders: newOrderArrivals, botConversations };
+      await cacheService.set(cacheKey, responseData, 60);
+
+      res.json(responseData);
     } catch (error) {
       console.error("Alerts KPI error:", error);
       res.status(500).json({ message: "Failed to fetch alerts" });
@@ -770,6 +779,12 @@ router.get(
 router.get("/funnel", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { companyId } = req.user!;
+
+    const cacheKey = `dashboard_funnel_${companyId}`;
+    const cachedData = await cacheService.get(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
 
     // Single groupBy query instead of 5 separate count queries
     const segmentCounts = await prisma.lead.groupBy({
@@ -794,7 +809,7 @@ router.get("/funnel", authMiddleware, async (req: AuthRequest, res: Response) =>
     const total = newCount + regularCount + vipCount + churnCount;
     const conversionRate = total > 0 ? Math.round((totalOrders / total) * 100) : 0;
 
-    res.json({
+    const responseData = {
       stages: [
         { label: "New Leads",   value: newCount,     color: "#6366f1" },
         { label: "Regular",     value: regularCount, color: "#10b981" },
@@ -804,7 +819,11 @@ router.get("/funnel", authMiddleware, async (req: AuthRequest, res: Response) =>
       ],
       conversionRate,
       totalLeads: total,
-    });
+    };
+
+    await cacheService.set(cacheKey, responseData, 60);
+
+    res.json(responseData);
   } catch (err) {
     console.error("Funnel error:", err);
     res.status(500).json({ message: "Failed to fetch funnel" });
@@ -818,6 +837,13 @@ router.get("/funnel", authMiddleware, async (req: AuthRequest, res: Response) =>
 router.get("/forecast", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { companyId } = req.user!;
+
+    const cacheKey = `dashboard_forecast_${companyId}`;
+    const cachedData = await cacheService.get(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
+
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const orders = await (prisma.order as any).findMany({
@@ -842,6 +868,8 @@ router.get("/forecast", authMiddleware, async (req: AuthRequest, res: Response) 
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, revenue]) => ({ date, revenue }));
 
+    let responseData: any;
+
     // Simple linear regression for next 14 days
     if (historical.length >= 3) {
       const n = historical.length;
@@ -862,10 +890,13 @@ router.get("/forecast", authMiddleware, async (req: AuthRequest, res: Response) 
         forecast.push({ date: futureDate, revenue: predicted, forecast: true });
       }
 
-      return res.json({ historical, forecast });
+      responseData = { historical, forecast };
+    } else {
+      responseData = { historical, forecast: [] };
     }
 
-    res.json({ historical, forecast: [] });
+    await cacheService.set(cacheKey, responseData, 60);
+    return res.json(responseData);
   } catch (err) {
     console.error("Forecast error:", err);
     res.status(500).json({ message: "Failed to generate forecast" });
@@ -879,6 +910,12 @@ router.get("/forecast", authMiddleware, async (req: AuthRequest, res: Response) 
 router.get("/agent-stats", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { companyId } = req.user!;
+
+    const cacheKey = `dashboard_agent_stats_${companyId}`;
+    const cachedData = await cacheService.get(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
 
     const agents = await prisma.user.findMany({
       where: { companyId, isActive: true },
@@ -939,7 +976,10 @@ router.get("/agent-stats", authMiddleware, async (req: AuthRequest, res: Respons
       orders: orderMap.get(agent.id) || 0,
     }));
 
-    res.json(stats.sort((a, b) => b.orders - a.orders));
+    const responseData = stats.sort((a, b) => b.orders - a.orders);
+    await cacheService.set(cacheKey, responseData, 60);
+
+    res.json(responseData);
   } catch (err) {
     console.error("Agent stats error:", err);
     res.status(500).json({ message: "Failed to fetch agent stats" });
@@ -957,6 +997,12 @@ router.get("/conversation-summary", authMiddleware, async (req: AuthRequest, res
       return res.status(403).json({ error: "Manager/owner only" });
     }
     const companyId = req.user!.companyId;
+
+    const cacheKey = `dashboard_conv_summary_${companyId}`;
+    const cachedData = await cacheService.get(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
 
     const active = await prisma.conversation.findMany({
       where: {
@@ -998,11 +1044,15 @@ router.get("/conversation-summary", authMiddleware, async (req: AuthRequest, res
       });
     }
 
-    res.json({
+    const responseData = {
       totalActive: active.length + unclaimed,
       unclaimed,
       byStaff: Array.from(byStaffMap.values()).map((s) => ({ ...s, count: s.conversations.length })),
-    });
+    };
+
+    await cacheService.set(cacheKey, responseData, 60);
+
+    res.json(responseData);
   } catch (err: any) {
     console.error("Conversation summary error:", err);
     res.status(500).json({ error: "Failed to fetch conversation summary" });
@@ -1021,6 +1071,12 @@ const LOW_STOCK_THRESHOLD = 5;
 router.get("/low-stock", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { companyId } = req.user!;
+
+    const cacheKey = `dashboard_low_stock_${companyId}`;
+    const cachedData = await cacheService.get(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
 
     const [variants, totalLowStock] = await Promise.all([
       prisma.inventoryVariant.findMany({
@@ -1068,10 +1124,14 @@ router.get("/low-stock", authMiddleware, async (req: AuthRequest, res: Response)
       sku: v.sku,
     }));
 
-    res.json({
+    const responseData = {
       totalLowStock,
       items,
-    });
+    };
+
+    await cacheService.set(cacheKey, responseData, 60);
+
+    res.json(responseData);
   } catch (err) {
     console.error("Low stock error:", err);
     res.status(500).json({ message: "Failed to fetch low stock data" });

@@ -7,6 +7,7 @@ import { can } from "../../services/auth/permissions.service";
 import { notificationService } from "../../services/infrastructure/notification.service";
 import { pgBossService } from "../../services/infrastructure/pgboss/pgboss.service";
 import { Channel, StandardMessageFrame } from "../../interfaces/messaging.interface";
+import { cacheService } from "../../services/infrastructure/cache.service";
 
 const router = Router();
 
@@ -244,6 +245,14 @@ router.get("/status", authMiddleware as any, async (req: any, res: any) => {
   try {
     const companyId = req.user?.companyId;
 
+    if (companyId) {
+      const cacheKey = `company_status_${companyId}`;
+      const cached = await cacheService.get(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+    }
+
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       select: {
@@ -260,7 +269,13 @@ router.get("/status", authMiddleware as any, async (req: any, res: any) => {
       return res.status(404).json({ message: "Company not found" });
     }
 
-    res.json({ company });
+    const responseData = { company };
+
+    if (companyId) {
+      await cacheService.set(`company_status_${companyId}`, responseData, 60);
+    }
+
+    res.json(responseData);
   } catch (error: any) {
     console.error("Company status error:", error);
     res.status(500).json({ message: "Failed to get company status" });
