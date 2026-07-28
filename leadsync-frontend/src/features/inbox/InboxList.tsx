@@ -264,7 +264,7 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
     if (!window.confirm(`Are you sure you want to delete ${selectedLeadIds.length} selected conversation(s)?`)) return;
     try {
       setBulkDeleting(true);
-      const res = await authedFetch("/api/leads/bulk-delete", {
+      const res = await authedFetch("/api/conversations/bulk-delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: selectedLeadIds }),
