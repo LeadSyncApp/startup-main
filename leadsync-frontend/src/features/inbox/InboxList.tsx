@@ -381,8 +381,8 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
                         {lead.status}
                       </Badge>
 
-                      {/* Claim button for unassigned chats */}
-                      {!lead.assignedTo && (
+                      {/* Claim button for unassigned active chats */}
+                      {!lead.assignedTo && lead.status !== "RESOLVED" && filter !== "completed" && (
                         <button
                           onClick={(e) => handleClaim(e, lead.id)}
                           data-tour="claim-chat"
