@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Download, RefreshCw, Zap } from 'lucide-react';
 import { authedFetch } from '../../api/client';
@@ -8,7 +8,6 @@ import { CollectionStatsWidget } from './widgets/CollectionStatsWidget';
 import { NeedsAttentionWidget } from './widgets/NeedsAttentionWidget';
 import { HealthCheckWidget } from './widgets/HealthCheckWidget';
 import { RevenueTrendWidget } from './widgets/RevenueTrendWidget';
-import { TopProductsWidget } from './widgets/TopProductsWidget';
 import { TopStaffWidget } from './widgets/TopStaffWidget';
 import { ChannelBreakdownWidget } from './widgets/ChannelBreakdownWidget';
 import { RecentOrdersWidget } from './widgets/RecentOrdersWidget';

@@ -23,7 +23,7 @@ interface ChartTooltipProps {
   label?: string;
 }
 
-function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
+function ChartTooltip({ active, payload }: ChartTooltipProps) {
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
   return (
@@ -106,7 +106,6 @@ export const RevenueForecastWidget: React.FC<RevenueForecastWidgetProps> = ({ fo
               stroke="var(--brand-saffron)"
               strokeWidth={2}
               dot={false}
-              strokeDasharray={(entry: { forecast?: boolean }) => entry?.forecast ? '5 5' : undefined}
               activeDot={{ r: 4, strokeWidth: 0 }}
             />
           </LineChart>

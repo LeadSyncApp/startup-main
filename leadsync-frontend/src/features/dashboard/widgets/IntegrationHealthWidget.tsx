@@ -1,6 +1,5 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Link2 } from 'lucide-react';
 
 interface CompanyData {
   telegramConnected?: boolean;
