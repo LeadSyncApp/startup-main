@@ -131,6 +131,7 @@ app.use("/api/users", secureRoutes);
 
 /* 🔐 MAIN ROUTES */
 app.use("/api/leads", leadsRoutes);
+app.use("/api/conversations", leadsRoutes);
 
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/products", productsRoutes);

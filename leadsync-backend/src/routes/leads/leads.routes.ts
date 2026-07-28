@@ -1225,6 +1225,71 @@ router.post("/bulk-delete", authMiddleware, authorizeRoles("MANAGER", "OWNER"), 
 });
 
 /* =========================================
+   POST /api/conversations/bulk-delete
+   Soft-delete multiple conversation threads without touching Lead records
+========================================= */
+router.post("/conversations/bulk-delete", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { companyId } = req.user!;
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "Invalid IDs provided" });
+    }
+
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        companyId,
+        deletedAt: null,
+        OR: [
+          { id: { in: ids } },
+          { leadId: { in: ids } }
+        ]
+      },
+      select: { id: true, leadId: true }
+    });
+
+    const convIds = conversations.map(c => c.id);
+
+    if (convIds.length > 0) {
+      await (prisma.conversation as any).updateMany({
+        where: {
+          id: { in: convIds },
+          companyId
+        },
+        data: {
+          deletedAt: new Date(),
+          lifecycleStatus: "deleted",
+          status: "RESOLVED"
+        }
+      });
+
+      await (prisma.message as any).updateMany({
+        where: {
+          conversationId: { in: convIds },
+          companyId,
+          deletedAt: null
+        },
+        data: {
+          deletedAt: new Date()
+        }
+      });
+
+      for (const c of conversations) {
+        if (c.leadId) {
+          emitToCompany(companyId, "conversation_deleted", { conversationId: c.id, leadId: c.leadId });
+        }
+      }
+    }
+
+    res.json({ message: `Successfully soft-deleted ${convIds.length} conversation thread(s)` });
+  } catch (error) {
+    console.error("Bulk conversation delete error:", error);
+    res.status(500).json({ message: "Failed to perform bulk conversation deletion" });
+  }
+});
+
+/* =========================================
    POST /api/leads/bulk-tag
    Add/remove tags for multiple leads
 ========================================= */
