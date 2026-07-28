@@ -157,7 +157,31 @@ export async function escalateToHuman(
     },
   });
 
-  // 5. Emit socket event
+  // 5. Additive audit logging: record Activity and ClaimLog entries
+  const actorName = updated.claimedByName || fullName || "Agent";
+  const actorId = updated.claimedById || callerId;
+
+  prisma.conversationActivity.create({
+    data: {
+      conversationId: updated.id,
+      companyId: updated.companyId,
+      type: "ASSIGNED",
+      actorId,
+      actorName,
+    },
+  }).catch((err) => console.error("❌ Failed to write ConversationActivity on claim:", err));
+
+  prisma.claimLog.create({
+    data: {
+      companyId: updated.companyId,
+      conversationId: updated.id,
+      actorId,
+      actorName,
+      action: "CLAIMED",
+    },
+  }).catch((err) => console.error("❌ Failed to write ClaimLog on claim:", err));
+
+  // 6. Emit socket event
   const eventPayload = {
     conversationId: updated.id,
     reason,
@@ -168,7 +192,7 @@ export async function escalateToHuman(
 
   safeEmitConversationUpdate(updated, "conversation.escalated", eventPayload);
 
-  // 6. Trigger notification
+  // 7. Trigger notification
   const lead = updated.leadId
     ? await prisma.lead.findUnique({ where: { id: updated.leadId }, select: { name: true, contact: true } })
     : null;
