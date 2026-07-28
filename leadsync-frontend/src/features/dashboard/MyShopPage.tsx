@@ -101,7 +101,12 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
           <HealthCheckWidget kpis={{ leads: 0, conversations: 0, orders: 0, agents: 0 }} conversionRate={0} loading />
         ) : data?.kpis && data?.funnel ? (
           <HealthCheckWidget
-            kpis={{ leads: data.kpis.leads, conversations: data.kpis.conversations, orders: data.kpis.orders, agents: data.kpis.agents }}
+            kpis={{
+              leads: data.metrics?.metrics?.totalLeads ?? data.kpis.leads,
+              conversations: data.kpis.conversations,
+              orders: data.metrics?.metrics?.totalOrders ?? data.kpis.orders,
+              agents: data.kpis.agents,
+            }}
             conversionRate={data.funnel.conversionRate}
           />
         ) : null}

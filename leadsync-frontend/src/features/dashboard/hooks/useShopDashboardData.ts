@@ -10,6 +10,7 @@ interface ShopDashboardData {
   funnel: any;
   forecast: any;
   conversationSummary: any;
+  metrics: any;
 }
 
 export function useShopDashboardData() {
@@ -24,60 +25,65 @@ export function useShopDashboardData() {
     setError(null);
 
     try {
-      const [
-        analyticsDashboardRes,
-        analyticsRevenueRes,
-        kpisRes,
-        agentStatsRes,
-        alertsRes,
-        funnelRes,
-        forecastRes,
-        conversationSummaryRes,
-      ] = await Promise.all([
-        authedFetch('/api/analytics/dashboard'),
-        authedFetch('/api/analytics/revenue'),
-        authedFetch('/api/dashboard/kpis'),
-        authedFetch('/api/dashboard/agent-stats'),
-        authedFetch('/api/dashboard/alerts'),
-        authedFetch('/api/dashboard/funnel'),
-        authedFetch('/api/dashboard/forecast'),
-        authedFetch('/api/dashboard/conversation-summary'),
-      ]);
+        const [
+          analyticsDashboardRes,
+          analyticsRevenueRes,
+          kpisRes,
+          agentStatsRes,
+          alertsRes,
+          funnelRes,
+          forecastRes,
+          conversationSummaryRes,
+          metricsRes,
+        ] = await Promise.all([
+          authedFetch('/api/analytics/dashboard'),
+          authedFetch('/api/analytics/revenue'),
+          authedFetch('/api/dashboard/kpis'),
+          authedFetch('/api/dashboard/agent-stats'),
+          authedFetch('/api/dashboard/alerts'),
+          authedFetch('/api/dashboard/funnel'),
+          authedFetch('/api/dashboard/forecast'),
+          authedFetch('/api/dashboard/conversation-summary'),
+          authedFetch('/api/dashboard/metrics'),
+        ]);
 
-      if (cancelledRef.current) return;
+        if (cancelledRef.current) return;
 
-      const [
-        analyticsDashboard,
-        analyticsRevenue,
-        kpis,
-        agentStats,
-        alerts,
-        funnel,
-        forecast,
-        conversationSummary,
-      ] = await Promise.all([
-        analyticsDashboardRes.ok ? analyticsDashboardRes.json() : null,
-        analyticsRevenueRes.ok ? analyticsRevenueRes.json() : null,
-        kpisRes.ok ? kpisRes.json() : null,
-        agentStatsRes.ok ? agentStatsRes.json() : null,
-        alertsRes.ok ? alertsRes.json() : null,
-        funnelRes.ok ? funnelRes.json() : null,
-        forecastRes.ok ? forecastRes.json() : null,
-        conversationSummaryRes.ok ? conversationSummaryRes.json() : null,
-      ]);
+        const [
+          analyticsDashboard,
+          analyticsRevenue,
+          kpis,
+          agentStats,
+          alerts,
+          funnel,
+          forecast,
+          conversationSummary,
+          metrics,
+        ] = await Promise.all([
+          analyticsDashboardRes.ok ? analyticsDashboardRes.json() : null,
+          analyticsRevenueRes.ok ? analyticsRevenueRes.json() : null,
+          kpisRes.ok ? kpisRes.json() : null,
+          agentStatsRes.ok ? agentStatsRes.json() : null,
+          alertsRes.ok ? alertsRes.json() : null,
+          funnelRes.ok ? funnelRes.json() : null,
+          forecastRes.ok ? forecastRes.json() : null,
+          conversationSummaryRes.ok ? conversationSummaryRes.json() : null,
+          metricsRes.ok ? metricsRes.json() : null,
+        ]);
 
-      if (cancelledRef.current) return;
+        if (cancelledRef.current) return;
 
-      setData({
-        analyticsDashboard,
-        analyticsRevenue,
-        kpis,
-        agentStats,
-        alerts,
-        funnel,
-        forecast,
-        conversationSummary,
-      });
+        setData({
+          analyticsDashboard,
+          analyticsRevenue,
+          kpis,
+          agentStats,
+          alerts,
+          funnel,
+          forecast,
+          conversationSummary,
+          metrics,
+        });
     } catch (err) {
       if (!cancelledRef.current) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
