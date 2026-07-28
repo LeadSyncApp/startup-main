@@ -1022,45 +1022,55 @@ router.get("/low-stock", authMiddleware, async (req: AuthRequest, res: Response)
   try {
     const { companyId } = req.user!;
 
-    const products = await prisma.inventoryProduct.findMany({
-      where: { companyId, isActive: true },
-      include: {
-        variants: {
-          where: { isActive: true },
-          select: { id: true, attributeValue: true, stock: true, sku: true },
+    const [variants, totalLowStock] = await Promise.all([
+      prisma.inventoryVariant.findMany({
+        where: {
+          isActive: true,
+          stock: { lte: LOW_STOCK_THRESHOLD, not: null },
+          product: {
+            companyId,
+            isActive: true,
+          },
         },
-      },
-    });
+        select: {
+          id: true,
+          attributeValue: true,
+          stock: true,
+          sku: true,
+          product: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: { stock: "asc" },
+        take: 5,
+      }),
+      prisma.inventoryVariant.count({
+        where: {
+          isActive: true,
+          stock: { lte: LOW_STOCK_THRESHOLD, not: null },
+          product: {
+            companyId,
+            isActive: true,
+          },
+        },
+      }),
+    ]);
 
-    const lowStockItems: {
-      productId: string;
-      productName: string;
-      variantId: string;
-      variantName: string;
-      stock: number;
-      sku: string | null;
-    }[] = [];
-
-    for (const product of products) {
-      for (const variant of product.variants) {
-        if (variant.stock !== null && variant.stock <= LOW_STOCK_THRESHOLD) {
-          lowStockItems.push({
-            productId: product.id,
-            productName: product.name,
-            variantId: variant.id,
-            variantName: variant.attributeValue,
-            stock: variant.stock,
-            sku: variant.sku,
-          });
-        }
-      }
-    }
-
-    lowStockItems.sort((a, b) => a.stock - b.stock);
+    const items = variants.map((v) => ({
+      productId: v.product.id,
+      productName: v.product.name,
+      variantId: v.id,
+      variantName: v.attributeValue,
+      stock: v.stock!,
+      sku: v.sku,
+    }));
 
     res.json({
-      totalLowStock: lowStockItems.length,
-      items: lowStockItems.slice(0, 5),
+      totalLowStock,
+      items,
     });
   } catch (err) {
     console.error("Low stock error:", err);
