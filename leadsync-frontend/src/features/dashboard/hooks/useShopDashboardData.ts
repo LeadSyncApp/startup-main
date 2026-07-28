@@ -39,6 +39,10 @@ export function useShopDashboardData() {
           forecastRes,
           conversationSummaryRes,
           metricsRes,
+          teamMembersRes,
+          automationRulesRes,
+          lowStockRes,
+          companyStatusRes,
         ] = await Promise.all([
           authedFetch('/api/analytics/dashboard'),
           authedFetch('/api/analytics/revenue'),
@@ -81,10 +85,10 @@ export function useShopDashboardData() {
           forecastRes.ok ? forecastRes.json() : null,
           conversationSummaryRes.ok ? conversationSummaryRes.json() : null,
           metricsRes.ok ? metricsRes.json() : null,
-          authedFetch('/api/team/members').then(r => r.ok ? r.json() : null).catch(() => null),
-          (() => { const cid = getCompanyId(); return cid ? authedFetch(`/api/automation/conversational-rules/${cid}`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null); })(),
-          authedFetch('/api/dashboard/low-stock').then(r => r.ok ? r.json() : null).catch(() => null),
-          authedFetch('/api/company/status').then(r => r.ok ? r.json() : null).catch(() => null),
+          teamMembersRes && teamMembersRes.ok ? teamMembersRes.json() : null,
+          automationRulesRes && automationRulesRes.ok ? automationRulesRes.json() : null,
+          lowStockRes.ok ? lowStockRes.json() : null,
+          companyStatusRes.ok ? companyStatusRes.json() : null,
         ]);
 
         if (cancelledRef.current) return;
