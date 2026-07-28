@@ -744,12 +744,13 @@ router.post("/:id/assign", authMiddleware, async (req: AuthRequest, res: Respons
       where: {
         id: conversation.id,
         companyId,
-        claimedById: null, // lock condition: only succeed if genuinely unclaimed
-        status: { not: 'RESOLVED' } // only assign open conversations
+        OR: [{ claimedById: null }, { status: 'RESOLVED' }] // lock condition: allow claiming unclaimed or previously-resolved chats
       },
       data: {
         claimedById: userId,
+        claimedAt: new Date(),
         status: "ASSIGNED",
+        mode: "HUMAN",
         updatedAt: new Date()
       }
     });
@@ -1104,11 +1105,13 @@ router.post("/bulk-assign", authMiddleware, async (req: AuthRequest, res: Respon
         where: {
           leadId,
           companyId,
-          claimedById: null // lock condition: only succeed if genuinely unclaimed
+          OR: [{ claimedById: null }, { status: 'RESOLVED' }] // lock condition: allow assigning unclaimed or previously-resolved chats
         },
         data: {
           claimedById: assignedToId,
+          claimedAt: new Date(),
           status: "ASSIGNED",
+          mode: "HUMAN",
           updatedAt: new Date()
         }
       });
@@ -1639,7 +1642,7 @@ router.post("/:id/reply", authMiddleware, async (req: AuthRequest, res: Response
         contact: true,
         channel: true,
         conversations: {
-          select: { id: true, status: true, claimedById: true },
+          select: { id: true, status: true, claimedById: true, firstStaffReplyAt: true },
           take: 1,
           orderBy: { updatedAt: "desc" }
         }
@@ -1739,6 +1742,14 @@ router.post("/:id/reply", authMiddleware, async (req: AuthRequest, res: Response
       // Total failure path (e.g. DB write never happened)
       console.error("Agent reply total failure:", err);
       return res.status(500).json({ message: err.message || "Failed to send reply" });
+    }
+
+    // 5b. Stamp firstStaffReplyAt if not already set on this conversation
+    if (!(conversation as any).firstStaffReplyAt) {
+      prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { firstStaffReplyAt: new Date() }
+      }).catch(e => console.error("Failed to set firstStaffReplyAt:", e.message));
     }
 
     // 6. Return the sent message info so frontend can display it immediately
