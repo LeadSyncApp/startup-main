@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { prisma } from "../lib/prisma";
 import { ConversationStatus, ConversationMode, Prisma } from "@prisma/client";
 import { safeEmitConversationUpdate } from "../lib/socket";
@@ -173,6 +174,7 @@ export async function escalateToHuman(
 
   prisma.claimLog.create({
     data: {
+      id: randomUUID(),
       companyId: updated.companyId,
       conversationId: updated.id,
       actorId,
@@ -274,6 +276,7 @@ export async function resolveConversation(
 
   prisma.claimLog.create({
     data: {
+      id: randomUUID(),
       companyId: updated.companyId,
       conversationId: updated.id,
       actorId,
