@@ -1,4 +1,4 @@
-import { prisma } from "../../lib/prisma";
+import { prisma, getTenantPrismaContext } from "../../lib/prisma";
 import { emitToAgent, emitToCompanyAdmin } from "../../lib/socket";
 
 type NotificationType = "ORDER" | "MESSAGE" | "ALERT" | "SYSTEM";
@@ -9,8 +9,9 @@ export class NotificationService {
      * Check if a user has a preference enabled for a given notification type.
      * Returns true (enabled) if no preference row exists yet (safe default).
      */
-    private async isTypeEnabled(userId: string, type: NotificationType): Promise<boolean> {
-        const pref = await prisma.notificationPreference.findUnique({
+    private async isTypeEnabled(userId: string, type: NotificationType, companyId?: string): Promise<boolean> {
+        const db = companyId ? getTenantPrismaContext(companyId) : prisma;
+        const pref = await db.notificationPreference.findUnique({
             where: { userId },
             select: { [type]: true }
         });
@@ -51,26 +52,30 @@ export class NotificationService {
         userId: string,
         title: string,
         body: string,
-        type: NotificationType
+        type: NotificationType,
+        companyId?: string
     ) {
         try {
+            // Determine user's companyId
+            let tenantId = companyId;
+            if (!tenantId) {
+                const user = await prisma.user.findUnique({
+                    where: { id: userId },
+                    select: { companyId: true }
+                });
+                if (!user) return null;
+                tenantId = user.companyId;
+            }
+
             // Check preference — skip if disabled
-            const enabled = await this.isTypeEnabled(userId, type);
+            const enabled = await this.isTypeEnabled(userId, type, tenantId);
             if (!enabled) return null;
-
-            // Get user's companyId
-            const user = await prisma.user.findUnique({
-                where: { id: userId },
-                select: { companyId: true }
-            });
-
-            if (!user) return null;
 
             // 1. Create DB Record
             const notification = await prisma.notification.create({
                 data: {
                     userId,
-                    companyId: user.companyId,
+                    companyId: tenantId,
                     title,
                     body,
                     type,
@@ -118,7 +123,7 @@ export class NotificationService {
             await Promise.all(
                 adminIds
                     .filter(id => enabledIds.has(id))
-                    .map(id => this.notifyUser(id, title, body, type))
+                    .map(id => this.notifyUser(id, title, body, type, companyId))
             );
 
         } catch (error) {
@@ -151,7 +156,7 @@ export class NotificationService {
             await Promise.all(
                 userIds
                     .filter(id => enabledIds.has(id))
-                    .map(id => this.notifyUser(id, title, body, type))
+                    .map(id => this.notifyUser(id, title, body, type, companyId))
             );
         } catch (error) {
             console.error(`❌ Failed to notify company ${companyId}:`, error);
