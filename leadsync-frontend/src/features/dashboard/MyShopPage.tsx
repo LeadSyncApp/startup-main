@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { Download } from 'lucide-react';
+import { authedFetch } from '../../api/client';
 import { TabID } from '../../components/layouts/MasterDashboardLayout';
 import { useShopDashboardData } from './hooks/useShopDashboardData';
 import { CollectionStatsWidget } from './widgets/CollectionStatsWidget';
@@ -20,6 +22,24 @@ interface MyShopPageProps {
 export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
   const { data, loading, error } = useShopDashboardData();
 
+  const handleExport = useCallback(async (endpoint: string, filename: string) => {
+    try {
+      const res = await authedFetch(endpoint);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // silently ignore export failures
+    }
+  }, []);
+
   return (
     <motion.div
       key="shop-tab"
@@ -34,6 +54,26 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
           Some dashboard data couldn't load. Showing what's available.
         </div>
       )}
+
+      {/* Export buttons */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => handleExport('/api/analytics/export', 'leadsync-orders.xlsx')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+          style={{ backgroundColor: 'var(--app-bg-soft)', color: 'var(--app-text-muted)', border: '1px solid var(--app-border)' }}
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export Orders
+        </button>
+        <button
+          onClick={() => handleExport('/api/analytics/export-leads', 'leadsync-leads.xlsx')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+          style={{ backgroundColor: 'var(--app-bg-soft)', color: 'var(--app-text-muted)', border: '1px solid var(--app-border)' }}
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export Leads
+        </button>
+      </div>
 
       {/* Row 1: Stats overview — full width stacked */}
       <div className="space-y-4">
