@@ -17,8 +17,9 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
         const companyId = req.user.companyId;
 
         // Check cache
+        const forceRefresh = req.query.refresh === "true";
         const cacheKey = `analytics_dashboard_${companyId}`;
-        const cached = await cacheService.get(cacheKey);
+        const cached = forceRefresh ? null : await cacheService.get(cacheKey);
         if (cached) {
             return res.json(cached);
         }
@@ -153,8 +154,9 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
         const companyId = req.user.companyId;
 
         // Check cache
+        const forceRefresh = req.query.refresh === "true";
         const cacheKey = `analytics_revenue_${companyId}`;
-        const cached = await cacheService.get(cacheKey);
+        const cached = forceRefresh ? null : await cacheService.get(cacheKey);
         if (cached) {
             return res.json(cached);
         }

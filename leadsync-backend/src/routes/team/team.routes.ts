@@ -24,8 +24,9 @@ router.get("/members", authMiddleware as any, async (req: any, res: any) => {
     }
 
     if (companyId) {
+      const forceRefresh = req.query.refresh === "true";
       const cacheKey = `team_members_${companyId}`;
-      const cached = await cacheService.get(cacheKey);
+      const cached = forceRefresh ? null : await cacheService.get(cacheKey);
       if (cached) {
         return res.json(cached);
       }

@@ -7,8 +7,9 @@ export async function getMerchantMetricsDashboard(req: any, res: Response) {
 
   try {
     if (companyId) {
+      const forceRefresh = req.query.refresh === 'true';
       const cacheKey = `dashboard_metrics_${companyId}`;
-      const cached = await cacheService.get(cacheKey);
+      const cached = forceRefresh ? null : await cacheService.get(cacheKey);
       if (cached) {
         return res.status(200).json(cached);
       }

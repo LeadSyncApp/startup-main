@@ -80,8 +80,9 @@ router.get(
       const companyId = req.user.companyId;
 
       /* CHECK CACHE */
+      const forceRefresh = req.query.refresh === "true";
       const cacheKey = `dashboard_kpis_${companyId}`;
-      const cachedData = await cacheService.get(cacheKey);
+      const cachedData = forceRefresh ? null : await cacheService.get(cacheKey);
 
       if (cachedData) {
         return res.json(cachedData);
@@ -726,8 +727,9 @@ router.get(
     try {
       const { companyId } = req.user!;
 
+      const forceRefresh = req.query.refresh === "true";
       const cacheKey = `dashboard_alerts_${companyId}`;
-      const cachedData = await cacheService.get(cacheKey);
+      const cachedData = forceRefresh ? null : await cacheService.get(cacheKey);
       if (cachedData) {
         return res.json(cachedData);
       }
@@ -780,8 +782,9 @@ router.get("/funnel", authMiddleware, async (req: AuthRequest, res: Response) =>
   try {
     const { companyId } = req.user!;
 
+    const forceRefresh = req.query.refresh === "true";
     const cacheKey = `dashboard_funnel_${companyId}`;
-    const cachedData = await cacheService.get(cacheKey);
+    const cachedData = forceRefresh ? null : await cacheService.get(cacheKey);
     if (cachedData) {
       return res.json(cachedData);
     }
@@ -838,8 +841,9 @@ router.get("/forecast", authMiddleware, async (req: AuthRequest, res: Response) 
   try {
     const { companyId } = req.user!;
 
+    const forceRefresh = req.query.refresh === "true";
     const cacheKey = `dashboard_forecast_${companyId}`;
-    const cachedData = await cacheService.get(cacheKey);
+    const cachedData = forceRefresh ? null : await cacheService.get(cacheKey);
     if (cachedData) {
       return res.json(cachedData);
     }
@@ -911,8 +915,9 @@ router.get("/agent-stats", authMiddleware, async (req: AuthRequest, res: Respons
   try {
     const { companyId } = req.user!;
 
+    const forceRefresh = req.query.refresh === "true";
     const cacheKey = `dashboard_agent_stats_${companyId}`;
-    const cachedData = await cacheService.get(cacheKey);
+    const cachedData = forceRefresh ? null : await cacheService.get(cacheKey);
     if (cachedData) {
       return res.json(cachedData);
     }
@@ -998,8 +1003,9 @@ router.get("/conversation-summary", authMiddleware, async (req: AuthRequest, res
     }
     const companyId = req.user!.companyId;
 
+    const forceRefresh = req.query.refresh === "true";
     const cacheKey = `dashboard_conv_summary_${companyId}`;
-    const cachedData = await cacheService.get(cacheKey);
+    const cachedData = forceRefresh ? null : await cacheService.get(cacheKey);
     if (cachedData) {
       return res.json(cachedData);
     }
@@ -1072,8 +1078,9 @@ router.get("/low-stock", authMiddleware, async (req: AuthRequest, res: Response)
   try {
     const { companyId } = req.user!;
 
+    const forceRefresh = req.query.refresh === "true";
     const cacheKey = `dashboard_low_stock_${companyId}`;
-    const cachedData = await cacheService.get(cacheKey);
+    const cachedData = forceRefresh ? null : await cacheService.get(cacheKey);
     if (cachedData) {
       return res.json(cachedData);
     }

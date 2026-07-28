@@ -23,10 +23,12 @@ export function useShopDashboardData() {
   const [error, setError] = useState<string | null>(null);
   const cancelledRef = useRef(false);
 
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (isRefresh = false) => {
     cancelledRef.current = false;
     setLoading(true);
     setError(null);
+
+    const qs = isRefresh ? '?refresh=true' : '';
 
     try {
         const [
@@ -44,19 +46,19 @@ export function useShopDashboardData() {
           lowStockRes,
           companyStatusRes,
         ] = await Promise.all([
-          authedFetch('/api/analytics/dashboard'),
-          authedFetch('/api/analytics/revenue'),
-          authedFetch('/api/dashboard/kpis'),
-          authedFetch('/api/dashboard/agent-stats'),
-          authedFetch('/api/dashboard/alerts'),
-          authedFetch('/api/dashboard/funnel'),
-          authedFetch('/api/dashboard/forecast'),
-          authedFetch('/api/dashboard/conversation-summary'),
-          authedFetch('/api/dashboard/metrics'),
-          authedFetch('/api/team/members'),
-          getCompanyId() ? authedFetch(`/api/automation/conversational-rules/${getCompanyId()}`) : Promise.resolve(null),
-          authedFetch('/api/dashboard/low-stock'),
-          authedFetch('/api/company/status'),
+          authedFetch(`/api/analytics/dashboard${qs}`),
+          authedFetch(`/api/analytics/revenue${qs}`),
+          authedFetch(`/api/dashboard/kpis${qs}`),
+          authedFetch(`/api/dashboard/agent-stats${qs}`),
+          authedFetch(`/api/dashboard/alerts${qs}`),
+          authedFetch(`/api/dashboard/funnel${qs}`),
+          authedFetch(`/api/dashboard/forecast${qs}`),
+          authedFetch(`/api/dashboard/conversation-summary${qs}`),
+          authedFetch(`/api/dashboard/metrics${qs}`),
+          authedFetch(`/api/team/members${qs}`),
+          getCompanyId() ? authedFetch(`/api/automation/conversational-rules/${getCompanyId()}${qs}`) : Promise.resolve(null),
+          authedFetch(`/api/dashboard/low-stock${qs}`),
+          authedFetch(`/api/company/status${qs}`),
         ]);
 
         if (cancelledRef.current) return;

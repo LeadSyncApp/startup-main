@@ -27,7 +27,7 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await refetch();
+      await refetch(true);
     } finally {
       setRefreshing(false);
     }

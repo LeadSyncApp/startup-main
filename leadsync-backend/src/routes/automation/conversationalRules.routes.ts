@@ -410,8 +410,9 @@ router.get("/:companyId", authMiddleware as any, async (req: any, res: any) => {
     }
     const { groupId } = req.query;
 
+    const forceRefresh = req.query.refresh === "true";
     const cacheKey = `conversational_rules_${companyId}${groupId ? `_${groupId}` : ''}`;
-    const cached = await cacheService.get(cacheKey);
+    const cached = forceRefresh ? null : await cacheService.get(cacheKey);
     if (cached) {
       return res.json(cached);
     }
