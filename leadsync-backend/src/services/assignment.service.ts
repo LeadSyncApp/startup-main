@@ -201,42 +201,69 @@ export async function resolveConversation(
   // 1. Fetch conversation
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    select: { id: true, companyId: true, mode: true },
+    select: { id: true, companyId: true, mode: true, claimedById: true, claimedByName: true },
   });
 
   if (!conversation) {
     throw new Error(`Conversation ${conversationId} not found`);
   }
 
-  // 2. Update: clear all assignment fields, return to BOT
+  const resolvedAt = new Date();
+
+  // 2. Update: keep historical claim fields intact, set status to RESOLVED, stamp resolvedAt & resolvedBy
   const updated = await prisma.conversation.update({
     where: { id: conversationId },
     data: {
       mode: ConversationMode.BOT,
       status: ConversationStatus.RESOLVED,
       lifecycleStatus: "archived",
-      claimedById: null,
-      claimedByName: null,
-      claimedAt: null,
       claimExpiresAt: null,
       lastClaimHeartbeat: null,
       needsStaffReason: null,
       slaNotifiedAt: null,
       resolvedBy,
-      updatedAt: new Date(),
+      resolvedById: conversation.claimedById || null,
+      resolvedAt,
+      updatedAt: resolvedAt,
     },
     select: {
       id: true,
       companyId: true,
       claimedById: true,
+      claimedByName: true,
     },
   });
 
-  // 3. Emit socket event
+  // 3. Additive audit logging: record Activity and ClaimLog entries
+  const actorName = updated.claimedByName || resolvedBy || "Agent";
+  const actorId = updated.claimedById || null;
+
+  prisma.conversationActivity.create({
+    data: {
+      conversationId: updated.id,
+      companyId: updated.companyId,
+      type: "RESOLVED",
+      actorId,
+      actorName,
+    },
+  }).catch((err) => console.error("❌ Failed to write ConversationActivity on resolve:", err));
+
+  prisma.claimLog.create({
+    data: {
+      companyId: updated.companyId,
+      conversationId: updated.id,
+      actorId,
+      actorName,
+      action: "RESOLVED",
+    },
+  }).catch((err) => console.error("❌ Failed to write ClaimLog on resolve:", err));
+
+  // 4. Emit socket event
   safeEmitConversationUpdate(updated, "conversation.resolved", {
     conversationId: updated.id,
     companyId: updated.companyId,
     resolvedBy,
+    resolvedAt: resolvedAt.toISOString(),
   });
 
   console.log(`[assignment] resolved ${conversationId} → back to BOT (resolvedBy: ${resolvedBy})`);
