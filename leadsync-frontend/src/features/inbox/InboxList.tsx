@@ -87,6 +87,25 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
   const [tabTotals, setTabTotals] = useState<Record<FilterTab, number>>({ chats: 0, completed: 0 });
   const { companyId } = useAuth();
 
+  const fetchTabTotals = useCallback(async () => {
+    try {
+      const searchParam = search ? `&search=${encodeURIComponent(search)}` : "";
+      const [chatsRes, completedRes] = await Promise.all([
+        authedFetch(`/api/leads?filter=mine&countOnly=true${searchParam}`),
+        authedFetch(`/api/leads?filter=resolved&countOnly=true${searchParam}`),
+      ]);
+      if (chatsRes.ok && completedRes.ok) {
+        const [chatsJson, completedJson] = await Promise.all([chatsRes.json(), completedRes.json()]);
+        setTabTotals({
+          chats: chatsJson.meta?.total ?? 0,
+          completed: completedJson.meta?.total ?? 0,
+        });
+      }
+    } catch (e) {
+      // Ignore count fetch errors defensively
+    }
+  }, [search]);
+
   const fetchLeads = useCallback(async (pageNum: number = 1, append: boolean = false) => {
     try {
       setLoading(true);
@@ -143,18 +162,20 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
       }
       setMeta(json.meta);
       setTabTotals((prev) => ({ ...prev, [filter]: json.meta?.total ?? 0 }));
+      fetchTabTotals();
     } catch (e: any) {
       setError(e.message || "Failed to load inbox");
       setLeads([]);
     } finally {
       setLoading(false);
     }
-  }, [filter, search]);
+  }, [filter, search, fetchTabTotals]);
 
-  // Initial fetch when filter/search changes.
+  // Initial fetch when filter/search changes + initial fetch for both tab totals.
   useEffect(() => {
     fetchLeads(1);
-  }, [fetchLeads]);
+    fetchTabTotals();
+  }, [fetchLeads, fetchTabTotals]);
 
   // Listen for real-time conversation resolution to remove from list immediately
   useEffect(() => {
