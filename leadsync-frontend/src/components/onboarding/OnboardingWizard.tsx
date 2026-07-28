@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
+import {
   ArrowRight, Shield, Check, Sparkles,
-  Utensils, ShoppingBag, Stethoscope, 
-  User, 
+  Utensils, ShoppingBag, Stethoscope,
+  User,
   Component,
   Eye, EyeOff, AlertTriangle,
-  Scissors, Store
+  Scissors, Store, Radio, MessageSquare, CheckCircle2,
+  Send, Globe
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -28,18 +29,18 @@ interface OnboardingWizardProps {
   skipStep1?: boolean;
 }
 
-export function OnboardingWizard({ 
-  onComplete, 
+export function OnboardingWizard({
+  onComplete,
   onSwitchToSignIn,
-  firstName, 
-  setFirstName, 
-  lastName, 
+  firstName,
+  setFirstName,
+  lastName,
   setLastName,
-  mockEmail, 
-  setMockEmail, 
-  mockCompany, 
-  setMockCompany, 
-  phone, 
+  mockEmail,
+  setMockEmail,
+  mockCompany,
+  setMockCompany,
+  phone,
   setPhone,
   password = "",
   setPassword = () => {},
@@ -48,20 +49,19 @@ export function OnboardingWizard({
   const [step, setStep] = useState(skipStep1 ? 2 : 1);
   const [accountExistsError, setAccountExistsError] = useState<string | null>(null);
 
-  // Check for ACCOUNT_EXISTS error from Google OAuth signup redirect
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const error = params.get("error");
     const message = params.get("message");
     if (error === "ACCOUNT_EXISTS") {
       setAccountExistsError(message || "This Google account is already registered. Please sign in instead.");
-      // Clean URL
       window.history.replaceState({}, document.title, "/onboarding");
     }
   }, []);
   const [showPassword, setShowPassword] = useState(false);
   const [businessScale, setBusinessScale] = useState<"HOME" | "SME">("HOME");
   const [businessType, setBusinessType] = useState("Retail / Shop");
+  const [connectChannel, setConnectChannel] = useState<"telegram" | "website" | "skip">("skip");
 
   const handleNextStep1 = () => {
     if (!firstName.trim()) {
@@ -97,9 +97,11 @@ export function OnboardingWizard({
       businessType,
       dailyRevenueTarget: "5000",
       trackInventory: true,
-      channels: { telegram: false, whatsapp: false }
+      channels: { telegram: connectChannel === "telegram", whatsapp: false }
     });
   };
+
+  const totalSteps = 4;
 
   return (
     <motion.div
@@ -109,9 +111,8 @@ export function OnboardingWizard({
       exit={{ opacity: 0 }}
       className="flex-1 flex min-h-screen w-full bg-[var(--app-bg)]"
     >
-      {/* Left Column: Dynamic Branding / Value Prop (Hidden on smaller screens) */}
+      {/* Left Column: Branding */}
       <div className="hidden lg:flex w-[45%] flex-col justify-between p-12 lg:p-16 relative overflow-hidden bg-[var(--app-surface)] text-[var(--app-text)]">
-        {/* Abstract Background Decoration */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
           <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, var(--brand-saffron) 0%, transparent 70%)', opacity: 0.15 }} />
           <div className="absolute top-1/2 -left-20 w-72 h-72 rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, var(--brand-saffron) 0%, transparent 70%)', opacity: 0.08 }} />
@@ -129,13 +130,13 @@ export function OnboardingWizard({
           {step === 1 && (
              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
-                  <User className="w-3.5 h-3.5" /> Workspace Identity
+                  <User className="w-3.5 h-3.5" /> Your Account
                 </div>
                 <h1 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-[var(--app-text)]">
-                  Welcome.<br/>Let's configure your command center.
+                  Let's get you<br/>set up in 2 minutes.
                 </h1>
                 <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
-                  Establish your secure administration seat to begin orchestrating leads, dispatch queues, and customer relations.
+                  Create your account to start managing customers, orders, and conversations — all in one place.
                 </p>
              </motion.div>
           )}
@@ -143,13 +144,13 @@ export function OnboardingWizard({
           {step === 2 && (
              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
-                  <Component className="w-3.5 h-3.5" /> Merchant DNA
+                  <Component className="w-3.5 h-3.5" /> Your Business
                 </div>
                 <h1 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-[var(--app-text)]">
-                  What are we<br/>building today?
+                  Tell us about<br/>your business.
                 </h1>
                 <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
-                  Whether you're running a home-grown boutique or a high-traffic retail outlet, SaLira adapts structurally to your vertical.
+                  This helps us tailor the dashboard to your business type — whether you sell products, run a service, or manage appointments.
                 </p>
              </motion.div>
           )}
@@ -157,13 +158,27 @@ export function OnboardingWizard({
           {step === 3 && (
              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
+                  <Radio className="w-3.5 h-3.5" /> Connect Channel
+                </div>
+                <h1 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-[var(--app-text)]">
+                  Where do your<br/>customers reach you?
+                </h1>
+                <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
+                  Connect a channel now so your AI assistant can start handling conversations right away. You can always add more later.
+                </p>
+             </motion.div>
+          )}
+
+          {step === 4 && (
+             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
                   <Sparkles className="w-3.5 h-3.5" /> All Set
                 </div>
                 <h1 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-[var(--app-text)]">
-                  Welcome aboard,<br/>{mockCompany || "your business"} 👋
+                  You're all set,<br/>{mockCompany || "your business"}!
                 </h1>
                 <p className="text-lg leading-relaxed max-w-md text-[var(--app-text-muted)]">
-                  Big things start here — welcome to SaLira.
+                  Here's what you can do next to get the most out of SaLira.
                 </p>
              </motion.div>
           )}
@@ -171,31 +186,31 @@ export function OnboardingWizard({
 
         <div className="relative z-10 flex items-center gap-3 text-sm font-mono text-[var(--app-text-muted)]">
           <Shield className="h-4 w-4" />
-          SOC2 Compliant Framework Placeholder
+          Your data is secure and encrypted
         </div>
       </div>
 
-      {/* Right Column: Interactive Wizard Form */}
+      {/* Right Column: Form */}
       <div className="flex-1 flex flex-col justify-center overflow-y-auto px-6 py-12 lg:px-16 xl:px-24" style={{ backgroundColor: 'var(--app-bg)' }}>
         <div className="w-full max-w-md mx-auto">
-          
-          {/* Header Progress for Mobile (Hidden on Desktop since left handles context, but good for progress) */}
+
+          {/* Progress bar */}
           <div className="mb-12">
             <div className="flex gap-2 mb-4">
-              {[1, 2, 3].map((s) => (
-                <div 
-                  key={s} 
-                  className={`h-1.5 rounded-full transition-all duration-500 ease-out ${s <= step ? 'w-full' : 'w-full'}`}
+              {[1, 2, 3, 4].map((s) => (
+                <div
+                  key={s}
+                  className={`h-1.5 rounded-full transition-all duration-500 ease-out flex-1`}
                   style={{ backgroundColor: s <= step ? 'var(--brand-saffron)' : 'var(--app-border)' }}
                 />
               ))}
             </div>
-            <p className="text-xs font-black uppercase tracking-widest text-[var(--app-text-muted)]">Step {step} of 3</p>
+            <p className="text-xs font-black uppercase tracking-widest text-[var(--app-text-muted)]">Step {step} of {totalSteps}</p>
           </div>
 
           <AnimatePresence mode="wait">
-            
-            {/* STEP 1 */}
+
+            {/* STEP 1 — Profile */}
             {step === 1 && (
               <motion.div
                 key="step1"
@@ -207,11 +222,10 @@ export function OnboardingWizard({
               >
                 <div className="space-y-2">
                   <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">Your Profile</h2>
-                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">Tell us who will be managing this instance.</p>
+                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">Who will be managing this workspace?</p>
                 </div>
 
                 <div className="space-y-3">
-                  {/* Account Exists Banner */}
                   {accountExistsError && (
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
@@ -228,14 +242,13 @@ export function OnboardingWizard({
                           className="mt-2 text-sm font-black underline hover:no-underline"
                           style={{ color: 'var(--danger-red)' }}
                         >
-                          Sign in → 
+                          Sign in →
                         </button>
                       </div>
                     </motion.div>
                   )}
 
-                  {/* Sign Up with Google */}
-                  <button 
+                  <button
                     type="button"
                     onClick={() => { window.location.href = "/api/auth/google/signup"; }}
                     className="w-full py-4 border-2 rounded-2xl flex items-center justify-center gap-3 transition-all font-bold text-sm cursor-pointer shadow-sm text-[var(--app-text)]"
@@ -249,7 +262,7 @@ export function OnboardingWizard({
 
                   <div className="relative flex items-center justify-center py-2">
                     <div className="absolute inset-0 flex items-center"><div className="w-full border-t" style={{ borderColor: 'var(--app-border)' }} /></div>
-                    <span className="relative px-4 text-[10px] font-black uppercase tracking-widest text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg)' }}>Or manually enter</span>
+                    <span className="relative px-4 text-[10px] font-black uppercase tracking-widest text-[var(--app-text-muted)]" style={{ backgroundColor: 'var(--app-bg)' }}>Or enter manually</span>
                   </div>
 
                   <div className="space-y-4">
@@ -289,7 +302,7 @@ export function OnboardingWizard({
                         Mobile Number <span className="text-red-500 ml-0.5">*</span>
                       </label>
                       <div className="flex gap-3">
-                        <div 
+                        <div
                           className="w-20 border-2 rounded-2xl px-4 py-4 font-bold text-sm flex items-center justify-center shrink-0"
                           style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                         >
@@ -364,11 +377,11 @@ export function OnboardingWizard({
                   >
                     Continue <ArrowRight className="h-4 w-4" />
                   </button>
-                  
+
                   <div className="text-center">
                     <p className="text-xs font-medium text-[var(--app-text-muted)]">
                       Already using SaLira?{" "}
-                      <button 
+                      <button
                         onClick={onSwitchToSignIn}
                         className="font-black hover:underline cursor-pointer text-[var(--brand-saffron)]"
                       >
@@ -380,7 +393,7 @@ export function OnboardingWizard({
               </motion.div>
             )}
 
-            {/* STEP 2 */}
+            {/* STEP 2 — Business Profile */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -392,11 +405,10 @@ export function OnboardingWizard({
               >
                 <div className="space-y-2">
                   <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">Business Profile</h2>
-                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">How is your operation structured?</p>
+                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">What kind of business are you running?</p>
                 </div>
 
                 <div className="space-y-6">
-                  {/* Business Name */}
                   <div>
                     <label className="text-xs font-bold mb-2 block text-[var(--app-text-muted)]">
                       Brand or Organization Name <span className="text-red-500 ml-0.5">*</span>
@@ -413,7 +425,6 @@ export function OnboardingWizard({
                     />
                   </div>
 
-                  {/* Operational Scale */}
                   <div>
                     <label className="text-xs font-bold mb-3 block text-[var(--app-text-muted)]">Business Scale</label>
                     <div className="grid grid-cols-2 gap-3 p-1.5 rounded-2xl border" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
@@ -434,7 +445,6 @@ export function OnboardingWizard({
                     </div>
                   </div>
 
-                  {/* Scale Helper Feedback */}
                   <motion.div
                     key={businessScale}
                     initial={{ opacity: 0, y: -6 }}
@@ -463,7 +473,6 @@ export function OnboardingWizard({
                     </div>
                   </motion.div>
 
-                  {/* Vertical */}
                   <div>
                     <label className="text-xs font-bold mb-3 block text-[var(--app-text-muted)]">Primary Vertical</label>
                     <div className="grid grid-cols-2 gap-3">
@@ -476,9 +485,7 @@ export function OnboardingWizard({
                       ].map((v) => (
                         <button
                           key={v.id}
-                          onClick={() => {
-                            setBusinessType(v.id);
-                          }}
+                          onClick={() => setBusinessType(v.id)}
                           className={`flex items-center flex-col justify-center text-center gap-3 p-5 rounded-2xl border-2 transition-all`}
                           style={{
                             borderColor: businessType === v.id ? 'var(--brand-saffron)' : 'var(--app-border)',
@@ -496,7 +503,7 @@ export function OnboardingWizard({
                 </div>
 
                 <div className="pt-4 flex gap-3">
-                  <button 
+                  <button
                     onClick={() => setStep(1)}
                     className="px-6 py-4.5 rounded-2xl font-bold transition-all text-sm border cursor-pointer"
                     style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
@@ -518,7 +525,7 @@ export function OnboardingWizard({
               </motion.div>
             )}
 
-            {/* STEP 3 - Welcome */}
+            {/* STEP 3 — Connect Channel */}
             {step === 3 && (
               <motion.div
                 key="step3"
@@ -529,26 +536,202 @@ export function OnboardingWizard({
                 className="space-y-8"
               >
                 <div className="space-y-2">
-                  <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">
-                    Welcome aboard, {mockCompany || "your business"} 👋
-                  </h2>
+                  <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">Connect a Channel</h2>
                   <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">
-                    Big things start here — welcome to SaLira.
+                    Where do your customers reach you? Connect a channel so your AI assistant can start helping right away.
                   </p>
                 </div>
 
-                <div className="rounded-2xl border p-6 space-y-3" style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}>
-                  <p className="text-sm font-semibold" style={{ color: 'var(--app-text)' }}>
-                    Everything's set up and ready when you are.
-                  </p>
-                  <p className="text-xs font-medium" style={{ color: 'var(--app-text-muted)' }}>
-                    Connect a channel anytime from Settings to go live.
-                  </p>
+                <div className="space-y-3">
+                  {/* Telegram Option */}
+                  <button
+                    onClick={() => setConnectChannel("telegram")}
+                    className="w-full p-5 rounded-2xl border-2 text-left transition-all flex items-center gap-4"
+                    style={{
+                      borderColor: connectChannel === "telegram" ? 'var(--brand-saffron)' : 'var(--app-border)',
+                      backgroundColor: connectChannel === "telegram" ? 'var(--brand-saffron-soft)' : 'var(--app-bg)',
+                    }}
+                    onMouseEnter={(e) => { if (connectChannel !== "telegram") e.currentTarget.style.borderColor = 'var(--app-border-strong)'; }}
+                    onMouseLeave={(e) => { if (connectChannel !== "telegram") e.currentTarget.style.borderColor = 'var(--app-border)'; }}
+                  >
+                    <div
+                      className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: connectChannel === "telegram" ? 'var(--brand-saffron)' : 'var(--app-bg-soft)', color: connectChannel === "telegram" ? 'var(--app-bg)' : 'var(--app-text-muted)' }}
+                    >
+                      <Send className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold" style={{ color: 'var(--app-text)' }}>Telegram</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}>
+                        Connect your Telegram channel to auto-reply to messages
+                      </p>
+                    </div>
+                    {connectChannel === "telegram" && (
+                      <CheckCircle2 className="h-5 w-5 shrink-0" style={{ color: 'var(--brand-saffron)' }} />
+                    )}
+                  </button>
+
+                  {/* Website Widget Option */}
+                  <button
+                    onClick={() => setConnectChannel("website")}
+                    className="w-full p-5 rounded-2xl border-2 text-left transition-all flex items-center gap-4"
+                    style={{
+                      borderColor: connectChannel === "website" ? 'var(--brand-saffron)' : 'var(--app-border)',
+                      backgroundColor: connectChannel === "website" ? 'var(--brand-saffron-soft)' : 'var(--app-bg)',
+                    }}
+                    onMouseEnter={(e) => { if (connectChannel !== "website") e.currentTarget.style.borderColor = 'var(--app-border-strong)'; }}
+                    onMouseLeave={(e) => { if (connectChannel !== "website") e.currentTarget.style.borderColor = 'var(--app-border)'; }}
+                  >
+                    <div
+                      className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: connectChannel === "website" ? 'var(--brand-saffron)' : 'var(--app-bg-soft)', color: connectChannel === "website" ? 'var(--app-bg)' : 'var(--app-text-muted)' }}
+                    >
+                      <Globe className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold" style={{ color: 'var(--app-text)' }}>Website Chat Widget</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}>
+                        Add a chat widget to your website for live support
+                      </p>
+                    </div>
+                    {connectChannel === "website" && (
+                      <CheckCircle2 className="h-5 w-5 shrink-0" style={{ color: 'var(--brand-saffron)' }} />
+                    )}
+                  </button>
+
+                  {/* Skip Option */}
+                  <button
+                    onClick={() => setConnectChannel("skip")}
+                    className="w-full p-5 rounded-2xl border-2 text-left transition-all flex items-center gap-4"
+                    style={{
+                      borderColor: connectChannel === "skip" ? 'var(--brand-saffron)' : 'var(--app-border)',
+                      backgroundColor: connectChannel === "skip" ? 'var(--brand-saffron-soft)' : 'var(--app-bg)',
+                    }}
+                    onMouseEnter={(e) => { if (connectChannel !== "skip") e.currentTarget.style.borderColor = 'var(--app-border-strong)'; }}
+                    onMouseLeave={(e) => { if (connectChannel !== "skip") e.currentTarget.style.borderColor = 'var(--app-border)'; }}
+                  >
+                    <div
+                      className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: connectChannel === "skip" ? 'var(--brand-saffron)' : 'var(--app-bg-soft)', color: connectChannel === "skip" ? 'var(--app-bg)' : 'var(--app-text-muted)' }}
+                    >
+                      <MessageSquare className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold" style={{ color: 'var(--app-text)' }}>Skip for now</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}>
+                        I'll connect a channel later from Settings
+                      </p>
+                    </div>
+                    {connectChannel === "skip" && (
+                      <CheckCircle2 className="h-5 w-5 shrink-0" style={{ color: 'var(--brand-saffron)' }} />
+                    )}
+                  </button>
                 </div>
 
                 <div className="pt-4 flex gap-3">
-                  <button 
+                  <button
                     onClick={() => setStep(2)}
+                    className="px-6 py-4.5 rounded-2xl font-bold transition-all text-sm border cursor-pointer"
+                    style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-surface)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-bg-soft)'; }}
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={() => setStep(4)}
+                    className="flex-1 py-4.5 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer text-sm"
+                    style={{ backgroundColor: 'var(--brand-saffron)', color: 'var(--app-bg)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-primary-strong)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--brand-saffron)'; }}
+                  >
+                    Continue <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* STEP 4 — Welcome + Quick-Start Checklist */}
+            {step === 4 && (
+              <motion.div
+                key="step4"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-8"
+              >
+                <div className="space-y-2">
+                  <h2 className="text-3xl font-black tracking-tight text-[var(--app-text)]">
+                    Welcome aboard, {mockCompany || "your business"}!
+                  </h2>
+                  <p className="leading-relaxed text-sm text-[var(--app-text-muted)]">
+                    Your workspace is ready. Here are your next steps to get the most out of SaLira.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-xs font-black uppercase tracking-widest text-[var(--app-text-muted)]">Quick-Start Checklist</p>
+
+                  {[
+                    {
+                      icon: Radio,
+                      title: "Connect your first channel",
+                      description: "Link Telegram or add the website widget so customers can reach you.",
+                      done: connectChannel !== "skip",
+                    },
+                    {
+                      icon: ShoppingBag,
+                      title: "Add your products",
+                      description: "Upload your product catalog so the AI can answer pricing questions.",
+                      done: false,
+                    },
+                    {
+                      icon: MessageSquare,
+                      title: "Try the AI auto-reply",
+                      description: "Send a test message to see how the AI handles customer conversations.",
+                      done: false,
+                    },
+                    {
+                      icon: User,
+                      title: "Invite your team",
+                      description: "Add staff members so they can manage conversations too.",
+                      done: false,
+                    },
+                  ].map((item) => (
+                    <div
+                      key={item.title}
+                      className="flex items-start gap-3 p-4 rounded-xl border"
+                      style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)' }}
+                    >
+                      <div
+                        className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                        style={{
+                          backgroundColor: item.done ? 'var(--success-green)' : 'var(--brand-saffron-soft)',
+                          color: item.done ? 'white' : 'var(--brand-saffron)',
+                        }}
+                      >
+                        {item.done ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <item.icon className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold" style={{ color: 'var(--app-text)' }}>
+                          {item.title}
+                        </p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}>
+                          {item.description}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    onClick={() => setStep(3)}
                     className="px-6 py-4.5 rounded-2xl font-bold transition-all text-sm border cursor-pointer"
                     style={{ backgroundColor: 'var(--app-bg-soft)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--app-surface)'; }}
@@ -575,4 +758,3 @@ export function OnboardingWizard({
     </motion.div>
   );
 }
-
