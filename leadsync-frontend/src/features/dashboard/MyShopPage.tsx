@@ -11,6 +11,7 @@ import { TopStaffWidget } from './widgets/TopStaffWidget';
 import { ChannelBreakdownWidget } from './widgets/ChannelBreakdownWidget';
 import { RecentOrdersWidget } from './widgets/RecentOrdersWidget';
 import { RevenueForecastWidget } from './widgets/RevenueForecastWidget';
+import { WorkloadOverviewWidget } from './widgets/WorkloadOverviewWidget';
 
 interface MyShopPageProps {
   onNavigate?: (tab: TabID) => void;
@@ -47,10 +48,17 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
         ) : null}
       </div>
 
-      {/* Row 2: Alerts — conditional full-width banner */}
-      {data?.alerts && (
-        <NeedsAttentionWidget alerts={data.alerts} onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined} />
-      )}
+      {/* Row 2: Alerts + Workload — conditional */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {data?.alerts && (
+          <NeedsAttentionWidget alerts={data.alerts} onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined} />
+        )}
+        <WorkloadOverviewWidget
+          data={data?.conversationSummary ?? null}
+          loading={loading}
+          onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined}
+        />
+      </div>
 
       {/* Row 3: Revenue + Forecast — 2 columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
