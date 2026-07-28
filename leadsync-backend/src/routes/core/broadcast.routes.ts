@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
-import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
+import { authMiddleware, authorizePermission, AuthRequest } from "../../middleware/auth.middleware";
 import { sendTelegramMessage } from "../../bot/telegram.sender";
 import { decryptSecret } from "../../utils/encryption";
 import { Channel } from "@prisma/client";
@@ -30,7 +30,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
  * POST /api/broadcasts
  * Create and send a new broadcast
  */
-router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post("/", authMiddleware, authorizePermission("broadcast.send"), async (req: AuthRequest, res: Response) => {
   try {
     const { companyId } = req.user!;
     const { title, message, targetTags, targetSegments } = req.body;

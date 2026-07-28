@@ -104,6 +104,7 @@ model User {
   authProvider                                 String           @default("EMAIL")
   googleId                                     String?          @unique
   onboardingStatus                             OnboardingStatus @default(PENDING)
+  permissionOverrides                          Json?            @default("[]")
   agentFeedPosts                               AgentFeedPost[]  @relation("AgentFeedPosts")
   Conversation_Conversation_assignedToIdToUser Conversation[]   @relation("Conversation_assignedToIdToUser")
   claimedConversations                         Conversation[]   @relation("ClaimedConversations")

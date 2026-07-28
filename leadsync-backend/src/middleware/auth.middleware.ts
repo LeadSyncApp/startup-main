@@ -3,6 +3,8 @@ import jwt, { JwtPayload as DefaultJwtPayload } from "jsonwebtoken";
 import { prisma, getTenantPrismaContext } from "../lib/prisma";
 import { tenantContextStorage, resolveTenantContext } from "../services/context/tenantContext.provider";
 
+import { can, Permission } from "../services/auth/permissions.service";
+
 // Augment Express's built-in User type
 declare global {
   namespace Express {
@@ -13,6 +15,7 @@ declare global {
       staffId?: string;
       name?: string;
       authProvider?: string;
+      permissionOverrides?: any;
     }
   }
 }
@@ -28,6 +31,7 @@ interface JwtPayload extends DefaultJwtPayload {
   staffId?: string;
   name?: string;
   authProvider?: string;
+  permissionOverrides?: any;
 }
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -37,8 +41,12 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
-const agentStatusCache = new Map<string, { isActive: boolean; lastChecked: number }>();
+const agentStatusCache = new Map<string, { isActive: boolean; permissionOverrides: any; lastChecked: number }>();
 const CACHE_LIFECYCLE_MS = 30000;
+
+export const invalidateUserCache = (userId: string) => {
+  agentStatusCache.delete(userId);
+};
 
 export const authMiddleware = async (
   req: AuthRequest,
@@ -74,13 +82,15 @@ export const authMiddleware = async (
     const now = Date.now();
     const cachedSession = agentStatusCache.get(decoded.userId);
     let isActive = false;
+    let permissionOverrides: any = decoded.permissionOverrides ?? null;
 
     if (cachedSession && (now - cachedSession.lastChecked < CACHE_LIFECYCLE_MS)) {
       isActive = cachedSession.isActive;
+      permissionOverrides = cachedSession.permissionOverrides;
     } else {
       const userExists = await prisma.user.findUnique({
         where: { id: decoded.userId },
-        select: { id: true, isActive: true },
+        select: { id: true, isActive: true, permissionOverrides: true },
       });
 
       if (!userExists) {
@@ -88,7 +98,8 @@ export const authMiddleware = async (
       }
 
       isActive = userExists.isActive;
-      agentStatusCache.set(decoded.userId, { isActive, lastChecked: now });
+      permissionOverrides = userExists.permissionOverrides;
+      agentStatusCache.set(decoded.userId, { isActive, permissionOverrides, lastChecked: now });
     }
 
     if (!isActive) {
@@ -102,6 +113,7 @@ export const authMiddleware = async (
       staffId: decoded.staffId,
       name: decoded.name,
       authProvider: decoded.authProvider,
+      permissionOverrides: permissionOverrides,
     };
 
     next();
@@ -119,6 +131,23 @@ export const authorizeRoles = (...allowedRoles: string[]) => {
 
     if (!allowedRoles.includes(req.user.role)) {
       console.warn(`🛑 RBAC Violation: User ${req.user.userId} with role ${req.user.role} tried to access a restricted route.`);
+      return res.status(403).json({
+        message: "Access Denied: You do not have permission to perform this action."
+      });
+    }
+
+    next();
+  };
+};
+
+export const authorizePermission = (permission: Permission) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!can(req.user, permission)) {
+      console.warn(`🛑 Permission Violation: User ${req.user.userId} with role ${req.user.role} tried to access ${permission}.`);
       return res.status(403).json({
         message: "Access Denied: You do not have permission to perform this action."
       });

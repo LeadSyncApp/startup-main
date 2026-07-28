@@ -20,6 +20,7 @@ import {
 } from "../../services/knowledge/inventory.service";
 import { prisma } from "../../lib/prisma";
 import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
+import { can } from "../../services/auth/permissions.service";
 import multer from "multer";
 import { supabase } from "../../lib/supabase";
 import { invalidateChunkCache } from "../../services/knowledge/chunkCache";
@@ -193,6 +194,7 @@ router.post("/:id/inventory/confirm", authMiddleware, async (req: AuthRequest, r
   const userCompanyId = req.user?.companyId;
   if (!userCompanyId) return res.status(401).json({ error: "No company context" });
   if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
+  if (!can(req.user, "inventory.manage")) return res.status(403).json({ error: "Access denied: Requires inventory.manage permission" });
   const { products } = req.body;
 
   if (!Array.isArray(products)) {
@@ -283,6 +285,7 @@ router.delete("/:id/inventory/:productId", authMiddleware, async (req: AuthReque
   const userCompanyId = req.user?.companyId;
   if (!userCompanyId) return res.status(401).json({ error: "No company context" });
   if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
+  if (!can(req.user, "inventory.manage")) return res.status(403).json({ error: "Access denied: Requires inventory.manage permission" });
 
   try {
     // 1. Verify product belongs to the requested company (tenant check)

@@ -9,6 +9,9 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 
+import { useAuth } from '../../features/auth-tenancy/AuthContext';
+import { can } from '../../lib/permissions';
+
 type UserRole = 'OWNER' | 'MANAGER' | 'STAFF';
 
 interface SidebarProps {
@@ -23,9 +26,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   gstinActive = true 
 }) => {
   const [isBackOfficeMode, setIsBackOfficeMode] = useState<boolean>(false);
+  const { user } = useAuth();
 
-  // If the user is an AGENT, they CANNOT enter Back Office mode
-  const canAccessBackOffice = userRole !== 'STAFF';
+  // User can access back office if they are OWNER/MANAGER or hold relevant permission overrides
+  const canAccessBackOffice = userRole !== 'STAFF' || 
+    can(user, 'settings.shop.edit') || 
+    can(user, 'inventory.manage') || 
+    can(user, 'automation.manage') || 
+    can(user, 'dashboard.financial');
   
   // Logic to determine if we should show administrative features
   const showBackOfficeElements = isBackOfficeMode && canAccessBackOffice;

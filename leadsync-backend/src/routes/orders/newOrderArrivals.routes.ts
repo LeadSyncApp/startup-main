@@ -1,5 +1,6 @@
 import { Router, Response } from "express";
 import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
+import { can } from "../../services/auth/permissions.service";
 import { prisma } from "../../lib/prisma";
 import { newOrderArrivalService } from "../../services/workflow/newOrderArrival.service";
 import { emitToCompany } from "../../lib/socket";
@@ -104,9 +105,9 @@ router.post("/:id/claim", authMiddleware, async (req: AuthRequest, res: Response
     const { id } = req.params;
     const { userId, companyId, role } = req.user!;
 
-    // Only agents, admins, and owners can claim orders
-    if (!["STAFF", "MANAGER", "OWNER"].includes(role)) {
-      return res.status(403).json({ message: "Only agents can claim orders" });
+    // Check permission to claim orders
+    if (!can(req.user, "orders.claim")) {
+      return res.status(403).json({ message: "You don't have permission to claim orders" });
     }
 
     const result = await newOrderArrivalService.claimOrderArrival(
@@ -141,8 +142,8 @@ router.get("/claimed", authMiddleware, async (req: AuthRequest, res: Response) =
       status: { in: ["PROCESSING", "PREPARING", "READY"] } // Active processing states
     };
 
-    // Role-based filtering for claimed orders
-    if (role === "STAFF") {
+    // Role & permission based filtering for claimed orders
+    if (!can(req.user, "orders.viewAll")) {
       whereCondition.OR = [
         { processedById: userId }, // My claimed orders
       ];

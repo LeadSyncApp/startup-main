@@ -4,14 +4,14 @@ import {
   Users, UserPlus, Mail, Smartphone, X, Loader2,
   RefreshCw, Power, PowerOff, Trash2, MoreHorizontal,
   MessageSquare, ShoppingBag, Search, UserCheck, Clock,
-  UserX, Calendar, CheckCircle2, AlertCircle
+  UserX, Calendar, CheckCircle2, AlertCircle, Shield, Check
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "../auth-tenancy/AuthContext";
 import { apiClient } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { can, getRoleLabel, getRoleIcon, getRoleColor, Role } from "../../lib/permissions";
+import { can, hasPermission, getRoleLabel, getRoleIcon, getRoleColor, Role, Permission } from "../../lib/permissions";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 
 // Types
@@ -29,6 +29,7 @@ interface TeamMember {
   lastSeenAt: string | null;
   onboardingStatus: "PENDING" | "INVITE_ACCEPTED" | "ONBOARDED";
   createdAt: string;
+  permissionOverrides?: string[] | null;
   _count: {
     assignedConversations: number;
     processedOrders: number;
@@ -61,6 +62,61 @@ interface PendingMember {
 
 type Tab = "directory" | "onboarding" | "activity";
 
+const OVERRIDABLE_PERMISSIONS: {
+  category: string;
+  items: {
+    key: Permission;
+    label: string;
+    description: string;
+  }[];
+}[] = [
+  {
+    category: "Orders & Fulfillment",
+    items: [
+      { key: "orders.viewAll", label: "View All Orders", description: "Access all customer orders across the shop, not just assigned ones." },
+      { key: "orders.confirm", label: "Confirm & Process Orders", description: "Approve, confirm, and update processing statuses for orders." },
+      { key: "orders.cancel", label: "Cancel Orders", description: "Cancel and archive customer orders." },
+    ],
+  },
+  {
+    category: "Inventory & Products",
+    items: [
+      { key: "inventory.manage", label: "Manage Inventory Catalog", description: "Add, edit, upload images, and delete product catalog items." },
+    ],
+  },
+  {
+    category: "AI & Bot Automation",
+    items: [
+      { key: "automation.manage", label: "Manage Automations & Knowledge", description: "Create and edit conversational rules, FAQs, and bot knowledge." },
+    ],
+  },
+  {
+    category: "Marketing & Outreach",
+    items: [
+      { key: "broadcast.send", label: "Send Customer Broadcasts", description: "Create and dispatch bulk broadcast campaigns to customer segments." },
+    ],
+  },
+  {
+    category: "Analytics & Financials",
+    items: [
+      { key: "dashboard.financial", label: "Financial Metrics & Export", description: "Access Gullak revenue metrics and export order/lead reports." },
+    ],
+  },
+  {
+    category: "Settings & System",
+    items: [
+      { key: "settings.shop.edit", label: "Edit Shop Profile Settings", description: "Update shop details, profile configuration, and business hours." },
+      { key: "settings.connections.telegram", label: "Manage Channels & Integrations", description: "Configure Telegram, WhatsApp, and Webhook integrations." },
+    ],
+  },
+  {
+    category: "Team Management",
+    items: [
+      { key: "team.invite", label: "Invite Team Members", description: "Send team invitations and view team onboarding statuses." },
+    ],
+  },
+];
+
 export function TeamMembersPage() {
   const { user, company } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("directory");
@@ -77,6 +133,11 @@ export function TeamMembersPage() {
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<{ id: string; name: string } | null>(null);
   const [inviteToRevoke, setInviteToRevoke] = useState<{ id: string; email: string } | null>(null);
+
+  // Permission Overrides Modal state
+  const [selectedMemberForPermissions, setSelectedMemberForPermissions] = useState<TeamMember | null>(null);
+  const [editingPermissions, setEditingPermissions] = useState<string[]>([]);
+  const [isSavingPermissions, setIsSavingPermissions] = useState(false);
 
   // Search filters
   const [directorySearch, setDirectorySearch] = useState("");
@@ -225,6 +286,44 @@ export function TeamMembersPage() {
 
   const handleRevokeInvite = (invitationId: string, email: string) => {
     setInviteToRevoke({ id: invitationId, email });
+  };
+
+  const handleOpenPermissionsModal = (member: TeamMember) => {
+    setSelectedMemberForPermissions(member);
+    setEditingPermissions(
+      Array.isArray(member.permissionOverrides) ? member.permissionOverrides : []
+    );
+  };
+
+  const handleTogglePermissionOverride = (permKey: string) => {
+    setEditingPermissions(prev =>
+      prev.includes(permKey)
+        ? prev.filter(p => p !== permKey)
+        : [...prev, permKey]
+    );
+  };
+
+  const handleSavePermissions = async () => {
+    if (!selectedMemberForPermissions) return;
+    setIsSavingPermissions(true);
+    try {
+      const res = await apiClient.patch(`/team/members/${selectedMemberForPermissions.id}/permissions`, {
+        permissionOverrides: editingPermissions,
+      });
+      toast.success(res.data.message || "Permissions updated successfully");
+      setMembers(prev =>
+        prev.map(m =>
+          m.id === selectedMemberForPermissions.id
+            ? { ...m, permissionOverrides: editingPermissions }
+            : m
+        )
+      );
+      setSelectedMemberForPermissions(null);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to update permissions");
+    } finally {
+      setIsSavingPermissions(false);
+    }
   };
 
   const getStatusIndicator = (member: TeamMember) => {
@@ -511,14 +610,22 @@ export function TeamMembersPage() {
                             </div>
                           </td>
                           <td className="py-5 px-6">
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-black uppercase tracking-[0.1em]"
-                                  style={{
-                                    backgroundColor: `${getRoleColor(member.role)}15`,
-                                    borderColor: `${getRoleColor(member.role)}30`,
-                                    color: getRoleColor(member.role),
-                                  }}>
-                              {getRoleIcon(member.role)} {getRoleLabel(member.role)}
-                            </span>
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-black uppercase tracking-[0.1em]"
+                                    style={{
+                                      backgroundColor: `${getRoleColor(member.role)}15`,
+                                      borderColor: `${getRoleColor(member.role)}30`,
+                                      color: getRoleColor(member.role),
+                                    }}>
+                                {getRoleIcon(member.role)} {getRoleLabel(member.role)}
+                              </span>
+                              {member.role === "STAFF" && member.permissionOverrides && member.permissionOverrides.length > 0 && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold"
+                                      style={{ backgroundColor: 'rgba(212, 168, 67, 0.12)', color: 'var(--brand-saffron)' }}>
+                                  <Shield className="h-3 w-3" /> +{member.permissionOverrides.length} granted access
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-5 px-6">
                             <span className="text-[11px] font-medium" style={{ color: 'var(--app-text-muted)' }}>
@@ -561,6 +668,14 @@ export function TeamMembersPage() {
                                               style={{ color: 'var(--app-text)' }}>
                                         🛠️ Demote to Staff
                                       </button>
+                                      {member.role === "STAFF" && (
+                                        <button onClick={() => handleOpenPermissionsModal(member)}
+                                                className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg hover:bg-opacity-10 cursor-pointer"
+                                                style={{ color: 'var(--brand-saffron)' }}>
+                                          <Shield className="h-3.5 w-3.5 inline mr-1.5" />
+                                          Manage Permissions
+                                        </button>
+                                      )}
                                       <hr style={{ borderColor: 'var(--app-border)' }} />
                                       <button onClick={() => handleRemoveMember(member.id, name)}
                                               className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg hover:bg-opacity-10 cursor-pointer"
@@ -1027,6 +1142,14 @@ export function TeamMembersPage() {
                                               style={{ color: 'var(--app-text)' }}>
                                         🛠️ Demote to Staff
                                       </button>
+                                      {member.role === "STAFF" && (
+                                        <button onClick={() => handleOpenPermissionsModal(member)}
+                                                className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg hover:bg-opacity-10 cursor-pointer"
+                                                style={{ color: 'var(--brand-saffron)' }}>
+                                          <Shield className="h-3.5 w-3.5 inline mr-1.5" />
+                                          Manage Permissions
+                                        </button>
+                                      )}
                                       <hr style={{ borderColor: 'var(--app-border)' }} />
                                       <button onClick={() => handleRemoveMember(member.id, name)}
                                               className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg hover:bg-opacity-10 cursor-pointer"
@@ -1173,6 +1296,145 @@ export function TeamMembersPage() {
         cancelLabel="Cancel"
         isDestructive={true}
       />
+
+      {/* Manage Permissions Modal */}
+      <AnimatePresence>
+        {selectedMemberForPermissions && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedMemberForPermissions(null)}
+              className="absolute inset-0 backdrop-blur-md"
+              style={{ backgroundColor: 'var(--app-backdrop)' }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 40 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 40 }}
+              className="relative w-full max-w-2xl rounded-[2.5rem] shadow-[0_48px_80px_-24px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col z-10 max-h-[85vh]"
+              style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}
+            >
+              {/* Header */}
+              <div className="p-6 md:p-8 flex justify-between items-center shrink-0"
+                   style={{ borderBottom: '1px solid var(--app-border)', backgroundColor: 'var(--app-bg-soft)' }}>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider"
+                          style={{ backgroundColor: 'rgba(212, 168, 67, 0.12)', color: 'var(--brand-saffron)' }}>
+                      Personal Override
+                    </span>
+                  </div>
+                  <h3 className="text-xl md:text-2xl font-black tracking-tight mt-1 flex items-center gap-2" style={{ color: 'var(--app-text)' }}>
+                    <Shield className="h-5 w-5 text-saffron" />
+                    Manage Staff Permissions
+                  </h3>
+                  <p className="text-xs font-semibold mt-1" style={{ color: 'var(--app-text-muted)' }}>
+                    For {selectedMemberForPermissions.firstName ? `${selectedMemberForPermissions.firstName} ${selectedMemberForPermissions.lastName || ""}` : selectedMemberForPermissions.email} ({getRoleLabel(selectedMemberForPermissions.role)})
+                  </p>
+                </div>
+                <button onClick={() => setSelectedMemberForPermissions(null)}
+                        className="h-10 w-10 rounded-xl flex items-center justify-center transition-transform active:scale-95 cursor-pointer shrink-0"
+                        style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)', color: 'var(--app-text-muted)' }}>
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Scrollable Body */}
+              <div className="p-6 md:p-8 overflow-y-auto space-y-6 flex-1">
+                <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  Grant additional feature access to this staff member beyond standard staff limits. Toggled permissions extend their access immediately.
+                </p>
+
+                {OVERRIDABLE_PERMISSIONS.map((category) => (
+                  <div key={category.category} className="space-y-3">
+                    <h4 className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: 'var(--brand-saffron)' }}>
+                      {category.category}
+                    </h4>
+                    <div className="space-y-2">
+                      {category.items.map((item) => {
+                        const nativelyGranted = hasPermission(selectedMemberForPermissions.role, item.key);
+                        const isOverridden = editingPermissions.includes(item.key);
+                        const hasAccess = nativelyGranted || isOverridden;
+
+                        return (
+                          <div
+                            key={item.key}
+                            className="flex items-center justify-between p-4 rounded-xl transition-all"
+                            style={{
+                              backgroundColor: hasAccess ? 'rgba(212, 168, 67, 0.04)' : 'var(--app-bg-soft)',
+                              border: `1px solid ${hasAccess ? 'rgba(212, 168, 67, 0.2)' : 'var(--app-border)'}`,
+                            }}
+                          >
+                            <div className="space-y-0.5 pr-4">
+                              <div className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--app-text)' }}>
+                                {item.label}
+                                {nativelyGranted && (
+                                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md"
+                                        style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: 'var(--success-green)' }}>
+                                    Role Default
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs font-medium" style={{ color: 'var(--app-text-muted)' }}>
+                                {item.description}
+                              </p>
+                            </div>
+
+                            {nativelyGranted ? (
+                              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shrink-0"
+                                   style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: 'var(--success-green)' }}>
+                                <Check className="h-4 w-4" />
+                                Included
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleTogglePermissionOverride(item.key)}
+                                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                                  isOverridden ? 'bg-amber-500' : 'bg-slate-700'
+                                }`}
+                              >
+                                <span
+                                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                    isOverridden ? 'translate-x-6' : 'translate-x-1'
+                                  }`}
+                                />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 md:p-8 flex items-center justify-between shrink-0"
+                   style={{ backgroundColor: 'var(--app-bg-soft)', borderTop: '1px solid var(--app-border)' }}>
+                <span className="text-xs font-bold" style={{ color: 'var(--app-text-muted)' }}>
+                  {editingPermissions.length} granted override{editingPermissions.length !== 1 ? 's' : ''}
+                </span>
+                <div className="flex items-center gap-3">
+                  <Button variant="secondary" onClick={() => setSelectedMemberForPermissions(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleSavePermissions}
+                    disabled={isSavingPermissions}
+                    className="px-6 py-3 text-xs tracking-wider uppercase rounded-xl"
+                  >
+                    {isSavingPermissions ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Shield className="h-4 w-4 mr-2" />}
+                    Save Permissions
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

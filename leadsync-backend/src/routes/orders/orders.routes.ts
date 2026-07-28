@@ -2,7 +2,8 @@ import { Router, Response } from "express";
 import { ConversationStatus, MessageSender } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { createTenantRepository } from "../../lib/tenantDb";
-import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
+import { authMiddleware, authorizeRoles, authorizePermission, AuthRequest } from "../../middleware/auth.middleware";
+import { can } from "../../services/auth/permissions.service";
 import { eventBus, Events } from "../../services/infrastructure/eventBus";
 import {
   OrderPriority,
@@ -558,13 +559,13 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     } else if (view === "history") {
       // History: Completed, Delivered, Cancelled, Archived, Shipped mapped to valid Enums
       whereCondition.status = { in: ["DELIVERED", "PAID", "COMPLETED", "CANCELLED"] };
-      if (req.user!.role === "STAFF") {
+      if (!can(req.user, "orders.viewAll")) {
         whereCondition.processedById = req.user!.userId;
       }
     } else {
       // Active Board: Include active stages. Unconfirmed PENDING payment request links are excluded until payment is confirmed.
       const activeStatuses = ["NEW", "CONFIRMED", "PROCESSING", "PREPARING", "READY", "PAID", "SHIPPED", "COMPLETED"];
-      if (req.user!.role === "STAFF") {
+      if (!can(req.user, "orders.viewAll")) {
         whereCondition.status = { in: activeStatuses };
         whereCondition.processedById = req.user!.userId;
       } else {
@@ -778,8 +779,8 @@ router.get("/awaiting", authMiddleware, async (req: AuthRequest, res: Response) 
       status: { in: ["BOT_CREATED_ORDER", "PENDING", "NEW"] } // Awaiting orders
     };
 
-    // Agents only see their own assigned/claimed orders
-    if (role === "STAFF") {
+    // Agents only see their own assigned/claimed orders unless granted orders.viewAll
+    if (!can(req.user, "orders.viewAll")) {
       whereCondition.processedById = userId;
     }
 
@@ -835,7 +836,7 @@ router.get("/awaiting", authMiddleware, async (req: AuthRequest, res: Response) 
    SOFT DELETE ORDER (History Archive)
    🔒 Restricted to: OWNER, ADMIN
 ================================== */
-router.delete("/:id", authMiddleware, authorizeRoles("OWNER", "MANAGER"), async (req: AuthRequest, res: Response) => {
+router.delete("/:id", authMiddleware, authorizePermission("orders.cancel"), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const companyId = req.user!.companyId;

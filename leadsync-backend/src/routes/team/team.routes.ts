@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { ConversationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { authMiddleware } from "../../middleware/auth.middleware";
+import { authMiddleware, invalidateUserCache } from "../../middleware/auth.middleware";
 import { can } from "../../services/auth/permissions.service";
 import { notificationService } from "../../services/infrastructure/notification.service";
 import { cacheService } from "../../services/infrastructure/cache.service";
@@ -49,6 +49,7 @@ router.get("/members", authMiddleware as any, async (req: any, res: any) => {
         createdAt: true,
         isActive: true,
         onboardingStatus: true,
+        permissionOverrides: true,
             _count: {
               select: {
                 claimedConversations: true,
@@ -112,6 +113,7 @@ router.get("/members/:id", authMiddleware as any, async (req: any, res: any) => 
         isOnline: true,
         lastSeenAt: true,
         createdAt: true,
+        permissionOverrides: true,
         _count: {
           select: {
             claimedConversations: true,
@@ -187,8 +189,13 @@ router.patch("/members/:id/role", authMiddleware as any, async (req: any, res: a
         lastName: true,
         role: true,
         staffId: true,
+        permissionOverrides: true,
       },
     });
+
+    if (companyId) {
+      await cacheService.delete(`team_members_${companyId}`);
+    }
 
     await notificationService.notifyUser(
       id,
@@ -201,6 +208,72 @@ router.patch("/members/:id/role", authMiddleware as any, async (req: any, res: a
   } catch (error: any) {
     console.error("Update team member role error:", error);
     res.status(500).json({ message: "Failed to update role" });
+  }
+});
+
+/* =====================================================
+   Update Team Member Permission Overrides
+   PATCH /api/team/members/:id/permissions
+   Requires: OWNER or MANAGER (can team.changeRole or team.invite)
+===================================================== */
+router.patch("/members/:id/permissions", authMiddleware as any, async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.user?.companyId;
+    const userRole = req.user?.role;
+    const { permissionOverrides } = req.body;
+
+    if (!can(userRole, "team.changeRole") && !can(userRole, "team.invite")) {
+      return res.status(403).json({ message: "You don't have permission to manage team permissions" });
+    }
+
+    if (!Array.isArray(permissionOverrides)) {
+      return res.status(400).json({ message: "permissionOverrides must be an array of permission strings" });
+    }
+
+    const targetUser = await prisma.user.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ message: "Team member not found" });
+    }
+
+    if (targetUser.role === "OWNER") {
+      return res.status(403).json({ message: "Cannot modify Owner's permissions" });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { permissionOverrides: permissionOverrides },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        staffId: true,
+        permissionOverrides: true,
+      },
+    });
+
+    invalidateUserCache(id);
+
+    if (companyId) {
+      await cacheService.delete(`team_members_${companyId}`);
+    }
+
+    await notificationService.notifyUser(
+      id,
+      "🔐 Permissions Updated",
+      "Your personal permission access has been updated",
+      "SYSTEM"
+    );
+
+    res.json({ message: "Permissions updated successfully", member: updated });
+  } catch (error: any) {
+    console.error("Update team member permissions error:", error);
+    res.status(500).json({ message: "Failed to update permissions" });
   }
 });
 

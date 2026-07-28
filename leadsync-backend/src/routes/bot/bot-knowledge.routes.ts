@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
 import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
+import { can } from "../../services/auth/permissions.service";
 
 const router = Router();
 
@@ -24,8 +25,8 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 /* POST /api/bot-knowledge — create */
 router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { companyId, role } = req.user!;
-    if (role === "STAFF") return res.status(403).json({ message: "Forbidden" });
+    const { companyId } = req.user!;
+    if (!can(req.user, "automation.manage")) return res.status(403).json({ message: "Forbidden" });
 
     const { type = "FAQ", title, content } = req.body;
     if (!title?.trim() || !content?.trim())
@@ -43,8 +44,8 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 /* PATCH /api/bot-knowledge/:id — update or toggle */
 router.patch("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { companyId, role } = req.user!;
-    if (role === "STAFF") return res.status(403).json({ message: "Forbidden" });
+    const { companyId } = req.user!;
+    if (!can(req.user, "automation.manage")) return res.status(403).json({ message: "Forbidden" });
 
     const existing = await (prisma.botKnowledge as any).findFirst({
       where: { id: req.params.id, companyId },
@@ -70,8 +71,8 @@ router.patch("/:id", authMiddleware, async (req: AuthRequest, res: Response) => 
 /* DELETE /api/bot-knowledge/:id */
 router.delete("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { companyId, role } = req.user!;
-    if (role === "STAFF") return res.status(403).json({ message: "Forbidden" });
+    const { companyId } = req.user!;
+    if (!can(req.user, "automation.manage")) return res.status(403).json({ message: "Forbidden" });
 
     const existing = await (prisma.botKnowledge as any).findFirst({
       where: { id: req.params.id, companyId },

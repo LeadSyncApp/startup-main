@@ -59,28 +59,69 @@ const PERMISSION_MAP: Record<Permission, Role[]> = {
   "conversations.assign":           ["OWNER", "MANAGER"],
   "conversations.reply":            ["OWNER", "MANAGER", "STAFF"],
   "broadcast.send":                 ["OWNER", "MANAGER"],
-  "inventory.manage":               ["OWNER", "MANAGER"],
+  "inventory.manage":               ["OWNER", "MANAGER", "STAFF"],
   "dashboard.view":                 ["OWNER", "MANAGER", "STAFF"],
   "dashboard.financial":            ["OWNER", "MANAGER"],
   "automation.manage":              ["OWNER", "MANAGER"],
   "company.delete":                 ["OWNER"],
 };
 
+export interface UserWithPermissions {
+  role?: Role | null;
+  permissionOverrides?: string[] | Record<string, boolean> | null;
+}
+
 /**
- * Check if a user role has a specific permission
+ * Check if a user role (or user object with personal overrides) has a specific permission.
+ * Personal overrides additively extend access beyond role defaults.
  */
-export function hasPermission(role: Role | undefined | null, permission: Permission): boolean {
+export function hasPermission(
+  userOrRole: Role | UserWithPermissions | undefined | null,
+  permission: Permission,
+  overrides?: string[] | Record<string, boolean> | null
+): boolean {
+  if (!userOrRole) return false;
+
+  let role: Role | undefined;
+  let userOverrides = overrides;
+
+  if (typeof userOrRole === "object" && userOrRole !== null) {
+    role = userOrRole.role ?? undefined;
+    userOverrides = userOrRole.permissionOverrides || overrides;
+  } else {
+    role = userOrRole as Role;
+  }
+
   if (!role) return false;
+
+  // 1. Check role-based permission
   const allowedRoles = PERMISSION_MAP[permission];
-  if (!allowedRoles) return false;
-  return allowedRoles.includes(role);
+  if (allowedRoles && allowedRoles.includes(role)) {
+    return true;
+  }
+
+  // 2. Check personal permission overrides (extends beyond role)
+  if (userOverrides) {
+    if (Array.isArray(userOverrides)) {
+      return userOverrides.includes(permission);
+    }
+    if (typeof userOverrides === "object" && userOverrides !== null) {
+      return Boolean(userOverrides[permission]);
+    }
+  }
+
+  return false;
 }
 
 /**
  * React Hook friendly version - use to conditionally render UI elements
  */
-export function can(role: Role | undefined | null, permission: Permission): boolean {
-  return hasPermission(role, permission);
+export function can(
+  userOrRole: Role | UserWithPermissions | undefined | null,
+  permission: Permission,
+  overrides?: string[] | Record<string, boolean> | null
+): boolean {
+  return hasPermission(userOrRole, permission, overrides);
 }
 
 /**

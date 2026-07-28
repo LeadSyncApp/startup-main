@@ -62,7 +62,7 @@ const PERMISSION_MAP: Record<Permission, Role[]> = {
   "conversations.assign":           ["OWNER", "MANAGER"],
   "conversations.reply":            ["OWNER", "MANAGER", "STAFF"],
   "broadcast.send":                 ["OWNER", "MANAGER"],
-  "inventory.manage":               ["OWNER", "MANAGER"],
+  "inventory.manage":               ["OWNER", "MANAGER", "STAFF"],
   "dashboard.view":                 ["OWNER", "MANAGER", "STAFF"],
   "dashboard.financial":            ["OWNER", "MANAGER"],
   "automation.manage":              ["OWNER", "MANAGER"],
@@ -72,27 +72,75 @@ const PERMISSION_MAP: Record<Permission, Role[]> = {
 export const PERMISSIONS = PERMISSION_MAP;
 
 /**
- * Check if a user role has a specific permission
+ * Check if a user role (or user object with personal overrides) has a specific permission.
+ * Personal overrides additively extend access beyond role defaults.
  */
-export function hasPermission(role: Role, permission: Permission): boolean {
+export function hasPermission(
+  role: Role | undefined | null,
+  permission: Permission,
+  overrides?: string[] | Record<string, boolean> | null | any
+): boolean {
+  if (!role) return false;
+
+  // 1. Check role-based permission
   const allowedRoles = PERMISSION_MAP[permission];
-  if (!allowedRoles) return false;
-  return allowedRoles.includes(role);
+  if (allowedRoles && allowedRoles.includes(role)) {
+    return true;
+  }
+
+  // 2. Check personal permission overrides (extends beyond role)
+  if (overrides) {
+    if (Array.isArray(overrides)) {
+      return overrides.includes(permission);
+    }
+    if (typeof overrides === "object" && overrides !== null) {
+      return Boolean(overrides[permission]);
+    }
+  }
+
+  return false;
 }
 
 /**
- * Get all permissions for a given role
+ * Get all permissions for a given role (plus optional overrides)
  */
-export function getPermissionsForRole(role: Role): Permission[] {
-  return (Object.keys(PERMISSION_MAP) as Permission[]).filter((perm) =>
+export function getPermissionsForRole(
+  role: Role,
+  overrides?: string[] | Record<string, boolean> | null | any
+): Permission[] {
+  const rolePerms = (Object.keys(PERMISSION_MAP) as Permission[]).filter((perm) =>
     PERMISSION_MAP[perm].includes(role)
   );
+
+  if (!overrides) return rolePerms;
+
+  const extraPerms: Permission[] = [];
+  if (Array.isArray(overrides)) {
+    overrides.forEach((p) => {
+      if ((Object.keys(PERMISSION_MAP) as Permission[]).includes(p as Permission) && !rolePerms.includes(p as Permission)) {
+        extraPerms.push(p as Permission);
+      }
+    });
+  }
+
+  return [...rolePerms, ...extraPerms];
 }
 
 /**
- * Middleware-compatible permission check
+ * Middleware & component compatible permission check.
+ * Accepts either a user object ({ role, permissionOverrides }), a role string, or role + overrides.
  */
-export function can(role: string | undefined, permission: Permission): boolean {
-  if (!role) return false;
-  return hasPermission(role as Role, permission);
+export function can(
+  userOrRole: { role?: Role; permissionOverrides?: any } | Role | string | undefined | null,
+  permission: Permission,
+  overrides?: string[] | Record<string, boolean> | null | any
+): boolean {
+  if (!userOrRole) return false;
+
+  if (typeof userOrRole === "object" && userOrRole !== null) {
+    return hasPermission(userOrRole.role, permission, userOrRole.permissionOverrides || overrides);
+  }
+
+  return hasPermission(userOrRole as Role, permission, overrides);
 }
+

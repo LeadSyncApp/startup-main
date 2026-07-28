@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
-import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
+import { authMiddleware, authorizeRoles, authorizePermission, AuthRequest } from "../../middleware/auth.middleware";
 import { cacheService } from "../../services/infrastructure/cache.service";
 import ExcelJS from "exceljs";
 
@@ -329,7 +329,7 @@ router.get("/crm", authMiddleware, async (req: AuthRequest, res: Response) => {
    GET /analytics/export
    Download orders as Excel (OWNER/MANAGER only)
  ================================ */
-router.get("/export", authMiddleware, authorizeRoles("OWNER", "MANAGER"), async (req: AuthRequest, res: Response) => {
+router.get("/export", authMiddleware, authorizePermission("dashboard.financial"), async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
@@ -400,7 +400,7 @@ router.get("/export", authMiddleware, authorizeRoles("OWNER", "MANAGER"), async 
    GET /analytics/export-leads
    Download leads as Excel (OWNER/MANAGER only)
  ================================ */
-router.get("/export-leads", authMiddleware, authorizeRoles("OWNER", "MANAGER"), async (req: AuthRequest, res: Response) => {
+router.get("/export-leads", authMiddleware, authorizePermission("dashboard.financial"), async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
