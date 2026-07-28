@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
-import { MessageSquare, MessageCircle, Instagram, Globe, Loader2, UserPlus } from "lucide-react";
+import { MessageSquare, MessageCircle, Instagram, Globe, Loader2, UserPlus, Trash2, CheckSquare, Square } from "lucide-react";
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
 import { useAuth } from "../auth-tenancy/AuthContext";
@@ -85,6 +85,8 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
   const [searchInput, setSearchInput] = useState("");
   // Total conversation counts per tab, always visible in the tab labels.
   const [tabTotals, setTabTotals] = useState<Record<FilterTab, number>>({ chats: 0, completed: 0 });
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const { companyId } = useAuth();
 
   const fetchTabTotals = useCallback(async () => {
@@ -173,6 +175,7 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
 
   // Initial fetch when filter/search changes + initial fetch for both tab totals.
   useEffect(() => {
+    setSelectedLeadIds([]);
     fetchLeads(1);
     fetchTabTotals();
   }, [fetchLeads, fetchTabTotals]);
@@ -255,6 +258,31 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
     }
   }, [fetchLeads]);
 
+  // Handle bulk deletion
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedLeadIds.length === 0) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedLeadIds.length} selected conversation(s)?`)) return;
+    try {
+      setBulkDeleting(true);
+      const res = await authedFetch("/api/leads/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedLeadIds }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to delete selected conversations");
+      }
+      toast.success(`Successfully deleted ${selectedLeadIds.length} conversation(s)`);
+      setSelectedLeadIds([]);
+      fetchLeads(1);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete conversations");
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [selectedLeadIds, fetchLeads]);
+
   if (loading && leads.length === 0) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -279,7 +307,7 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
   }
 
    return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0 relative">
       {/* Search input */}
       <div className="px-4 pt-4">
         <form onSubmit={handleSearchSubmit} className="flex gap-2" data-tour="search-input">
@@ -311,7 +339,7 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
           {FILTER_TABS.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => { setLeads([]); setFilter(tab.key); }}
+              onClick={() => { setLeads([]); setFilter(tab.key); setSelectedLeadIds([]); }}
               className={`px-3 py-1 text-xs font-black rounded-t transition cursor-pointer ${
                 filter === tab.key
                   ? "bg-[var(--app-surface-alt)] text-[var(--app-text)] border-b-2 border-brand-saffron"
@@ -323,6 +351,35 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
           ))}
         </div>
       </div>
+
+      {/* Select All Bar */}
+      {leads.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--app-border)] bg-[var(--app-bg-soft)] text-xs">
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedLeadIds.length === leads.length) {
+                setSelectedLeadIds([]);
+              } else {
+                setSelectedLeadIds(leads.map((l) => l.id));
+              }
+            }}
+            className="flex items-center gap-2 text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition cursor-pointer font-bold"
+          >
+            {selectedLeadIds.length > 0 && selectedLeadIds.length === leads.length ? (
+              <CheckSquare className="h-4 w-4 text-brand-saffron" />
+            ) : (
+              <Square className="h-4 w-4 text-[var(--app-text-muted)]" />
+            )}
+            Select All ({leads.length})
+          </button>
+          {selectedLeadIds.length > 0 && (
+            <span className="text-[10px] font-black text-brand-saffron uppercase tracking-widest">
+              {selectedLeadIds.length} selected
+            </span>
+          )}
+        </div>
+      )}
 
       {leads.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 text-center">
@@ -336,7 +393,7 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
         </div>
       ) : (
         <>
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 mt-2">
             <div className="space-y-2" data-tour="conversation-row">
             {leads.map((lead) => {
                const ChannelIcon = CHANNEL_ICON[lead.channel.toUpperCase()] || Globe;
@@ -346,6 +403,7 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
               // as unread — the user is viewing it live, so suppress the badge + highlight.
               const isOpenHere = selectedLeadId === lead.id;
               const shownUnread = isOpenHere ? 0 : lead.unreadCount;
+              const isChecked = selectedLeadIds.includes(lead.id);
 
               return (
                 <button
@@ -362,6 +420,24 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
                     selectedLeadId === lead.id ? "ring-2 ring-[var(--brand-saffron)]" : ""
                   } ${(lead.isUnread && !isOpenHere) ? "bg-[var(--brand-saffron-soft)]/40 border-[var(--brand-saffron)]/40" : ""}`}
                 >
+                  {/* Row Checkbox */}
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedLeadIds((prev) =>
+                        prev.includes(lead.id) ? prev.filter((id) => id !== lead.id) : [...prev, lead.id]
+                      );
+                    }}
+                    className="p-1 text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition cursor-pointer shrink-0"
+                    title={isChecked ? "Deselect" : "Select"}
+                  >
+                    {isChecked ? (
+                      <CheckSquare className="h-4 w-4 text-brand-saffron" />
+                    ) : (
+                      <Square className="h-4 w-4 text-[var(--app-text-muted)] opacity-50 group-hover:opacity-100" />
+                    )}
+                  </div>
+
                   {/* Avatar */}
                   <div className="h-10 w-10 rounded-full bg-brand-navy text-white flex items-center justify-center shrink-0 text-xs font-black">
                     {displayName.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()}
@@ -443,6 +519,28 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
             </div>
           ) : null}
         </>
+      )}
+
+      {/* Floating Bulk Action Bar */}
+      {selectedLeadIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2.5 bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700">
+          <span className="text-xs font-black tracking-wide">{selectedLeadIds.length} selected</span>
+          <div className="h-4 w-px bg-slate-700" />
+          <button
+            onClick={handleBulkDelete}
+            disabled={bulkDeleting}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {bulkDeleting ? "Deleting..." : "Delete Selected"}
+          </button>
+          <button
+            onClick={() => setSelectedLeadIds([])}
+            className="px-2 py-1 text-slate-400 hover:text-white text-xs font-bold transition cursor-pointer"
+          >
+            Cancel
+          </button>
+        </div>
       )}
     </div>
   );
