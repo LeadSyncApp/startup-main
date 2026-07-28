@@ -15,12 +15,16 @@ import { RevenueForecastWidget } from './widgets/RevenueForecastWidget';
 import { WorkloadOverviewWidget } from './widgets/WorkloadOverviewWidget';
 import { LowStockWidget } from './widgets/LowStockWidget';
 import { IntegrationHealthWidget } from './widgets/IntegrationHealthWidget';
+import { useAuth } from '../auth-tenancy/AuthContext';
+import { can } from '../../lib/permissions';
 
 interface MyShopPageProps {
   onNavigate?: (tab: TabID) => void;
 }
 
 export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
+  const { user } = useAuth();
+  const canViewFinancials = can(user, 'dashboard.financial');
   const { data, loading, error, refetch } = useShopDashboardData();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -77,27 +81,31 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
           <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
         </button>
-        <button
-          onClick={() => handleExport('/api/analytics/export', 'leadsync-orders.xlsx')}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-          style={{ backgroundColor: 'var(--app-bg-soft)', color: 'var(--app-text-muted)', border: '1px solid var(--app-border)' }}
-        >
-          <Download className="h-3.5 w-3.5" />
-          Export Orders
-        </button>
-        <button
-          onClick={() => handleExport('/api/analytics/export-leads', 'leadsync-leads.xlsx')}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-          style={{ backgroundColor: 'var(--app-bg-soft)', color: 'var(--app-text-muted)', border: '1px solid var(--app-border)' }}
-        >
-          <Download className="h-3.5 w-3.5" />
-          Export Leads
-        </button>
+        {canViewFinancials && (
+          <>
+            <button
+              onClick={() => handleExport('/api/analytics/export', 'leadsync-orders.xlsx')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+              style={{ backgroundColor: 'var(--app-bg-soft)', color: 'var(--app-text-muted)', border: '1px solid var(--app-border)' }}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export Orders
+            </button>
+            <button
+              onClick={() => handleExport('/api/analytics/export-leads', 'leadsync-leads.xlsx')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+              style={{ backgroundColor: 'var(--app-bg-soft)', color: 'var(--app-text-muted)', border: '1px solid var(--app-border)' }}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export Leads
+            </button>
+          </>
+        )}
       </div>
 
       {/* Row 1: Stats overview — full width stacked */}
       <div className="space-y-4">
-        <CollectionStatsWidget />
+        {canViewFinancials && <CollectionStatsWidget />}
         {loading ? (
           <HealthCheckWidget kpis={{ leads: 0, conversations: 0, orders: 0, agents: 0 }} conversionRate={0} loading />
         ) : data?.kpis && data?.funnel ? (
@@ -131,30 +139,34 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
         />
       </div>
 
-      {/* Row 3: Revenue + Forecast — 2 columns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {loading ? (
-          <RevenueTrendWidget trend={null} chart={[]} loading />
-        ) : data?.analyticsRevenue && data?.analyticsDashboard ? (
-          <RevenueTrendWidget
-            trend={data.analyticsRevenue.trend}
-            chart={data.analyticsDashboard.revenueChart}
-          />
-        ) : <div />}
-        {loading ? (
-          <RevenueForecastWidget forecast={null} loading />
-        ) : data?.forecast ? (
-          <RevenueForecastWidget forecast={data.forecast} />
-        ) : <div />}
-      </div>
+      {/* Row 3: Revenue + Forecast — 2 columns (only when canViewFinancials is true) */}
+      {canViewFinancials && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {loading ? (
+            <RevenueTrendWidget trend={null} chart={[]} loading />
+          ) : data?.analyticsRevenue && data?.analyticsDashboard ? (
+            <RevenueTrendWidget
+              trend={data.analyticsRevenue.trend}
+              chart={data.analyticsDashboard.revenueChart}
+            />
+          ) : <div />}
+          {loading ? (
+            <RevenueForecastWidget forecast={null} loading />
+          ) : data?.forecast ? (
+            <RevenueForecastWidget forecast={data.forecast} />
+          ) : <div />}
+        </div>
+      )}
 
-      {/* Row 4: Channels + Recent Orders — 2 columns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {loading ? (
-          <ChannelBreakdownWidget channels={[]} loading />
-        ) : data?.analyticsRevenue ? (
-          <ChannelBreakdownWidget channels={data.analyticsRevenue.channelAttribution} />
-        ) : <div />}
+      {/* Row 4: Channels + Recent Orders */}
+      <div className={`grid gap-4 ${canViewFinancials ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+        {canViewFinancials && (
+          loading ? (
+            <ChannelBreakdownWidget channels={[]} loading />
+          ) : data?.analyticsRevenue ? (
+            <ChannelBreakdownWidget channels={data.analyticsRevenue.channelAttribution} />
+          ) : <div />
+        )}
         {loading ? (
           <RecentOrdersWidget orders={[]} loading />
         ) : data?.analyticsRevenue ? (
@@ -162,12 +174,14 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
         ) : <div />}
       </div>
 
-      {/* Row 5: Staff leaderboard — full width */}
-      {loading ? (
-        <TopStaffWidget staff={[]} loading />
-      ) : data?.agentStats ? (
-        <TopStaffWidget staff={data.agentStats} />
-      ) : null}
+      {/* Row 5: Staff leaderboard — full width (only when canViewFinancials is true) */}
+      {canViewFinancials && (
+        loading ? (
+          <TopStaffWidget staff={[]} loading />
+        ) : data?.agentStats ? (
+          <TopStaffWidget staff={data.agentStats} />
+        ) : null
+      )}
 
       {/* Row 6: Compact stat tiles — Integrations + Automation */}
       {!loading && (
