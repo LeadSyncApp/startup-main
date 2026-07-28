@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 
 interface RevenueTrendWidgetProps {
   trend: number | null;
@@ -17,10 +18,29 @@ function TrendSkeleton() {
   );
 }
 
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: Array<{ value: number; payload: { date: string; amount: number; orders: number } }>;
+}
+
+function ChartTooltip({ active, payload }: ChartTooltipProps) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div
+      className="px-3 py-2 rounded-lg text-xs shadow-lg"
+      style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)', color: 'var(--app-text)' }}
+    >
+      <p className="font-medium">{d.date}</p>
+      <p className="tabular-nums">{'\u20B9'}{d.amount.toLocaleString('en-IN')}</p>
+      <p style={{ color: 'var(--app-text-muted)' }}>{d.orders} orders</p>
+    </div>
+  );
+}
+
 export const RevenueTrendWidget: React.FC<RevenueTrendWidgetProps> = ({ trend, chart, loading }) => {
   if (loading) return <TrendSkeleton />;
 
-  const maxAmount = Math.max(...chart.map(d => d.amount), 1);
   const trendUp = trend !== null && trend > 0;
   const trendDown = trend !== null && trend < 0;
   const trendColor = trendUp ? 'var(--success-green)' : trendDown ? '#ef4444' : 'var(--app-text-muted)';
@@ -35,39 +55,39 @@ export const RevenueTrendWidget: React.FC<RevenueTrendWidgetProps> = ({ trend, c
           style={{ backgroundColor: `${trendColor}15`, color: trendColor }}
         >
           <TrendIcon className="h-3.5 w-3.5" />
-          {trendUp ? '↑' : '↓'} {Math.abs(trend)}% vs last month
+          {trendUp ? '\u2191' : '\u2193'} {Math.abs(trend)}% vs last month
         </div>
       )}
 
-      <div className="h-28 flex items-end gap-1.5 justify-between">
-        {chart.map((day, i) => {
-          const height = maxAmount > 0 ? (day.amount / maxAmount) * 100 : 0;
-          return (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
-              <div
-                className="absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:block z-10 px-2 py-1 rounded text-2xs font-medium whitespace-nowrap"
-                style={{ backgroundColor: 'var(--app-surface)', color: 'var(--app-text)', border: '1px solid var(--app-border)' }}
-              >
-                ₹{day.amount.toLocaleString('en-IN')} · {day.orders} orders
-              </div>
-              <motion.div
-                className="w-full rounded-sm transition-colors group-hover:opacity-100"
-                style={{
-                  backgroundColor: day.amount > 0 ? 'var(--brand-saffron)' : 'var(--app-border)',
-                  opacity: day.amount > 0 ? 0.75 : 0.3,
-                }}
-                initial={{ height: 0 }}
-                animate={{ height: `${Math.max(height, 3)}%` }}
-                transition={{ duration: 0.4, delay: i * 0.03 }}
-              />
-              {i % 3 === 0 && (
-                <span className="text-2xs" style={{ color: 'var(--app-text-muted)' }}>
-                  {day.date.split(' ').pop()?.slice(0, 2)}
-                </span>
-              )}
-            </div>
-          );
-        })}
+      <div className="h-40">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chart} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border)" vertical={false} />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 10, fill: 'var(--app-text-muted)' }}
+              tickLine={false}
+              axisLine={false}
+              interval={Math.floor(chart.length / 5)}
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: 'var(--app-text-muted)' }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v: number) => v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)}
+            />
+            <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(200,90,50,0.06)' }} />
+            <Bar dataKey="amount" radius={[3, 3, 0, 0]} maxBarSize={24}>
+              {chart.map((entry, i) => (
+                <Cell
+                  key={i}
+                  fill={entry.amount > 0 ? 'var(--brand-saffron)' : 'var(--app-border)'}
+                  fillOpacity={entry.amount > 0 ? 0.75 : 0.3}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
     </div>
