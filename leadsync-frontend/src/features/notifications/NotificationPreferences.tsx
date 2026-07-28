@@ -22,11 +22,15 @@ export function NotificationPreferences() {
   const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     api.get("/notifications/preferences").then((data: Preferences) => {
-      setPrefs(data);
+      if (!cancelled) setPrefs(data);
     }).catch(() => {
-      toast.error("Failed to load notification preferences");
+      if (!cancelled) toast.error("Failed to load notification preferences");
     });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleToggle = useCallback(async (key: keyof Preferences, value: boolean) => {
