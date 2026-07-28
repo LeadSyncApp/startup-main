@@ -1,6 +1,6 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Download } from 'lucide-react';
+import { Download, RefreshCw } from 'lucide-react';
 import { authedFetch } from '../../api/client';
 import { TabID } from '../../components/layouts/MasterDashboardLayout';
 import { useShopDashboardData } from './hooks/useShopDashboardData';
@@ -20,7 +20,17 @@ interface MyShopPageProps {
 }
 
 export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
-  const { data, loading, error } = useShopDashboardData();
+  const { data, loading, error, refetch } = useShopDashboardData();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch]);
 
   const handleExport = useCallback(async (endpoint: string, filename: string) => {
     try {
@@ -57,6 +67,15 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
 
       {/* Export buttons */}
       <div className="flex items-center gap-2">
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+          style={{ backgroundColor: 'var(--app-bg-soft)', color: 'var(--app-text-muted)', border: '1px solid var(--app-border)' }}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
         <button
           onClick={() => handleExport('/api/analytics/export', 'leadsync-orders.xlsx')}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
