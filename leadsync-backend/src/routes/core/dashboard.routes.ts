@@ -1009,4 +1009,63 @@ router.get("/conversation-summary", authMiddleware, async (req: AuthRequest, res
   }
 });
 
+/* =====================================================
+   GET /api/dashboard/low-stock
+   Returns count + top 5 low-stock inventory variants.
+   Tenant-scoped via authMiddleware companyId.
+   Reuses the same LOW_STOCK_THRESHOLD (5) from
+   businessNotification.service.ts and inventory.service.ts.
+===================================================== */
+const LOW_STOCK_THRESHOLD = 5;
+
+router.get("/low-stock", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { companyId } = req.user!;
+
+    const products = await prisma.inventoryProduct.findMany({
+      where: { companyId, isActive: true },
+      include: {
+        variants: {
+          where: { isActive: true },
+          select: { id: true, attributeValue: true, stock: true, sku: true },
+        },
+      },
+    });
+
+    const lowStockItems: {
+      productId: string;
+      productName: string;
+      variantId: string;
+      variantName: string;
+      stock: number;
+      sku: string | null;
+    }[] = [];
+
+    for (const product of products) {
+      for (const variant of product.variants) {
+        if (variant.stock !== null && variant.stock <= LOW_STOCK_THRESHOLD) {
+          lowStockItems.push({
+            productId: product.id,
+            productName: product.name,
+            variantId: variant.id,
+            variantName: variant.attributeValue,
+            stock: variant.stock,
+            sku: variant.sku,
+          });
+        }
+      }
+    }
+
+    lowStockItems.sort((a, b) => a.stock - b.stock);
+
+    res.json({
+      totalLowStock: lowStockItems.length,
+      items: lowStockItems.slice(0, 5),
+    });
+  } catch (err) {
+    console.error("Low stock error:", err);
+    res.status(500).json({ message: "Failed to fetch low stock data" });
+  }
+});
+
 export default router;

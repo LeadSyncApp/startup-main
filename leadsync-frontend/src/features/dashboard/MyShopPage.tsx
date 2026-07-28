@@ -14,6 +14,7 @@ import { ChannelBreakdownWidget } from './widgets/ChannelBreakdownWidget';
 import { RecentOrdersWidget } from './widgets/RecentOrdersWidget';
 import { RevenueForecastWidget } from './widgets/RevenueForecastWidget';
 import { WorkloadOverviewWidget } from './widgets/WorkloadOverviewWidget';
+import { LowStockWidget } from './widgets/LowStockWidget';
 
 interface MyShopPageProps {
   onNavigate?: (tab: TabID) => void;
@@ -112,14 +113,19 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
         ) : null}
       </div>
 
-      {/* Row 2: Alerts + Workload — conditional */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Row 2: Alerts + Workload + Low Stock — conditional */}
+      <div className={`grid gap-4 ${data?.lowStock && data.lowStock.totalLowStock > 0 ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
         {data?.alerts && (
           <NeedsAttentionWidget alerts={data.alerts} onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined} />
         )}
         <WorkloadOverviewWidget
           data={data?.conversationSummary ?? null}
           teamMembers={data?.teamMembers ?? null}
+          loading={loading}
+          onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined}
+        />
+        <LowStockWidget
+          data={data?.lowStock ?? null}
           loading={loading}
           onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined}
         />

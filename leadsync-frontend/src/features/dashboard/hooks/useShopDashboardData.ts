@@ -13,6 +13,7 @@ interface ShopDashboardData {
   metrics: any;
   teamMembers: any;
   automationRules: any;
+  lowStock: any;
 }
 
 export function useShopDashboardData() {
@@ -49,6 +50,7 @@ export function useShopDashboardData() {
           authedFetch('/api/dashboard/metrics'),
           authedFetch('/api/team/members'),
           getCompanyId() ? authedFetch(`/api/automation/conversational-rules/${getCompanyId()}`) : Promise.resolve(null),
+          authedFetch('/api/dashboard/low-stock'),
         ]);
 
         if (cancelledRef.current) return;
@@ -65,6 +67,7 @@ export function useShopDashboardData() {
           metrics,
           teamMembers,
           automationRules,
+          lowStock,
         ] = await Promise.all([
           analyticsDashboardRes.ok ? analyticsDashboardRes.json() : null,
           analyticsRevenueRes.ok ? analyticsRevenueRes.json() : null,
@@ -77,6 +80,7 @@ export function useShopDashboardData() {
           metricsRes.ok ? metricsRes.json() : null,
           authedFetch('/api/team/members').then(r => r.ok ? r.json() : null).catch(() => null),
           (() => { const cid = getCompanyId(); return cid ? authedFetch(`/api/automation/conversational-rules/${cid}`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null); })(),
+          authedFetch('/api/dashboard/low-stock').then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
 
         if (cancelledRef.current) return;
@@ -93,6 +97,7 @@ export function useShopDashboardData() {
           metrics,
           teamMembers,
           automationRules,
+          lowStock,
         });
     } catch (err) {
       if (!cancelledRef.current) {
