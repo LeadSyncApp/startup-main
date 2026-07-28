@@ -1,7 +1,7 @@
 import { Router, Response } from "express";
 import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
 import { notificationService } from "../../services/infrastructure/notification.service";
-import { prisma } from "../../lib/prisma";
+import { prisma, getTenantPrismaContext } from "../../lib/prisma";
 
 const router = Router();
 
@@ -41,9 +41,10 @@ router.get("/preferences", authMiddleware, async (req: AuthRequest, res: Respons
     try {
         const userId = req.user!.userId;
         const companyId = req.user!.companyId;
+        const tenantDb = getTenantPrismaContext(companyId);
 
         // Auto-create default row if none exists (all true)
-        const pref = await prisma.notificationPreference.upsert({
+        const pref = await tenantDb.notificationPreference.upsert({
             where: { userId },
             create: {
                 userId,
@@ -75,6 +76,7 @@ router.patch("/preferences", authMiddleware, async (req: AuthRequest, res: Respo
     try {
         const userId = req.user!.userId;
         const companyId = req.user!.companyId;
+        const tenantDb = getTenantPrismaContext(companyId);
         const { ORDER, MESSAGE, ALERT, SYSTEM } = req.body;
 
         // Build update data — only include provided fields
@@ -89,7 +91,7 @@ router.patch("/preferences", authMiddleware, async (req: AuthRequest, res: Respo
         }
 
         // Upsert — create with defaults if row doesn't exist, then update
-        const pref = await prisma.notificationPreference.upsert({
+        const pref = await tenantDb.notificationPreference.upsert({
             where: { userId },
             create: {
                 userId,
