@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Users, MessageSquare } from 'lucide-react';
+import { Users, MessageSquare, Wifi } from 'lucide-react';
 
 interface StaffWorkload {
   staffId: string;
@@ -10,6 +10,7 @@ interface StaffWorkload {
 
 interface WorkloadOverviewWidgetProps {
   data: { totalActive: number; unclaimed: number; byStaff: StaffWorkload[] } | null;
+  teamMembers: { members: { isOnline: boolean }[] } | null;
   loading?: boolean;
   onNavigate?: (tab: string) => void;
 }
@@ -27,12 +28,13 @@ function WorkloadSkeleton() {
   );
 }
 
-export const WorkloadOverviewWidget: React.FC<WorkloadOverviewWidgetProps> = ({ data, loading, onNavigate }) => {
+export const WorkloadOverviewWidget: React.FC<WorkloadOverviewWidgetProps> = ({ data, teamMembers, loading, onNavigate }) => {
   if (loading) return <WorkloadSkeleton />;
 
   if (!data) return null;
 
   const sorted = [...data.byStaff].sort((a, b) => b.count - a.count);
+  const agentsOnline = teamMembers?.members?.filter(m => m.isOnline).length ?? 0;
 
   return (
     <motion.div
@@ -49,6 +51,13 @@ export const WorkloadOverviewWidget: React.FC<WorkloadOverviewWidgetProps> = ({ 
           <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--app-text)' }}>{data.totalActive}</span>
           <span className="text-2xs" style={{ color: 'var(--app-text-muted)' }}>active</span>
         </div>
+        {agentsOnline > 0 && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--app-bg-soft)' }}>
+            <Wifi className="h-4 w-4" style={{ color: 'var(--success-green)' }} />
+            <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--app-text)' }}>{agentsOnline}</span>
+            <span className="text-2xs" style={{ color: 'var(--app-text-muted)' }}>online</span>
+          </div>
+        )}
         {data.unclaimed > 0 && (
           <button
             onClick={() => onNavigate?.('inbox')}

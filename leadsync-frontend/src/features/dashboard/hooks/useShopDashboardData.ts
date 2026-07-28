@@ -11,6 +11,7 @@ interface ShopDashboardData {
   forecast: any;
   conversationSummary: any;
   metrics: any;
+  teamMembers: any;
 }
 
 export function useShopDashboardData() {
@@ -45,6 +46,7 @@ export function useShopDashboardData() {
           authedFetch('/api/dashboard/forecast'),
           authedFetch('/api/dashboard/conversation-summary'),
           authedFetch('/api/dashboard/metrics'),
+          authedFetch('/api/team/members'),
         ]);
 
         if (cancelledRef.current) return;
@@ -59,6 +61,7 @@ export function useShopDashboardData() {
           forecast,
           conversationSummary,
           metrics,
+          teamMembers,
         ] = await Promise.all([
           analyticsDashboardRes.ok ? analyticsDashboardRes.json() : null,
           analyticsRevenueRes.ok ? analyticsRevenueRes.json() : null,
@@ -69,6 +72,7 @@ export function useShopDashboardData() {
           forecastRes.ok ? forecastRes.json() : null,
           conversationSummaryRes.ok ? conversationSummaryRes.json() : null,
           metricsRes.ok ? metricsRes.json() : null,
+          authedFetch('/api/team/members').then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
 
         if (cancelledRef.current) return;
@@ -83,6 +87,7 @@ export function useShopDashboardData() {
           forecast,
           conversationSummary,
           metrics,
+          teamMembers,
         });
     } catch (err) {
       if (!cancelledRef.current) {

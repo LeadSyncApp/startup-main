@@ -119,6 +119,7 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
         )}
         <WorkloadOverviewWidget
           data={data?.conversationSummary ?? null}
+          teamMembers={data?.teamMembers ?? null}
           loading={loading}
           onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined}
         />
