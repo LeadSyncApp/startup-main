@@ -188,5 +188,36 @@ router.get('/mock-payment/:id', async (req, res) => {
   }
 });
 
-export default router
+/**
+ * GET /api/public/payment-success
+ * Public landing page for payment redirects
+ */
+router.get('/payment-success', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Payment Successful</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; text-align: center; padding: 50px 20px; background: #f9fafb; color: #111827; }
+          .card { background: white; max-width: 480px; margin: 0 auto; padding: 40px 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+          .icon { font-size: 48px; margin-bottom: 16px; }
+          h1 { margin: 0 0 12px; font-size: 24px; color: #059669; }
+          p { margin: 0 0 24px; color: #4b5563; line-height: 1.5; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="icon">✅</div>
+          <h1>Payment Received!</h1>
+          <p>Thank you for your payment. Your transaction has been processed successfully. An invoice and confirmation details will be sent directly to your chat.</p>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+export default router;
+
 

@@ -9,6 +9,13 @@ import { queueProvider } from "../../services/infrastructure/queue-provider/queu
 import { notificationService } from "../../services/infrastructure/notification.service";
 import { authMiddleware } from "../../middleware/auth.middleware";
 
+/** SHA-256 hash of a reset token for indexed direct lookup (avoids O(N) bcrypt loop) */
+function hashResetToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+const BCRYPT_SALT_ROUNDS = 12;
+
 const router = Router();
 
 console.log("🔥 auth.routes.ts loaded");
@@ -63,7 +70,7 @@ router.post("/signup", async (req, res) => {
       return res.status(409).json({ message: "Email already exists" });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
     
     // Auto-generate company code
     const rawName = companyName || `${firstName}${lastName ? ' ' + lastName : ''} Co`;
@@ -194,14 +201,30 @@ router.post("/login", async (req, res) => {
         isAvailable: true,
         passwordHash: true,
         companyId: true,
-        company: true,
+        company: {
+          select: {
+            id: true,
+            name: true,
+            companyCode: true,
+          },
+        },
         authProvider: true,
         googleId: true,
+        failedLoginCount: true,
+        lockedUntil: true,
       },
     });
 
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    // 🔐 Account lockout check — reject if still within cooldown
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const remainingSec = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000);
+      return res.status(429).json({
+        message: `Too many failed attempts. Please try again in ${remainingSec} seconds.`,
+      });
     }
 
     // Role enforcement - only if explicitly requested
@@ -219,11 +242,38 @@ router.post("/login", async (req, res) => {
       : false;
 
     if (!valid) {
+      // 🔐 Track failed login attempt — exponential delay prevents account lockout DoS
+      // A stranger knowing the email can't lock out the real user; they just slow
+      // down their own brute-force attempts. The real user waits through the delay
+      // once, then the counter resets on success.
+      const newCount = user.failedLoginCount + 1;
+      const MAX_DELAY_MS = 5 * 60 * 1000; // 5-minute cap
+
+      // Exponential backoff: 5s, 10s, 20s, 40s, 80s, 160s, 300s (capped)
+      const delayMs = Math.min(5000 * Math.pow(2, newCount - 1), MAX_DELAY_MS);
+
+      const updateData: any = {
+        failedLoginCount: newCount,
+        lastFailedLoginAt: new Date(),
+      };
+
+      // Apply delay as lockedUntil (always updated, grows with attempts)
+      updateData.lockedUntil = new Date(Date.now() + delayMs);
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: updateData,
+      });
+
       const provider = user.authProvider || (user.googleId ? "GOOGLE" : "EMAIL");
       if (provider === "GOOGLE" || provider === "BOTH") {
         return res.status(401).json({ message: "You signed up with Google. Please use Google sign-in." });
       }
-      return res.status(401).json({ message: "Invalid credentials" });
+
+      const delaySec = Math.ceil(delayMs / 1000);
+      return res.status(429).json({
+        message: `Too many failed attempts. Please try again in ${delaySec} seconds.`,
+      });
     }
 
     // Unified Login logic: If only email/password provided, allow entry if credentials match
@@ -240,10 +290,15 @@ router.post("/login", async (req, res) => {
       }
     }
 
-    // Update online status on login
+    // Update online status on login + reset failed login counter
     await prisma.user.update({
       where: { id: user.id },
-      data: { isOnline: true, lastSeenAt: new Date() },
+      data: {
+        isOnline: true,
+        lastSeenAt: new Date(),
+        failedLoginCount: 0,
+        lockedUntil: null,
+      },
     });
 
     const token = signToken({
@@ -316,7 +371,8 @@ router.post("/forgot-password", async (req, res) => {
     console.log('🔑 Forgot password - Generated raw reset token, expiry:', resetTokenExpiry);
 
     // Hash the reset token before storing
-    const hashedResetToken = await bcrypt.hash(rawResetToken, 10);
+    const hashedResetToken = await bcrypt.hash(rawResetToken, BCRYPT_SALT_ROUNDS);
+    const resetTokenHashValue = hashResetToken(rawResetToken);
     console.log('🔒 Forgot password - Hashed reset token for storage');
 
     // Store hashed reset token in database
@@ -324,6 +380,7 @@ router.post("/forgot-password", async (req, res) => {
       where: { id: user.id },
       data: {
         resetToken: hashedResetToken,
+        resetTokenHash: resetTokenHashValue,
         resetTokenExpiry,
       },
     });
@@ -368,6 +425,7 @@ router.post("/forgot-password", async (req, res) => {
         where: { id: user.id },
         data: {
           resetToken: null,
+          resetTokenHash: null,
           resetTokenExpiry: null,
         },
       });
@@ -398,31 +456,23 @@ router.post("/reset-password", async (req, res) => {
 
     console.log('🔑 Reset password - Looking up user with valid reset token');
 
-    // Find all users with reset tokens (we need to check the hash)
-    const usersWithResetTokens = await prisma.user.findMany({
+    // Direct indexed lookup via SHA-256 hash — O(1) instead of O(N) bcrypt loop
+    const resetTokenHashValue = hashResetToken(token);
+    const validUser = await prisma.user.findFirst({
       where: {
-        resetToken: {
-          not: null,
-        },
+        resetTokenHash: resetTokenHashValue,
         resetTokenExpiry: {
-          gt: new Date(), // Token not expired
+          gt: new Date(),
         },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
       },
     });
 
-    console.log('🔍 Reset password - Found users with reset tokens:', usersWithResetTokens.length);
-
-    // Find the user whose hashed token matches the provided token
-    let validUser = null;
-    for (const user of usersWithResetTokens) {
-      if (user.resetToken) {
-        const isValid = await bcrypt.compare(token, user.resetToken);
-        if (isValid) {
-          validUser = user;
-          break;
-        }
-      }
-    }
+    console.log('🔍 Reset password - User lookup result:', validUser ? 'found' : 'not found');
 
     if (!validUser) {
       console.log('❌ Reset password - Invalid or expired reset token');
@@ -433,7 +483,7 @@ router.post("/reset-password", async (req, res) => {
     console.log('✅ Reset password - Valid token found for user:', { userId: validUser.id, userName });
 
     // Hash new password
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
     console.log('🔒 Reset password - New password hashed');
 
     // Update password and clear reset token
@@ -442,6 +492,7 @@ router.post("/reset-password", async (req, res) => {
       data: {
         passwordHash,
         resetToken: null,
+        resetTokenHash: null,
         resetTokenExpiry: null,
       },
     });
@@ -504,7 +555,7 @@ router.post("/staff-signup", async (req, res) => {
     }
 
     // Hash the password
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
     // Complete the onboarding / update details
     const updatedUser = await prisma.user.update({

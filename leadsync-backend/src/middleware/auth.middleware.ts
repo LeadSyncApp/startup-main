@@ -179,3 +179,26 @@ export const injectTenantContext = async (
     return res.status(500).json({ message: "Internal server error during tenant isolation setup" });
   }
 };
+
+/**
+ * Express middleware to enforce tenant isolation across company-scoped routes (e.g. /companies/:id/...).
+ * Verifies that the requested `:id` parameter matches the authenticated user's `companyId`.
+ */
+export const requireTenantAccess = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  const { id: companyId } = req.params;
+  const userCompanyId = req.user?.companyId;
+
+  if (!userCompanyId) {
+    return res.status(401).json({ error: "No company context" });
+  }
+
+  if (companyId && companyId !== userCompanyId) {
+    return res.status(403).json({ error: "Access denied" });
+  }
+
+  next();
+};
