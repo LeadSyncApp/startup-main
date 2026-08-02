@@ -19,7 +19,7 @@ import {
   ProductData
 } from "../../services/knowledge/inventory.service";
 import { prisma } from "../../lib/prisma";
-import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
+import { authMiddleware, AuthRequest, requireTenantAccess } from "../../middleware/auth.middleware";
 import { can } from "../../services/auth/permissions.service";
 import multer from "multer";
 import { supabase } from "../../lib/supabase";
@@ -64,11 +64,8 @@ const confirmProductSchema = z.object({
  * Returns all active InventoryProduct records with nested variants.
  * Optional query param: ?categories=X,Y — filter by any of the given categories (AND logic for array overlap).
  */
-router.get("/:id/inventory", authMiddleware, async (req: AuthRequest, res) => {
+router.get("/:id/inventory", authMiddleware, requireTenantAccess, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
-  const userCompanyId = req.user?.companyId;
-  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
-  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { categories } = req.query;
 
   try {
@@ -88,11 +85,8 @@ router.get("/:id/inventory", authMiddleware, async (req: AuthRequest, res) => {
  * 
  * Search products by name or category for the in-chat product picker.
  */
-router.get("/:id/inventory/search", authMiddleware, async (req: AuthRequest, res) => {
+router.get("/:id/inventory/search", authMiddleware, requireTenantAccess, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
-  const userCompanyId = req.user?.companyId;
-  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
-  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { q } = req.query;
   const searchTerm = (q as string || "").trim();
 
@@ -117,11 +111,8 @@ router.get("/:id/inventory/search", authMiddleware, async (req: AuthRequest, res
  * 
  * Check if any of the submitted products already exist (by name).
  */
-router.post("/:id/inventory/check-duplicates", authMiddleware, async (req: AuthRequest, res) => {
+router.post("/:id/inventory/check-duplicates", authMiddleware, requireTenantAccess, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
-  const userCompanyId = req.user?.companyId;
-  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
-  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { products } = req.body;
 
   if (!Array.isArray(products)) {
@@ -129,20 +120,16 @@ router.post("/:id/inventory/check-duplicates", authMiddleware, async (req: AuthR
   }
 
   try {
-    const duplicates: Array<{ name: string; existingId: string }> = [];
-
-    for (const product of products) {
-      const name = product.product_type;
-
-      const existing = await prisma.inventoryProduct.findUnique({
-        where: { companyId_name: { companyId, name } },
-        select: { id: true, name: true }
-      });
-
-      if (existing) {
-        duplicates.push({ name: existing.name, existingId: existing.id });
-      }
-    }
+    // Batch-fetch all potential duplicates in one query instead of N individual findUnique calls
+    const names = products.map((p: any) => p.product_type).filter(Boolean);
+    const existing = await prisma.inventoryProduct.findMany({
+      where: { companyId, name: { in: names } },
+      select: { id: true, name: true },
+    });
+    const existingByName = new Map(existing.map(e => [e.name, e.id]));
+    const duplicates = products
+      .filter((p: any) => existingByName.has(p.product_type))
+      .map((p: any) => ({ name: p.product_type, existingId: existingByName.get(p.product_type)! }));
 
     res.json({ duplicates });
   } catch (error: any) {
@@ -157,11 +144,8 @@ router.post("/:id/inventory/check-duplicates", authMiddleware, async (req: AuthR
  * Groq-based parsing of free-text inventory descriptions.
  * Returns structured products array without persisting.
  */
-router.post("/:id/inventory/parse", authMiddleware, async (req: AuthRequest, res) => {
+router.post("/:id/inventory/parse", authMiddleware, requireTenantAccess, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
-  const userCompanyId = req.user?.companyId;
-  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
-  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { text, language } = req.body;
 
   if (!text || typeof text !== "string") {
@@ -189,11 +173,8 @@ router.post("/:id/inventory/parse", authMiddleware, async (req: AuthRequest, res
  * Also maintains KnowledgeChunk for RAG backward compatibility.
  * Deduplicates by product name.
  */
-router.post("/:id/inventory/confirm", authMiddleware, async (req: AuthRequest, res) => {
+router.post("/:id/inventory/confirm", authMiddleware, requireTenantAccess, async (req: AuthRequest, res) => {
   const { id: companyId } = req.params;
-  const userCompanyId = req.user?.companyId;
-  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
-  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   if (!can(req.user, "inventory.manage")) return res.status(403).json({ error: "Access denied: Requires inventory.manage permission" });
   const { products } = req.body;
 
@@ -280,11 +261,8 @@ router.get("/search", authMiddleware, async (req: AuthRequest, res) => {
  * Soft-deletes a product by setting isActive = false, and also deactivates 
  * the corresponding KnowledgeChunk (sourceType = 'PRODUCT') so it's removed from RAG search.
  */
-router.delete("/:id/inventory/:productId", authMiddleware, async (req: AuthRequest, res) => {
+router.delete("/:id/inventory/:productId", authMiddleware, requireTenantAccess, async (req: AuthRequest, res) => {
   const { id: companyId, productId } = req.params;
-  const userCompanyId = req.user?.companyId;
-  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
-  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   if (!can(req.user, "inventory.manage")) return res.status(403).json({ error: "Access denied: Requires inventory.manage permission" });
 
   try {
@@ -333,12 +311,10 @@ router.delete("/:id/inventory/:productId", authMiddleware, async (req: AuthReque
 router.post(
   "/:id/inventory/:productId/images",
   authMiddleware,
+  requireTenantAccess,
   upload.single("image"),
   async (req: AuthRequest, res) => {
     const { id: companyId, productId } = req.params;
-    const userCompanyId = req.user?.companyId;
-    if (!userCompanyId) return res.status(401).json({ error: "No company context" });
-    if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
     const file = req.file;
 
     if (!file) {
@@ -418,11 +394,8 @@ router.post(
  * DELETE /companies/:id/inventory/:productId/images/:imageId
  * Delete an image
  */
-router.delete("/:id/inventory/:productId/images/:imageId", authMiddleware, async (req: AuthRequest, res) => {
+router.delete("/:id/inventory/:productId/images/:imageId", authMiddleware, requireTenantAccess, async (req: AuthRequest, res) => {
   const { id: companyId, productId, imageId } = req.params;
-  const userCompanyId = req.user?.companyId;
-  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
-  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
 
   try {
     const image = await prisma.productImage.findFirst({
@@ -448,15 +421,17 @@ router.delete("/:id/inventory/:productId/images/:imageId", authMiddleware, async
     });
 
     let newImageUrl: string | null = null;
-    for (let i = 0; i < remainingImages.length; i++) {
-      const img = remainingImages[i];
-      await prisma.productImage.update({
-        where: { id: img.id },
-        data: { order: i }
-      });
-      if (i === 0) {
-        newImageUrl = img.url;
-      }
+    if (remainingImages.length > 0) {
+      newImageUrl = remainingImages[0].url;
+      // Batch reindex: use a single transaction with independent updates
+      await prisma.$transaction(
+        remainingImages.map((img, i) =>
+          prisma.productImage.update({
+            where: { id: img.id },
+            data: { order: i }
+          })
+        )
+      );
     }
 
     await prisma.inventoryProduct.update({
@@ -475,11 +450,8 @@ router.delete("/:id/inventory/:productId/images/:imageId", authMiddleware, async
  * POST /companies/:id/inventory/:productId/images/reorder
  * Reorder image gallery
  */
-router.post("/:id/inventory/:productId/images/reorder", authMiddleware, async (req: AuthRequest, res) => {
+router.post("/:id/inventory/:productId/images/reorder", authMiddleware, requireTenantAccess, async (req: AuthRequest, res) => {
   const { id: companyId, productId } = req.params;
-  const userCompanyId = req.user?.companyId;
-  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
-  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
   const { imageIds } = req.body;
 
   if (!Array.isArray(imageIds)) {
@@ -523,11 +495,8 @@ router.post("/:id/inventory/:productId/images/reorder", authMiddleware, async (r
  * GET /companies/:id/inventory/:productId/history
  * Fetch price and stock history logs for a product
  */
-router.get("/:id/inventory/:productId/history", authMiddleware, async (req: AuthRequest, res) => {
+router.get("/:id/inventory/:productId/history", authMiddleware, requireTenantAccess, async (req: AuthRequest, res) => {
   const { id: companyId, productId } = req.params;
-  const userCompanyId = req.user?.companyId;
-  if (!userCompanyId) return res.status(401).json({ error: "No company context" });
-  if (companyId !== userCompanyId) return res.status(403).json({ error: "Access denied" });
 
   try {
     const product = await prisma.inventoryProduct.findFirst({

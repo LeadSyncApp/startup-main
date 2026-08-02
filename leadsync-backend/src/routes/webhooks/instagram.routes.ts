@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { pgBossService } from "../../services/infrastructure/pgboss/pgboss.service";
 import { prisma } from "../../lib/prisma";
 import { Channel } from "../../interfaces/messaging.interface";
+import { validateMetaWebhookSignature } from "../../middleware/webhookValidator";
 
 const router = Router();
 
@@ -32,7 +33,7 @@ const resolveInstagramTenantIdentity = async (req: Request, res: Response, next:
   next();
 };
 
-router.post("/webhook", resolveInstagramTenantIdentity, async (req: Request, res: Response) => {
+router.post("/webhook", validateMetaWebhookSignature, resolveInstagramTenantIdentity, async (req: Request, res: Response) => {
   try {
     const entry = req.body.entry?.[0];
     const messaging = entry?.messaging?.[0];

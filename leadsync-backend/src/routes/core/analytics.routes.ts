@@ -1,5 +1,6 @@
 import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
+import { OrderStatus } from "@prisma/client";
 import { authMiddleware, authorizeRoles, authorizePermission, AuthRequest } from "../../middleware/auth.middleware";
 import { cacheService } from "../../services/infrastructure/cache.service";
 import ExcelJS from "exceljs";
@@ -34,15 +35,24 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(now.getDate() - 30);
 
-        // 2. Fetch Orders (Delivered or Completed)
+        const PAID_STATUSES: OrderStatus[] = [
+          OrderStatus.PAID,
+          OrderStatus.COMPLETED,
+          OrderStatus.DELIVERED,
+          OrderStatus.SHIPPED,
+          OrderStatus.PROCESSING,
+          OrderStatus.PREPARING,
+          OrderStatus.READY
+        ];
         const orders = await prisma.order.findMany({
             where: {
                 companyId,
-                status: { in: ["DELIVERED", "PAID"] },
+                status: { in: PAID_STATUSES },
                 createdAt: { gte: thirtyDaysAgo }
             },
             select: {
                 amount: true,
+                amountInSubunits: true,
                 createdAt: true,
                 summary: true,
                 metadata: true,
@@ -50,6 +60,11 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
                 processedBy: { select: { firstName: true, lastName: true } }
             }
         });
+
+        // Helper to resolve numerical amount cleanly
+        const getAmount = (o: any) => o.amountInSubunits !== null && o.amountInSubunits !== undefined && o.amountInSubunits > 0n
+            ? Number(o.amountInSubunits) / 100
+            : (o.amount || 0);
 
         // 3. Daily Revenue Calculation (Last 14 Days)
         const dailyRevenue: Record<string, number> = {};
@@ -68,7 +83,7 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
             const dateStr = o.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             if (o.createdAt >= fourteenDaysAgo) {
                 if (dailyRevenue[dateStr] !== undefined) {
-                    dailyRevenue[dateStr] += o.amount;
+                    dailyRevenue[dateStr] += getAmount(o);
                     dailyOrders[dateStr] += 1;
                 }
             }
@@ -82,7 +97,6 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
 
 
         // 4. Calculate Top Products
-        // ⚡ CLEAN SINGLE SOURCE OF TRUTH: Rely entirely on the structured JSON populated by the AI orchestrator worker
         const productPerformanceMatrix = orders.reduce((acc: any, order: any) => {
             const items = (order.orderItems as any[]) || [];
             items.forEach(item => {
@@ -103,7 +117,7 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
         // 5. Agent Performance (Orders Processed)
         const agentMap: Record<string, number> = {};
         orders.forEach(o => {
-            const agent = o.processedBy as any;
+            const agent = (o as any).processedBy;
             if (agent) {
                 const agentName = `${agent.firstName} ${agent.lastName || ""}`.trim();
                 agentMap[agentName] = (agentMap[agentName] || 0) + 1;
@@ -192,17 +206,21 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
                     isDeleted: false,
                     createdAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo }
                 },
-                select: { amount: true }
+                select: { amount: true, amountInSubunits: true }
             })
         ]);
 
+        const resolveAmount = (o: any) => o.amountInSubunits !== null && o.amountInSubunits !== undefined && o.amountInSubunits > 0n
+            ? Number(o.amountInSubunits) / 100
+            : (o.amount || 0);
+
         // KPIs
-        const totalRevenue = currentOrders.reduce((s, o) => s + o.amount, 0);
+        const totalRevenue = currentOrders.reduce((s, o) => s + resolveAmount(o), 0);
         const orderCount = currentOrders.length;
         const avgOrderValue = orderCount > 0 ? Math.round(totalRevenue / orderCount) : 0;
 
         // Trend % vs previous 30-day period
-        const prevRevenue = previousOrders.reduce((s, o) => s + o.amount, 0);
+        const prevRevenue = previousOrders.reduce((s, o) => s + resolveAmount(o), 0);
         const trend = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue) * 100 : null;
 
         // Daily timeline — last 30 days
@@ -216,7 +234,7 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
         currentOrders.forEach(o => {
             const key = o.createdAt.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
             if (dailyMap[key]) {
-                dailyMap[key].value += o.amount;
+                dailyMap[key].value += resolveAmount(o);
                 dailyMap[key].orders += 1;
             }
         });
@@ -245,7 +263,7 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
         // Recent orders (latest 10)
         const recentOrders = currentOrders.slice(0, 10).map(o => ({
             customer: o.lead?.name || o.lead?.contact || "Unknown",
-            amount: o.amount,
+            amount: resolveAmount(o),
             date: o.createdAt,
             status: o.status
         }));
@@ -257,7 +275,7 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
                 const { id, firstName, lastName } = o.processedBy as any;
                 const agentName = `${firstName} ${lastName || ""}`.trim();
                 if (!agentMap[id]) agentMap[id] = { name: agentName, revenue: 0, orders: 0 };
-                agentMap[id].revenue += o.amount;
+                agentMap[id].revenue += resolveAmount(o);
                 agentMap[id].orders += 1;
             }
         });
@@ -270,7 +288,7 @@ router.get("/revenue", authMiddleware, async (req: AuthRequest, res: Response) =
         currentOrders.forEach(o => {
             const ch = (o.lead?.channel as string) || "UNKNOWN";
             if (!channelMap[ch]) channelMap[ch] = { revenue: 0, orders: 0 };
-            channelMap[ch].revenue += o.amount;
+            channelMap[ch].revenue += resolveAmount(o);
             channelMap[ch].orders += 1;
         });
         const channelAttribution = Object.entries(channelMap).map(([channel, d]) => ({

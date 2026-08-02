@@ -70,22 +70,25 @@ router.post("/archive", authMiddleware as any, async (req: any, res: any) => {
       return res.status(400).json({ message: "Company is already archived" });
     }
 
-    // Soft-delete: just flip the flag
-    await prisma.company.update({
-      where: { id: companyId },
-      data: { isArchived: true },
-    });
+    // Soft-delete and update state inside a single transaction
+    await prisma.$transaction(async (tx) => {
+      // 1. Soft-delete: just flip the flag
+      await tx.company.update({
+        where: { id: companyId },
+        data: { isArchived: true },
+      });
 
-    // Set all users to offline
-    await prisma.user.updateMany({
-      where: { companyId },
-      data: { isOnline: false, isAvailable: false },
-    });
+      // 2. Set all users to offline
+      await tx.user.updateMany({
+        where: { companyId },
+        data: { isOnline: false, isAvailable: false },
+      });
 
-    // Unassign all conversations
-    await prisma.conversation.updateMany({
-      where: { companyId, claimedById: { not: null } },
-      data: { claimedById: null, status: ConversationStatus.OPEN },
+      // 3. Unassign all conversations
+      await tx.conversation.updateMany({
+        where: { companyId, claimedById: { not: null } },
+        data: { claimedById: null, status: ConversationStatus.OPEN },
+      });
     });
 
     // Notify the user who archived
@@ -184,10 +187,7 @@ router.post("/purge", authMiddleware as any, async (req: any, res: any) => {
     const deletedMessages = await batchDelete("message", companyId);
     console.log(`[Purge] Deleted ${deletedMessages} messages`);
 
-    // 2. InternalNotes depend on Conversations
-    // TODO: internalNote model removed from schema
-
-    // 3. OrderLogs depend on Orders
+    // 2. OrderLogs depend on Orders
     await prisma.orderLog.deleteMany({ where: { companyId } });
 
     // 4. OrderItems depend on Orders
@@ -209,7 +209,6 @@ router.post("/purge", authMiddleware as any, async (req: any, res: any) => {
     await prisma.notification.deleteMany({ where: { companyId } });
     await prisma.invitation.deleteMany({ where: { companyId } });
     await prisma.agentFeedPost.deleteMany({ where: { companyId } });
-    // TODO: internalNote model removed from schema
     await prisma.user.deleteMany({ where: { companyId } });
 
     // 10. Other company-scoped records

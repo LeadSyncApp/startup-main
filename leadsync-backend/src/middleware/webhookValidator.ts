@@ -16,9 +16,9 @@ export function validateMetaWebhookSignature(req: SignatureVerifiedRequest, res:
         return res.status(401).json({ error: "Unauthorized: Missing signature header." });
     }
 
-    const appSecret = process.env.WHATSAPP_APP_SECRET;
+    const appSecret = process.env.INSTAGRAM_APP_SECRET || process.env.WHATSAPP_APP_SECRET;
     if (!appSecret) {
-        console.error("🚨 [Signature Verification] Server Error: WHATSAPP_APP_SECRET environment variable is not defined.");
+        console.error("🚨 [Signature Verification] Server Error: INSTAGRAM_APP_SECRET or WHATSAPP_APP_SECRET environment variable is not defined.");
         return res.status(500).json({ error: "Internal Server Error: Secret verification key missing." });
     }
 

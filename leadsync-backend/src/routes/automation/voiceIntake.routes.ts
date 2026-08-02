@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { authMiddleware, AuthRequest } from "../../middleware/auth.middleware";
+import { authMiddleware, AuthRequest, requireTenantAccess } from "../../middleware/auth.middleware";
 import { processVoiceIntake } from "../../services/inventory/voiceIntake.service";
 
 const router = Router();
@@ -21,17 +21,10 @@ const upload = multer({
 router.post(
   "/:id/inventory/voice-intake",
   authMiddleware,
+  requireTenantAccess,
   upload.single("audio"),
   async (req: AuthRequest, res) => {
     const { id: companyId } = req.params;
-    const userCompanyId = req.user?.companyId;
-
-    if (!userCompanyId) {
-      return res.status(401).json({ error: "No company context" });
-    }
-    if (companyId !== userCompanyId) {
-      return res.status(403).json({ error: "Access denied" });
-    }
 
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({ error: "Audio file is required (form key 'audio')" });

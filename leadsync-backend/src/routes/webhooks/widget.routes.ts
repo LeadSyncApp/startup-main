@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import rateLimit, { MemoryStore } from "express-rate-limit";
+import rateLimit, { MemoryStore, ipKeyGenerator } from "express-rate-limit";
 import { prisma } from "../../lib/prisma";
 import { pgBossService } from "../../services/infrastructure/pgboss/pgboss.service";
 import { Channel, StandardMessageFrame } from "../../interfaces/messaging.interface";
@@ -61,7 +61,7 @@ const companyWidgetPostLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 60, // max 60 submissions per min per company
   keyGenerator: (req: Request) => {
-    return req.body?.companyId ? `company_${req.body.companyId}` : (req.ip || "unknown");
+    return req.body?.companyId ? `company_${req.body.companyId}` : ipKeyGenerator(req.ip || "unknown");
   },
   standardHeaders: true,
   legacyHeaders: false,

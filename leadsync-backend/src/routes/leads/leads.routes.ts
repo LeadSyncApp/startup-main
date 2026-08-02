@@ -74,8 +74,8 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 
     // Fast-path for countOnly request
     if (countOnly) {
-      const countSql = `SELECT CAST(COUNT(*) AS bigint) AS count FROM "Lead" l WHERE ${whereClauses.join(" AND ")}`;
-      const countRows = await directPrisma.$queryRawUnsafe<{ count: bigint }[]>(countSql, ...params);
+      const countSql = `SELECT CAST(COUNT(*) AS integer) AS count FROM "Lead" l WHERE ${whereClauses.join(" AND ")}`;
+      const countRows = await directPrisma.$queryRawUnsafe<{ count: number }[]>(countSql, ...params);
       const total = countRows.length > 0 ? Number(countRows[0].count) : 0;
 
       return res.json({
@@ -113,7 +113,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
           l."pendingOrderClaimedAt",
           l."pendingOrderSummary",
           l."pendingOrderAmount",
-          COUNT(*) OVER() AS total_count
+          CAST(COUNT(*) OVER() AS integer) AS total_count
         FROM "Lead" l
         WHERE ${whereClauses.join(" AND ")}
         ORDER BY l."lastActiveAt" DESC
@@ -166,9 +166,9 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 
     // Fallback for empty paginated result sets beyond bounds
     if (rawRows.length === 0 && page > 1) {
-      const countSql = `SELECT CAST(COUNT(*) AS bigint) AS count FROM "Lead" l WHERE ${whereClauses.join(" AND ")}`;
+      const countSql = `SELECT CAST(COUNT(*) AS integer) AS count FROM "Lead" l WHERE ${whereClauses.join(" AND ")}`;
       const countParams = params.slice(0, paramIndex - 3);
-      const countRows = await directPrisma.$queryRawUnsafe<{ count: bigint }[]>(countSql, ...countParams);
+      const countRows = await directPrisma.$queryRawUnsafe<{ count: number }[]>(countSql, ...countParams);
       total = countRows.length > 0 ? Number(countRows[0].count) : 0;
     }
 
@@ -555,8 +555,7 @@ router.post("/:id/claim-pending-order", authMiddleware, async (req: AuthRequest,
         id,
         companyId,
         deletedAt: null,
-        pendingOrderState: "PENDING_APPROVAL", // lock condition
-        pendingOrderClaimedById: null // lock condition
+        pendingOrderClaimedById: null // lock condition: unclaimed
       },
       data: {
         pendingOrderState: "CLAIMED_FOR_APPROVAL",
@@ -1096,32 +1095,22 @@ router.post("/bulk-assign", authMiddleware, async (req: AuthRequest, res: Respon
       return res.status(400).json({ message: "Invalid IDs provided" });
     }
 
-    // Atomically update each conversation — only succeeds if still unclaimed (prevents double-claim races)
-    const claimResults = [];
-    const alreadyClaimed = [];
-    for (const leadId of ids) {
-      // Same proven pattern as pending-order claim route (leads.routes.ts ~L362-386)
-      const updateResult = await prisma.conversation.updateMany({
-        where: {
-          leadId,
-          companyId,
-          OR: [{ claimedById: null }, { status: 'RESOLVED' }] // lock condition: allow assigning unclaimed or previously-resolved chats
-        },
-        data: {
-          claimedById: assignedToId,
-          claimedAt: new Date(),
-          status: "ASSIGNED",
-          mode: "HUMAN",
-          updatedAt: new Date()
-        }
-      });
-
-      if (updateResult.count === 0) {
-        alreadyClaimed.push(leadId);
-      } else {
-        claimResults.push(leadId);
-      }
-    }
+    // Single batched update: assign all conversations at once, returning which leadIds were updated.
+    // Any leadId NOT in the result was already claimed by someone else.
+    const updatedRows = await prisma.$queryRawUnsafe<{ leadId: string }[]>(
+      `UPDATE "Conversation"
+       SET "claimedById" = $1, "claimedAt" = now(), status = 'ASSIGNED', mode = 'HUMAN', "updatedAt" = now()
+       WHERE "leadId" = ANY($2::text[])
+         AND "companyId" = $3
+         AND ("claimedById" IS NULL OR status = 'RESOLVED')
+       RETURNING "leadId"`,
+      assignedToId,
+      ids,
+      companyId
+    );
+    const claimedLeadIds = new Set(updatedRows.map((r: any) => r.leadId));
+    const claimResults = ids.filter((id: string) => claimedLeadIds.has(id));
+    const alreadyClaimed = ids.filter((id: string) => !claimedLeadIds.has(id));
 
     if (alreadyClaimed.length > 0) {
       return res.status(409).json({
@@ -1255,27 +1244,30 @@ router.post("/conversations/bulk-delete", authMiddleware, async (req: AuthReques
     const convIds = conversations.map(c => c.id);
 
     if (convIds.length > 0) {
-      await (prisma.conversation as any).updateMany({
-        where: {
-          id: { in: convIds },
-          companyId
-        },
-        data: {
-          deletedAt: new Date(),
-          lifecycleStatus: "deleted",
-          status: "RESOLVED"
-        }
-      });
+      const now = new Date();
+      await prisma.$transaction(async (tx) => {
+        await (tx.conversation as any).updateMany({
+          where: {
+            id: { in: convIds },
+            companyId
+          },
+          data: {
+            deletedAt: now,
+            lifecycleStatus: "deleted",
+            status: "RESOLVED"
+          }
+        });
 
-      await (prisma.message as any).updateMany({
-        where: {
-          conversationId: { in: convIds },
-          companyId,
-          deletedAt: null
-        },
-        data: {
-          deletedAt: new Date()
-        }
+        await (tx.message as any).updateMany({
+          where: {
+            conversationId: { in: convIds },
+            companyId,
+            deletedAt: null
+          },
+          data: {
+            deletedAt: now
+          }
+        });
       });
 
       for (const c of conversations) {
@@ -1313,21 +1305,13 @@ router.post("/bulk-tag", authMiddleware, async (req: AuthRequest, res: Response)
         }
       });
     } else {
-      // Corrected loop for removing tags
-      await Promise.all(ids.map(async id => {
-        const lead = await (prisma.lead as any).findUnique({ 
-          where: { id, companyId },
-          select: { tags: true }
-        });
-        if (lead && lead.tags) {
-          await (prisma.lead as any).update({
-            where: { id, companyId },
-            data: {
-              tags: { set: lead.tags.filter((t: string) => t !== tag) }
-            }
-          });
-        }
-      }));
+      // Single batched query: remove tag from all matching leads at once
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Lead" SET tags = array_remove(tags, $1) WHERE id = ANY($2::text[]) AND "companyId" = $3`,
+        tag,
+        ids,
+        companyId
+      );
     }
 
     res.json({ message: `Successfully updated tags for ${ids.length} leads` });
@@ -1540,21 +1524,23 @@ router.delete("/:id/conversation", authMiddleware, async (req: AuthRequest, res:
     }
 
     const conversationId = lead.conversations[0].id;
+    const now = new Date();
 
-    // Soft-delete conversation
-    await (prisma.conversation as any).update({
-      where: { id: conversationId },
-      data: {
-        deletedAt: new Date(),
-        lifecycleStatus: "deleted",
-        status: "RESOLVED"
-      }
-    });
+    // Soft-delete conversation and related messages transactionally
+    await prisma.$transaction(async (tx) => {
+      await (tx.conversation as any).update({
+        where: { id: conversationId },
+        data: {
+          deletedAt: now,
+          lifecycleStatus: "deleted",
+          status: "RESOLVED"
+        }
+      });
 
-    // Also soft-delete related messages
-    await (prisma.message as any).updateMany({
-      where: { conversationId, companyId, deletedAt: null },
-      data: { deletedAt: new Date() }
+      await (tx.message as any).updateMany({
+        where: { conversationId, companyId, deletedAt: null },
+        data: { deletedAt: now }
+      });
     });
 
     emitToCompany(companyId, "conversation_deleted", { conversationId, leadId: id });
@@ -1810,26 +1796,38 @@ router.get("/:id/history", authMiddleware, async (req: AuthRequest, res: Respons
       orderBy: { createdAt: "desc" },
     });
 
+    // Batch-fetch all unique claimers in one query instead of N individual findUnique calls
+    const claimerIds = [...new Set(
+      conversations
+        .filter((c: any) => !c.claimedByName && c.claimedById)
+        .map((c: any) => c.claimedById)
+    )];
+    const claimerMap = new Map<string, { firstName: string | null; lastName: string | null }>();
+    if (claimerIds.length > 0) {
+      const claimers = await prisma.user.findMany({
+        where: { id: { in: claimerIds } },
+        select: { id: true, firstName: true, lastName: true },
+      });
+      for (const u of claimers) {
+        claimerMap.set(u.id, { firstName: u.firstName, lastName: u.lastName });
+      }
+    }
+
     // Prefer the corrected ConversationActivity name over the legacy Conversation field
-    const conversationsWithFixedNames = await Promise.all(
-      conversations.map(async (c) => {
-        let claimedByName = c.claimedByName;
-        if (!claimedByName && c.claimedById) {
-          const claimer = await prisma.user.findUnique({
-            where: { id: c.claimedById },
-            select: { firstName: true, lastName: true },
-          });
-          claimedByName = claimer
-            ? `${claimer.firstName || ""} ${claimer.lastName || ""}`.trim()
-            : "Deleted User";
-        }
-        return {
-          ...c,
-          claimedByName,
-          resolvedBy: c.activities[0]?.actorName || c.resolvedBy,
-        };
-      })
-    );
+    const conversationsWithFixedNames = conversations.map((c: any) => {
+      let claimedByName = c.claimedByName;
+      if (!claimedByName && c.claimedById) {
+        const claimer = claimerMap.get(c.claimedById);
+        claimedByName = claimer
+          ? `${claimer.firstName || ""} ${claimer.lastName || ""}`.trim()
+          : "Deleted User";
+      }
+      return {
+        ...c,
+        claimedByName,
+        resolvedBy: c.activities[0]?.actorName || c.resolvedBy,
+      };
+    });
 
     return res.json({
       totalConversations: conversationsWithFixedNames.length,

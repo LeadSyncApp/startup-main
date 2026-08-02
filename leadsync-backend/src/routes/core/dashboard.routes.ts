@@ -1,7 +1,7 @@
 import { decryptSecret } from "../../utils/encryption";
 import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
-import { Prisma, ConversationStatus } from "@prisma/client";
+import { Prisma, ConversationStatus, OrderStatus } from "@prisma/client";
 import { authMiddleware, injectTenantContext, AuthRequest } from "../../middleware/auth.middleware";
 import { getGroq } from "../../services/ai/ai.service";
 import { cacheService } from "../../services/infrastructure/cache.service";
@@ -118,10 +118,18 @@ router.get(
         where: { companyId, source: "BOT_DETECTED" },
       });
 
-      // 4. Revenue Aggregate
+      const PAID_STATUSES: OrderStatus[] = [
+        OrderStatus.PAID,
+        OrderStatus.COMPLETED,
+        OrderStatus.DELIVERED,
+        OrderStatus.SHIPPED,
+        OrderStatus.PROCESSING,
+        OrderStatus.PREPARING,
+        OrderStatus.READY
+      ];
       const revenueData = await prisma.order.aggregate({
-        where: { companyId, isDeleted: false, status: { in: ["DELIVERED", "PAID"] } },
-        _sum: { amount: true },
+        where: { companyId, isDeleted: false, status: { in: PAID_STATUSES } },
+        _sum: { amountInSubunits: true, amount: true },
       });
 
       // Process Grouped Data
@@ -135,7 +143,9 @@ router.get(
         orderStats.find((s) => s.approvalStatus === "REJECTED")?._count
           .approvalStatus || 0;
 
-      const totalRevenue = revenueData._sum.amount || 0;
+      const totalRevenue = revenueData._sum.amountInSubunits !== null && revenueData._sum.amountInSubunits !== undefined
+        ? Number(revenueData._sum.amountInSubunits) / 100
+        : (revenueData._sum.amount || 0);
 
       const responseData = {
         leads,
@@ -857,7 +867,7 @@ router.get("/forecast", authMiddleware, async (req: AuthRequest, res: Response) 
         status: { in: ["DELIVERED", "PAID"] },
         completedAt: { gte: since },
       },
-      select: { completedAt: true, amount: true },
+      select: { completedAt: true, amount: true, amountInSubunits: true },
       orderBy: { completedAt: "asc" },
     });
 
@@ -865,7 +875,10 @@ router.get("/forecast", authMiddleware, async (req: AuthRequest, res: Response) 
     const dayMap: Record<string, number> = {};
     for (const o of orders) {
       const day = new Date(o.completedAt).toISOString().slice(0, 10);
-      dayMap[day] = (dayMap[day] || 0) + o.amount;
+      const val = o.amountInSubunits !== null && o.amountInSubunits !== undefined && o.amountInSubunits > 0n
+        ? Number(o.amountInSubunits) / 100
+        : o.amount;
+      dayMap[day] = (dayMap[day] || 0) + val;
     }
 
     const historical = Object.entries(dayMap)
@@ -932,9 +945,7 @@ router.get("/agent-stats", authMiddleware, async (req: AuthRequest, res: Respons
     const agentIds = agents.map(a => a.id);
 
     // Group conversations count by claimedById in a single query
-    // TODO(post-deprecation): This comment previously referred to 'assignedToId', a
-    // leftover from the now-deprecated workflow/assignment.service.ts. The code
-    // correctly groups by claimedById (the live column written by ai.orchestrator.worker.ts).
+    // Note: Groups by claimedById (the live column written by ai.orchestrator.worker.ts).
     const conversationsGrouped = await prisma.conversation.groupBy({
       by: ["claimedById"],
       where: {

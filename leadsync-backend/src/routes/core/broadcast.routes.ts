@@ -4,6 +4,7 @@ import { authMiddleware, authorizePermission, AuthRequest } from "../../middlewa
 import { sendTelegramMessage } from "../../bot/telegram.sender";
 import { decryptSecret } from "../../utils/encryption";
 import { Channel } from "@prisma/client";
+import { pgBossService } from "../../services/infrastructure/pgboss/pgboss.service";
 
 const router = Router();
 
@@ -72,18 +73,7 @@ router.post("/", authMiddleware, authorizePermission("broadcast.send"), async (r
       return res.status(200).json({ message: "No recipients found for selected filters", recipientCount: 0 });
     }
 
-    // 3. Send Messages (Background or parallel)
-    const token = decryptSecret(company.telegramBotToken)!;
-    
-    // In a real production app, we'd queue these to avoid rate limits
-    // For this build, we'll do it in parallel with chunks or just Promise.all for now
-    const results = await Promise.allSettled(
-      leads.map(lead => sendTelegramMessage(token, lead.contact, message))
-    );
-
-    const successCount = results.filter(r => r.status === "fulfilled").length;
-
-    // 4. Record Broadcast
+    // 3. Record Broadcast as QUEUED, return immediately
     const broadcast = await (prisma.broadcast as any).create({
       data: {
         companyId,
@@ -91,13 +81,28 @@ router.post("/", authMiddleware, authorizePermission("broadcast.send"), async (r
         message,
         targetTags: targetTags || [],
         targetSegments: targetSegments || [],
-        recipientCount: successCount,
-        status: "SENT"
+        recipientCount: leads.length,
+        status: "QUEUED"
       }
     });
 
-    res.json({
-      message: `Broadcast sent to ${successCount} customers`,
+    // 4. Send messages asynchronously via PgBoss queue
+    const token = decryptSecret(company.telegramBotToken)!;
+    const boss = pgBossService.getBoss();
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < leads.length; i += BATCH_SIZE) {
+      const batch = leads.slice(i, i + BATCH_SIZE);
+      await boss.send("broadcast.send", {
+        broadcastId: broadcast.id,
+        companyId,
+        token,
+        message,
+        leads: batch.map(l => ({ contact: l.contact, id: l.id })),
+      });
+    }
+
+    res.status(202).json({
+      message: `Broadcast queued for ${leads.length} recipients`,
       broadcast
     });
 
