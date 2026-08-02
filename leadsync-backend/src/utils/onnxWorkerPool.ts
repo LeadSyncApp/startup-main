@@ -1,6 +1,7 @@
 import { Worker } from "node:worker_threads";
 import path from "node:path";
 import crypto from "node:crypto";
+import os from "node:os";
 
 export interface TaskMetric {
   id: string;
@@ -46,9 +47,12 @@ export class OnnxWorkerPool {
   private taskMetrics: TaskMetric[] = [];
   private maxQueueDepthSeen = 0;
 
-  constructor(poolSize: number = 1, timeoutMs: number = 10000) {
+  constructor(poolSize?: number, timeoutMs: number = 10000) {
+    const numCpus = os.cpus()?.length || 2;
+    const calculatedDefault = Math.min(4, Math.max(2, Math.floor(numCpus / 2)));
+    const fallbackSize = poolSize && poolSize > 0 ? poolSize : calculatedDefault;
     const envSize = parseInt(process.env.ONNX_WORKER_POOL_SIZE || "", 10);
-    this.poolSize = !isNaN(envSize) && envSize > 0 ? envSize : poolSize;
+    this.poolSize = !isNaN(envSize) && envSize > 0 ? envSize : fallbackSize;
     this.timeoutMs = timeoutMs;
   }
 
@@ -58,6 +62,12 @@ export class OnnxWorkerPool {
   public async init(): Promise<void> {
     if (this.isInitialized) return;
     if (this.initPromise) return this.initPromise;
+
+    if (process.env.ONNX_DISABLE === "true" || process.env.SKIP_ONNX_WARMUP === "true") {
+      console.log("[OnnxWorkerPool] ONNX worker pool disabled via environment variable.");
+      this.isInitialized = true;
+      return;
+    }
 
     this.initPromise = (async () => {
       console.log(`[OnnxWorkerPool] Initializing ONNX worker pool (poolSize=${this.poolSize})...`);

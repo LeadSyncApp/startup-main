@@ -121,54 +121,7 @@ export async function generateWithSarvamFallback(
 ): Promise<SarvamGenerationResult> {
   const { prompt, language = "en", context } = request;
 
-  // ============================================================
-  // TODO: Uncomment this block to re-enable Sarvam as primary
-  // ============================================================
-  // // Try Sarvam first if API key is available
-  // if (apiKey && groq) {
-  //   const sarvamResult = await callSarvamWithTimeout(apiKey, prompt, context, language);
-  // 
-  //   if (sarvamResult.usedSarvam) {
-  //     return sarvamResult;
-  //   }
-  // 
-  //   // Sarvam failed - fall back to Groq
-  //   if (groq) {
-  //     try {
-  //       const fallbackPrompt = `You are a helpful assistant. Reply in ${language === "hi" ? "Hindi" : "English"}.
-  // Only state facts present in the context. Do not add information that isn't explicitly provided.
-  // If a requested detail is missing, escalate by stating you need more information.
-  // 
-  // Context: ${context || "No context provided"}
-  // 
-  // Question: ${prompt}`;
-  // 
-  //       const groqResult = await groq.chat.completions.create({
-  //         messages: [
-  //           { role: "user", content: fallbackPrompt }
-  //         ],
-  //         model: "llama-3.3-70b-versatile",
-  //         temperature: 0.3,
-  //         max_tokens: 2048,
-  //       });
-  // 
-  //       const fallbackReply = groqResult.choices[0]?.message?.content?.trim() || "";
-  // 
-  //       return {
-  //         reply: fallbackReply,
-  //         usedSarvam: false,
-  //         fallbackReason: sarvamResult.fallbackReason,
-  //       };
-  //     } catch (groqError: any) {
-  //       console.error("[SarvamFallback] Groq fallback also failed:", groqError.message);
-  //       return {
-  //         reply: "Aapka message mil gaya hai. Hamaare agent jaldi hi reply karenge!",
-  //         usedSarvam: false,
-  //         fallbackReason: `groq_error: ${groqError.message}`,
-  //       };
-  //     }
-  //   }
-  // }
+
 
   // ============================================================
   // Use Groq directly (Sarvam skipped)

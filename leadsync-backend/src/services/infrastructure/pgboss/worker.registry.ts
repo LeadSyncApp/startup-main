@@ -173,6 +173,46 @@ export class WorkerRegistry {
     await boss.work(MISSED_REPLY_SLA_JOB_NAME, async () => {
       await processSlaCheckJob();
     });
+
+    // Nightly Payment Reconciliation Job Worker
+    await boss.work('NIGHTLY_PAYMENT_RECONCILIATION', async () => {
+      const { reconciliationService } = require('../../integrations/reconciliation.service');
+      await reconciliationService.runReconciliation(48);
+    });
+
+    // Outbox Events Worker
+    await boss.work('PROCESS_OUTBOX_EVENTS', async () => {
+      const { outboxWorker } = require('../outbox.worker');
+      await outboxWorker.processPendingEvents();
+    });
+
+    // Broadcast Send Worker — sends Telegram messages in background batches
+    await boss.work('broadcast.send', { batchSize: 1 }, async (jobs: Array<{ id: string; data: any }>) => {
+      for (const job of jobs) {
+        const { broadcastId, companyId, token, message, leads } = job.data;
+        const { sendTelegramMessage } = require('../../../bot/telegram.sender');
+        let successCount = 0;
+        for (const lead of leads) {
+          try {
+            await sendTelegramMessage(token, lead.contact, message);
+            successCount++;
+          } catch (err: any) {
+            console.error(`[Broadcast] Failed to send to ${lead.contact}:`, err.message);
+          }
+        }
+        // Update broadcast record with sent count
+        try {
+          const tenantDb = getTenantPrismaContext(companyId);
+          await (tenantDb.broadcast as any).update({
+            where: { id: broadcastId },
+            data: { status: "SENT", recipientCount: successCount }
+          });
+        } catch (err: any) {
+          console.error(`[Broadcast] Failed to update broadcast ${broadcastId}:`, err.message);
+        }
+        console.log(JSON.stringify({ event: "broadcast_sent", broadcastId, companyId, successCount, total: leads.length }));
+      }
+    });
   }
 
   public static async registerWorkers(): Promise<void> {

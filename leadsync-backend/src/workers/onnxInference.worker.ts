@@ -13,6 +13,9 @@ import {
 
 // Limit internal ONNX WASM threads to 1 per worker thread to prevent thread contention
 env.backends.onnx.wasm.numThreads = 1;
+if (env.backends?.onnx) {
+  (env.backends.onnx as any).preferNative = false;
+}
 
 const E5_MODEL_NAME = "Xenova/multilingual-e5-small";
 const RERANKER_MODEL_NAME = "onnx-community/bge-reranker-v2-m3-ONNX";

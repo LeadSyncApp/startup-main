@@ -1,6 +1,9 @@
 import { Server as HttpServer } from "http";
 import { Server } from "socket.io";
 import { prisma } from "./prisma";
+import { verifyToken } from "../utils/jwt";
+import { getAllowedOrigins } from "../utils/cors";
+
 
 let io: Server | null = null;
 
@@ -101,34 +104,104 @@ export const initSocket = (httpServer: HttpServer) => {
 
     io = new Server(httpServer, {
         cors: {
-            origin: "*",
-            methods: ["GET", "POST", "PATCH", "DELETE"]
+            origin: getAllowedOrigins(),
+            methods: ["GET", "POST", "PATCH", "DELETE"],
+            credentials: true,
         },
     });
 
+    // 🔐 Middleware: Require valid JWT on connection (handshake auth)
+    io.use((socket, next) => {
+        const token = socket.handshake.auth?.token || 
+            (socket.handshake.headers?.authorization?.startsWith("Bearer ")
+                ? socket.handshake.headers.authorization.split(" ")[1]
+                : null);
+
+        if (!token) {
+            const visitorToken = socket.handshake.auth?.visitorToken;
+            if (visitorToken) {
+                socket.data.isVisitor = true;
+                socket.data.visitorToken = visitorToken;
+                return next();
+            }
+            return next(new Error("Authentication error: Token required"));
+        }
+
+        try {
+            const decoded = verifyToken(token);
+            if (!decoded || !decoded.userId || !decoded.companyId) {
+                return next(new Error("Authentication error: Invalid token payload"));
+            }
+
+            socket.data.userId = decoded.userId;
+            socket.data.companyId = decoded.companyId;
+            socket.data.role = decoded.role;
+            socket.data.isAuthenticated = true;
+            next();
+        } catch (err: any) {
+            return next(new Error(`Authentication error: ${err.message}`));
+        }
+    });
+
     io.on("connection", async (socket) => {
-        console.log(`🔌 New socket connection: ${socket.id}`);
+        console.log(`🔌 New socket connection: ${socket.id} (authenticated: ${!!socket.data.isAuthenticated}, user: ${socket.data.userId || 'none'})`);
 
         socket.on("join_company", (companyId: string) => {
+            if (!socket.data.isAuthenticated || socket.data.companyId !== companyId) {
+                console.warn(`🛑 [Socket Auth] Unauthorized join_company attempt for company ${companyId} by socket ${socket.id}`);
+                socket.emit("error", { message: "Unauthorized company room join" });
+                return;
+            }
             socket.join(`company:${companyId}`);
             console.log(`🏢 Socket ${socket.id} joined company room: company:${companyId}`);
         });
 
         socket.on("join_user", (userId: string) => {
+            if (!socket.data.isAuthenticated || socket.data.userId !== userId) {
+                console.warn(`🛑 [Socket Auth] Unauthorized join_user attempt for user ${userId} by socket ${socket.id}`);
+                socket.emit("error", { message: "Unauthorized user room join" });
+                return;
+            }
             socket.join(`user:${userId}`);
             console.log(`👤 Socket ${socket.id} joined user room: user:${userId}`);
         });
 
         socket.on("join_admin", (companyId: string) => {
+            if (!socket.data.isAuthenticated || socket.data.companyId !== companyId || !["OWNER", "MANAGER"].includes(socket.data.role)) {
+                console.warn(`🛑 [Socket Auth] Unauthorized join_admin attempt for company ${companyId} by socket ${socket.id}`);
+                socket.emit("error", { message: "Unauthorized admin room join" });
+                return;
+            }
             socket.join(`company:${companyId}:admin`);
             console.log(`🛡️ Socket ${socket.id} joined admin room: company:${companyId}:admin`);
         });
 
-        socket.on("join_conversation", (conversationId: string) => {
-            if (conversationId) {
+        socket.on("join_conversation", async (conversationId: string) => {
+            if (!conversationId) return;
+            if (!socket.data.isAuthenticated) {
+                console.warn(`🛑 [Socket Auth] Unauthenticated join_conversation attempt by socket ${socket.id}`);
+                socket.emit("error", { message: "Unauthorized conversation room join" });
+                return;
+            }
+
+            try {
+                const conversation = await prisma.conversation.findUnique({
+                    where: { id: conversationId },
+                    select: { companyId: true }
+                });
+
+                if (!conversation || conversation.companyId !== socket.data.companyId) {
+                    console.warn(`🛑 [Socket Auth] Unauthorized join_conversation attempt for ${conversationId} by user ${socket.data.userId}`);
+                    socket.emit("error", { message: "Unauthorized conversation room join" });
+                    return;
+                }
+
                 socket.join(conversationId);
                 socket.join(`conversation:${conversationId}`);
                 console.log(`💬 Socket ${socket.id} joined conversation room: ${conversationId}`);
+            } catch (err) {
+                console.error(`❌ [Socket Auth] Error checking conversation ownership:`, err);
+                socket.emit("error", { message: "Internal server error joining conversation" });
             }
         });
 
@@ -191,23 +264,28 @@ export const initSocket = (httpServer: HttpServer) => {
 
         // Track which user this socket belongs to
         socket.on("register_user", async (payload: { userId: string; companyId: string; userName?: string }) => {
-            socket.data.userId = payload.userId;
-            socket.data.companyId = payload.companyId;
-            socket.data.userName = payload.userName;
+            if (!socket.data.isAuthenticated) {
+                console.warn(`🛑 [Socket Auth] Unauthenticated register_user attempt by socket ${socket.id}`);
+                return;
+            }
+            const userId = socket.data.userId;
+            const companyId = socket.data.companyId;
+            socket.data.userName = payload?.userName || socket.data.userName;
+
             // Also join the user room
-            socket.join(`user:${payload.userId}`);
+            socket.join(`user:${userId}`);
             // Initialise heartbeat timestamp
-            userHeartbeats.set(payload.userId, Date.now());
+            userHeartbeats.set(userId, Date.now());
             // Mark user as online in DB
             try {
                 await prisma.user.update({
-                    where: { id: payload.userId },
+                    where: { id: userId },
                     data: { isOnline: true, lastSeenAt: new Date() },
                 });
             } catch (err) {
                 console.error("❌ Failed to mark user online on register:", err);
             }
-            console.log(`👤 Socket ${socket.id} registered to user: ${payload.userId} @ company:${payload.companyId}`);
+            console.log(`👤 Socket ${socket.id} registered to user: ${userId} @ company:${companyId}`);
         });
 
         // Client-side heartbeat ping — the frontend sends this periodically

@@ -44,12 +44,12 @@ function formatLogLine(raw: string): string {
   }
 }
 
-// Custom writable wrapper to format Pino JSON chunks into [TIMESTAMP] [LEVEL] text format
+// Custom writable wrapper: write raw structured JSON to file, formatted text to stdout
 const pinoFileStreamWrapper = new Writable({
   write(chunk, _encoding, callback) {
     try {
-      const formatted = formatLogLine(chunk.toString());
-      fileStream.write(formatted);
+      // Write structured JSON to file for machine parsing
+      fileStream.write(chunk);
     } catch {}
     callback();
   }
@@ -100,12 +100,13 @@ const origConsole = {
 function writeConsoleToFile(level: string, args: any[]) {
   try {
     const formattedMsg = util.format(...args);
-    const lines = formattedMsg.split(/\r?\n/);
-    const timestamp = new Date().toISOString();
-    const formattedLines = lines.map(line => line.trim() ? `[${timestamp}] [${level}] ${line}` : "").filter(Boolean).join("\n") + "\n";
-    if (formattedLines.trim()) {
-      fileStream.write(formattedLines);
-    }
+    const entry = {
+      level,
+      time: new Date().toISOString(),
+      msg: formattedMsg,
+      source: "console",
+    };
+    fileStream.write(JSON.stringify(entry) + "\n");
   } catch {
     // Ignore logging errors to prevent recursive loops
   }

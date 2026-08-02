@@ -2,8 +2,12 @@ import PgBossModule from 'pg-boss';
 // @ts-ignore
 import { Client } from 'pg';
 
-// 🟢 FORCE GLOBAL TLS BYPASS PERSISTENTLY FOR LOCAL DEV ENVIRONMENT
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+// Supabase uses a certificate chain with a self-signed root CA that Node.js
+// doesn't trust by default. We need rejectUnauthorized: false for pg driver connections.
+// This is scoped to PgBoss connections only — Prisma handles TLS internally.
+const DB_SSL_CONFIG = process.env.DATABASE_URL?.includes('sslmode=require')
+  ? { rejectUnauthorized: false }
+  : undefined;
 
 class PgBossService {
   private static instance: PgBossService;
@@ -23,7 +27,10 @@ class PgBossService {
     'menu.restructure.job',
     'knowledge.train.job',
     'voice.process.job',
-    'CHECK_MISSED_REPLY_SLA'
+    'CHECK_MISSED_REPLY_SLA',
+    'NIGHTLY_PAYMENT_RECONCILIATION',
+    'PROCESS_OUTBOX_EVENTS',
+    'broadcast.send'
   ];
 
   private constructor() {}
@@ -49,9 +56,15 @@ class PgBossService {
       throw new Error("Could not find PgBoss constructor in the module");
     }
 
+    // Strip sslmode from connection string — we pass ssl config explicitly via the
+    // `ssl` option so that rejectUnauthorized: false actually takes effect.
+    // When sslmode=require is in the URL, pg's parser overrides our ssl config.
+    const cleanConnectionString = connectionString.replace(/[?&]sslmode=require&?/, '?').replace(/\?$/, '');
+
     this.boss = new PgBossConstructor({
-      connectionString,
+      connectionString: cleanConnectionString,
       application_name: 'leadsync-pgboss',
+      ssl: DB_SSL_CONFIG,
     });
 
     this.boss.on('error', (error: Error) => {
@@ -59,7 +72,11 @@ class PgBossService {
     });
 
     // Hardened Production Schema Initialization
-    const pgClientPre = new Client({ connectionString });
+    const cleanPgUrl = connectionString.replace(/[?&]sslmode=require&?/, '?').replace(/\?$/, '');
+    const pgClientPre = new Client({
+      connectionString: cleanPgUrl,
+      ssl: DB_SSL_CONFIG,
+    });
     try {
       await pgClientPre.connect();
       const schemaCheck = await pgClientPre.query(
@@ -84,11 +101,13 @@ class PgBossService {
       for (const queue of this.requiredQueues) {
         await this.boss.createQueue(queue);
       }
-      // Disable automatic retries on webhook.process — all pipeline errors are
-      // permanent (bad channel, bad payload, auth failure). Retries only produce
-      // duplicate side effects (Sarvam calls, Groq calls, outbound messages).
-      await this.boss.updateQueue('webhook.process', { retryLimit: 0 }).catch((e: any) => {
-        console.error('⚠️ [PgBoss] Failed to set retryLimit=0 on webhook.process:', e.message);
+      // Allow retries with exponential backoff for transient failures (DB blips,
+      // Groq 503s, Telegram timeouts). After 3 attempts the job is dead-lettered.
+      await this.boss.updateQueue('webhook.process', {
+        retryLimit: 3,
+        retryBackoff: true,
+      }).catch((e: any) => {
+        console.error('⚠️ [PgBoss] Failed to set retry policy on webhook.process:', e.message);
       });
       console.log('✅ [PgBoss] Queue registration/verifications complete.');
     } catch (apiErr) {

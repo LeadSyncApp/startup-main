@@ -94,16 +94,14 @@ export const createTenantRepository = (companyId: string, tx?: any) => {
           },
         }),
       update: async (args: any) => {
-        const existing = await db.lead.findFirst({
+        const result = await db.lead.updateMany({
+          ...args,
           where: { id: args.where.id, companyId },
         });
-        if (!existing) {
+        if (result.count === 0) {
           throw new Error(`Lead not found in tenant ${companyId}`);
         }
-        return db.lead.update({
-          ...args,
-          where: { id: existing.id },
-        });
+        return result;
       },
     },
 
@@ -141,16 +139,14 @@ export const createTenantRepository = (companyId: string, tx?: any) => {
           },
         }),
       update: async (args: any) => {
-        const existing = await db.conversation.findFirst({
+        const result = await db.conversation.updateMany({
+          ...args,
           where: { id: args.where.id, companyId },
         });
-        if (!existing) {
+        if (result.count === 0) {
           throw new Error(`Conversation not found in tenant ${companyId}`);
         }
-        return db.conversation.update({
-          ...args,
-          where: { id: existing.id },
-        });
+        return result;
       },
     },
 
@@ -188,16 +184,14 @@ export const createTenantRepository = (companyId: string, tx?: any) => {
           },
         }),
       update: async (args: any) => {
-        const existing = await db.order.findFirst({
+        const result = await db.order.updateMany({
+          ...args,
           where: { id: args.where.id, companyId },
         });
-        if (!existing) {
+        if (result.count === 0) {
           throw new Error(`Order not found in tenant ${companyId}`);
         }
-        return db.order.update({
-          ...args,
-          where: { id: existing.id },
-        });
+        return result;
       },
       updateMany: (args: any) =>
         db.order.updateMany({
@@ -266,16 +260,14 @@ export const createTenantRepository = (companyId: string, tx?: any) => {
           },
         }),
       update: async (args: any) => {
-        const existing = await db.account.findFirst({
+        const result = await db.account.updateMany({
+          ...args,
           where: { id: args.where.id, companyId },
         });
-        if (!existing) {
+        if (result.count === 0) {
           throw new Error(`Account not found in tenant ${companyId}`);
         }
-        return db.account.update({
-          ...args,
-          where: { id: existing.id },
-        });
+        return result;
       },
       count: (args?: any) =>
         db.account.count({
@@ -321,16 +313,14 @@ export const createTenantRepository = (companyId: string, tx?: any) => {
           },
         }),
       update: async (args: any) => {
-        const existing = await db.deal.findFirst({
+        const result = await db.deal.updateMany({
+          ...args,
           where: { id: args.where.id, companyId },
         });
-        if (!existing) {
+        if (result.count === 0) {
           throw new Error(`Deal not found in tenant ${companyId}`);
         }
-        return db.deal.update({
-          ...args,
-          where: { id: existing.id },
-        });
+        return result;
       },
       count: (args?: any) =>
         db.deal.count({
@@ -376,16 +366,14 @@ export const createTenantRepository = (companyId: string, tx?: any) => {
           },
         }),
       update: async (args: any) => {
-        const existing = await db.task.findFirst({
+        const result = await db.task.updateMany({
+          ...args,
           where: { id: args.where.id, companyId },
         });
-        if (!existing) {
+        if (result.count === 0) {
           throw new Error(`Task not found in tenant ${companyId}`);
         }
-        return db.task.update({
-          ...args,
-          where: { id: existing.id },
-        });
+        return result;
       },
       count: (args?: any) =>
         db.task.count({

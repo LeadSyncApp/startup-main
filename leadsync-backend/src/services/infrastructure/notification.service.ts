@@ -122,12 +122,28 @@ export class NotificationService {
             const adminIds = admins.map(a => a.id);
             const enabledIds = await this.getEnabledUserIds(companyId, adminIds, type);
 
-            // 3. Create and Emit only for enabled users
-            await Promise.all(
-                adminIds
-                    .filter(id => enabledIds.has(id))
-                    .map(id => this.notifyUser(id, title, body, type, companyId))
-            );
+            const recipientIds = adminIds.filter(id => enabledIds.has(id));
+            if (recipientIds.length === 0) return;
+
+            // 3. Batch insert all notifications in one query
+            const now = new Date();
+            const notificationData = recipientIds.map(userId => ({
+                userId,
+                companyId,
+                title,
+                body,
+                type,
+                isRead: false,
+            }));
+            await prisma.notification.createMany({ data: notificationData });
+
+            // 4. Emit real-time events per user (socket events can't be batched)
+            for (const userId of recipientIds) {
+                emitToAgent(userId, "notification_new", {
+                    title, body, type, isRead: false,
+                    userId, companyId, createdAt: now,
+                });
+            }
 
         } catch (error) {
             console.error(`❌ Failed to notify admins of company ${companyId}:`, error);
@@ -156,11 +172,28 @@ export class NotificationService {
             const userIds = users.map(u => u.id);
             const enabledIds = await this.getEnabledUserIds(companyId, userIds, type);
 
-            await Promise.all(
-                userIds
-                    .filter(id => enabledIds.has(id))
-                    .map(id => this.notifyUser(id, title, body, type, companyId))
-            );
+            const recipientIds = userIds.filter(id => enabledIds.has(id));
+            if (recipientIds.length === 0) return;
+
+            // Batch insert all notifications in one query
+            const now = new Date();
+            const notificationData = recipientIds.map(userId => ({
+                userId,
+                companyId,
+                title,
+                body,
+                type,
+                isRead: false,
+            }));
+            await prisma.notification.createMany({ data: notificationData });
+
+            // Emit real-time events per user
+            for (const userId of recipientIds) {
+                emitToAgent(userId, "notification_new", {
+                    title, body, type, isRead: false,
+                    userId, companyId, createdAt: now,
+                });
+            }
         } catch (error) {
             console.error(`❌ Failed to notify company ${companyId}:`, error);
         }

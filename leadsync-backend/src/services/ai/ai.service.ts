@@ -35,14 +35,34 @@ export function getGroq(): Groq {
     groqClient = new Groq({
       apiKey,
       fetch: async (url: any, init?: any) => {
-        const response = await nodeFetch(url, init);
-        const remaining = response.headers.get("x-ratelimit-remaining-tokens");
-        const limit = response.headers.get("x-ratelimit-limit-tokens");
-        const reset = response.headers.get("x-ratelimit-reset-tokens");
-        if (remaining !== null || limit !== null || reset !== null) {
-          console.log(`[GROQ-QUOTA] remaining=${remaining} limit=${limit} reset=${reset}`);
+        // Wrap with AbortController timeout to actually cancel the TCP connection
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), GROQ_REQUEST_TIMEOUT_MS);
+
+        // Chain with any existing signal from the SDK
+        const parentSignal = init?.signal;
+        if (parentSignal) {
+          parentSignal.addEventListener("abort", () => controller.abort());
         }
-        return response;
+
+        try {
+          const response = await nodeFetch(url, { ...init, signal: controller.signal });
+          clearTimeout(timeoutId);
+
+          const remaining = response.headers.get("x-ratelimit-remaining-tokens");
+          const limit = response.headers.get("x-ratelimit-limit-tokens");
+          const reset = response.headers.get("x-ratelimit-reset-tokens");
+          if (remaining !== null || limit !== null || reset !== null) {
+            console.log(`[GROQ-QUOTA] remaining=${remaining} limit=${limit} reset=${reset}`);
+          }
+          return response;
+        } catch (err: any) {
+          clearTimeout(timeoutId);
+          if (err.name === "AbortError") {
+            throw new Error(`Groq API timeout: request did not respond within ${GROQ_REQUEST_TIMEOUT_MS}ms`);
+          }
+          throw err;
+        }
       },
     });
   }
@@ -52,6 +72,19 @@ export function getGroq(): Groq {
 // ⚡ In-memory cache for merchant categories lookup (5 min TTL)
 const categoriesCache = new Map<string, { categories: string[]; cachedAt: number }>();
 const CATEGORIES_CACHE_TTL_MS = 5 * 60 * 1000;
+const CATEGORIES_CACHE_MAX = 200;
+const GROQ_REQUEST_TIMEOUT_MS = 30_000; // 30-second timeout for Groq LLM calls
+
+function evictCategoriesCache(): void {
+  if (categoriesCache.size <= CATEGORIES_CACHE_MAX) return;
+  const evictCount = Math.ceil(CATEGORIES_CACHE_MAX / 2);
+  let deleted = 0;
+  for (const key of categoriesCache.keys()) {
+    if (deleted >= evictCount) break;
+    categoriesCache.delete(key);
+    deleted++;
+  }
+}
 
 export function invalidateCategoriesCache(companyId?: string) {
   if (companyId) {
@@ -426,8 +459,8 @@ Carefully extract:
 If the customer has not supplied a valid, clean 6-digit pincode or clear landmark descriptors, mark "needs_follow_up": true, flag "follow_up_reason" explaining exactly what's required, and write a polite, vernacular reply in "replyText" prompting the client to supply the missing information.
 
 # INTENT RECOGNITION (CRITICAL)
-- "Checkout": The customer is building an order, but required fields (exact items, quantity, price, full shipping address, pincode) are missing, or they haven't given explicit confirmation yet. Set needs_follow_up: true and ask specifically for what is missing.
-- "OrderConfirmed": The customer has explicitly confirmed the order (e.g., "confirm my order", "yes book it") AND all required fields (items, total amount, shipping address) are present in the context. DO NOT return OrderConfirmed if shipping details or items are missing; return "Checkout" instead.
+- "Checkout": The customer is building an order, but required fields (exact items, quantity, price, full shipping address, pincode) or required product attributes (like size, color, or variant selection) are missing, or they haven't given explicit confirmation yet. Set needs_follow_up: true and ask specifically for what is missing.
+- "OrderConfirmed": The customer has explicitly confirmed the order (e.g., "confirm my order", "yes book it") AND all required fields (items, total amount, shipping address) AND specific variant choices (for products that have variants) are present in the context. DO NOT return OrderConfirmed if shipping details, items, or required variant/attribute choices are missing; return "Checkout" instead.
 
 # MATCHED PRODUCT CONFIDENCE RULES
 - A <MatchedProduct> section is provided when the system has matched the customer's
@@ -531,6 +564,7 @@ export async function generateShopReply(payload: any): Promise<UnifiedShopRespon
       );
       allCategories = [...new Set(categoryRows.flatMap(r => r.categories))].sort();
       categoriesCache.set(context.companyId, { categories: allCategories, cachedAt: now });
+      evictCategoriesCache();
     }
 
     const historyText = Array.isArray(payload.conversation_history) && payload.conversation_history.length > 0
@@ -543,7 +577,7 @@ export async function generateShopReply(payload: any): Promise<UnifiedShopRespon
       const itemsStr = Array.isArray(d.items) && d.items.length > 0
         ? d.items.map((i: any) => `${i.name} x${i.quantity} @ ₹${i.price}${i.isMatched === false ? " (UNVERIFIED)" : ""}`).join(", ")
         : "None";
-      draftText = `Status: ${d.status}\nItems: ${itemsStr}\nTotal Amount: ₹${d.totalAmount || 0}\nRecipient: ${d.recipientName || "N/A"}\nPhone: ${d.recipientPhone || "N/A"}\nAddress: ${d.shippingAddress ? JSON.stringify(d.shippingAddress) : "N/A"}`;
+      draftText = `Status: ${d.status}\nItems: ${itemsStr}\nTotal Amount: ₹${Number(d.totalAmountInSubunits || 0n) / 100}\nRecipient: ${d.recipientName || "N/A"}\nPhone: ${d.recipientPhone || "N/A"}\nAddress: ${d.shippingAddress ? JSON.stringify(d.shippingAddress) : "N/A"}`;
     }
 
     const contextBoundaryBlock = `
@@ -636,11 +670,15 @@ CHAT MESSAGE SENT BY CUSTOMER: "${payload.user_message}"
           await new Promise(res => setTimeout(res, 750));
         }
 
-        const result = await stepProfiler.time(
-          `generateShopReply main Groq LLM generation call${attempt > 1 ? " (retry)" : ""}`,
+        // Stream the response to reduce time-to-first-token. JSON mode requires
+        // full accumulation before parse, but streaming allows the Groq gateway to
+        // begin delivery immediately instead of buffering the entire completion.
+        // Timeout is enforced at the fetch layer (getGroq) via AbortController.
+        const stream = await stepProfiler.time(
+          `generateShopReply main Groq LLM streaming call${attempt > 1 ? " (retry)" : ""}`,
           "ai.service.ts:585",
           "External call",
-          `Groq chat.completions API call (${context?.aiModelTarget || "llama-3.1-8b-instant"})`,
+          `Groq streaming chat.completions API call (${context?.aiModelTarget || "llama-3.1-8b-instant"})`,
           false,
           () => groq.chat.completions.create({
             messages: [
@@ -650,11 +688,19 @@ CHAT MESSAGE SENT BY CUSTOMER: "${payload.user_message}"
             model: context?.aiModelTarget || "llama-3.1-8b-instant",
             response_format: { type: "json_object" },
             temperature: 0.1,
+            max_tokens: 1024,
+            stream: true,
           })
         );
 
-        const text = result.choices[0]?.message?.content || "{}";
-        parsedResponse = JSON.parse(text);
+        // Accumulate stream chunks — necessary exception for JSON response_format.
+        // Only one fullText string in memory at a time (stream chunks are transient).
+        let fullText = "";
+        for await (const chunk of stream) {
+          const delta = chunk.choices[0]?.delta?.content;
+          if (delta) fullText += delta;
+        }
+        parsedResponse = JSON.parse(fullText || "{}");
         break; // Success! Exit retry loop
       } catch (err: any) {
         lastError = err;
@@ -777,7 +823,7 @@ Return a JSON object: { "replyText": "your reply here", "intent_type": "Query" |
   const userPrompt = `Customer message: "${payload.user_message}"`;
 
   try {
-    const result = await groq.chat.completions.create({
+    const stream = await groq.chat.completions.create({
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -785,9 +831,15 @@ Return a JSON object: { "replyText": "your reply here", "intent_type": "Query" |
       model: "llama-3.1-8b-instant",
       response_format: { type: "json_object" },
       temperature: 0.3,
+      max_tokens: 256,
+      stream: true,
     });
-    const text = result.choices[0]?.message?.content || "{}";
-    return JSON.parse(text);
+    let fullText = "";
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) fullText += delta;
+    }
+    return JSON.parse(fullText || "{}");
   } catch (err: any) {
     console.error("❌ [FastPath] Lightweight reply failed:", err?.message || String(err));
     return { replyText: "Hello! How can I help you today?", intent_type: "Query" };

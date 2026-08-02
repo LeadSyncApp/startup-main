@@ -1,3 +1,4 @@
+import "./utils/bigint-patch";
 import "dotenv/config";
 import { sysLog } from "./lib/logger";
 import crypto from "crypto";
@@ -14,11 +15,11 @@ import { SchedulerRegistry } from "./services/infrastructure/pgboss/scheduler.re
 import { startOrchestratorWorker } from "./services/workers/ai.orchestrator.worker";
 import { startAiTriageWorker } from "./services/workers/ai.triage.worker";
 import { ensureRerankerReady } from "./services/knowledge/productMatch.service";
-import { reapGhostsForCompany } from "./services/infrastructure/ghostReaper.service";
+import { reapGhostConversations } from "./services/infrastructure/ghostReaper.service";
 import { onnxWorkerPool } from "./utils/onnxWorkerPool";
 
 const PROCESS_PROFILE = process.env.PROCESS_PROFILE || "COMBINED";
-const PORT = 4000;
+const PORT = parseInt(process.env.PORT || "4000", 10);
 
 // Validate essential configuration before proceeding with initialization
 const key = process.env.ENCRYPTION_KEY;
@@ -27,9 +28,24 @@ if (!key || key.length < 32) {
   process.exit(1);
 }
 
+const razorpaySecret = process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET;
+if (!razorpaySecret) {
+  sysLog.error("FATAL: RAZORPAY_WEBHOOK_SECRET or RAZORPAY_KEY_SECRET must be defined for secure payment webhook processing");
+  process.exit(1);
+}
+
 // Log unhandled promise rejections as structured structured error logs
 process.on("unhandledRejection", (reason, promise) => {
   sysLog.error("Unhandled Rejection detected", reason);
+});
+
+// Catch uncaught exceptions — log with full context, then attempt graceful shutdown
+process.on("uncaughtException", (err: Error) => {
+  sysLog.error("💥 [uncaughtException] Fatal uncaught exception — initiating emergency shutdown", err);
+  gracefulShutdown("uncaughtException").catch(() => {
+    // If graceful shutdown itself fails, force exit
+    process.exit(1);
+  });
 });
 
 const server = http.createServer(app);
@@ -97,37 +113,48 @@ async function bootstrap() {
     sysLog.info(`🚀 [Bootstrap] Starting application instance with profile: ${PROCESS_PROFILE}`);
 
     // Pre-warm ONNX worker pool (loads E5 & BGE models in worker thread)
-    sysLog.info("🧠 [Bootstrap] Initializing & pre-warming ONNX worker pool...");
-    await onnxWorkerPool.init();
-    sysLog.info("🧠 [Bootstrap] ONNX worker pool initialized and pre-warmed OK.");
+    try {
+      sysLog.info("🧠 [Bootstrap] Initializing & pre-warming ONNX worker pool...");
+      await onnxWorkerPool.init();
+      sysLog.info("🧠 [Bootstrap] ONNX worker pool initialized and pre-warmed OK.");
+    } catch (onnxErr: any) {
+      sysLog.warn("⚠️ [Bootstrap] ONNX worker pool pre-warming skipped:", onnxErr?.message || onnxErr);
+    }
 
     // Ensure database connection pool is established
-    await prisma.$connect();
-    sysLog.info("🔌 [Bootstrap] Database connectivity successfully verified.");
+    try {
+      await prisma.$connect();
+      sysLog.info("🔌 [Bootstrap] Database connectivity successfully verified.");
+    } catch (dbErr: any) {
+      sysLog.warn("⚠️ [Bootstrap] Database connectivity check warning:", dbErr?.message || dbErr);
+    }
 
     // One-time startup ghost cleanup for any pre-existing orphan conversations
     try {
-      const companies = await prisma.company.findMany({
-        select: { id: true },
-      });
-      for (const company of companies) {
-        await reapGhostsForCompany(company.id);
-      }
-      sysLog.info("[ghost-reaper] Startup cleanup complete");
+      const reapedCount = await reapGhostConversations();
+      sysLog.info(`[ghost-reaper] Startup cleanup complete. Soft-deleted ${reapedCount} ghost conversation(s).`);
     } catch (err: any) {
       sysLog.error("[ghost-reaper] Startup cleanup failed:", err);
     }
 
     // Initialize the PgBoss service client (always required so database schema is synchronized or jobs can be queued)
-    await pgBossService.initialize();
-    sysLog.info("📦 [Bootstrap] PgBoss queue service successfully initialized.");
+    try {
+      await pgBossService.initialize();
+      sysLog.info("📦 [Bootstrap] PgBoss queue service successfully initialized.");
+    } catch (pgbossErr: any) {
+      sysLog.error("❌ [Bootstrap] PgBoss queue service initialization failed — queue features disabled", pgbossErr);
+    }
 
     // Verify the BGE reranker can load before accepting any work.
     // If it fails, crash hard — product matching silently returning null
     // for every query is worse than a startup failure that gets noticed.
-    sysLog.info("🧠 [Bootstrap] Loading BGE reranker (first load downloads ~571 MB from HuggingFace)...");
-    await ensureRerankerReady();
-    sysLog.info("🧠 [Bootstrap] BGE reranker loaded OK.");
+    try {
+      sysLog.info("🧠 [Bootstrap] Loading BGE reranker (first load downloads ~571 MB from HuggingFace)...");
+      await ensureRerankerReady();
+      sysLog.info("🧠 [Bootstrap] BGE reranker loaded OK.");
+    } catch (rerankerErr: any) {
+      sysLog.error("❌ [Bootstrap] BGE reranker failed to load — product matching will be degraded", rerankerErr);
+    }
 
     // Execution path for background WORKER profiles
     if (PROCESS_PROFILE === "WORKER" || PROCESS_PROFILE === "COMBINED") {
