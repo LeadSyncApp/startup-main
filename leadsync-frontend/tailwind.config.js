@@ -18,12 +18,19 @@ export default {
         mono: ['var(--font-mono)', 'JetBrains Mono', 'monospace'],
       },
       colors: {
+        /* SOURCE OF TRUTH IS src/index.css. These literals mirror the light-mode
+           values of the matching CSS custom properties.
+           They used to hold the pre-rebrand gold/navy palette, which meant a
+           class like `text-brand-saffron` silently rendered GOLD while the rest
+           of the app rendered terracotta. Keep them in sync when index.css
+           changes. Names kept for backwards compatibility — `navy` is no longer
+           navy, it is the terracotta accent. */
         brand: {
-          navy: '#1E3A5F',
-          'navy-light': '#2D4A7A',
-          saffron: '#D4A843',
-          'saffron-light': '#E8C96A',
-          'saffron-soft': '#FFF8E7',
+          navy: '#D36B46',          // --brand-navy
+          'navy-light': '#E48F71',  // --brand-navy-light
+          saffron: '#D36B46',       // --brand-saffron (terracotta)
+          'saffron-light': '#E48F71',
+          'saffron-soft': 'rgba(211, 107, 70, 0.08)',
         },
         app: {
           bg: 'var(--app-bg)',
@@ -38,11 +45,12 @@ export default {
           'primary-strong': 'var(--app-primary-strong)',
           'primary-soft': 'var(--app-primary-soft)',
         },
+        /* Mirrors --success-green / --warning-amber / --danger-red / --info-blue */
         status: {
-          success: '#16A34A',
-          warning: '#F59E0B',
-          danger: '#DC2626',
-          info: '#0284C7',
+          success: '#86C232',
+          warning: '#D36B46',
+          danger: '#a63232',
+          info: '#3A4B46',
         }
       },
       boxShadow: {

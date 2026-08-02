@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, memo } from "react";
+import { useState, useEffect, useCallback, memo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { MessageSquare, MessageCircle, Instagram, Globe, Loader2, UserPlus, Trash2, CheckSquare, Square } from "lucide-react";
+import { MessageSquare, MessageCircle, Instagram, Globe, Loader2, UserPlus, Trash2, CheckSquare, Square, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
 import { useAuth } from "../auth-tenancy/AuthContext";
@@ -86,8 +86,57 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
   // Total conversation counts per tab, always visible in the tab labels.
   const [tabTotals, setTabTotals] = useState<Record<FilterTab, number>>({ chats: 0, completed: 0 });
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const { companyId } = useAuth();
+
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isLongPressActiveRef = useRef<boolean>(false);
+  const startPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  const startLongPress = useCallback((leadId: string, clientX: number, clientY: number) => {
+    isLongPressActiveRef.current = false;
+    startPosRef.current = { x: clientX, y: clientY };
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressActiveRef.current = true;
+      if (typeof window !== "undefined" && window.navigator && window.navigator.vibrate) {
+        window.navigator.vibrate(50);
+      }
+      setIsSelectionMode(true);
+      setSelectedLeadIds((prev) => (prev.includes(leadId) ? prev : [...prev, leadId]));
+    }, 500);
+  }, []);
+
+  const cancelLongPress = useCallback((clientX?: number, clientY?: number) => {
+    if (startPosRef.current && clientX !== undefined && clientY !== undefined) {
+      const dx = Math.abs(clientX - startPosRef.current.x);
+      const dy = Math.abs(clientY - startPosRef.current.y);
+      if (dx > 10 || dy > 10) {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+      }
+    } else {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }
+  }, []);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, leadId: string) => {
+    e.preventDefault();
+    setIsSelectionMode(true);
+    setSelectedLeadIds((prev) => (prev.includes(leadId) ? prev : [...prev, leadId]));
+  }, []);
+
+  const toggleLeadSelection = useCallback((leadId: string) => {
+    setSelectedLeadIds((prev) =>
+      prev.includes(leadId) ? prev.filter((id) => id !== leadId) : [...prev, leadId]
+    );
+  }, []);
 
   const fetchTabTotals = useCallback(async () => {
     try {
@@ -139,28 +188,9 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
       });
 
       if (append) {
-        setLeads((prev) => {
-          const next = [...prev, ...statusFiltered];
-          const unreadIds = next
-            .filter((l) => l.status !== "RESOLVED" && (l.unreadCount ?? 0) > 0)
-            .map((l) => l.id);
-          window.dispatchEvent(
-            new CustomEvent("inbox:unread_leads", {
-              detail: { unreadLeadIds: unreadIds },
-            })
-          );
-          return next;
-        });
+        setLeads((prev) => [...prev, ...statusFiltered]);
       } else {
         setLeads(statusFiltered);
-        const unreadIds = statusFiltered
-          .filter((l) => l.status !== "RESOLVED" && (l.unreadCount ?? 0) > 0)
-          .map((l) => l.id);
-        window.dispatchEvent(
-          new CustomEvent("inbox:unread_leads", {
-            detail: { unreadLeadIds: unreadIds },
-          })
-        );
       }
       setMeta(json.meta);
       setTabTotals((prev) => ({ ...prev, [filter]: json.meta?.total ?? 0 }));
@@ -173,9 +203,22 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
     }
   }, [filter, search, fetchTabTotals]);
 
+  // Safely broadcast unread lead IDs to parent MasterDashboardLayout via useEffect (after render phase completes)
+  useEffect(() => {
+    const unreadIds = leads
+      .filter((l) => l.status !== "RESOLVED" && (l.unreadCount ?? 0) > 0)
+      .map((l) => l.id);
+    window.dispatchEvent(
+      new CustomEvent("inbox:unread_leads", {
+        detail: { unreadLeadIds: unreadIds },
+      })
+    );
+  }, [leads]);
+
   // Initial fetch when filter/search changes + initial fetch for both tab totals.
   useEffect(() => {
     setSelectedLeadIds([]);
+    setIsSelectionMode(false);
     fetchLeads(1);
     fetchTabTotals();
   }, [fetchLeads, fetchTabTotals]);
@@ -275,6 +318,7 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
       }
       toast.success(`Successfully deleted ${selectedLeadIds.length} conversation(s)`);
       setSelectedLeadIds([]);
+      setIsSelectionMode(false);
       fetchLeads(1);
     } catch (e: any) {
       toast.error(e.message || "Failed to delete conversations");
@@ -339,7 +383,7 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
           {FILTER_TABS.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => { setLeads([]); setFilter(tab.key); setSelectedLeadIds([]); }}
+              onClick={() => { setLeads([]); setFilter(tab.key); setSelectedLeadIds([]); setIsSelectionMode(false); }}
               className={`px-3 py-1 text-xs font-black rounded-t transition cursor-pointer ${
                 filter === tab.key
                   ? "bg-[var(--app-surface-alt)] text-[var(--app-text)] border-b-2 border-brand-saffron"
@@ -352,32 +396,45 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
         </div>
       </div>
 
-      {/* Select All Bar */}
-      {leads.length > 0 && (
-        <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--app-border)] bg-[var(--app-bg-soft)] text-xs">
+      {/* Select All Bar (shown only when in selection mode) */}
+      {isSelectionMode && leads.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--app-border)] bg-[var(--app-bg-soft)] text-xs transition-all">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedLeadIds.length === leads.length) {
+                  setSelectedLeadIds([]);
+                } else {
+                  setSelectedLeadIds(leads.map((l) => l.id));
+                }
+              }}
+              className="flex items-center gap-2 text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition cursor-pointer font-bold"
+            >
+              {selectedLeadIds.length > 0 && selectedLeadIds.length === leads.length ? (
+                <CheckSquare className="h-4 w-4 text-brand-saffron" />
+              ) : (
+                <Square className="h-4 w-4 text-[var(--app-text-muted)]" />
+              )}
+              Select All ({leads.length})
+            </button>
+            {selectedLeadIds.length > 0 && (
+              <span className="text-[10px] font-black text-brand-saffron uppercase tracking-widest">
+                {selectedLeadIds.length} selected
+              </span>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => {
-              if (selectedLeadIds.length === leads.length) {
-                setSelectedLeadIds([]);
-              } else {
-                setSelectedLeadIds(leads.map((l) => l.id));
-              }
+              setSelectedLeadIds([]);
+              setIsSelectionMode(false);
             }}
-            className="flex items-center gap-2 text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition cursor-pointer font-bold"
+            className="px-2 py-1 text-xs font-bold text-[var(--app-text-muted)] hover:text-[var(--app-text)] hover:bg-[var(--app-surface-alt)] rounded transition cursor-pointer flex items-center gap-1"
           >
-            {selectedLeadIds.length > 0 && selectedLeadIds.length === leads.length ? (
-              <CheckSquare className="h-4 w-4 text-brand-saffron" />
-            ) : (
-              <Square className="h-4 w-4 text-[var(--app-text-muted)]" />
-            )}
-            Select All ({leads.length})
+            <X className="h-3.5 w-3.5" />
+            Cancel
           </button>
-          {selectedLeadIds.length > 0 && (
-            <span className="text-[10px] font-black text-brand-saffron uppercase tracking-widest">
-              {selectedLeadIds.length} selected
-            </span>
-          )}
         </div>
       )}
 
@@ -409,34 +466,56 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
                 <button
                   key={lead.id}
                   onClick={() => {
+                    if (isLongPressActiveRef.current) {
+                      isLongPressActiveRef.current = false;
+                      return;
+                    }
                     if (!lead.conversationId) return;
-                    if (onSelectLead) {
-                      onSelectLead(lead.id);
+                    if (isSelectionMode) {
+                      toggleLeadSelection(lead.id);
                     } else {
-                      navigate(`/inbox/${lead.id}`);
+                      if (onSelectLead) {
+                        onSelectLead(lead.id);
+                      } else {
+                        navigate(`/inbox/${lead.id}`);
+                      }
                     }
                   }}
-                  className={`w-full flex items-center gap-4 p-4 rounded-2xl border bg-[var(--ticket-bg)] text-[var(--ticket-text)] border-[var(--ticket-border)] hover:brightness-110 transition-all text-left cursor-pointer group ${
+                  onContextMenu={(e) => handleContextMenu(e, lead.id)}
+                  onMouseDown={(e) => {
+                    if (e.button === 0) startLongPress(lead.id, e.clientX, e.clientY);
+                  }}
+                  onMouseUp={() => cancelLongPress()}
+                  onMouseLeave={() => cancelLongPress()}
+                  onMouseMove={(e) => cancelLongPress(e.clientX, e.clientY)}
+                  onTouchStart={(e) => {
+                    if (e.touches.length === 1) startLongPress(lead.id, e.touches[0].clientX, e.touches[0].clientY);
+                  }}
+                  onTouchEnd={() => cancelLongPress()}
+                  onTouchMove={(e) => {
+                    if (e.touches.length === 1) cancelLongPress(e.touches[0].clientX, e.touches[0].clientY);
+                  }}
+                  className={`w-full flex items-center gap-4 p-4 rounded-2xl border bg-[var(--ticket-bg)] text-[var(--ticket-text)] border-[var(--ticket-border)] hover:brightness-110 transition-all text-left cursor-pointer group select-none ${
                     selectedLeadId === lead.id ? "ring-2 ring-[var(--brand-saffron)]" : ""
-                  } ${(lead.isUnread && !isOpenHere) ? "bg-[var(--brand-saffron-soft)]/40 border-[var(--brand-saffron)]/40" : ""}`}
+                  } ${(lead.isUnread && !isOpenHere) ? "bg-[var(--brand-saffron-soft)]/40 border-[var(--brand-saffron)]/40" : ""} ${isChecked ? "ring-1 ring-brand-saffron/50 bg-brand-saffron/5" : ""}`}
                 >
-                  {/* Row Checkbox */}
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedLeadIds((prev) =>
-                        prev.includes(lead.id) ? prev.filter((id) => id !== lead.id) : [...prev, lead.id]
-                      );
-                    }}
-                    className="p-1 text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition cursor-pointer shrink-0"
-                    title={isChecked ? "Deselect" : "Select"}
-                  >
-                    {isChecked ? (
-                      <CheckSquare className="h-4 w-4 text-brand-saffron" />
-                    ) : (
-                      <Square className="h-4 w-4 text-[var(--app-text-muted)] opacity-50 group-hover:opacity-100" />
-                    )}
-                  </div>
+                  {/* Row Checkbox (visible only in selection mode) */}
+                  {isSelectionMode && (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleLeadSelection(lead.id);
+                      }}
+                      className="p-1 text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition cursor-pointer shrink-0"
+                      title={isChecked ? "Deselect" : "Select"}
+                    >
+                      {isChecked ? (
+                        <CheckSquare className="h-4 w-4 text-brand-saffron" />
+                      ) : (
+                        <Square className="h-4 w-4 text-[var(--app-text-muted)] opacity-50 group-hover:opacity-100" />
+                      )}
+                    </div>
+                  )}
 
                   {/* Avatar */}
                   <div className="h-10 w-10 rounded-full bg-brand-navy text-white flex items-center justify-center shrink-0 text-xs font-black">
@@ -535,7 +614,7 @@ export const InboxList = memo(function InboxList({ selectedLeadId, onSelectLead 
             {bulkDeleting ? "Deleting..." : "Delete Selected"}
           </button>
           <button
-            onClick={() => setSelectedLeadIds([])}
+            onClick={() => { setSelectedLeadIds([]); setIsSelectionMode(false); }}
             className="px-2 py-1 text-slate-400 hover:text-white text-xs font-bold transition cursor-pointer"
           >
             Cancel

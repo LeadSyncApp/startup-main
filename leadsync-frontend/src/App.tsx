@@ -13,6 +13,7 @@ import MarketingHomePage from "./pages/MarketingHomePage";
 import { activityToast as activityToast } from "./features/activity-ledger/useActivityStore";
 import { GuidedTour } from "./components/tour/GuidedTour";
 import { WizardProvider } from "./contexts/WizardContext";
+import { DashboardQueryProvider } from "./features/dashboard/providers/QueryProvider";
 import { X } from "lucide-react";
 
 const AutoRepliesPage = lazy(() => import("./features/configurations/AutoRepliesPage").then(m => ({ default: m.AutoRepliesPage })));
@@ -309,6 +310,7 @@ export default function App() {
               merchantName={company?.name || mockCompany || "My Business"}
               onLogout={logout}
             >
+              <DashboardQueryProvider>
               <WizardProvider>
               <div className="w-full h-full min-h-0 flex flex-col">
                 <GuidedTour activeTab={activeTab} />
@@ -328,7 +330,7 @@ export default function App() {
                     </motion.div>
                   )}
                   {activeTab === 'inbox' && (
-                    <motion.div key="inbox" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="inbox-panel" className="flex-1 min-h-0">
+                    <motion.div key="inbox" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeInOut" }} data-tour="inbox-panel" className="flex-1 h-full min-h-0 flex flex-col">
                       <InboxSplitView />
                     </motion.div>
                   )}
@@ -372,6 +374,7 @@ export default function App() {
                 </Suspense>
               </div>
               </WizardProvider>
+              </DashboardQueryProvider>
             </MasterDashboardLayout>
           ) : (
             <Navigate to="/onboarding" replace />

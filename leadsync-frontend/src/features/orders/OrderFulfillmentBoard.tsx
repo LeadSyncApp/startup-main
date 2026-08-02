@@ -17,6 +17,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { authedFetch } from '../../api/client';
+import { onEvent } from '../../lib/socketClient';
 
 export const OrderFulfillmentBoard: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -30,8 +31,9 @@ export const OrderFulfillmentBoard: React.FC = () => {
     try {
       const res = await authedFetch('/api/orders?view=active');
       if (res.ok) {
-        const data = await res.json();
-        setOrders(Array.isArray(data) ? data : []);
+        const json = await res.json();
+        const list = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
+        setOrders(list);
       } else {
         toast.error('Failed to load orders');
       }
@@ -45,6 +47,17 @@ export const OrderFulfillmentBoard: React.FC = () => {
 
   useEffect(() => {
     fetchOrders();
+    const unsub1 = onEvent('order_created', () => fetchOrders());
+    const unsub2 = onEvent('order_updated', () => fetchOrders());
+    const unsub3 = onEvent('payment_confirmed', () => fetchOrders());
+    const unsub4 = onEvent('conversation_updated', () => fetchOrders());
+
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+      unsub4();
+    };
   }, [fetchOrders]);
 
   const updateStatus = async (orderId: string, newStatus: string) => {
@@ -70,17 +83,18 @@ export const OrderFulfillmentBoard: React.FC = () => {
     }
   };
 
-  const READY_STATUSES = ['PAID', 'APPROVED', 'CONFIRMED', 'READY', 'PROCESSING', 'PREPARING'];
-  const SHIPPED_STATUSES = ['SHIPPED', 'DELIVERED', 'COMPLETED'];
+  const PENDING_STATUSES = ['PENDING'];
+  const READY_STATUSES = ['PAID', 'APPROVED', 'CONFIRMED', 'READY', 'PROCESSING', 'PREPARING', 'COMPLETED'];
+  const SHIPPED_STATUSES = ['SHIPPED', 'DELIVERED'];
 
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
-      let displayStatus = 'PENDING';
+      let displayStatus: string | null = null;
       if (READY_STATUSES.includes(o.status)) {
         displayStatus = 'READY';
       } else if (SHIPPED_STATUSES.includes(o.status)) {
         displayStatus = 'SHIPPED';
-      } else {
+      } else if (PENDING_STATUSES.includes(o.status) || o.metadata?.isPaymentRequest) {
         displayStatus = 'PENDING';
       }
 
@@ -105,7 +119,7 @@ export const OrderFulfillmentBoard: React.FC = () => {
   }, [orders]);
 
   const pendingCount = useMemo(() => {
-    return orders.filter(o => ![...READY_STATUSES, ...SHIPPED_STATUSES].includes(o.status)).length;
+    return orders.filter(o => PENDING_STATUSES.includes(o.status) || o.metadata?.isPaymentRequest).length;
   }, [orders]);
 
   const getStatusColor = (status: string) => {
@@ -115,47 +129,59 @@ export const OrderFulfillmentBoard: React.FC = () => {
       case 'READY':
       case 'APPROVED':
       case 'CONFIRMED':
-        return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
       case 'PENDING':
       case 'NEW':
-        return 'bg-amber-50 text-amber-600 border-amber-100';
+        return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
       case 'SHIPPED':
       case 'DELIVERED':
-        return 'bg-blue-50 text-blue-600 border-blue-100';
+        return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
       default:
-        return 'bg-slate-50 text-slate-600 border-slate-100';
+        return 'bg-app-surface-alt text-app-text-muted border-app-border';
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 text-app-text">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <ShoppingBag className="size-6 text-indigo-600" />
+          <h2 className="text-2xl font-black text-app-text tracking-tight flex items-center gap-2">
+            <ShoppingBag className="size-6 text-[var(--brand-saffron)]" />
             Order Fulfillment
           </h2>
-          <p className="text-sm text-slate-500 font-medium">Manage your paid orders and logistics</p>
+          <p className="text-sm text-app-text-muted font-medium">Manage your paid orders and logistics</p>
         </div>
 
-        <div data-tour="tab-bar" className="flex bg-slate-100 p-1 rounded-xl items-center gap-1">
+        <div data-tour="tab-bar" className="flex bg-app-surface p-1.5 rounded-2xl items-center gap-1 border border-app-border">
           <button 
             onClick={() => setTab('READY')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 ${tab === 'READY' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              tab === 'READY' 
+                ? 'bg-[var(--brand-saffron)] text-white shadow-md' 
+                : 'text-app-text-muted hover:text-app-text hover:bg-app-surface-alt'
+            }`}
           >
             <CheckCircle2 className="size-3.5" />
             Ready for Packing ({readyCount})
           </button>
           <button 
             onClick={() => setTab('SHIPPED')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 ${tab === 'SHIPPED' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              tab === 'SHIPPED' 
+                ? 'bg-[var(--brand-saffron)] text-white shadow-md' 
+                : 'text-app-text-muted hover:text-app-text hover:bg-app-surface-alt'
+            }`}
           >
             <Truck className="size-3.5" />
             Shipped/Out ({shippedCount})
           </button>
           <button 
             onClick={() => setTab('PENDING')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 ${tab === 'PENDING' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              tab === 'PENDING' 
+                ? 'bg-[var(--brand-saffron)] text-white shadow-md' 
+                : 'text-app-text-muted hover:text-app-text hover:bg-app-surface-alt'
+            }`}
           >
             <Clock className="size-3.5" />
             Wait for Payment ({pendingCount})
@@ -164,36 +190,36 @@ export const OrderFulfillmentBoard: React.FC = () => {
             data-tour="order-refresh"
             onClick={fetchOrders}
             title="Refresh orders from server"
-            className="p-1.5 hover:bg-white text-slate-500 hover:text-slate-900 rounded-lg transition"
+            className="p-2 hover:bg-app-surface-alt text-app-text-muted hover:text-app-text rounded-xl transition cursor-pointer"
           >
             <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>
 
-      <div data-tour="order-search" className="bg-white border border-slate-200 rounded-3xl p-4 flex items-center gap-3 shadow-sm">
-        <Search className="size-4 text-slate-400" />
+      <div data-tour="order-search" className="bg-app-surface border border-app-border rounded-3xl p-4 flex items-center gap-3 shadow-sm">
+        <Search className="size-4 text-app-text-muted" />
         <input 
           type="text" 
           placeholder="Search by customer name or Order ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 bg-transparent border-none outline-none text-sm font-medium placeholder:text-slate-300"
+          className="flex-1 bg-transparent border-none outline-none text-sm font-medium text-app-text placeholder:text-app-text-muted"
         />
-        <button className="p-2 hover:bg-slate-50 rounded-xl transition text-slate-400">
+        <button className="p-2 hover:bg-app-surface-alt rounded-xl transition text-app-text-muted cursor-pointer">
           <Filter className="size-4" />
         </button>
       </div>
 
       {loading ? (
         <div className="h-64 flex items-center justify-center">
-          <div className="size-8 border-3 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
+          <div className="size-8 border-3 border-[var(--brand-saffron)]/20 border-t-[var(--brand-saffron)] rounded-full animate-spin" />
         </div>
       ) : filteredOrders.length === 0 ? (
-        <div data-tour="order-empty-state" className="bg-white border-2 border-dashed border-slate-100 rounded-3xl p-16 text-center">
-            <ClipboardList className="size-12 text-slate-100 mx-auto mb-4" />
-            <h3 className="text-slate-400 font-black text-sm">No orders found here</h3>
-            <p className="text-slate-300 text-[10px] font-bold uppercase tracking-widest mt-1">
+        <div data-tour="order-empty-state" className="bg-app-surface border-2 border-dashed border-app-border rounded-3xl p-16 text-center">
+            <ClipboardList className="size-12 text-app-text-muted/40 mx-auto mb-4" />
+            <h3 className="text-app-text font-black text-sm">No orders found here</h3>
+            <p className="text-app-text-muted text-[10px] font-bold uppercase tracking-widest mt-1">
               {tab === 'READY' ? 'Orders confirmed as PAID will auto-jump here for packing' : 'Nothing to show in this view'}
             </p>
         </div>
@@ -211,74 +237,74 @@ export const OrderFulfillmentBoard: React.FC = () => {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className={`bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group ${
+                  className={`bg-app-surface border border-app-border rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group ${
                     isUpdating ? "opacity-60 pointer-events-none select-none" : ""
                   }`}
                 >
-                  <div className="p-5 border-b border-slate-50 bg-slate-50/30">
+                  <div className="p-5 border-b border-app-border bg-app-surface-alt/40">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex gap-2">
                         <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${getStatusColor(order.status)}`}>
                           {order.status}
                         </span>
                         {(order.priorityScore > 70 || order.isUrgent) ? (
-                          <span data-tour="priority-badge" className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-red-50 text-red-600 border-red-100">
+                          <span data-tour="priority-badge" className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-rose-500/10 text-rose-400 border-rose-500/20">
                             URGENT
                           </span>
                         ) : (
-                          <span data-tour="priority-badge" className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-slate-50 text-slate-600 border-slate-100">
+                          <span data-tour="priority-badge" className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-app-surface-alt text-app-text-muted border-app-border">
                             STANDARD
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] font-bold text-slate-400 font-mono">
+                      <span className="text-[10px] font-bold text-app-text-muted font-mono">
                         #{order.id.slice(0, 8)}
                       </span>
                     </div>
                     
                     <div className="flex items-center gap-3">
-                      <div className="size-10 bg-white border border-slate-200 rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm">
+                      <div className="size-10 bg-app-surface border border-app-border rounded-2xl flex items-center justify-center text-[var(--brand-saffron)] shadow-sm">
                         <User className="size-5" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-black text-slate-900">{order.lead?.name || "Customer"}</h4>
+                          <h4 className="text-sm font-black text-app-text">{order.lead?.name || "Customer"}</h4>
                           {(order.status === 'PAID' || order.status === 'APPROVED' || order.status === 'CONFIRMED') && (
                             <span className="bg-emerald-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Paid</span>
                           )}
                         </div>
-                        <p className="text-[10px] text-slate-500 font-bold">{order.lead?.contact || "No Contact"}</p>
+                        <p className="text-[10px] text-app-text-muted font-bold">{order.lead?.contact || "No Contact"}</p>
                       </div>
                     </div>
                   </div>
 
                   <div className="p-5 space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</span>
-                      <span className="text-2xl font-black text-indigo-600 flex items-center gap-0.5">
+                      <span className="text-[10px] font-black text-app-text-muted uppercase tracking-widest">Amount</span>
+                      <span className="text-2xl font-black text-[var(--brand-saffron)] flex items-center gap-0.5 font-mono">
                         <IndianRupee className="size-5" />
                         {Number(order.amount || 0).toLocaleString()}
                       </span>
                     </div>
 
-                    <div className="bg-slate-50 rounded-2xl p-3">
-                      <p className="text-xs text-slate-600 font-medium leading-relaxed italic">
+                    <div className="bg-app-surface-alt/60 rounded-2xl p-3 border border-app-border/50">
+                      <p className="text-xs text-app-text font-medium leading-relaxed italic">
                         "{order.summary || "Order"}"
                       </p>
                     </div>
 
                     <div className="flex items-center gap-2 pt-2">
                       {['PENDING', 'NEW'].includes(order.status) && (
-                        <div className="flex-1 py-3 bg-slate-50 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest text-center border border-dashed border-slate-200">
+                        <div className="flex-1 py-3 bg-amber-500/10 text-amber-400 rounded-2xl text-[10px] font-black uppercase tracking-widest text-center border border-dashed border-amber-500/30">
                           Waiting for Payment
                         </div>
                       )}
-                      {['READY', 'PAID', 'APPROVED', 'CONFIRMED', 'PROCESSING', 'PREPARING'].includes(order.status) && (
+                      {['READY', 'PAID', 'APPROVED', 'CONFIRMED', 'PROCESSING', 'PREPARING', 'COMPLETED'].includes(order.status) && (
                         <button 
                            data-tour="status-action-button"
                            onClick={() => updateStatus(order.id, 'SHIPPED')}
                            disabled={isUpdating}
-                           className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                           className="flex-1 py-3 bg-[var(--brand-saffron)] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[var(--brand-saffron-light)] transition shadow-lg shadow-[var(--brand-saffron)]/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                         >
                           {isUpdating ? <Loader2 className="size-3.5 animate-spin" /> : null}
                           Mark as Shipped
@@ -289,23 +315,23 @@ export const OrderFulfillmentBoard: React.FC = () => {
                             data-tour="status-action-button"
                             onClick={() => updateStatus(order.id, 'DELIVERED')}
                             disabled={isUpdating}
-                            className="flex-1 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            className="flex-1 py-3 bg-app-surface-alt text-app-text border border-app-border rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-app-bg-soft transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                          >
                            {isUpdating ? <Loader2 className="size-3.5 animate-spin" /> : null}
                            Mark as Delivered
                          </button>
                       )}
-                      <button className="p-3 border border-slate-200 rounded-2xl text-slate-400 hover:bg-slate-50 transition">
+                      <button className="p-3 border border-app-border rounded-2xl text-app-text-muted hover:bg-app-surface-alt transition cursor-pointer">
                         <MoreVertical className="size-4" />
                       </button>
                     </div>
 
                     <div className="flex items-center justify-between pt-2">
-                       <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                       <div className="flex items-center gap-1 text-[10px] font-bold text-app-text-muted">
                           <Clock className="size-3" />
                           {new Date(order.createdAt).toLocaleDateString()}
                        </div>
-                       <button data-tour="view-chat-link" className="text-[10px] font-black uppercase text-indigo-600 hover:underline flex items-center gap-1">
+                       <button data-tour="view-chat-link" className="text-[10px] font-black uppercase text-[var(--brand-saffron)] hover:underline flex items-center gap-1 cursor-pointer">
                           View Chat
                           <ChevronRight className="size-3" />
                        </button>

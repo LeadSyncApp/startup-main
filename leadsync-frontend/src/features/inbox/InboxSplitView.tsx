@@ -29,8 +29,8 @@ export default function InboxSplitView({ initialLeadId = null }: InboxSplitViewP
         />
       </div>
 
-      {/* Right column: fills remaining width, min 480px */}
-      <div data-tour="chat-detail-panel" className="flex-1 min-w-[480px] min-h-0 overflow-hidden h-full flex flex-col">
+      {/* Right column: fills remaining width flexibly */}
+      <div data-tour="chat-detail-panel" className="flex-1 min-w-0 min-h-0 overflow-hidden h-full flex flex-col relative">
         {selectedLeadId ? (
           <InboxDetail leadId={selectedLeadId} showBackButton={false} />
         ) : (

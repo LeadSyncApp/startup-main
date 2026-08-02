@@ -350,7 +350,7 @@ export function PaymentRequestModal({
                 onClick={() => { resetItemSelection(); setShowCartView(!showCartView); }}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
                   showCartView
-                    ? "bg-brand-saffron text-brand-navy"
+                    ? "bg-brand-saffron text-white shadow-sm"
                     : "bg-[var(--app-surface-alt)] text-[var(--app-text)] hover:bg-[var(--app-bg-soft)] border border-[var(--app-border)]"
                 }`}
               >
@@ -449,7 +449,7 @@ export function PaymentRequestModal({
                       <p className="text-xs text-[var(--app-text-muted)]">Your payment request cart is empty</p>
                       <button
                         onClick={() => setShowCartView(false)}
-                        className="mt-3 px-4 py-1.5 bg-brand-saffron text-brand-navy rounded-lg text-xs font-black"
+                        className="mt-3 px-4 py-1.5 bg-brand-saffron text-white rounded-lg text-xs font-black shadow-sm"
                       >
                         Browse Catalog
                       </button>
@@ -696,7 +696,7 @@ export function PaymentRequestModal({
 
                   <button
                     onClick={handleVariantContinue}
-                    className="w-full py-2 bg-brand-saffron hover:bg-brand-saffron/80 text-brand-navy rounded-lg font-black text-xs transition cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full py-2.5 bg-brand-saffron hover:bg-brand-saffron/90 text-white rounded-lg font-black text-xs transition cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-brand-saffron/20 active:scale-[0.99]"
                   >
                     Continue to Quantity
                   </button>
@@ -794,7 +794,7 @@ export function PaymentRequestModal({
 
                     <button
                       onClick={() => handleAddToCart(false)}
-                      className="py-2.5 bg-brand-saffron hover:bg-brand-saffron/90 text-brand-navy rounded-lg font-black text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                      className="py-2.5 bg-brand-saffron hover:bg-brand-saffron/90 text-white rounded-lg font-black text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-brand-saffron/20"
                     >
                       <ShoppingCart className="h-3.5 w-3.5" />
                       Add to Request ({cartItems.length + 1} items)

@@ -519,16 +519,19 @@ export function StreamTriage() {
     });
   }, [setExpandedSections]);
 
-  // ── Handle claim ──
   const handleClaim = useCallback(async (leadId?: string) => {
     const lead = leadId ? leadsRef.current.find(l => l.id === leadId) : activeLeadRef.current;
     if (!lead?.conversationId) return;
     try {
-      const endpoint = lead.pendingOrderAmount !== null && lead.pendingOrderAmount > 0
+      const primaryEndpoint = lead.pendingOrderAmount !== null && lead.pendingOrderAmount > 0
         ? `/api/leads/${lead.id}/claim-pending-order`
         : `/api/leads/${lead.id}/assign`;
-      const res = await authedFetch(endpoint, { method: "POST" });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || "Failed to claim"); }
+      let res = await authedFetch(primaryEndpoint, { method: "POST" });
+      if (!res.ok) {
+        // Resilient fallback to general assign endpoint
+        res = await authedFetch(`/api/leads/${lead.id}/assign`, { method: "POST" });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || "Failed to claim"); }
+      }
       toast.success(`Claimed ${lead.name || lead.contact}`);
       setCurrentIndex(prev => prev + 1);
       setSelectedLeadId(null);

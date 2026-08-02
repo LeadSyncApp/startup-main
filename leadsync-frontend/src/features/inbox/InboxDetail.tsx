@@ -9,7 +9,7 @@ interface InboxDetailProps {
   leadId?: string;
   showBackButton?: boolean;
 }
-import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe, Menu, Plus, CreditCard, Copy, Zap, MoreVertical, Eraser, Trash2 } from "lucide-react";
+import { ArrowLeft, Send, Loader2, AlertTriangle, RefreshCw, MessageCircle, Instagram, Globe, Menu, Plus, CreditCard, Copy, Zap, MoreVertical, Eraser, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { authedFetch } from "../../api/client";
 import { onEvent } from "../../lib/socketClient";
@@ -601,8 +601,8 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
       const simKey = orderId || "deferred_payload";
 
       return (
-        <div key={msg.id} className={`flex ${isClient ? "justify-start" : "justify-end"} py-2`}>
-          <div className="max-w-[85%] sm:max-w-[75%] p-4 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-[var(--app-surface)] to-[var(--app-surface-alt)] shadow-lg text-[var(--app-text)]">
+        <div key={msg.id} className={`flex ${isClient ? "justify-start" : "justify-end"} py-2 min-w-0 max-w-full`}>
+          <div className="max-w-[85%] sm:max-w-[75%] min-w-0 p-4 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-[var(--app-surface)] to-[var(--app-surface-alt)] shadow-lg text-[var(--app-text)] [overflow-wrap:anywhere] break-words">
             <div className="flex items-center justify-between gap-2 border-b border-[var(--app-border)] pb-2 mb-3">
               <div className="flex items-center gap-2">
                 <CreditCard className="h-4 w-4 text-brand-saffron" />
@@ -617,7 +617,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
               </span>
             </div>
 
-            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words font-medium text-[var(--app-text)] mb-3">
+            <p className="text-sm leading-relaxed whitespace-pre-wrap break-all [overflow-wrap:anywhere] font-medium text-[var(--app-text)] mb-3">
               {displayContent}
             </p>
 
@@ -661,8 +661,8 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
     }
 
     return (
-      <div key={msg.id} className={`flex ${isClient ? "justify-start" : "justify-end"} py-1`}>
-        <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl border ${
+      <div key={msg.id} className={`flex ${isClient ? "justify-start" : "justify-end"} py-1 min-w-0 max-w-full`}>
+        <div className={`max-w-[85%] sm:max-w-[75%] min-w-0 px-4 py-2.5 rounded-2xl border [overflow-wrap:anywhere] ${
           isFailed
             ? "bg-rose-500/10 border-rose-500/30 text-rose-200"
             : isClient
@@ -689,7 +689,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
               </span>
             )}
           </div>
-          <p className="text-sm leading-[1.6] whitespace-pre-wrap break-words mt-1 mb-1 text-[var(--app-text)]">{msg.content}</p>
+          <p className="text-sm leading-[1.6] whitespace-pre-wrap break-all [overflow-wrap:anywhere] mt-1 mb-1 text-[var(--app-text)]">{msg.content}</p>
           {msg.deliveryError && (
             <p className="text-[10px] font-mono text-rose-400/70 mt-0 italic">{msg.deliveryError}</p>
           )}
@@ -714,115 +714,119 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
   };
 
   return (
-    <div className="flex h-full w-full min-h-0 overflow-hidden">
+    <div className="flex h-full w-full min-h-0 overflow-hidden relative">
       <div className="flex-1 flex flex-col h-full min-h-0 transition-all duration-200">
       {/* Header */}
-      <div className="flex items-center gap-4 px-4 py-4 border-b border-[var(--app-border)] bg-app-surface">
+      <div className="flex items-center justify-between gap-2 sm:gap-4 px-3 sm:px-4 py-3 sm:py-4 border-b border-[var(--app-border)] bg-app-surface min-w-0 shrink-0">
         {showBackButton && (
-          <button onClick={() => navigate("/inbox")} className="p-2 rounded-xl hover:bg-[var(--app-bg-soft)] border border-[var(--app-border)] transition cursor-pointer">
+          <button onClick={() => navigate("/inbox")} className="p-2 rounded-xl hover:bg-[var(--app-bg-soft)] border border-[var(--app-border)] transition cursor-pointer shrink-0">
             <ArrowLeft className="h-4 w-4 text-app-text-muted" />
           </button>
         )}
         <div className="flex-1 min-w-0">
-          <h2 className="text-base font-black text-app-text truncate">{customerDisplayName}</h2>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <h2 className="text-sm sm:text-base font-black text-app-text truncate">{customerDisplayName}</h2>
+          <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap overflow-hidden">
             {customerPhone && customerPhone !== customerDisplayName && (
-              <span className="text-[10px] text-[var(--app-text-muted)] font-mono">{customerPhone}</span>
+              <span className="text-[10px] text-[var(--app-text-muted)] font-mono truncate">{customerPhone}</span>
             )}
-            <Badge variant="neutral" className="flex items-center gap-1">
+            <Badge variant="neutral" className="flex items-center gap-1 shrink-0">
               <ChannelIcon className="h-3 w-3" />
               {detail.channel}
             </Badge>
-            <Badge variant={STATUS_VARIANT[detail.status?.toUpperCase()] || "neutral"}>
+            <Badge variant={STATUS_VARIANT[detail.status?.toUpperCase()] || "neutral"} className="shrink-0">
               {detail.status}
             </Badge>
           </div>
         </div>
-        {/* Done button - only show in YOU mode */}
-        {mode === "YOU" && (
-          <button
-            onClick={() => setShowResolveConfirm(true)}
-            className="px-2 py-0.5 text-[10px] font-black rounded border border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/25 transition cursor-pointer"
-          >
-            Done
-          </button>
-        )}
-        {/* AI/You Mode Toggle Pill */}
-        <div className="flex items-center gap-1">
-          <span
-            onClick={() => handleModeToggle("AI")}
-            className={`text-[10px] font-black px-2.5 py-1 rounded-l-md border cursor-pointer transition ${
-              mode === "AI"
-                ? "bg-[var(--brand-saffron)] text-[var(--app-bg)] border-[var(--brand-saffron)]"
-                : "bg-[var(--app-surface-alt)] text-[var(--app-text-muted)] border-[var(--app-border)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-soft)]"
-            }`}
-          >
-            AI
-          </span>
-          <span
-            onClick={() => handleModeToggle("YOU")}
-            className={`text-[10px] font-black px-2.5 py-1 rounded-r-md border cursor-pointer transition ${
-              mode === "YOU"
-                ? "bg-[var(--brand-saffron)] text-[var(--app-bg)] border-[var(--brand-saffron)]"
-                : "bg-[var(--app-surface-alt)] text-[var(--app-text-muted)] border-[var(--app-border)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-soft)]"
-            }`}
-          >
-            You
-          </span>
-        </div>
-        {/* Panel toggle button */}
-        <button
-          onClick={() => setPanelOpen(!panelOpen)}
-          className={`p-1.5 rounded-lg border transition cursor-pointer ${
-            panelOpen
-              ? "bg-[var(--app-surface-alt)] border-[var(--app-border-strong)] text-[var(--app-text)]"
-              : "bg-[var(--app-surface-alt)] border-[var(--app-border)] text-[var(--app-text-muted)] hover:bg-[var(--app-bg-soft)]"
-          }`}
-          title="Customer details"
-        >
-          <Menu className="h-4 w-4" />
-        </button>
 
-        {/* Options / Kebab Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setShowKebabMenu(!showKebabMenu)}
-            className={`p-1.5 rounded-lg border transition cursor-pointer ${
-              showKebabMenu
-                ? "bg-[var(--app-surface-alt)] border-[var(--app-border-strong)] text-[var(--app-text)]"
-                : "bg-[var(--app-surface-alt)] border-[var(--app-border)] text-[var(--app-text-muted)] hover:bg-[var(--app-bg-soft)] text-[var(--app-text)]"
-            }`}
-            title="Conversation options"
-          >
-            <MoreVertical className="h-4 w-4" />
-          </button>
-
-          {showKebabMenu && (
-            <div
-              className="absolute right-0 mt-2 w-52 bg-[var(--app-surface)] border border-[var(--app-border)] rounded-xl shadow-xl z-50 py-1 overflow-hidden"
-              onClick={() => setShowKebabMenu(false)}
+        {/* Right Controls Container - Always shrink-0 so it NEVER squishes or wraps into the customer title */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Done button - only show in YOU mode */}
+          {mode === "YOU" && (
+            <button
+              onClick={() => setShowResolveConfirm(true)}
+              className="px-2 py-0.5 text-[10px] font-black rounded border border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/25 transition cursor-pointer shrink-0"
             >
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="w-full px-3 py-2 text-xs font-bold text-[var(--app-text)] hover:bg-[var(--app-surface-alt)] flex items-center gap-2.5 transition text-left cursor-pointer"
-              >
-                <Eraser className="h-3.5 w-3.5 text-amber-500" />
-                <span>Clear Messages</span>
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="w-full px-3 py-2 text-xs font-bold text-rose-500 hover:bg-rose-500/10 flex items-center gap-2.5 transition text-left cursor-pointer border-t border-[var(--app-border)]"
-              >
-                <Trash2 className="h-3.5 w-3.5 text-rose-500" />
-                <span>Delete Conversation</span>
-              </button>
-            </div>
+              Done
+            </button>
           )}
+          {/* AI/You Mode Toggle Pill */}
+          <div className="flex items-center shrink-0 select-none">
+            <span
+              onClick={() => handleModeToggle("AI")}
+              className={`text-[10px] font-black px-2.5 py-1 rounded-l-md border cursor-pointer transition ${
+                mode === "AI"
+                  ? "bg-[var(--brand-saffron)] text-[var(--app-bg)] border-[var(--brand-saffron)]"
+                  : "bg-[var(--app-surface-alt)] text-[var(--app-text-muted)] border-[var(--app-border)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-soft)]"
+              }`}
+            >
+              AI
+            </span>
+            <span
+              onClick={() => handleModeToggle("YOU")}
+              className={`text-[10px] font-black px-2.5 py-1 rounded-r-md border border-l-0 cursor-pointer transition ${
+                mode === "YOU"
+                  ? "bg-[var(--brand-saffron)] text-[var(--app-bg)] border-[var(--brand-saffron)]"
+                  : "bg-[var(--app-surface-alt)] text-[var(--app-text-muted)] border-[var(--app-border)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-soft)]"
+              }`}
+            >
+              You
+            </span>
+          </div>
+          {/* Panel toggle button */}
+          <button
+            onClick={() => setPanelOpen(!panelOpen)}
+            className={`p-1.5 rounded-lg border transition cursor-pointer shrink-0 ${
+              panelOpen
+                ? "bg-[var(--app-surface-alt)] border-[var(--app-border-strong)] text-[var(--app-text)]"
+                : "bg-[var(--app-surface-alt)] border-[var(--app-border)] text-[var(--app-text-muted)] hover:bg-[var(--app-bg-soft)]"
+            }`}
+            title="Customer details"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+
+          {/* Options / Kebab Menu */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setShowKebabMenu(!showKebabMenu)}
+              className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                showKebabMenu
+                  ? "bg-[var(--app-surface-alt)] border-[var(--app-border-strong)] text-[var(--app-text)]"
+                  : "bg-[var(--app-surface-alt)] border-[var(--app-border)] text-[var(--app-text-muted)] hover:bg-[var(--app-bg-soft)] text-[var(--app-text)]"
+              }`}
+              title="Conversation options"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+
+            {showKebabMenu && (
+              <div
+                className="absolute right-0 mt-2 w-52 bg-[var(--app-surface)] border border-[var(--app-border)] rounded-xl shadow-xl z-50 py-1 overflow-hidden"
+                onClick={() => setShowKebabMenu(false)}
+              >
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className="w-full px-3 py-2 text-xs font-bold text-[var(--app-text)] hover:bg-[var(--app-surface-alt)] flex items-center gap-2.5 transition text-left cursor-pointer"
+                >
+                  <Eraser className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Clear Messages</span>
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="w-full px-3 py-2 text-xs font-bold text-rose-500 hover:bg-rose-500/10 flex items-center gap-2.5 transition text-left cursor-pointer border-t border-[var(--app-border)]"
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                  <span>Delete Conversation</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto py-4 px-4 gap-1 flex flex-col">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-4 gap-1 flex flex-col min-w-0">
         {detail.messages.length === 0 && (
           <div className="text-center text-xs text-[var(--app-text-muted)] py-8">No messages yet. Say hello!</div>
         )}
@@ -854,8 +858,8 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
       )}
 
       {/* Input */}
-      <div className="p-3 border-t border-[var(--app-border)]">
-        <div className="flex gap-2 items-center">
+      <div className="p-3 border-t border-[var(--app-border)] min-w-0 shrink-0">
+        <div className="flex gap-2 items-center min-w-0">
           <button
             onClick={() => setShowProductPicker(true)}
             className="p-2 rounded-xl bg-[var(--app-surface-alt)] border border-[var(--app-border)] hover:bg-[var(--app-bg-soft)] transition cursor-pointer shrink-0"
@@ -876,7 +880,7 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
             placeholder={sending ? "Sending..." : "Type a reply..."}
             disabled={sending}
-            className="flex-1 input-field"
+            className="flex-1 min-w-0 input-field"
           />
           <button
             onClick={() => handleSend()}
@@ -915,12 +919,12 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
       </div>
 
       {panelOpen && leadId && (
-        <div className="w-[320px] shrink-0 border-l border-[var(--app-border)] h-full overflow-y-auto bg-app-surface">
-          {/* Panel tabs */}
-          <div className="flex border-b border-[var(--app-border)]">
+        <div className="w-full sm:w-[320px] shrink-0 border-l border-[var(--app-border)] h-full overflow-y-auto bg-app-surface absolute right-0 top-0 bottom-0 z-30 2xl:relative 2xl:z-auto shadow-2xl 2xl:shadow-none transition-all duration-200">
+          {/* Panel header & tabs */}
+          <div className="flex items-center border-b border-[var(--app-border)]">
             <button
               onClick={() => setPanelTab("details")}
-              className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+              className={`flex-1 px-3 py-2.5 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
                 panelTab === "details"
                   ? "bg-[var(--app-surface-alt)] text-[var(--app-text)] border-b-2 border-brand-saffron"
                   : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
@@ -930,13 +934,20 @@ export function InboxDetail({ leadId: propLeadId, showBackButton = true }: Inbox
             </button>
             <button
               onClick={() => setPanelTab("ai")}
-              className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+              className={`flex-1 px-3 py-2.5 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
                 panelTab === "ai"
                   ? "bg-[var(--app-surface-alt)] text-[var(--app-text)] border-b-2 border-brand-saffron"
                   : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
               }`}
             >
               AI Suggestion
+            </button>
+            <button
+              onClick={() => setPanelOpen(false)}
+              className="p-2 text-[var(--app-text-muted)] hover:text-[var(--app-text)] transition cursor-pointer 2xl:hidden"
+              title="Close panel"
+            >
+              <X className="h-4 w-4" />
             </button>
           </div>
 

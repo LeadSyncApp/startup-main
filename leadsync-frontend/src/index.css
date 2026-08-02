@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+/* Fonts are loaded once, in index.html (Fraunces + IBM Plex Sans + IBM Plex Mono).
+   The former @import here pulled Inter and Plus Jakarta Sans, which nothing on
+   the site actually uses, plus a second copy of a mono face. Removed. */
 
 @tailwind base;
 @tailwind components;
@@ -13,7 +15,7 @@
     /* Font stack */
     --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
     --font-display: "Fraunces", "IBM Plex Sans", serif;
-    --font-mono: "JetBrains Mono", monospace;
+    --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
     /* Primary Brand Palette - Light Mode */
     --brand-navy: #D36B46;
@@ -30,12 +32,12 @@
     --app-text: #1B2421;            /* Deep spruce green text */
     --text-primary: #1B2421;
     --text-secondary: #3A4B46;
-    --app-text-muted: #5E706B;
+    --app-text-muted: #5A6C67;
     --app-border: #d8dedb;
     --app-border-strong: #c3cdc8;
 
     /* Status colors */
-    --app-primary: #D36B46;
+    --app-primary: #A74B2A;
     --app-primary-strong: #b9502b;
     --app-primary-soft: rgba(211, 107, 70, 0.06);
     --success-green: #86C232;       /* Pistachio green - success/money states only */
@@ -73,6 +75,23 @@
     --orchid: #D36B46;
     --signal: #86C232;
     --brick: #a63232;
+
+    /* ── Landing story: backgrounds warm up as the story progresses ── */
+    --story-bg-0: #faf7f2;
+    --story-bg-1: #f9f3ea;
+    --story-bg-2: #f6efe4;
+    --story-bg-3: #f2ebdd;
+    --story-bg-4: #eee6d6;
+    --story-bg-5: #e9e0cd;
+
+    /* Phone chassis — a physical object, so it stays dark in both themes */
+    --phone-bezel: #0F1614;
+    --phone-shadow:
+      0 42px 80px -24px rgba(27, 36, 33, 0.42),
+      0 14px 34px -14px rgba(27, 36, 33, 0.28);
+
+    /* Real depth. The existing shadow scale tops out near-invisible. */
+    --app-shadow-xl: 0 28px 60px -22px rgba(27, 36, 33, 0.22), 0 8px 20px -12px rgba(27, 36, 33, 0.14);
   }
 
   /* Dark mode — Deep spruce green base */
@@ -95,12 +114,12 @@
     --app-text: #F4F9F4;            /* Warm off-white/cream text */
     --text-primary: #F4F9F4;
     --text-secondary: #C4D1C4;
-    --app-text-muted: #8FA68F;
+    --app-text-muted: #96AB96;
     --app-border: rgba(244, 249, 244, 0.15);      /* Low opacity cream/off-white */
     --app-border-strong: rgba(244, 249, 244, 0.25);
 
     /* Status colors */
-    --app-primary: #D36B46;
+    --app-primary: #E29174;
     --app-primary-strong: #E48F71;
     --app-primary-soft: rgba(211, 107, 70, 0.12);
     --success-green: #86C232;       /* Pistachio green */
@@ -138,6 +157,21 @@
     --orchid: #D36B46;
     --signal: #86C232;
     --brick: #e05e5e;
+
+    /* ── Landing story: same warming progression, spruce side ── */
+    --story-bg-0: #1B2421;
+    --story-bg-1: #1F2A26;
+    --story-bg-2: #23302B;
+    --story-bg-3: #273630;
+    --story-bg-4: #2B3B35;
+    --story-bg-5: #30423B;
+
+    --phone-bezel: #0B100E;
+    --phone-shadow:
+      0 42px 80px -24px rgba(0, 0, 0, 0.66),
+      0 14px 34px -14px rgba(0, 0, 0, 0.5);
+
+    --app-shadow-xl: 0 28px 60px -22px rgba(0, 0, 0, 0.6), 0 8px 20px -12px rgba(0, 0, 0, 0.45);
   }
 
   body {
@@ -161,6 +195,22 @@
   /* Remove forced italic globally */
   input, textarea, select, button {
     font-family: var(--font-sans);
+  }
+
+  /* Marketing anchor targets must clear the 64px sticky nav */
+  #how-it-works,
+  #features,
+  #who-its-for {
+    scroll-margin-top: 4rem;
+  }
+
+  /* Smooth anchor scrolling, scoped to the marketing page only (it is the
+     one page containing #how-it-works) so it can't interfere with the
+     dashboard's programmatic/virtualised scrolling. */
+  @media (prefers-reduced-motion: no-preference) {
+    html:has(#how-it-works) {
+      scroll-behavior: smooth;
+    }
   }
 
   /* Focus ring — accessible */
@@ -275,6 +325,13 @@
     background-color: var(--app-border);
   }
 
+  /* Translucent marketing nav. Two declarations on purpose: the first is the
+     opaque fallback for engines without color-mix(). */
+  .marketing-nav-bg {
+    background-color: var(--app-bg);
+    background-color: color-mix(in srgb, var(--app-bg) 88%, transparent);
+  }
+
   /* Container */
   .page-container {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6;
@@ -373,6 +430,14 @@
   .fade-in-page {
     animation: fadeInPage 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
+
+  /* Fraunces' character lives on its SOFT and WONK axes. Headings on the
+     marketing page opt in; the app UI stays neutral. No-op if the variable
+     font hasn't loaded. */
+  .display-soft {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 144, "SOFT" 48, "WONK" 1;
+  }
 }
 
 @keyframes slideUp {
@@ -409,6 +474,11 @@
     transform: translate(25px, 20px) scale(1.08);
     opacity: calc(var(--blob-opacity) * 1.15);
   }
+}
+
+@keyframes storyTypingDot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-3px); opacity: 1; }
 }
 
 @keyframes fadeInPage {

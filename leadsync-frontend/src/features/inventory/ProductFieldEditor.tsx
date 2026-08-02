@@ -165,21 +165,21 @@ export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }:
   };
 
   return (
-    <div data-tour="product-fields" className="p-4 bg-slate-950 rounded-2xl border border-slate-900 shadow-2xl selection:bg-indigo-500/10 text-xs">
+    <div data-tour="product-fields" className="p-4 bg-app-surface rounded-2xl border border-app-border shadow-md-custom selection:bg-app-primary-soft text-xs">
       {/* Upper bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-900 pb-4 mb-5 gap-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-app-border pb-4 mb-5 gap-3">
         <div>
-          <h2 className="text-sm font-black text-slate-200 uppercase tracking-widest font-mono flex items-center gap-2">
-            <Braces className="h-4.5 w-4.5 text-cyan-400" />
+          <h2 className="text-sm font-black text-app-text uppercase tracking-widest font-mono flex items-center gap-2">
+            <Braces className="h-4.5 w-4.5 text-app-primary" />
             Product Field Definitions
           </h2>
-          <p className="text-[11px] text-slate-500 mt-0.5">
+          <p className="text-[11px] text-app-text-muted mt-0.5">
             {companyId
               ? "Define custom fields for products and variants. These fields will appear when adding or editing inventory."
               : "Define custom fields for your products. These fields will be saved when you complete setup."}
           </p>
         </div>
-        <span className="text-[10px] font-mono font-black text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-2 py-0.5 rounded">
+        <span className="text-[10px] font-mono font-black text-app-primary bg-app-primary-soft border border-app-border px-2 py-0.5 rounded">
           {companyId ? "INVENTORY SCHEMA" : "DRAFT MODE"}
         </span>
       </div>
@@ -187,29 +187,29 @@ export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }:
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Form declaration */}
         <form data-tour="product-fields-form" onSubmit={handleAddField} className="lg:col-span-4 space-y-4 font-mono">
-          <h3 className="font-extrabold text-[10px] uppercase tracking-wider text-slate-400 flex items-center gap-1.5 pb-2 border-b border-slate-900">
-            <Layers className="h-4 w-4 text-slate-500" />
+          <h3 className="font-extrabold text-[10px] uppercase tracking-wider text-app-text-muted flex items-center gap-1.5 pb-2 border-b border-app-border">
+            <Layers className="h-4 w-4 text-app-text-muted" />
             Add New Field
           </h3>
 
           <div className="space-y-1">
-            <label className="text-[9px] text-slate-500 uppercase block font-extrabold">Field Name</label>
+            <label className="text-[9px] text-app-text-muted uppercase block font-extrabold">Field Name</label>
             <input
               type="text"
               required
               placeholder="e.g. brand, color, size"
               value={newFieldName}
               onChange={(e) => setNewFieldName(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 placeholder-slate-700 focus:outline-none"
+              className="input-field"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-[9px] text-slate-500 uppercase block font-extrabold">Field Type</label>
+            <label className="text-[9px] text-app-text-muted uppercase block font-extrabold">Field Type</label>
             <select
               value={newFieldType}
               onChange={(e) => setNewFieldType(e.target.value as any)}
-              className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none"
+              className="input-field"
             >
               <option value="text">Text</option>
               <option value="number">Number</option>
@@ -219,11 +219,11 @@ export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }:
           </div>
 
           <div className="space-y-1">
-            <label className="text-[9px] text-slate-500 uppercase block font-extrabold">Applies To</label>
+            <label className="text-[9px] text-app-text-muted uppercase block font-extrabold">Applies To</label>
             <select
               value={newFieldAppliesTo}
               onChange={(e) => setNewFieldAppliesTo(e.target.value as any)}
-              className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none"
+              className="input-field"
             >
               <option value="product">Product</option>
               <option value="variant">Variant</option>
@@ -232,30 +232,30 @@ export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }:
 
           {newFieldType === "select" && (
             <div className="space-y-1">
-              <label className="text-[9px] text-slate-500 uppercase block font-extrabold">Options (comma-separated)</label>
+              <label className="text-[9px] text-app-text-muted uppercase block font-extrabold">Options (comma-separated)</label>
               <input
                 type="text"
                 placeholder="e.g. Red, Blue, Green"
                 value={newFieldOptions}
                 onChange={(e) => setNewFieldOptions(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 placeholder-slate-700 focus:outline-none"
+                className="input-field"
               />
             </div>
           )}
 
           <div className="space-y-1">
-            <label className="text-[9px] text-slate-500 uppercase block font-extrabold">Sort Order</label>
+            <label className="text-[9px] text-app-text-muted uppercase block font-extrabold">Sort Order</label>
             <input
               type="number"
               value={newFieldSortOrder}
               onChange={(e) => setNewFieldSortOrder(parseInt(e.target.value) || 0)}
-              className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none"
+              className="input-field"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full bg-slate-900 hover:bg-slate-800 font-extrabold px-3 py-2 border border-slate-800 hover:border-slate-700 text-cyan-400 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer"
+            className="w-full bg-app-surface-alt hover:bg-app-primary-soft font-extrabold px-3 py-2 border border-app-border hover:border-app-border-strong text-app-primary rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
           >
             <Plus className="h-4 w-4" />
             <span>Add Field</span>
@@ -264,18 +264,18 @@ export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }:
 
         {/* Catalog render table view list */}
         <div className="lg:col-span-8 space-y-4">
-          <h3 className="font-extrabold font-mono text-[10px] uppercase tracking-wider text-slate-400 flex items-center gap-1.5 pb-2 border-b border-slate-900">
-            <ArrowRight className="h-4 w-4 text-slate-500" />
+          <h3 className="font-extrabold font-mono text-[10px] uppercase tracking-wider text-app-text-muted flex items-center gap-1.5 pb-2 border-b border-app-border">
+            <ArrowRight className="h-4 w-4 text-app-text-muted" />
             Active Product Fields ({fields.length} Fields Defined)
           </h3>
 
           {loading ? (
-            <p className="text-slate-500 text-[11px]">Loading fields...</p>
+            <p className="text-app-text-muted text-[11px]">Loading fields...</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-[11px] font-mono">
                 <thead>
-                  <tr className="border-b border-slate-900 text-slate-500 text-[9px] uppercase tracking-wider">
+                  <tr className="border-b border-app-border text-app-text-muted text-[9px] uppercase tracking-wider">
                     <th className="py-2.5">Field Name</th>
                     <th className="py-2.5">Type</th>
                     <th className="py-2.5">Applies To</th>
@@ -284,29 +284,29 @@ export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }:
                     <th className="py-2.5 text-right">Delete</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-900 relative">
+                <tbody className="divide-y divide-app-border relative">
                   {fields.map((field) => (
-                    <tr key={field.id} className="text-slate-300 hover:bg-slate-900/10 transition-colors">
+                    <tr key={field.id} className="text-app-text hover:bg-app-surface-alt transition-colors">
                       <td className="py-3 pr-2">
-                        <span className="font-extrabold text-white text-xs">{field.fieldName}</span>
+                        <span className="font-extrabold text-app-text text-xs">{field.fieldName}</span>
                       </td>
-                      <td className="py-3 pr-2 text-indigo-400 text-[10px] font-black uppercase">
+                      <td className="py-3 pr-2 text-app-primary text-[10px] font-black uppercase">
                         {field.fieldType}
                       </td>
-                      <td className="py-3 pr-2 text-slate-400 italic capitalize">
+                      <td className="py-3 pr-2 text-app-text-muted italic capitalize">
                         {field.appliesTo}
                       </td>
-                      <td className="py-3 pr-2 text-slate-500 text-[10px]">
+                      <td className="py-3 pr-2 text-app-text-muted text-[10px]">
                         {field.options.length > 0 ? field.options.join(", ") : "—"}
                       </td>
-                      <td className="py-3 pr-2 text-slate-500">
+                      <td className="py-3 pr-2 text-app-text-muted">
                         {field.sortOrder}
                       </td>
                       <td className="py-3 text-right">
                         <button
                           type="button"
                           onClick={() => handleRemoveField(field.id, field.fieldName)}
-                          className="text-slate-600 transition-colors cursor-pointer hover:text-rose-500"
+                          className="text-app-text-muted transition-colors cursor-pointer hover:text-[var(--danger-red)]"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -318,10 +318,10 @@ export function ProductFieldEditor({ companyId: propCompanyId, onFieldsChange }:
             </div>
           )}
 
-          <div className="p-3 bg-indigo-500/5 rounded-xl border border-indigo-500/10 flex gap-2">
-            <BadgeInfo className="h-4.5 w-4.5 text-indigo-400 shrink-0 mt-0.5" />
-            <p className="text-[10px] text-slate-400 leading-relaxed font-sans">
-              <span className="text-white font-mono font-extrabold block uppercase tracking-widest text-[9px] mb-1">
+          <div className="p-3 bg-app-primary-soft rounded-xl border border-app-border flex gap-2">
+            <BadgeInfo className="h-4.5 w-4.5 text-app-primary shrink-0 mt-0.5" />
+            <p className="text-[10px] text-app-text-muted leading-relaxed font-sans">
+              <span className="text-app-text font-mono font-extrabold block uppercase tracking-widest text-[9px] mb-1">
                 Product Field Guide
               </span>
               Fields marked as "product" apply to the entire product. Fields marked as "variant" apply to individual variants (e.g., size, color). Select-type fields will show a dropdown when entering inventory.
