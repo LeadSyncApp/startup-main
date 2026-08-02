@@ -19,6 +19,7 @@ import { orderWorkflowService } from "../../services/workflow/orderWorkflow.serv
 import { queueProvider } from "../../services/infrastructure/queue-provider/queue-provider.factory";
 import { PDF_JOB_NAME } from "../../services/infrastructure/pgboss/jobs/pdf.job";
 import { businessNotificationService } from "../../services/infrastructure/businessNotification.service";
+import { cacheService } from "../../services/infrastructure/cache.service";
 
 const router = Router();
 
@@ -65,13 +66,23 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
         if (!dbProduct) return null;
 
         const qty = parseInt(p.quantity) || 1;
-        let price = dbProduct.basePrice;
+        let price = Number(dbProduct.price ?? dbProduct.basePrice ?? 0);
+        if (!price && dbProduct.basePriceInSubunits) {
+          price = Number(dbProduct.basePriceInSubunits) > 10000 
+            ? Number(dbProduct.basePriceInSubunits) / 100 
+            : Number(dbProduct.basePriceInSubunits);
+        }
         let variantAttr: string | null = null;
         
-        if (p.variantId) {
+        if (p.variantId && dbProduct.variants) {
           const variant = dbProduct.variants.find((v: any) => v.id === p.variantId);
           if (variant) {
-            if (variant.price !== null) price = variant.price;
+            if (variant.price !== null && variant.price !== undefined) {
+              price = Number(variant.price);
+            } else if (variant.priceInSubunits !== null && variant.priceInSubunits !== undefined) {
+              const vPrice = Number(variant.priceInSubunits);
+              price = vPrice > 10000 ? vPrice / 100 : vPrice;
+            }
             variantAttr = variant.attributeValue;
           }
         }
@@ -85,7 +96,9 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
           name: variantAttr ? `${dbProduct.name} - ${variantAttr}` : dbProduct.name,
           quantity: qty,
           price: price,
-          cogs: 0
+          priceInSubunits: BigInt(Math.round((price || 0) * 100)),
+          cogs: 0,
+          cogsInSubunits: 0n
         };
       }).filter(Boolean);
     } else if (customAmount) {
@@ -95,7 +108,9 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
         name: "Custom Payment",
         quantity: 1,
         price: totalAmount,
-        cogs: 0
+        priceInSubunits: BigInt(Math.round(totalAmount * 100)),
+        cogs: 0,
+        cogsInSubunits: 0n
       }];
     }
 
@@ -137,24 +152,78 @@ router.post("/payment-request", authMiddleware, async (req: AuthRequest, res: Re
     const cleanNote = note || `Payment for order from ${conv?.company?.name || "store"}`;
     const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(upiName)}&am=${totalAmount}&cu=INR&tn=${encodeURIComponent(cleanNote)}`;
 
-    // TRUE DEFERRED ORDER CREATION:
-    // Do NOT create an Order row in DB at link generation time.
-    // Return a lightweight payment intent payload. The Order row is ONLY created upon payment confirmation.
+    // Create or update PENDING order for this conversation so it immediately appears in Wait for Payment
+    let pendingOrder: any = await prisma.order.findFirst({
+      where: { conversationId, companyId, status: OrderStatus.PENDING },
+      include: { orderItems: true }
+    });
+
+    if (!pendingOrder) {
+      pendingOrder = await prisma.order.create({
+        data: {
+          companyId,
+          conversationId,
+          leadId: leadId!,
+          amount: totalAmount,
+          amountInSubunits: BigInt(Math.round(totalAmount * 100)),
+          status: OrderStatus.PENDING,
+          summary: note || `Payment Request for ${orderItemsData.length} item(s)`,
+          source: "MANUAL",
+          processedById: req.user!.userId,
+          metadata: {
+            upiLink,
+            isPaymentRequest: true,
+            catalogBased: hasProducts
+          },
+          orderItems: {
+            create: orderItemsData.map((item: any) => ({
+              companyId,
+              sku: item.sku || null,
+              name: item.name,
+              quantity: item.quantity || 1,
+              price: item.price || 0,
+              priceInSubunits: BigInt(Math.round((item.price || 0) * 100)),
+              cogs: 0,
+              cogsInSubunits: 0n
+            }))
+          }
+        },
+        include: { orderItems: true }
+      });
+      emitToCompany(companyId, "order_created", pendingOrder);
+    } else {
+      pendingOrder = await prisma.order.update({
+        where: { id: pendingOrder.id },
+        data: {
+          amount: totalAmount,
+          amountInSubunits: BigInt(Math.round(totalAmount * 100)),
+          summary: note || pendingOrder.summary,
+        },
+        include: { orderItems: true }
+      });
+      emitToCompany(companyId, "order_updated", pendingOrder);
+    }
+
+    emitToCompany(companyId, "dashboard_metrics_updated", { refreshNeeded: true });
+
     const paymentPayload = {
       conversationId,
       leadId: leadId!,
       companyId,
       amount: totalAmount,
+      amountInSubunits: Math.round(totalAmount * 100),
       summary: note || `Order for ${orderItemsData.length} item(s)`,
       orderItems: orderItemsData,
       catalogBased: hasProducts,
-      upiLink
+      upiLink,
+      orderId: pendingOrder.id
     };
 
     res.json({
-      message: "Payment request generated (Order creation deferred to payment)",
+      message: "Payment request generated",
       paymentPayload,
-      upiLink
+      upiLink,
+      order: pendingOrder
     });
 
   } catch (error) {
@@ -190,45 +259,74 @@ router.post("/fulfill-payment-request", authMiddleware, async (req: AuthRequest,
         )
       : new Set<string>();
 
-    // 1. Create the Order directly in PAID status upon payment confirmation
-    const order = await prisma.order.create({
-      data: {
-        companyId,
-        conversationId: paymentPayload.conversationId,
-        leadId: paymentPayload.leadId,
-        amount: paymentPayload.amount,
-        status: OrderStatus.PAID,
-        completedAt: null,
-        summary: paymentPayload.summary || "Paid Order",
-        source: "MANUAL",
-        processedById: userId,
-        metadata: {
-          upiLink: paymentPayload.upiLink,
-          isPaymentRequest: true,
-          catalogBased: paymentPayload.catalogBased || false
+    // 1. Atomic: create/update Order + decrement Stock within a single transaction
+    const order = await prisma.$transaction(async (tx) => {
+      const existingPendingOrder = await tx.order.findFirst({
+        where: {
+          conversationId: paymentPayload.conversationId,
+          companyId,
+          status: OrderStatus.PENDING,
         },
-        orderItems: {
-          create: (paymentPayload.orderItems || []).map((item: any) => ({
-            companyId,
-            productId: (item.productId && validProductIds.has(item.productId)) ? item.productId : null,
-            sku: item.sku || null,
-            name: item.name,
-            quantity: item.quantity || 1,
-            price: item.price || 0,
-            cogs: item.cogs || 0
-          }))
-        }
-      },
-      include: {
-        orderItems: true,
-        lead: true
-      }
-    });
+        include: { orderItems: true, lead: true }
+      });
 
-    // 2. Decrement Stock for inventory items
-    await decrementStockForOrder(order.id, companyId).catch(err =>
-      console.error(`❌ [StockDecrement] Failed for order ${order.id}:`, err)
-    );
+      let result: any;
+      if (existingPendingOrder) {
+        result = await tx.order.update({
+          where: { id: existingPendingOrder.id },
+          data: {
+            status: OrderStatus.PAID,
+            amount: paymentPayload.amount || existingPendingOrder.amount,
+            amountInSubunits: BigInt(Math.round(((paymentPayload.amount || existingPendingOrder.amount) || 0) * 100)),
+            processedById: userId,
+            metadata: {
+              ...(existingPendingOrder.metadata as any || {}),
+              upiLink: paymentPayload.upiLink,
+              isPaymentRequest: true,
+              catalogBased: paymentPayload.catalogBased || false
+            }
+          },
+          include: { orderItems: true, lead: true }
+        });
+      } else {
+        result = await tx.order.create({
+          data: {
+            companyId,
+            conversationId: paymentPayload.conversationId,
+            leadId: paymentPayload.leadId,
+            amount: paymentPayload.amount,
+            amountInSubunits: BigInt(Math.round((paymentPayload.amount || 0) * 100)),
+            status: OrderStatus.PAID,
+            completedAt: null,
+            summary: paymentPayload.summary || "Paid Order",
+            source: "MANUAL",
+            processedById: userId,
+            metadata: {
+              upiLink: paymentPayload.upiLink,
+              isPaymentRequest: true,
+              catalogBased: paymentPayload.catalogBased || false
+            },
+            orderItems: {
+              create: (paymentPayload.orderItems || []).map((item: any) => ({
+                companyId,
+                productId: (item.productId && validProductIds.has(item.productId)) ? item.productId : null,
+                sku: item.sku || null,
+                name: item.name,
+                quantity: item.quantity || 1,
+                price: item.price || 0,
+                priceInSubunits: BigInt(Math.round((item.price || 0) * 100)),
+                cogs: item.cogs || 0,
+                cogsInSubunits: BigInt(Math.round((item.cogs || 0) * 100))
+              }))
+            }
+          },
+          include: { orderItems: true, lead: true }
+        });
+      }
+
+      await decrementStockForOrder(result.id, companyId, tx);
+      return result;
+    });
 
     // 3. Queue PDF Invoice generation
     const paymentRef = "PAY_" + Date.now();
@@ -256,6 +354,11 @@ router.post("/fulfill-payment-request", authMiddleware, async (req: AuthRequest,
       emitToConversation(conv.id, "new_message", sysMsg);
       safeEmitConversationUpdate(conv as any, "payment_confirmed", order);
     }
+
+    emitToCompany(companyId, "order_created", order);
+    emitToCompany(companyId, "order_updated", order);
+    emitToCompany(companyId, "dashboard_metrics_updated", { refreshNeeded: true });
+    await cacheService.delete(`dashboard_kpis_${companyId}`).catch(() => {});
 
     businessNotificationService.notifyPaymentStatus({
       companyId,
@@ -333,6 +436,10 @@ router.post("/:id/simulate-success", authMiddleware, async (req: AuthRequest, re
       emitToConversation(conv.id, "new_message", sysMsg);
       safeEmitConversationUpdate(conv as any, "payment_confirmed", updatedOrder);
     }
+
+    emitToCompany(companyId, "order_updated", updatedOrder);
+    emitToCompany(companyId, "dashboard_metrics_updated", { refreshNeeded: true });
+    await cacheService.delete(`dashboard_kpis_${companyId}`).catch(() => {});
 
     res.json({ 
       message: "Payment successfully simulated! Stock has been auto-deducted and invoice queued.", 
@@ -463,51 +570,60 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     if (priority === "URGENT" || isUrgent) initialScore += 50;
     if (amount && amount > 5000) initialScore += 30;
 
-    // Force cast to allow new fields
-    const order = await (prisma.order as any).create({
-      data: {
-        companyId,
-        leadId: conversation.leadId,
-        summary: targetSummary,
-        priority: priority || OrderPriority.NORMAL,
-        status: OrderStatus.NEW,
-        amount: amount ?? 0,
-        approvalStatus: OrderApprovalStatus.PENDING,
-
-        isUrgent: isUrgent || false,
-        priorityScore: initialScore,
-        predictedValue: amount,
-        processedById: (conversation as any).claimedById || req.user!.userId,
-        items: {
-          location: targetLocation,
-          baseSummary: summary,
-          agentName: agentName || (req.user as any)?.firstName || "Agent",
-          city: city || "",
-          state: state || "",
-          isManualLead: true,
-        },
-      },
-      include: {
-        lead: { select: { name: true, contact: true } }
-      }
-    });
-
-    // 🆕 Create relational Order Items (Link to the Master Catalog)
+    // Force cast to allow new fields — wrap Order + OrderItem creation in a
+    // single transaction so a partial failure rolls back the entire order.
     const items = req.body.items;
-    if (items && Array.isArray(items)) {
-      const itemRecords = items.map((item: any) => ({
-        orderId: order.id,
-        productId: item.productId || null,
-        sku: item.sku || null,
-        name: item.name,
-        quantity: Number(item.quantity) || 1,
-        price: Number(item.price) || 0,
-      }));
+    const order = await prisma.$transaction(async (tx) => {
+      const createdOrder = await (tx.order as any).create({
+        data: {
+          companyId,
+          leadId: conversation.leadId,
+          summary: targetSummary,
+          priority: priority || OrderPriority.NORMAL,
+          status: OrderStatus.NEW,
+          amount: amount ?? 0,
+          approvalStatus: OrderApprovalStatus.PENDING,
 
-      await prisma.orderItem.createMany({
-        data: itemRecords
+          isUrgent: isUrgent || false,
+          priorityScore: initialScore,
+          predictedValue: amount,
+          processedById: (conversation as any).claimedById || req.user!.userId,
+          items: {
+            location: targetLocation,
+            baseSummary: summary,
+            agentName: agentName || (req.user as any)?.firstName || "Agent",
+            city: city || "",
+            state: state || "",
+            isManualLead: true,
+          },
+        },
+        include: {
+          lead: { select: { name: true, contact: true } }
+        }
       });
-    }
+
+      // 🆕 Create relational Order Items (Link to the Master Catalog)
+      if (items && Array.isArray(items)) {
+        const itemRecords = items.map((item: any) => {
+          const itemPrice = Number(item.price) || 0;
+          return {
+            orderId: createdOrder.id,
+            productId: item.productId || null,
+            sku: item.sku || null,
+            name: item.name,
+            quantity: Number(item.quantity) || 1,
+            price: itemPrice,
+            priceInSubunits: BigInt(Math.round(itemPrice * 100)),
+          };
+        });
+
+        await tx.orderItem.createMany({
+          data: itemRecords
+        });
+      }
+
+      return createdOrder;
+    });
 
     // 🆕 Update lead with pending order approval state (pendingOrder fields removed from schema)
     // Removed pendingOrder state updates as they no longer exist in schema
@@ -563,13 +679,14 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         whereCondition.processedById = req.user!.userId;
       }
     } else {
-      // Active Board: Include active stages. Unconfirmed PENDING payment request links are excluded until payment is confirmed.
-      const activeStatuses = ["NEW", "CONFIRMED", "PROCESSING", "PREPARING", "READY", "PAID", "SHIPPED", "COMPLETED"];
+      // Active Board: Include active stages including PENDING orders awaiting payment confirmation.
+      const activeStatuses = ["PENDING", "NEW", "CONFIRMED", "PROCESSING", "PREPARING", "READY", "PAID", "SHIPPED", "COMPLETED"];
+      whereCondition.status = { in: activeStatuses };
       if (!can(req.user, "orders.viewAll")) {
-        whereCondition.status = { in: activeStatuses };
-        whereCondition.processedById = req.user!.userId;
-      } else {
-        whereCondition.status = { in: activeStatuses };
+        whereCondition.OR = [
+          { processedById: req.user!.userId },
+          { processedById: null }
+        ];
       }
     }
 
@@ -723,27 +840,28 @@ router.post("/:id/claim", authMiddleware, async (req: AuthRequest, res: Response
       return res.status(403).json({ message: "Only agents can claim orders" });
     }
 
-    // Atomic claim: only if unclaimed
-    const order = await prisma.order.findFirst({
-      where: { 
-        id, 
+    // Atomic claim: single UPDATE with compound WHERE to prevent race condition.
+    // Only one concurrent request can win — the others see count=0.
+    const claimResult = await prisma.order.updateMany({
+      where: {
+        id,
         companyId,
-        processedById: null // Must be unclaimed
-      }
-    });
-
-    if (!order) {
-      return res.status(404).json({ message: "Order not found or already claimed" });
-    }
-
-    // Update with claim
-    const updatedOrder = await prisma.order.update({
-      where: { id },
+        processedById: null, // Must be unclaimed
+      },
       data: {
         processedById: userId,
-        status: OrderStatus.PENDING, // Move to PENDING after claim
-        updatedAt: new Date()
+        status: OrderStatus.PENDING,
+        updatedAt: new Date(),
       },
+    });
+
+    if (claimResult.count === 0) {
+      return res.status(409).json({ message: "Order not found or already claimed" });
+    }
+
+    // Fetch the full order for response and socket events
+    const updatedOrder = await prisma.order.findUnique({
+      where: { id },
       include: {
         lead: { select: { name: true, contact: true } },
         processedBy: { select: { id: true, firstName: true, lastName: true } }
@@ -751,13 +869,15 @@ router.post("/:id/claim", authMiddleware, async (req: AuthRequest, res: Response
     });
 
     // Emit socket events - find conversation via lead for the emit
-    const conv = order.leadId ? await prisma.conversation.findFirst({
-      where: { leadId: order.leadId, lifecycleStatus: 'active' }
+    const conv = updatedOrder?.leadId ? await prisma.conversation.findFirst({
+      where: { leadId: updatedOrder.leadId, lifecycleStatus: 'active' }
     }) : null;
-    if (conv) {
+    if (conv && updatedOrder) {
       safeEmitConversationUpdate(conv, "order_updated", updatedOrder);
     }
-    emitToAgent(userId, "order_claimed", updatedOrder);
+    if (updatedOrder) {
+      emitToAgent(userId, "order_claimed", updatedOrder);
+    }
 
     return res.json(updatedOrder);
   } catch (error: any) {

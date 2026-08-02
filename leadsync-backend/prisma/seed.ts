@@ -1,26 +1,29 @@
 /// <reference types="node" />
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Channel, LeadSegment, ConversationIntent, ConversationStatus, DraftOrderStatus, OrderStatus, OrderApprovalStatus, SourceChannel, OrderPriority, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Seeding demo data...");
+  console.log("🌱 Seeding SaLira pitch demo flow data (Real-time identical flow: Ajay & Deepak)...");
 
-  // Clean existing demo data
-  await prisma.claimLog.deleteMany({ where: { conversationId: { in: ["ls-101", "ls-102", "ls-103", "ls-104"] } } });
-  await prisma.message.deleteMany({ where: { conversationId: { in: ["ls-101", "ls-102", "ls-103", "ls-104"] } } });
-  await prisma.conversation.deleteMany({ where: { id: { in: ["ls-101", "ls-102", "ls-103", "ls-104"] } } });
-  await prisma.lead.deleteMany({ where: { id: { in: ["lead-101", "lead-102", "lead-103", "lead-104"] } } });
-  await prisma.user.deleteMany({ where: { email: { in: ["demo@leadsync.test", "demo.staff@leadsync.test"] } } });
-  await prisma.company.deleteMany({ where: { companyCode: "DEMO001" } });
+  const demoCompanyId = "company-demo-001";
+  const demoCompanyCode = "DEMO001";
 
-  // 1. Create demo company
+  // Clean existing demo company (cascades to all associated leads, conversations, orders, products)
+  console.log("🧹 Cleaning old demo company data...");
+  try {
+    await prisma.company.deleteMany({ where: { companyCode: demoCompanyCode } });
+  } catch (err: any) {
+    console.log("Note during cleanup:", err?.message || err);
+  }
+
+  // 1. Create Demo Company
   const company = await prisma.company.create({
     data: {
-      id: "company-demo-001",
+      id: demoCompanyId,
       name: "Om Sai Silk Boutique (Demo)",
-      companyCode: "DEMO001",
+      companyCode: demoCompanyCode,
       businessName: "Om Sai Silk Boutique",
       businessAddress: "123, Fashion Street, Mumbai, Maharashtra 400001",
       currencySymbol: "₹",
@@ -28,11 +31,14 @@ async function main() {
       timezone: "Asia/Kolkata",
       businessStartHour: 8,
       businessEndHour: 22,
+      telegramConnected: true,
+      telegramBotToken: "mock_telegram_token",
+      telegramBotUsername: "SaLiraDemoBot",
     },
   });
-  console.log(`✅ Created company: ${company.name} (${company.id})`);
+  console.log(`✅ Created Demo Company: ${company.name} (${company.id})`);
 
-  // 2. Create demo owner user
+  // 2. Create Demo Users (Owner & Staff)
   const ownerPassword = await bcrypt.hash("demo1234", 10);
   const owner = await prisma.user.create({
     data: {
@@ -41,17 +47,15 @@ async function main() {
       firstName: "Demo",
       lastName: "Owner",
       passwordHash: ownerPassword,
-      role: "OWNER",
+      role: Role.OWNER,
       companyId: company.id,
       isActive: true,
-      isOnline: false,
+      isAvailable: true,
       onboardingStatus: "ONBOARDED",
       authProvider: "EMAIL",
     },
   });
-  console.log(`✅ Created owner: ${owner.email} (password: demo1234)`);
 
-  // 3. Create demo staff user
   const staffPassword = await bcrypt.hash("staff1234", 10);
   const staff = await prisma.user.create({
     data: {
@@ -60,193 +64,393 @@ async function main() {
       firstName: "Demo",
       lastName: "Staff",
       passwordHash: staffPassword,
-      role: "STAFF",
+      role: Role.STAFF,
       companyId: company.id,
       isActive: true,
-      isOnline: false,
+      isAvailable: true,
       onboardingStatus: "ONBOARDED",
       authProvider: "EMAIL",
     },
   });
-  console.log(`✅ Created staff: ${staff.email} (password: staff1234)`);
+  console.log(`✅ Created Owner (${owner.email}) & Staff (${staff.email})`);
 
-  // 4. Create demo leads
-  const leadsData = [
-    { id: "lead-101", name: "Aarav Mehta", contact: "+919876543210", channel: "WHATSAPP" as const, segment: "VIP" as const, totalSpend: 15000, estimatedValue: 25000, city: "Mumbai", state: "Maharashtra" },
-    { id: "lead-102", name: "Kavya Deshmukh", contact: "+918765432109", channel: "INSTAGRAM" as const, segment: "NEW" as const, totalSpend: 0, estimatedValue: 3000, city: "Pune", state: "Maharashtra" },
-    { id: "lead-103", name: "Vikram Malhotra", contact: "+917654321098", channel: "TELEGRAM" as const, segment: "REGULAR" as const, totalSpend: 8500, estimatedValue: 5000, city: "Delhi", state: "Delhi" },
-    { id: "lead-104", name: "Riya Sen", contact: "+919988776655", channel: "WHATSAPP" as const, segment: "REGULAR" as const, totalSpend: 6200, estimatedValue: 4000, city: "Bengaluru", state: "Karnataka" },
-  ];
-
-  for (const leadData of leadsData) {
-    await prisma.lead.create({
-      data: {
-        id: leadData.id,
-        name: leadData.name,
-        contact: leadData.contact,
-        channel: leadData.channel,
-        segment: leadData.segment,
-        totalSpend: leadData.totalSpend,
-        estimatedValue: leadData.estimatedValue,
-        city: leadData.city,
-        state: leadData.state,
-        companyId: company.id,
-        aiPriority: leadData.segment === "VIP" ? "HIGH" as const : leadData.segment === "REGULAR" ? "MEDIUM" as const : "LOW" as const,
+  // 3. Create Demo Inventory (Banarasi Silk Saree & Chanderi Silk Stole)
+  const sareeProduct = await prisma.inventoryProduct.create({
+    data: {
+      id: "prod-saree-001",
+      companyId: company.id,
+      name: "Banarasi Silk Saree",
+      description: "Handloomed pure Banarasi silk saree with authentic gold zari weave.",
+      sku: "SAREE-BANARASI-01",
+      basePrice: 5800.0,
+      basePriceInSubunits: BigInt(580000),
+      categories: ["Sarees", "Silk", "Bridal"],
+      hasVariants: true,
+      variantAttributeName: "Color",
+      variantAttributeNames: ["Color"],
+      isAvailable: true,
+      isActive: true,
+      variants: {
+        create: [
+          {
+            id: "var-saree-gold",
+            attributeValue: "Royal Gold",
+            attributes: { Color: "Royal Gold" },
+            sku: "SAREE-BANARASI-GOLD",
+            price: 5800.0,
+            priceInSubunits: BigInt(580000),
+            stock: 50,
+            isActive: true,
+          },
+          {
+            id: "var-saree-red",
+            attributeValue: "Crimson Red",
+            attributes: { Color: "Crimson Red" },
+            sku: "SAREE-BANARASI-RED",
+            price: 6200.0,
+            priceInSubunits: BigInt(620000),
+            stock: 35,
+            isActive: true,
+          },
+        ],
       },
-    });
-  }
-  console.log(`✅ Created ${leadsData.length} demo leads`);
+    },
+  });
 
-  // 5. Create demo conversations matching mock data IDs
-  type ConvData = {
-    id: string;
-    channel: "WHATSAPP" | "TELEGRAM" | "INSTAGRAM";
-    leadId: string;
-    mode: "BOT" | "HUMAN";
-    priorityScore: number;
-    intent: "BROWSING" | "ORDERING" | "SUPPORT";
-    status: "OPEN" | "ASSIGNED";
-    assignedToId: string | null;
-    claimedById: string | null;
-    claimExpiresAt: Date | null;
-  };
-  const conversationsData: ConvData[] = [
-    {
-      id: "ls-101",
-      channel: "WHATSAPP",
-      leadId: "lead-101",
-      mode: "BOT",
-      priorityScore: 82,
-      intent: "ORDERING",
-      status: "OPEN",
-      assignedToId: null,
-      claimedById: null,
-      claimExpiresAt: null,
+  const stoleProduct = await prisma.inventoryProduct.create({
+    data: {
+      id: "prod-stole-001",
+      companyId: company.id,
+      name: "Chanderi Silk Stole",
+      description: "Lightweight handwoven Chanderi silk dupatta with subtle gold borders.",
+      sku: "STOLE-CHANDERI-01",
+      basePrice: 1800.0,
+      basePriceInSubunits: BigInt(180000),
+      categories: ["Dupattas", "Silk"],
+      hasVariants: false,
+      isAvailable: true,
+      isActive: true,
     },
-    {
-      id: "ls-102",
-      channel: "INSTAGRAM",
-      leadId: "lead-102",
-      mode: "BOT",
-      priorityScore: 45,
-      intent: "BROWSING",
-      status: "OPEN",
-      assignedToId: null,
-      claimedById: null,
-      claimExpiresAt: null,
-    },
-    {
-      id: "ls-103",
-      channel: "TELEGRAM",
-      leadId: "lead-103",
-      mode: "HUMAN",
-      priorityScore: 28,
-      intent: "SUPPORT",
-      status: "ASSIGNED",
-      assignedToId: null,
-      claimedById: owner.id,
-      claimExpiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 min lease
-    },
-    {
-      id: "ls-104",
-      channel: "WHATSAPP",
-      leadId: "lead-104",
-      mode: "BOT",
-      priorityScore: 22,
-      intent: "BROWSING",
-      status: "OPEN",
-      assignedToId: null,
-      claimedById: null,
-      claimExpiresAt: null,
-    },
-  ];
+  });
+  console.log(`✅ Created Demo Products: ${sareeProduct.name} (₹5,800) & ${stoleProduct.name} (₹1,800)`);
 
-  for (const convData of conversationsData) {
-    await prisma.conversation.create({
-      data: {
-        ...convData,
+  // 4. Create Demo Leads (Normal real-time incoming chat structure, channels: TELEGRAM & WEBSITE)
+  // Lead 1: Ajay (Target Unclaimed Demo Lead on TELEGRAM - clean incoming chat)
+  const leadAjay = await prisma.lead.create({
+    data: {
+      id: "lead-ajay-001",
+      companyId: company.id,
+      name: "Ajay",
+      contact: "+919811223344",
+      channel: Channel.TELEGRAM,
+      segment: LeadSegment.VIP,
+      totalSpend: 18500.0,
+      estimatedValue: 35000.0,
+      city: "New Delhi",
+      state: "Delhi",
+      tags: ["VIP", "High Intent"],
+      aiPriority: "HIGH",
+      pendingOrderAmount: null, // Normal real-time chat without artificial pending order card
+      pendingOrderState: "NONE",
+      pendingOrderClaimedById: null,
+      pendingOrderClaimedAt: null,
+      pendingOrderSummary: null,
+      lastActiveAt: new Date(),
+    },
+  });
+
+  // Lead 2: Deepak (Unclaimed Lead on WEBSITE)
+  const leadDeepak = await prisma.lead.create({
+    data: {
+      id: "lead-deepak-001",
+      companyId: company.id,
+      name: "Deepak",
+      contact: "+919876543210",
+      channel: Channel.WEBSITE,
+      segment: LeadSegment.REGULAR,
+      totalSpend: 6200.0,
+      estimatedValue: 12000.0,
+      city: "Mumbai",
+      state: "Maharashtra",
+      tags: ["Festive Wear"],
+      aiPriority: "HIGH",
+      pendingOrderAmount: null,
+      pendingOrderState: "NONE",
+      lastActiveAt: new Date(Date.now() - 10 * 60 * 1000),
+    },
+  });
+
+  // Lead 3: Ananya (Browsing Lead on WEBSITE)
+  const leadAnanya = await prisma.lead.create({
+    data: {
+      id: "lead-ananya-001",
+      companyId: company.id,
+      name: "Ananya",
+      contact: "+917654321098",
+      channel: Channel.WEBSITE,
+      segment: LeadSegment.NEW,
+      totalSpend: 0,
+      estimatedValue: 2000.0,
+      city: "Bengaluru",
+      state: "Karnataka",
+      tags: ["Browsing"],
+      aiPriority: "LOW",
+      pendingOrderAmount: null,
+      pendingOrderState: "NONE",
+      lastActiveAt: new Date(Date.now() - 60 * 60 * 1000),
+    },
+  });
+
+  // Lead 4: Vikram (Baseline Order Lead on TELEGRAM)
+  const leadVikram = await prisma.lead.create({
+    data: {
+      id: "lead-vikram-001",
+      companyId: company.id,
+      name: "Vikram",
+      contact: "+919988776655",
+      channel: Channel.TELEGRAM,
+      segment: LeadSegment.VIP,
+      totalSpend: 17400.0,
+      estimatedValue: 25000.0,
+      city: "Ahmedabad",
+      state: "Gujarat",
+      tags: ["VIP", "Corporate Buyer"],
+      aiPriority: "HIGH",
+      lastActiveAt: new Date(Date.now() - 120 * 60 * 1000),
+    },
+  });
+
+  console.log(`✅ Created 4 Demo Leads (Ajay, Deepak, Ananya, Vikram)`);
+
+  // 5. Create Unclaimed Conversations & Messages (Channels: TELEGRAM & WEBSITE only, fast path assignment)
+  // Conv 1: Ajay (Target Unclaimed Chat — TELEGRAM — Priority Score 94/100, Intent: ORDERING)
+  const convAjay = await prisma.conversation.create({
+    data: {
+      id: "ls-ajay-001",
+      companyId: company.id,
+      leadId: leadAjay.id,
+      channel: Channel.TELEGRAM,
+      mode: "BOT",
+      status: ConversationStatus.OPEN,
+      claimedById: null,
+      assignedToId: null,
+      priorityScore: 94,
+      intent: ConversationIntent.ORDERING,
+      aiSummary: "Customer requested 2x Banarasi Silk Sarees for an upcoming wedding. Urgent purchase intent.",
+      suggestedAgentReply: "Hello Ajay! We have 2 Banarasi Silk Sarees in Royal Gold reserved for you at ₹11,600. Here is your payment link to confirm delivery!",
+      transientIntentState: "ORDERING",
+      needsStaffReason: "🎯 High purchase intent | ⚡ Just arrived",
+      updatedAt: new Date(),
+    },
+  });
+
+  await prisma.message.createMany({
+    data: [
+      {
+        id: "msg-ajay-001",
         companyId: company.id,
-      },
-    });
-  }
-  console.log(`✅ Created ${conversationsData.length} demo conversations`);
-
-  // 6. Create demo messages for each conversation
-  type MsgData = {
-    conversationId: string;
-    content: string;
-    sender: "CLIENT" | "AGENT" | "SYSTEM";
-  };
-  const messagesData: MsgData[] = [
-    // ls-101 messages (Aarav Mehta - WhatsApp)
-    { conversationId: "ls-101", content: "Namaste, I see your handcrafted collection on Instagram.", sender: "CLIENT" },
-    { conversationId: "ls-101", content: "Namaste! Welcome to Om Sai Silk Boutique. Click any item sku to fetch price structure.", sender: "SYSTEM" },
-    { conversationId: "ls-101", content: "Can you confirm if you have the Handcrafted Brass Tea Pot in stock?", sender: "CLIENT" },
-    { conversationId: "ls-101", content: "Yes! Brass Tea Pot (#TEAPOT-44) is available for ₹2,100 (excluding 18% GST). Would you like me to book it?", sender: "SYSTEM" },
-    { conversationId: "ls-101", content: "Understood, please finalize my order for the Handcrafted Brass Tea Pot.", sender: "CLIENT" },
-    // ls-102 messages (Kavya Deshmukh - Instagram)
-    { conversationId: "ls-102", content: "Hi! Loved the Premium Silk Kurti post.", sender: "CLIENT" },
-    { conversationId: "ls-102", content: "Hello! Our Silk Kurtis are hand-loomed with premium silk zari. We offer custom sizes too.", sender: "SYSTEM" },
-    { conversationId: "ls-102", content: "How much is express shipping to Mumbai Zone 2 region?", sender: "CLIENT" },
-    // ls-103 messages (Vikram Malhotra - Telegram)
-    { conversationId: "ls-103", content: "Do you have any footwear collections available?", sender: "CLIENT" },
-    { conversationId: "ls-103", content: "Yes Vikram, we carry premium handcrafted leather sandals.", sender: "AGENT" },
-    { conversationId: "ls-103", content: "Do you have the Kolhapuri chappals in Tan color size 10?", sender: "CLIENT" },
-    // ls-104 messages (Riya Sen - WhatsApp)
-    { conversationId: "ls-104", content: "Is my coupon still valid for purchase?", sender: "CLIENT" },
-    { conversationId: "ls-104", content: "Indeed Riya! The code INS500 grants ₹500 discount on values above ₹2000.", sender: "SYSTEM" },
-    { conversationId: "ls-104", content: "Thanks, checking the catalog link.", sender: "CLIENT" },
-  ];
-
-  for (const msgData of messagesData) {
-    await prisma.message.create({
-      data: {
-        conversationId: msgData.conversationId,
-        content: msgData.content,
-        sender: msgData.sender,
-        companyId: company.id,
+        conversationId: convAjay.id,
+        sender: "CLIENT",
+        content: "Hi! I want to buy 2 Banarasi Silk Sarees right away for an upcoming wedding. Total should be around ₹11,600. Can you confirm stock and send me the payment link?",
         messageType: "TEXT",
+        platform: Channel.TELEGRAM,
+        createdAt: new Date(Date.now() - 30 * 1000),
       },
-    });
-  }
-  console.log(`✅ Created ${messagesData.length} demo messages`);
+      {
+        id: "msg-ajay-002",
+        companyId: company.id,
+        conversationId: convAjay.id,
+        sender: "SYSTEM",
+        content: "Hello Ajay! 👋 Yes, we have 2 Banarasi Silk Sarees in Royal Gold in stock @ ₹5,800 each. Your total comes to ₹11,600.",
+        messageType: "TEXT",
+        platform: Channel.TELEGRAM,
+        createdAt: new Date(Date.now() - 10 * 1000),
+      },
+    ],
+  });
 
-  // 7. Create ClaimLog entries for the already-claimed conversation (ls-103)
-  await prisma.claimLog.create({
+  // Conv 2: Deepak (Unclaimed Chat — WEBSITE — Priority Score 72/100)
+  const convDeepak = await prisma.conversation.create({
     data: {
+      id: "ls-deepak-001",
       companyId: company.id,
-      conversationId: "ls-103",
-      actorId: owner.id,
-      actorName: "Demo Owner",
-      action: "CLAIM",
-      createdAt: new Date(Date.now() - 30 * 60 * 1000), // 30 min ago
+      leadId: leadDeepak.id,
+      channel: Channel.WEBSITE,
+      mode: "BOT",
+      status: ConversationStatus.OPEN,
+      claimedById: null,
+      assignedToId: null,
+      priorityScore: 72,
+      intent: ConversationIntent.ORDERING,
+      aiSummary: "Customer inquiring about 1x Banarasi Silk Saree in Crimson Red.",
+      updatedAt: new Date(Date.now() - 10 * 60 * 1000),
     },
   });
-  // Add a heartbeat log to show lease renewal
-  await prisma.claimLog.create({
+
+  await prisma.message.create({
     data: {
+      id: "msg-deepak-001",
       companyId: company.id,
-      conversationId: "ls-103",
-      actorId: owner.id,
-      actorName: "Demo Owner",
-      action: "HEARTBEAT",
-      createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 min ago
+      conversationId: convDeepak.id,
+      sender: "CLIENT",
+      content: "Hi! Do you have the Crimson Red Banarasi Silk Saree in stock? I'd like to place an order.",
+      messageType: "TEXT",
+      platform: Channel.WEBSITE,
+      createdAt: new Date(Date.now() - 10 * 60 * 1000),
     },
   });
-  console.log(`✅ Created ClaimLog entries for conversation ls-103 (CLAIM + HEARTBEAT)`);
 
-  // 8. Conversational rules for the demo company are created via the
-  // AutoRepliesPage UI or API — no legacy automation rules to seed here.
+  // Conv 3: Ananya (Browsing Chat — WEBSITE — Priority Score 35/100)
+  const convAnanya = await prisma.conversation.create({
+    data: {
+      id: "ls-ananya-001",
+      companyId: company.id,
+      leadId: leadAnanya.id,
+      channel: Channel.WEBSITE,
+      mode: "BOT",
+      status: ConversationStatus.OPEN,
+      claimedById: null,
+      assignedToId: null,
+      priorityScore: 35,
+      intent: ConversationIntent.BROWSING,
+      aiSummary: "Visitor browsing Chanderi silk stoles catalog under ₹2,000.",
+      updatedAt: new Date(Date.now() - 60 * 60 * 1000),
+    },
+  });
 
-  console.log("\n🎉 Seed complete!");
-  console.log("\n📋 Demo login credentials:");
-  console.log("   Owner: demo@leadsync.test / demo1234");
-  console.log("   Staff: demo.staff@leadsync.test / staff1234");
-  console.log("\n💬 Demo conversations:");
-  console.log("   ls-101: Aarav Mehta (WhatsApp) - unclaimed");
-  console.log("   ls-102: Kavya Deshmukh (Instagram) - unclaimed");
-  console.log("   ls-103: Vikram Malhotra (Telegram) - claimed by owner (with ClaimLog)");
-  console.log("   ls-104: Riya Sen (WhatsApp) - unclaimed");
+  await prisma.message.create({
+    data: {
+      id: "msg-ananya-001",
+      companyId: company.id,
+      conversationId: convAnanya.id,
+      sender: "CLIENT",
+      content: "Looking for Chanderi silk stoles under ₹2,000 with floral embroidery.",
+      messageType: "TEXT",
+      platform: Channel.WEBSITE,
+      createdAt: new Date(Date.now() - 60 * 60 * 1000),
+    },
+  });
+
+  console.log(`✅ Created 3 Unclaimed Conversations on TELEGRAM & WEBSITE (Ajay: 94, Deepak: 72, Ananya: 35)`);
+
+  // 6. Create Draft Order AND Pending Order for Ajay (₹11,600)
+  // When payment is simulated in chat, this order converts to PAID, updating Orders page & Shop Dashboard!
+  const draftOrderAjay = await prisma.draftOrder.create({
+    data: {
+      id: "draft-order-ajay-001",
+      companyId: company.id,
+      conversationId: convAjay.id,
+      leadId: leadAjay.id,
+      status: DraftOrderStatus.AWAITING_CONFIRMATION,
+      totalAmount: 11600.0,
+      totalAmountInSubunits: BigInt(1160000),
+      recipientName: "Ajay",
+      recipientPhone: "+919811223344",
+      items: [
+        {
+          productId: sareeProduct.id,
+          name: "Banarasi Silk Saree",
+          quantity: 2,
+          unitPrice: 5800.0,
+          totalPrice: 11600.0,
+          variant: "Royal Gold",
+        },
+      ],
+      shippingAddress: {
+        line1: "12 Park Avenue, Greater Kailash",
+        city: "New Delhi",
+        state: "Delhi",
+        pincode: "110048",
+      },
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const orderAjay = await prisma.order.create({
+    data: {
+      id: "ord-ajay-1089",
+      companyId: company.id,
+      conversationId: convAjay.id,
+      leadId: leadAjay.id,
+      summary: "2x Banarasi Silk Saree (Royal Gold)",
+      amount: 11600.0,
+      amountInSubunits: BigInt(1160000),
+      status: OrderStatus.BOT_CREATED_ORDER,
+      approvalStatus: OrderApprovalStatus.PENDING,
+      sourceChannel: SourceChannel.TELEGRAM,
+      priority: OrderPriority.URGENT,
+      priorityScore: 94,
+      stockDecremented: false,
+      orderItems: {
+        create: [
+          {
+            companyId: company.id,
+            name: "Banarasi Silk Saree",
+            quantity: 2,
+            price: 5800.0,
+            priceInSubunits: BigInt(580000),
+            sku: "SAREE-BANARASI-GOLD",
+          },
+        ],
+      },
+    },
+  });
+  console.log(`✅ Created DraftOrder & Pending Order #ord-ajay-1089 for Ajay: ₹11,600`);
+
+  // 7. Baseline Paid Order for Order Fulfillment Board (TELEGRAM)
+  const orderVikram = await prisma.order.create({
+    data: {
+      id: "ord-vikram-1088",
+      companyId: company.id,
+      conversationId: convAjay.id,
+      leadId: leadVikram.id,
+      summary: "3x Banarasi Silk Saree (Royal Gold)",
+      amount: 17400.0,
+      amountInSubunits: BigInt(1740000),
+      status: OrderStatus.PAID,
+      approvalStatus: OrderApprovalStatus.APPROVED,
+      sourceChannel: SourceChannel.TELEGRAM,
+      priority: OrderPriority.URGENT,
+      priorityScore: 88,
+      stockDecremented: true,
+      orderItems: {
+        create: [
+          {
+            companyId: company.id,
+            name: "Banarasi Silk Saree",
+            quantity: 3,
+            price: 5800.0,
+            priceInSubunits: BigInt(580000),
+            sku: "SAREE-BANARASI-GOLD",
+          },
+        ],
+      },
+    },
+  });
+
+  // 8. Create Shop Analytics Rollup
+  await prisma.companyAnalyticsRollup.create({
+    data: {
+      companyId: company.id,
+      totalRevenue: 17400.0,
+      totalOrdersCount: 1,
+      totalLeadsCount: 4,
+    },
+  });
+
+  console.log(`✅ Created Baseline Fulfillment Order #ORD-1088 (READY/PAID ₹17,400) & Analytics Rollup`);
+
+  console.log("\n🎉 SaLira Pitch Demo Flow Seed Complete!");
+  console.log("\n========================================================");
+  console.log("📋 DEMO LOGIN CREDENTIALS:");
+  console.log("   Role: OWNER (Full Access to All Dashboard Tabs)");
+  console.log("   Email:    demo@leadsync.test");
+  console.log("   Password: demo1234");
+  console.log("--------------------------------------------------------");
+  console.log("   Role: STAFF");
+  console.log("   Email:    demo.staff@leadsync.test");
+  console.log("   Password: staff1234");
+  console.log("========================================================\n");
 }
 
 main()

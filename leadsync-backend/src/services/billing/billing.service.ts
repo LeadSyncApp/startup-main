@@ -25,15 +25,23 @@ export class BillingService {
 
             if (!order) return;
 
-            // Compute subtotal from normalized order items instead of taking the raw 'amount'
-            let computedTotal = 0;
+            // Compute subtotal from normalized order items using integer subunits arithmetic
+            let computedSubunits = 0n;
             if (order.orderItems && order.orderItems.length > 0) {
-                computedTotal = order.orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                computedSubunits = order.orderItems.reduce((sum, item) => {
+                    const itemPriceSubunits = item.priceInSubunits !== null && item.priceInSubunits !== undefined && item.priceInSubunits > 0n
+                        ? item.priceInSubunits 
+                        : BigInt(Math.round((item.price || 0) * 100));
+                    return sum + (itemPriceSubunits * BigInt(item.quantity || 1));
+                }, 0n);
             } else {
-                computedTotal = order.amount;
+                computedSubunits = order.amountInSubunits !== null && order.amountInSubunits !== undefined && order.amountInSubunits > 0n
+                    ? order.amountInSubunits 
+                    : BigInt(Math.round((order.amount || 0) * 100));
             }
 
-            if (computedTotal <= 0) return; // No billing needed for 0 amount
+            if (computedSubunits <= 0n) return; // No billing needed for 0 amount
+            const computedTotal = Number(computedSubunits) / 100;
 
             const invoiceNumber = `INV-${Date.now().toString().slice(-6)}-${orderId.slice(0, 4).toUpperCase()}`;
 
@@ -45,8 +53,11 @@ export class BillingService {
                     invoiceNumber,
                     currency: context.currencyCode,
                     subtotal: computedTotal,
-                    tax: 0, // Add tax logic later if needed
+                    subtotalInSubunits: computedSubunits,
+                    tax: 0,
+                    taxInSubunits: 0n,
                     total: computedTotal,
+                    totalInSubunits: computedSubunits,
                     paymentStatus: "PENDING"
                 }
             });

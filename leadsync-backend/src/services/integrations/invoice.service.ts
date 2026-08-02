@@ -57,14 +57,20 @@ class InvoiceService {
 
             const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(updatedCompany.invoiceCounter).padStart(6, "0")}`;
 
+            const amountSubunits = order.amountInSubunits !== null && order.amountInSubunits !== undefined && order.amountInSubunits > 0n
+                ? order.amountInSubunits 
+                : BigInt(Math.round((order.amount || 0) * 100));
+
             // 4. Create invoice record (without PDF URL yet)
             invoice = await (prisma as any).invoice.create({
                 data: {
                     companyId: order.companyId,
                     orderId: order.id,
                     invoiceNumber,
-                    subtotal: order.amount, // Simple MVP: total = subtotal for now
+                    subtotal: order.amount,
+                    subtotalInSubunits: amountSubunits,
                     total: order.amount,
+                    totalInSubunits: amountSubunits,
                     paymentStatus: "PAID",
                     paymentRef: paymentRef || null,
                 },
@@ -227,9 +233,14 @@ class InvoiceService {
         
         // Enforce precise decimal precision adjustments natively based on currency denomination types
         const isZeroDecimal = ["JPY", "KRW", "CLP"].includes(currencyLabel);
+
+        const amountVal = order.amountInSubunits !== null && order.amountInSubunits !== undefined && order.amountInSubunits > 0n
+            ? Number(order.amountInSubunits) / 100
+            : order.amount;
+
         const formattedAmountString = isZeroDecimal 
-            ? Math.round(order.amount).toString() 
-            : order.amount.toFixed(2);
+            ? Math.round(amountVal).toString() 
+            : amountVal.toFixed(2);
 
         this.generateTableRow(
             doc,

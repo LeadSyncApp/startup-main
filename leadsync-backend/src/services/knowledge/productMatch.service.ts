@@ -263,7 +263,7 @@ async function judgeProductMatch(
             temperature: 0.0,
           }),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("judge timeout")), 3000)
+            setTimeout(() => reject(new Error("judge timeout")), 1500)
           ),
         ]);
 
@@ -436,7 +436,11 @@ export async function matchProductForMessage(
           id: v.id,
           attributeValue: v.attributeValue,
           attributes: v.attributes as Record<string, string> | undefined,
-          price: v.price !== null && v.price !== undefined ? Number(v.price) : (product.basePrice !== null && product.basePrice !== undefined ? Number(product.basePrice) : null),
+          price: v.priceInSubunits !== null && v.priceInSubunits !== undefined 
+            ? Number(v.priceInSubunits) / 100 
+            : (product.basePriceInSubunits !== null && product.basePriceInSubunits !== undefined 
+                ? Number(product.basePriceInSubunits) / 100 
+                : null),
           stock: v.stock,
           stockStatus: v.stock === 0 ? "OUT_OF_STOCK" : v.stock !== null && v.stock <= LOW_STOCK_THRESHOLD ? "LOW_STOCK" : v.stock !== null ? "IN_STOCK" : null
         }));

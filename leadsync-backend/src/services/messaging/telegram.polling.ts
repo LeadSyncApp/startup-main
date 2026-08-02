@@ -37,26 +37,11 @@ export async function startTelegramPolling() {
     try {
       // Fail-safe: if local dev and MY_BOT_USERNAME is not configured, poll nothing.
       if (IS_LOCAL && !process.env.MY_BOT_USERNAME) {
-        setTimeout(poll, 1500);
+        setTimeout(poll, 500);
         return;
       }
 
-      // Find all companies with connected Telegram bots for this polling instance
-      const companies = await prisma.company.findMany({
-        where: {
-          telegramBotToken: { not: null },
-          telegramConnected: true,
-          ...(IS_LOCAL ? { telegramBotUsername: process.env.MY_BOT_USERNAME } : {})
-        },
-        select: {
-          id: true,
-          telegramBotToken: true,
-          telegramBotUsername: true,
-          telegramConnected: true
-        }
-      });
-
-      // Safeguard: Check for duplicate bot tokens across the targeted environment to prevent misrouting
+      // Single query for both polling and duplicate detection (eliminates O(N) round trip to Seoul)
       const allActiveBots = await prisma.company.findMany({
         where: {
           telegramBotToken: { not: null },
@@ -67,7 +52,8 @@ export async function startTelegramPolling() {
           id: true,
           name: true,
           telegramBotToken: true,
-          telegramBotUsername: true
+          telegramBotUsername: true,
+          telegramConnected: true
         }
       });
 
@@ -92,6 +78,8 @@ export async function startTelegramPolling() {
         }
       }
 
+      // Derive the polling list from the same query result (reuse `name` for logging too)
+      const companies = allActiveBots;
       const activeCompanies = companies.filter(c => !duplicateCompanyIds.has(c.id));
 
       // 🛑 FIX: Parallelize polling across all companies instead of sequential.
@@ -237,7 +225,7 @@ export async function startTelegramPolling() {
       console.error("❌ Global Telegram Polling Error:", globalErr.message);
     } finally {
       // Schedule next poll ONLY after this iteration has fully completed
-      setTimeout(poll, 1500);
+      setTimeout(poll, 500);
     }
   };
 

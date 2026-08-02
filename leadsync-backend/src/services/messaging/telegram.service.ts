@@ -5,7 +5,8 @@ export async function createOrder(
   companyId: string,
   conversationId: string,
   leadId: string,
-  summary: string
+  summary: string,
+  amount: number = 0
 ) {
   return prisma.order.create({
     data: {
@@ -13,6 +14,8 @@ export async function createOrder(
       conversationId,
       leadId,
       summary,
+      amount,
+      amountInSubunits: BigInt(Math.round(amount * 100)),
       priority: OrderPriority.NORMAL,
     },
   });

@@ -79,6 +79,8 @@ model Company {
   conversationActivities ConversationActivity[]
   draftOrders              DraftOrder[]
   webhookDeliveryLogs     WebhookDeliveryLog[]
+  paymentIntents          PaymentIntent[]
+  refunds                 Refund[]
 }
 
 model User {
@@ -99,12 +101,16 @@ model User {
   isOnline                                     Boolean          @default(false)
   lastSeenAt                                   DateTime?
   resetToken                                   String?
+  resetTokenHash                               String?          @unique
   resetTokenExpiry                             DateTime?
   updatedAt                                    DateTime         @updatedAt
   authProvider                                 String           @default("EMAIL")
   googleId                                     String?          @unique
   onboardingStatus                             OnboardingStatus @default(PENDING)
   permissionOverrides                          Json?            @default("[]")
+  failedLoginCount                             Int              @default(0)
+  lastFailedLoginAt                            DateTime?
+  lockedUntil                                  DateTime?
   agentFeedPosts                               AgentFeedPost[]  @relation("AgentFeedPosts")
   Conversation_Conversation_assignedToIdToUser Conversation[]   @relation("Conversation_assignedToIdToUser")
   claimedConversations                         Conversation[]   @relation("ClaimedConversations")
@@ -209,7 +215,8 @@ model InventoryProduct {
   description           String?
   categories            String[]            @default([])
   sku                   String?
-  basePrice             Float
+  basePrice             Float // @deprecated Use basePriceInSubunits
+  basePriceInSubunits   BigInt              @default(0)
   imageUrl              String?
   hasVariants           Boolean             @default(false)
   variantAttributeName String?
@@ -236,7 +243,8 @@ model InventoryVariant {
   productId      String
   attributeValue String
   sku            String?
-  price          Float
+  price          Float // @deprecated Use priceInSubunits
+  priceInSubunits BigInt?
   stock          Int?
   isActive       Boolean          @default(true)
   createdAt      DateTime         @default(now())
@@ -254,7 +262,7 @@ model InventoryVariant {
 model Order {
   id             String              @id @default(uuid())
   companyId      String
-  conversationId String
+  conversationId String?
   leadId         String?
   summary        String
   priority       OrderPriority       @default(NORMAL)
@@ -263,9 +271,12 @@ model Order {
   metadata       Json?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
-  amount         Float               @default(0)
-  totalCogs      Float               @default(0)
-  netProfit      Float               @default(0)
+  amount                 Float               @default(0) // @deprecated Use amountInSubunits
+  amountInSubunits       BigInt              @default(0)
+  totalCogs              Float               @default(0) // @deprecated Use totalCogsInSubunits
+  totalCogsInSubunits    BigInt              @default(0)
+  netProfit              Float               @default(0) // @deprecated Use netProfitInSubunits
+  netProfitInSubunits    BigInt              @default(0)
   processedById  String?
   approvalStatus OrderApprovalStatus @default(APPROVED)
   source         OrderSource         @default(MANUAL)
@@ -278,11 +289,12 @@ model Order {
   stockDecremented Boolean           @default(false)
   invoice        Invoice?
   company        Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  lead           Lead?               @relation(fields: [leadId], references: [id])
+  conversation   Conversation?       @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  lead           Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
   processedBy    User?               @relation("ProcessedOrders", fields: [processedById], references: [id])
   orderItems     OrderItem[]
   logs           OrderLog[]
+  paymentIntents PaymentIntent[]
 
   @@index([companyId])
   @@index([companyId, approvalStatus])
@@ -319,8 +331,10 @@ model OrderItem {
   sku       String?
   name      String
   quantity  Int
-  price     Float
-  cogs      Float?
+  price               Float // @deprecated Use priceInSubunits
+  priceInSubunits     BigInt              @default(0)
+  cogs                Float? // @deprecated Use cogsInSubunits
+  cogsInSubunits      BigInt?             @default(0)
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product   Product? @relation(fields: [productId], references: [id])
@@ -355,9 +369,12 @@ model Invoice {
   orderId         String   @unique
   invoiceNumber   String
   invoiceDate     DateTime @default(now())
-  subtotal        Float
-  tax             Float    @default(0)
-  total           Float
+  subtotal            Float // @deprecated Use subtotalInSubunits
+  subtotalInSubunits  BigInt              @default(0)
+  tax                 Float               @default(0) // @deprecated Use taxInSubunits
+  taxInSubunits       BigInt              @default(0)
+  total               Float // @deprecated Use totalInSubunits
+  totalInSubunits     BigInt              @default(0)
   currency        String   @default("USD")
   paymentStatus   String
   paymentProvider String   @default("razorpay")
@@ -1101,7 +1118,8 @@ model DraftOrder {
   conversationId String
   leadId         String?
   items          Json
-  totalAmount    Float            @default(0.0)
+  totalAmount             Float            @default(0.0) // @deprecated Use totalAmountInSubunits
+  totalAmountInSubunits   BigInt           @default(0)
   status         DraftOrderStatus @default(DRAFTING)
   recipientName  String?
   recipientPhone String?
@@ -1152,4 +1170,168 @@ model WebhookDeliveryLog {
   @@index([companyId, createdAt(sort: Desc)])
   @@index([outcome])
 }
+
+model ProcessedWebhookEvent {
+  id          String   @id
+  provider    String   @default("razorpay")
+  eventType   String
+  processedAt DateTime @default(now())
+
+  @@index([provider, eventType])
+}
+
+enum PaymentIntentStatus {
+  REQUIRES_PAYMENT_METHOD
+  REQUIRES_CONFIRMATION
+  PROCESSING
+  SUCCEEDED
+  CANCELLED
+  FAILED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum AttemptStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model PaymentIntent {
+  id                    String              @id @default(uuid())
+  companyId             String
+  orderId               String?
+  amountInSubunits      BigInt
+  currency              String              @default("INR")
+  status                PaymentIntentStatus @default(REQUIRES_PAYMENT_METHOD)
+  provider              String              @default("razorpay")
+  providerPaymentLinkId String?             @unique
+  idempotencyKey        String              @unique
+  metadata              Json?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  order    Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  attempts PaymentAttempt[]
+  refunds  Refund[]
+
+  @@index([companyId])
+  @@index([companyId, orderId])
+  @@index([status])
+}
+
+model PaymentAttempt {
+  id                    String        @id @default(uuid())
+  paymentIntentId       String
+  providerTransactionId String?       @unique
+  amountInSubunits      BigInt
+  status                AttemptStatus @default(PENDING)
+  errorCode             String?
+  errorMessage          String?
+  rawPayload            Json?
+  createdAt             DateTime      @default(now())
+
+  paymentIntent PaymentIntent @relation(fields: [paymentIntentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentIntentId])
+}
+
+model Refund {
+  id               String       @id @default(uuid())
+  companyId        String
+  paymentIntentId  String
+  amountInSubunits BigInt
+  reason           String?
+  status           RefundStatus @default(PENDING)
+  providerRefundId String?      @unique
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  paymentIntent PaymentIntent @relation(fields: [paymentIntentId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([paymentIntentId])
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model OutboxEvent {
+  id            String       @id @default(uuid())
+  companyId     String?
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  processedAt   DateTime?
+  error         String?
+  retryCount    Int          @default(0)
+  createdAt     DateTime     @default(now())
+
+  @@index([status, createdAt])
+  @@index([aggregateType, aggregateId])
+  @@index([companyId])
+}
+
+enum DiscrepancyType {
+  MISSING_INTERNAL_RECORD
+  AMOUNT_MISMATCH
+  MISSING_PROVIDER_RECORD
+  STATUS_MISMATCH
+}
+
+enum DiscrepancyStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+model ReconciliationDiscrepancy {
+  id                    String            @id @default(uuid())
+  companyId             String?
+  discrepancyType       DiscrepancyType
+  providerTransactionId String?
+  paymentIntentId       String?
+  providerAmount        BigInt?
+  internalAmount        BigInt?
+  details               Json?
+  status                DiscrepancyStatus @default(OPEN)
+  resolvedAt            DateTime?
+  createdAt             DateTime          @default(now())
+
+  @@index([status])
+  @@index([discrepancyType])
+  @@index([providerTransactionId])
+  @@index([paymentIntentId])
+  @@index([companyId])
+}
+
+model FailedJob {
+  id            String   @id @default(uuid())
+  queue         String
+  jobId         String?
+  payload       Json
+  error         String?
+  attempts      Int      @default(0)
+  companyId     String?
+  createdAt     DateTime @default(now())
+  reprocessedAt DateTime?
+
+  @@index([queue])
+  @@index([companyId])
+  @@index([createdAt])
+}
+
 

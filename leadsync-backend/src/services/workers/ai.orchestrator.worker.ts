@@ -6,7 +6,7 @@ import { outboundDispatcherService } from "../outbound.dispatcher";
 import { TelegramTransportService } from "../transport/telegramTransport.service";
 import { decryptSecret } from "../../utils/encryption";
 import { Channel, MessageSender, ConversationStatus } from "@prisma/client";
-import { generateShopReply, generateFastReply, classifyMessageIntentWithTimeout, PreFlightClassification, UnifiedShopResponse } from "../ai/ai.service";
+import { generateShopReply, generateFastReply, classifyMessageIntentWithTimeout, checkPreFlightBypassRules, PreFlightClassification, UnifiedShopResponse } from "../ai/ai.service";
 import { retrieveSimilarChunks } from "../knowledge/knowledgeRetriever.service";
 import { matchProductForMessage } from "../knowledge/productMatch.service";
 import { StandardMessageFrame } from "../../interfaces/messaging.interface";
@@ -21,6 +21,7 @@ import { getActiveDraftOrder, syncDraftOrderFromAi, confirmActiveDraftOrder, syn
 import crypto from "crypto";
 import { stepProfiler } from "../../utils/stepProfiler";
 import { businessNotificationService } from "../infrastructure/businessNotification.service";
+import { sendChatAction } from "../../bot/telegram.sender";
 
 // Thread-safe Profiling — log elapsed from entry at each major boundary per trace
 function P(label: string): void {
@@ -224,6 +225,12 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
 
     console.log(`⏱️ [PIPELINE_TIMING] [START] [${traceId}] TOTAL_END_TO_END_PIPELINE at ${new Date(t_worker_pickup).toISOString()} (${t_worker_pickup} ms) | Queue delay: ${queue_delay} ms`);
 
+    if (process.env.DEBUG_LATENCY === "true") {
+      const mem = process.memoryUsage();
+      (global as any).__pipelineStartRss = mem.rss;
+      console.log(`🧠 [MEMORY] Pipeline START — RSS: ${(mem.rss / 1024 / 1024).toFixed(1)} MB, HeapUsed: ${(mem.heapUsed / 1024 / 1024).toFixed(1)} MB, HeapTotal: ${(mem.heapTotal / 1024 / 1024).toFixed(1)} MB`);
+    }
+
   if (process.env.DEBUG_LATENCY === "true") {
     console.log(`⏱️ [LATENCY DEBUG] Stage 7 (pg-boss Queue Delay): ${queue_delay} ms`);
     console.log(`⏱️ [LATENCY DEBUG] Worker picked up job at: ${t_worker_pickup}`);
@@ -412,6 +419,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       },
     });
     rulesCache.set(rulesCacheKey, { rules, cachedAt: Date.now() });
+    evictCacheIfNeeded(rulesCache, RULES_CACHE_MAX);
     return rules;
   })();
 
@@ -761,6 +769,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     P("Promise.all messages+draft done");
 
     let classification: PreFlightClassification | null = null;
+    const metrics = (job as any)._latencyMetrics || {};
     if (processingText) {
       // 1. Build thread history for classification context (most recent 6 messages, chronological)
       let threadHistoryStr = "";
@@ -783,33 +792,95 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         lastBotMessage: lastBotMsg,
       };
 
-      // 2. Run pre-flight classifier and RAG product match in parallel
-      P("before intent classification & RAG search");
-      const metrics = (job as any)._latencyMetrics || {};
-      metrics.t_intent_start = Date.now();
-      metrics.t_rag_start = metrics.t_intent_start;
-      metrics.stage2a_msg_to_intent_start = metrics.t_intent_start - (metrics.t_worker_pickup || metrics.t_intent_start);
+      // 2. Pre-flight bypass: fast regex rules that skip the classification LLM call entirely.
+      //    Saves ~200-1500ms and one model inference cycle for greetings, PINs, menu selections.
+      const preflightBypass = checkPreFlightBypassRules(processingText, bypassContext);
+      if (preflightBypass) {
+        console.log(`⚡ [PreFlight Bypass] Skipped classification LLM:`, JSON.stringify(preflightBypass));
+        metrics.t_intent_start = Date.now();
+        metrics.t_rag_start = metrics.t_intent_start;
+        metrics.stage2a_msg_to_intent_start = metrics.t_intent_start - (metrics.t_worker_pickup || metrics.t_intent_start);
 
-      const startClassificationTime = Date.now();
-      const [classificationRes, precomputedProductMatch] = await Promise.all([
-        classifyMessageIntentWithTimeout(processingText, threadHistoryStr, 2000, bypassContext),
-        matchProductForMessage(companyId, processingText),
-      ]);
+        // RAG still runs for product/policy context — only classification is bypassed
+        const precomputedProductMatch = await matchProductForMessage(companyId, processingText);
 
-      classification = classificationRes;
-      metrics.t_intent_end = Date.now();
-      metrics.t_rag_end = metrics.t_intent_end;
-      classificationTime = metrics.t_intent_end - metrics.t_intent_start;
-      metrics.stage2b_intent_duration = classificationTime;
-      metrics.stage3a_intent_to_rag_start = 0;
+        classification = preflightBypass;
+        metrics.t_intent_end = Date.now();
+        metrics.t_rag_end = metrics.t_intent_end;
+        classificationTime = 0; // Bypass = 0ms classification
+        metrics.stage2b_intent_duration = 0;
+        metrics.stage3a_intent_to_rag_start = 0;
+
+        // Store the precomputed match for downstream use
+        (global as any).__preflightProductMatch = precomputedProductMatch;
+      } else {
+        // 2b. Full LLM classification + RAG product match in parallel
+        P("before intent classification & RAG search");
+        metrics.t_intent_start = Date.now();
+        metrics.t_rag_start = metrics.t_intent_start;
+        metrics.stage2a_msg_to_intent_start = metrics.t_intent_start - (metrics.t_worker_pickup || metrics.t_intent_start);
+
+        const [classificationRes, precomputedProductMatch] = await Promise.all([
+          classifyMessageIntentWithTimeout(processingText, threadHistoryStr, 2000, bypassContext),
+          matchProductForMessage(companyId, processingText),
+        ]);
+
+        classification = classificationRes;
+        (global as any).__preflightProductMatch = precomputedProductMatch;
+
+        metrics.t_intent_end = Date.now();
+        metrics.t_rag_end = metrics.t_intent_end;
+        classificationTime = metrics.t_intent_end - metrics.t_intent_start;
+        metrics.stage2b_intent_duration = classificationTime;
+        metrics.stage3a_intent_to_rag_start = 0;
+      }
 
       P(`after intent classification & RAG search (${classification!.intent}, ${classification!.inquiryType || "N/A"})`);
       console.log(`⚙️ [Orchestrator Intent & RAG] "${processingText}" → Classified as: ${classification!.intent} (${classification!.inquiryType || "N/A"})`);
 
       // 3. Conditional context injection based on classified intent
-      if (classification.intent === "ProductInquiry") {
-        // Semantic product matching result computed in parallel
-        triageMatchedProduct = precomputedProductMatch;
+      if (classification.intent === "ProductInquiry" || (activeDraftOrder && Array.isArray(activeDraftOrder.items) && activeDraftOrder.items.length > 0)) {
+        // Semantic product matching result computed in parallel (from preflight or full path)
+        triageMatchedProduct = (global as any).__preflightProductMatch || null;
+        delete (global as any).__preflightProductMatch;
+
+        // 🛡️ ACTIVE DRAFT PRODUCT FALLBACK:
+        // If an active draft order exists with an item whose product has unresolved variants,
+        // and RAG returned null or a different product for a short attribute selection message,
+        // override triageMatchedProduct with the active draft's product so context is preserved.
+        if (activeDraftOrder && Array.isArray(activeDraftOrder.items) && activeDraftOrder.items.length > 0) {
+          const draftItem = activeDraftOrder.items.find((i: any) => i.inventoryProductId);
+          if (draftItem) {
+            const draftProduct = await prisma.inventoryProduct.findUnique({
+              where: { id: draftItem.inventoryProductId },
+              include: { variants: { where: { isActive: true } } }
+            });
+            if (draftProduct && draftProduct.hasVariants) {
+              if (!triageMatchedProduct || triageMatchedProduct.productId !== draftProduct.id) {
+                console.log(`🛡️ [Orchestrator] Applying active draft product fallback: overriding matched product with active draft item "${draftProduct.name}"`);
+                triageMatchedProduct = {
+                  productId: draftProduct.id,
+                  name: draftProduct.name,
+                  variant: "",
+                  stock: draftProduct.variants.reduce((s: number, v: any) => s + (v.stock || 0), 0),
+                  stockStatus: "IN_STOCK",
+                  thumbnailUrl: draftProduct.imageUrl || "",
+                  score: 0.99,
+                  gap: 0.5,
+                  confidenceTier: "HIGH",
+                  matchReason: "Active draft order item follow-up",
+                  variants: draftProduct.variants.map((v: any) => ({
+                    id: v.id,
+                    attributeValue: v.attributeValue,
+                    price: Number(v.priceInSubunits || 0n) / 100,
+                    stock: v.stock ?? 0,
+                    stockStatus: (v.stock ?? 0) > 0 ? "IN_STOCK" : "OUT_OF_STOCK"
+                  }))
+                };
+              }
+            }
+          }
+        }
         if (triageMatchedProduct) {
           if (triageMatchedProduct.candidates && triageMatchedProduct.candidates.length > 1) {
             const candidateLines = triageMatchedProduct.candidates.map((c: any, idx: number) => {
@@ -853,16 +924,17 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
                   const parts = [`Product: ${p.name}`];
                   if (p.description) parts.push(`Description: ${p.description}`);
                   if (p.hasVariants && p.variants.length > 0 && p.variantAttributeName) {
-                    const variantVals = p.variants.map((v) => `${v.attributeValue} (Price: ₹${v.price})`).join(", ");
+                    const variantVals = p.variants.map((v) => `${v.attributeValue} (Price: ₹${Number(v.priceInSubunits || 0) / 100})`).join(", ");
                     parts.push(`${p.variantAttributeName}: ${variantVals}`);
                   }
-                  parts.push(`Price: ₹${p.basePrice}`);
+                  parts.push(`Price: ₹${Number(p.basePriceInSubunits || 0) / 100}`);
                   return `- ` + parts.join(", ");
                 }).join("\n");
               } else {
                 menuSnapshotForAi = config?.botStructuredMenu || "No products currently available.";
               }
               productMenuCache.set(companyId, { snapshot: menuSnapshotForAi, cachedAt: Date.now() });
+              evictCacheIfNeeded(productMenuCache, PRODUCT_MENU_CACHE_MAX);
             }
           } catch (dbErr: any) {
             console.error("[Orchestrator] Fallback broad inventory query failed:", dbErr.message);
@@ -928,7 +1000,6 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
       content: m.content
     }));
 
-    const metrics = (job as any)._latencyMetrics || {};
     metrics.t_ai_call_start = Date.now();
     metrics.stage4_rag_done_to_ai_start = metrics.t_ai_call_start - (metrics.t_rag_end || metrics.t_intent_end || metrics.t_intent_start || metrics.t_worker_pickup);
 
@@ -939,6 +1010,21 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
     // and mixed messages like "hi, are you open?" correctly.
     let aiTurnResult: UnifiedShopResponse;
     const tLlmStart = performance.now();
+
+    // Typing indicator: send "typing..." immediately and re-send every ~4s
+    // while the LLM generates. Telegram's typing indicator expires after ~5s.
+    let typingInterval: ReturnType<typeof setInterval> | null = null;
+    const resolvedBotToken = (companyContext as any).telegramBotToken
+      ? decryptSecret((companyContext as any).telegramBotToken)
+      : null;
+    if (resolvedBotToken && frame.channel === Channel.TELEGRAM) {
+      sendChatAction(resolvedBotToken, frame.externalChatId, "typing").catch(() => {});
+      typingInterval = setInterval(() => {
+        sendChatAction(resolvedBotToken, frame.externalChatId, "typing").catch(() => {});
+      }, 4000);
+    }
+
+    try {
     if (classification?.intent === "Greeting/SmallTalk") {
       const fastReply = await generateFastReply({
         user_message: processingText,
@@ -967,6 +1053,10 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
         conversation_history: conversationHistory,
         active_draft_order: activeDraftOrder,
       });
+    }
+    } finally {
+      // Stop typing indicator regardless of success/failure
+      if (typingInterval) clearInterval(typingInterval);
     }
     const tLlmEnd = performance.now();
     metrics.t_ai_call_end = Date.now();
@@ -1164,8 +1254,9 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
                   `update lead ${lead.id} and conversation ${conversation.id}`,
                   true,
                   async () => {
-                    const pendingOrderAmount = (activeDraftOrder && activeDraftOrder.totalAmount > 0)
-                      ? activeDraftOrder.totalAmount
+                    const draftSubunits = activeDraftOrder?.totalAmountInSubunits || 0n;
+                    const pendingOrderAmount = (activeDraftOrder && draftSubunits > 0n)
+                      ? Number(draftSubunits) / 100
                       : null;
                     await tenantPrisma.$transaction([
                       tenantPrisma.lead.update({
@@ -1242,7 +1333,7 @@ export async function processWebhookJob(job: { id: string; data: StandardMessage
 
         console.log(`
 ===================== LATENCY BENCHMARK REPORT =====================
-Stage 1: Telegram polling delay                     | ~1500 ms (setTimeout loop)
+Stage 1: Telegram polling delay                     | ~500 ms (setTimeout loop, reduced from 1500ms)
 Stage 2a: Msg received -> Intent classification start | ${metrics.stage2a_msg_to_intent_start || 0} ms
 Stage 2b: Intent classification duration             | ${metrics.stage2b_intent_duration || 0} ms
 Stage 3a: Intent classified -> RAG retrieval start   | ${metrics.stage3a_intent_to_rag_start || 0} ms
@@ -1252,9 +1343,9 @@ Stage 4: RAG done -> AI model call START             | ${metrics.stage4_rag_done
 Stage 5: AI model call END -> DB write of reply      | ${metrics.stage5_ai_end_to_db_write || 0} ms
 Stage 6: DB write -> Socket.IO emit                  | ${metrics.stage6_db_write_to_socket_emit || 0} ms
 Stage 7: pg-boss queue (enqueued -> picked up)       | ${metrics.queue_delay || 0} ms
-================================================================────
+================================================================
 Total Non-AI Pipeline Latency: ${totalNonAi} ms (excluding polling delay)
-================================================================────
+================================================================
         `);
       }
       P("socket emit done");
@@ -1291,6 +1382,10 @@ Total Non-AI Pipeline Latency: ${totalNonAi} ms (excluding polling delay)
     const t_pipeline_end = Date.now();
     const total_pipeline_ms = t_pipeline_end - t_worker_pickup;
     console.log(`⏱️ [PIPELINE_TIMING] [END]   [${traceId}] TOTAL_END_TO_END_PIPELINE at ${new Date(t_pipeline_end).toISOString()} (${t_pipeline_end} ms) | Total Duration: ${total_pipeline_ms} ms`);
+    if (process.env.DEBUG_LATENCY === "true") {
+      const mem = process.memoryUsage();
+      console.log(`🧠 [MEMORY] Pipeline END   — RSS: ${(mem.rss / 1024 / 1024).toFixed(1)} MB, HeapUsed: ${(mem.heapUsed / 1024 / 1024).toFixed(1)} MB, HeapTotal: ${(mem.heapTotal / 1024 / 1024).toFixed(1)} MB | Delta RSS: ${((mem.rss - (global as any).__pipelineStartRss || 0) / 1024 / 1024).toFixed(1)} MB`);
+    }
     return aiTurnResult;
   });
 });
@@ -1305,11 +1400,25 @@ const processedJobIds = new Set<string>();
 // this is an accepted latency-vs-consistency tradeoff for a ~1.2s query.
 const productMenuCache = new Map<string, { snapshot: string; cachedAt: number }>();
 const PRODUCT_MENU_CACHE_TTL = 60_000;
+const PRODUCT_MENU_CACHE_MAX = 200;
 
 // Cache for active conversational rules (admin UI updates push new rules, but
 // a 30s staleness window is acceptable given the ~967ms query cost per message).
 const rulesCache = new Map<string, { rules: any[]; cachedAt: number }>();
 const RULES_CACHE_TTL = 30_000;
+const RULES_CACHE_MAX = 200;
+
+/** Evict oldest half of an LRU-like Map when it exceeds maxSize. */
+function evictCacheIfNeeded<K, V>(cache: Map<K, V>, maxSize: number): void {
+  if (cache.size <= maxSize) return;
+  const evictCount = Math.ceil(maxSize / 2);
+  let deleted = 0;
+  for (const key of cache.keys()) {
+    if (deleted >= evictCount) break;
+    cache.delete(key);
+    deleted++;
+  }
+}
 
 const JOB_ID_CLEANUP_INTERVAL = 3600_000; // 1 hour
 
@@ -1335,8 +1444,43 @@ export async function startOrchestratorWorker(): Promise<void> {
           processedJobIds.add(job.id);
           try {
             await processWebhookJob(job);
-          } catch (jobErr) {
-            console.error(`❌ [Orchestrator] Job execution failed for ID ${job.id}:`, jobErr);
+          } catch (jobErr: any) {
+            // Remove from dedup set so pg-boss can re-deliver for retry
+            processedJobIds.delete(job.id);
+
+            const retryCount = job.retryCount ?? 0;
+            const maxRetries = 3;
+            console.error(`❌ [Orchestrator] Job execution failed for ID ${job.id} (attempt ${(job.retryCount ?? 0) + 1}/${maxRetries + 1}):`, jobErr?.message || jobErr);
+
+            // Dead-letter: after all retries exhausted, persist for manual reprocessing
+            if (retryCount >= maxRetries) {
+              const companyId = job.data?.companyId || job.data?.tenantContextEnvelope?.companyId || null;
+              try {
+                await prisma.failedJob.create({
+                  data: {
+                    queue: "webhook.process",
+                    jobId: job.id,
+                    payload: job.data ?? {},
+                    error: jobErr?.message || String(jobErr),
+                    attempts: retryCount + 1,
+                    companyId,
+                  },
+                });
+                // Structured log — searchable in log aggregators via "event":"dead_letter"
+                console.error(JSON.stringify({
+                  event: "dead_letter",
+                  queue: "webhook.process",
+                  jobId: job.id,
+                  companyId,
+                  error: jobErr?.message || String(jobErr),
+                  attempts: retryCount + 1,
+                  timestamp: new Date().toISOString(),
+                }));
+              } catch (dlErr) {
+                console.error(`❌ [DeadLetter] Failed to persist dead-letter job ${job.id}:`, dlErr);
+              }
+            }
+
             throw jobErr;
           }
         })

@@ -64,13 +64,13 @@ export async function syncLeadPendingOrderState(
     orderBy: { updatedAt: "desc" }
   });
 
-  if (activeDraft && activeDraft.totalAmount > 0) {
+  if (activeDraft && activeDraft.totalAmountInSubunits > 0n) {
     if (leadId) {
       const lead = await prisma.lead.findFirst({ where: { id: leadId, deletedAt: null }, select: { id: true } });
       if (lead) {
         await prisma.lead.update({
           where: { id: leadId },
-          data: { pendingOrderAmount: activeDraft.totalAmount }
+          data: { pendingOrderAmount: Number(activeDraft.totalAmountInSubunits) / 100 }
         });
       }
     }
@@ -147,7 +147,7 @@ export async function getActiveDraftOrder(companyId: string, conversationId: str
  * in parallel across all items, and batches variant lookups — reducing ~12-14
  * sequential DB round-trips to ~3-4 total.
  */
-export async function resolveAndValidateItems(companyId: string, rawItems: any[]): Promise<ResolveItemsResult> {
+export async function resolveAndValidateItems(companyId: string, rawItems: any[], rawUserMessage?: string): Promise<ResolveItemsResult> {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     return { resolvedItems: [], allMatched: false, resolvedTotal: 0 };
   }
@@ -228,9 +228,26 @@ export async function resolveAndValidateItems(companyId: string, rawItems: any[]
     let matchedVariantId: string | null = null;
     if (dbProduct?.hasVariants) {
       const variants = variantMap.get(dbProduct.id) || [];
-      const matched = variants.find((v) =>
-        new RegExp(`\\b${v.attributeValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(itemName)
+      const textToTest = `${itemName} ${rawUserMessage || ""}`.trim();
+
+      // 1. Exact regex match of attributeValue
+      let matched = variants.find((v) =>
+        new RegExp(`\\b${v.attributeValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(textToTest)
       );
+
+      // 2. Token / word match for variant attributes (e.g. "L", "Size L", "RED", "M", "S")
+      if (!matched) {
+        matched = variants.find((v) => {
+          const parts = v.attributeValue.split(/[\/\-\s]+/).map((p: string) => p.trim()).filter(Boolean);
+          return parts.some((part: string) => {
+            if (part.length === 1 || ["S", "M", "L", "XL", "XXL"].includes(part.toUpperCase())) {
+              return new RegExp(`\\b(size\\s*)?${part}\\b`, "i").test(textToTest);
+            }
+            return new RegExp(`\\b${part}\\b`, "i").test(textToTest);
+          });
+        });
+      }
+
       if (matched) matchedVariantId = matched.id;
     }
 
@@ -239,7 +256,8 @@ export async function resolveAndValidateItems(companyId: string, rawItems: any[]
       allMatched = false;
     }
 
-    const price = dbProduct?.basePrice ?? (typeof item.price === "number" ? item.price : 0);
+    const basePriceFloat = dbProduct?.basePriceInSubunits ? Number(dbProduct.basePriceInSubunits) / 100 : null;
+    const price = basePriceFloat ?? (typeof item.price === "number" ? item.price : 0);
     const lineTotal = price * qty;
     resolvedTotal += lineTotal;
 
@@ -272,13 +290,13 @@ export async function syncDraftOrderFromAi(params: {
   extractedOrder?: any;
   rawUserMessage?: string;
 }): Promise<any> {
-  const { companyId, conversationId, leadId, extractedOrder } = params;
+  const { companyId, conversationId, leadId, extractedOrder, rawUserMessage } = params;
 
   if (!extractedOrder || !Array.isArray(extractedOrder.items) || extractedOrder.items.length === 0) {
     return await getActiveDraftOrder(companyId, conversationId);
   }
 
-  const { resolvedItems, allMatched, resolvedTotal } = await resolveAndValidateItems(companyId, extractedOrder.items);
+  const { resolvedItems, allMatched, resolvedTotal } = await resolveAndValidateItems(companyId, extractedOrder.items, rawUserMessage);
   if (resolvedItems.length === 0) {
     return await getActiveDraftOrder(companyId, conversationId);
   }
@@ -296,6 +314,8 @@ export async function syncDraftOrderFromAi(params: {
   const recipientPhone = extractedOrder.recipient_phone || activeDraft?.recipientPhone || null;
   const shippingAddress = extractedOrder.address_details || activeDraft?.shippingAddress || null;
 
+  const totalAmountSubunits = BigInt(Math.round((resolvedTotal || 0) * 100));
+
   if (activeDraft) {
     // Update existing active draft in place
     return await prisma.draftOrder.update({
@@ -303,6 +323,7 @@ export async function syncDraftOrderFromAi(params: {
       data: {
         items: resolvedItems as any,
         totalAmount: resolvedTotal,
+        totalAmountInSubunits: totalAmountSubunits,
         status: targetStatus,
         recipientName,
         recipientPhone,
@@ -320,6 +341,7 @@ export async function syncDraftOrderFromAi(params: {
         leadId,
         items: resolvedItems as any,
         totalAmount: resolvedTotal,
+        totalAmountInSubunits: totalAmountSubunits,
         status: targetStatus,
         recipientName,
         recipientPhone,
@@ -352,22 +374,66 @@ export async function confirmActiveDraftOrder(companyId: string, conversationId:
     return { order: null, draftOrder: activeDraft, reason: "NO_ITEMS_IN_DRAFT" };
   }
 
-  // Ensure DB dedup: check if a real non-terminal order was created for this conversation in the last 60 seconds
-  const recentOrder = await prisma.order.findFirst({
+  // 🛡️ CHECK REQUIRED ATTRIBUTES: Ensure all items with variants have a specific variant selected
+  const productIds = items
+    .map((i: any) => i.inventoryProductId)
+    .filter((id: any): id is string => typeof id === "string" && id.length > 0);
+
+  if (productIds.length > 0) {
+    const productsWithVariants = await prisma.inventoryProduct.findMany({
+      where: { id: { in: productIds }, hasVariants: true, companyId },
+      include: { variants: { where: { isActive: true } } }
+    });
+
+    for (const item of items) {
+      const prod = productsWithVariants.find((p) => p.id === item.inventoryProductId);
+      if (prod && prod.hasVariants && prod.variants.length > 0) {
+        const variantSkus = new Set(prod.variants.map((v) => v.sku).filter(Boolean));
+        const variantIds = new Set(prod.variants.map((v) => v.id));
+        const isVariantResolved =
+          (item.sku && (variantSkus.has(item.sku) || variantIds.has(item.sku))) ||
+          (item.variantId && variantIds.has(item.variantId));
+
+        if (!isVariantResolved) {
+          console.log(`🛡️ [DraftOrderService] Product "${prod.name}" has variants but no specific variant is selected for item "${item.name}". Skipping order confirmation until attributes are specified.`);
+          return { order: null, draftOrder: activeDraft, reason: "UNRESOLVED_VARIANT_ATTRIBUTES" };
+        }
+      }
+    }
+  }
+
+  // Verify: check if an active non-terminal order already exists for this conversation
+  const existingOrder = await prisma.order.findFirst({
     where: {
       conversationId,
       isDeleted: false,
-      createdAt: { gte: new Date(Date.now() - 60 * 1000) }
-    }
+      status: { notIn: ["CANCELLED", "REJECTED"] }
+    },
+    orderBy: { createdAt: "desc" }
   });
 
-  if (recentOrder) {
-    console.log(`🛡️ [DraftOrderService] Order ${recentOrder.id} was already created recently for conversation ${conversationId}. Marking draft as CONFIRMED.`);
-    const updatedDraft = await prisma.draftOrder.update({
+  if (existingOrder) {
+    console.log(`🛡️ [DraftOrderService] Order ${existingOrder.id} already exists for conversation ${conversationId}. Marking draft as CONFIRMED.`);
+    await prisma.draftOrder.update({
       where: { id: activeDraft.id },
       data: { status: DraftOrderStatus.CONFIRMED }
     });
-    return { order: recentOrder, draftOrder: updatedDraft, reason: "ALREADY_CONFIRMED_RECENTLY" };
+    return { order: existingOrder, draftOrder: activeDraft, reason: "ORDER_ALREADY_EXISTS" };
+  }
+
+  // Atomic claim: lock draft status to prevent concurrent confirmations before order creation
+  const claimed = await prisma.draftOrder.updateMany({
+    where: {
+      id: activeDraft.id,
+      status: { in: [DraftOrderStatus.AWAITING_CONFIRMATION, DraftOrderStatus.DRAFTING] },
+    },
+    data: { status: DraftOrderStatus.CONFIRMED },
+  });
+
+  if (claimed.count === 0) {
+    console.log(`🛡️ [DraftOrderService] Draft ${activeDraft.id} already claimed/confirmed. Skipping.`);
+    const refreshed = await prisma.draftOrder.findUnique({ where: { id: activeDraft.id } });
+    return { order: null, draftOrder: refreshed, reason: "ALREADY_CLAIMED" };
   }
 
   // Create real Order via newOrderArrivalService
@@ -376,7 +442,7 @@ export async function confirmActiveDraftOrder(companyId: string, conversationId:
     conversationId,
     leadId: activeDraft.leadId,
     summary: `AI Order: ${items.map((i: any) => `${i.name} x${i.quantity}`).join(", ") || "Unknown Items"}`,
-    amount: activeDraft.totalAmount,
+    amount: Number(activeDraft.totalAmountInSubunits) / 100,
     items: items.map((i: any) => ({
       name: i.name,
       quantity: i.quantity,
@@ -390,15 +456,14 @@ export async function confirmActiveDraftOrder(companyId: string, conversationId:
   try {
     const createdOrder = await newOrderArrivalService.processNewOrderArrival(orderData);
 
-    // Transition DraftOrder status to CONFIRMED
-    const updatedDraft = await prisma.draftOrder.update({
-      where: { id: activeDraft.id },
-      data: { status: DraftOrderStatus.CONFIRMED }
-    });
-
-    console.log(`✅ [DraftOrderService] Successfully confirmed draft ${activeDraft.id} -> created Order ${createdOrder.id} for amount ₹${activeDraft.totalAmount}`);
-    return { order: createdOrder, draftOrder: updatedDraft };
+    console.log(`✅ [DraftOrderService] Successfully confirmed draft ${activeDraft.id} -> created Order ${createdOrder.id} for amount ₹${Number(activeDraft.totalAmountInSubunits) / 100}`);
+    return { order: createdOrder, draftOrder: activeDraft };
   } catch (err: any) {
+    // Revert draft status on failure so it can be retried
+    await prisma.draftOrder.update({
+      where: { id: activeDraft.id },
+      data: { status: DraftOrderStatus.AWAITING_CONFIRMATION }
+    }).catch(() => {});
     console.error(`❌ [DraftOrderService] Failed to process order arrival for draft ${activeDraft.id}:`, err.message);
     throw err;
   }

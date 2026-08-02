@@ -75,6 +75,10 @@ export class NewOrderArrivalService {
         });
         const assignedToId = conversation?.claimedById || null;
 
+        const amountSubunits = BigInt(Math.round((amount || 0) * 100));
+        const cogsSubunits = BigInt(Math.round((totalCogs || 0) * 100));
+        const profitSubunits = BigInt(Math.round((netProfit || 0) * 100));
+
         // 2. Create the order and items in a transaction using tenantDb.$transaction
         const order = await tenantDb.$transaction(async (txDb) => {
             const newOrder = await txDb.order.create({
@@ -83,22 +87,15 @@ export class NewOrderArrivalService {
                     leadId,
                     summary,
                     amount,
+                    amountInSubunits: amountSubunits,
                     totalCogs,
+                    totalCogsInSubunits: cogsSubunits,
                     netProfit,
-                    orderItems: items && items.length > 0 ? {
-                        create: items.map((item: any) => ({
-                            companyId,
-                            name: item.name || "Unknown Item",
-                            quantity: item.quantity || 1,
-                            price: item.price || 0,
-                            sku: item.sku || null,
-                            productId: item.productId || null
-                        }))
-                    } : undefined,
+                    netProfitInSubunits: profitSubunits,
                     status: initialStatus,
                     source: source || OrderSource.BOT_DETECTED,
                     priority: priority || (amount > 0 ? OrderPriority.URGENT : OrderPriority.NORMAL),
-                    priorityScore: await this.calculatePriorityScore(amount, companyId, customerHistory),
+                    priorityScore: await this.calculatePriorityScore(amountSubunits, companyId, customerHistory),
                     predictedValue: amount,
                     isUrgent: amount > 0,
                     processedById: assignedToId,
@@ -110,16 +107,22 @@ export class NewOrderArrivalService {
 
             // Create relational Order Items (The "Master Catalog" link)
             if (items && Array.isArray(items)) {
-                const itemRecords = items.map(item => ({
-                    orderId: newOrder.id,
-                    companyId: companyId,
-                    productId: item.productId || null,
-                    sku: item.sku || null,
-                    name: item.name,
-                    quantity: Number(item.quantity) || 1,
-                    price: Number(item.price) || 0,
-                    cogs: item.cogs !== undefined && item.cogs !== null ? Number(item.cogs) : null,
-                }));
+                const itemRecords = items.map(item => {
+                    const priceNum = Number(item.price) || 0;
+                    const cogsNum = item.cogs !== undefined && item.cogs !== null ? Number(item.cogs) : 0;
+                    return {
+                        orderId: newOrder.id,
+                        companyId: companyId,
+                        productId: item.productId || null,
+                        sku: item.sku || null,
+                        name: item.name,
+                        quantity: Number(item.quantity) || 1,
+                        price: priceNum,
+                        priceInSubunits: BigInt(Math.round(priceNum * 100)),
+                        cogs: cogsNum,
+                        cogsInSubunits: BigInt(Math.round(cogsNum * 100))
+                    };
+                });
 
                 await txDb.orderItem.createMany({
                     data: itemRecords
@@ -324,9 +327,10 @@ export class NewOrderArrivalService {
      * Calculate priority score based on order value and customer history
      * Phase 3 Formula: (Order Amount * 0.5) + (Customer Lifetime Value * 0.3) + (Urgency Multiplier)
      */
-    private async calculatePriorityScore(amount: number, companyId: string, history: CustomerHistory): Promise<number> {
+    private async calculatePriorityScore(amountInSubunits: bigint | number, companyId: string, history: CustomerHistory): Promise<number> {
+        const amountValue = Number(amountInSubunits) / 100;
         // We apply a scaling factor (e.g. 0.01) to order amounts to normalize rupees into a 0-100 score
-        const scaledAmount = amount * 0.01;
+        const scaledAmount = amountValue * 0.01;
         const scaledLtv = history.previousSpend * 0.01;
         
         let score = (scaledAmount * 0.5) + (scaledLtv * 0.3);
@@ -343,9 +347,9 @@ export class NewOrderArrivalService {
             urgencyMultiplier = 15; // Win-back urgency
         } else if (history.isExistingCustomer) {
             urgencyMultiplier = 10; // VIP urgency
-        } else if (amount > 1000) {
+        } else if (amountValue > 1000) {
             urgencyMultiplier = 20; // High Value New Customer
-        } else if (amount > 0) {
+        } else if (amountValue > 0) {
              urgencyMultiplier = 5;
         }
 

@@ -254,11 +254,15 @@ async function upsertVariants(
     }
 
     const attributesMap = v.attributes || null;
+    const variantPriceSubunits = v.price_override !== null && v.price_override !== undefined 
+      ? BigInt(Math.round(v.price_override * 100)) 
+      : null;
 
     await db.inventoryVariant.upsert({
       where: { productId_attributeValue: { productId, attributeValue: v.attribute_value } },
       update: { 
         price: v.price_override ?? 0, 
+        priceInSubunits: variantPriceSubunits,
         stock: v.stock, 
         ...(attributesMap ? { attributes: attributesMap } : {}),
         ...(variantSku ? { sku: variantSku } : {}) 
@@ -268,6 +272,7 @@ async function upsertVariants(
         attributeValue: v.attribute_value, 
         attributes: attributesMap,
         price: v.price_override ?? 0, 
+        priceInSubunits: variantPriceSubunits,
         stock: v.stock, 
         sku: variantSku 
       }
@@ -318,14 +323,15 @@ export async function confirmInventoryProducts(
       if (existing) {
         // Update existing product — only update SKU if explicitly provided
         productSku = product.sku ?? existing.sku;
-        const newPrice = product.price_inr ?? existing.basePrice;
+        const existingBasePriceFloat = Number(existing.basePriceInSubunits) / 100;
+        const newPrice = product.price_inr ?? existingBasePriceFloat;
         
-        if (existing.basePrice !== newPrice) {
+        if (existingBasePriceFloat !== newPrice) {
           historyPromises.push(
             tx.priceHistory.create({
               data: {
                 productId: existing.id,
-                oldPrice: existing.basePrice,
+                oldPrice: existingBasePriceFloat,
                 newPrice: newPrice,
                 actorName: "System Ingestion"
               }
@@ -337,6 +343,7 @@ export async function confirmInventoryProducts(
           where: { id: existing.id },
           data: {
             basePrice: newPrice,
+            basePriceInSubunits: BigInt(Math.round((newPrice || 0) * 100)),
             hasVariants,
             variantAttributeName: product.attribute_name,
             variantAttributeNames: dimensionNames,
@@ -352,12 +359,14 @@ export async function confirmInventoryProducts(
         // Create new product — auto-generate SKU if not provided
         const baseSku = product.sku || generateBaseSku(productName);
         productSku = await ensureSkuUnique(companyId, baseSku, tx);
+        const basePriceVal = product.price_inr ?? 0;
         const newProduct = await tx.inventoryProduct.create({
           data: {
             companyId,
             name: productName,
             description: product.description,
-            basePrice: product.price_inr ?? 0,
+            basePrice: basePriceVal,
+            basePriceInSubunits: BigInt(Math.round(basePriceVal * 100)),
             hasVariants,
             variantAttributeName: product.attribute_name,
             variantAttributeNames: dimensionNames,
@@ -539,8 +548,8 @@ export async function getInventoryProducts(companyId: string, categoriesFilter?:
  * falls back to the most-stocked variant. Floors at 0 to prevent negatives.
  * Skips variant-less products (no `stock` field on the product itself).
  */
-export async function decrementStockForOrder(orderId: string, companyId: string): Promise<void> {
-  await (directPrisma || prisma).$transaction(async (tx) => {
+export async function decrementStockForOrder(orderId: string, companyId: string, txClient?: any): Promise<void> {
+  const runner = async (tx: any) => {
     // 1. Atomic Idempotency Check: set stockDecremented = true only if it is currently false
     const updated = await tx.order.updateMany({
       where: { id: orderId, stockDecremented: false },
@@ -588,72 +597,70 @@ export async function decrementStockForOrder(orderId: string, companyId: string)
 
       // 4. Fallback: Exact name match or prefix match (e.g. item.name = "wss shirts - 42 / M", product.name = "wss shirts")
       if (!product) {
+        const baseName = item.name.split(" - ")[0].trim();
         product = await (tx.inventoryProduct as any).findFirst({
-          where: { companyId, name: { equals: item.name, mode: "insensitive" }, isActive: true }
+          where: {
+            companyId,
+            isActive: true,
+            OR: [
+              { name: { equals: item.name, mode: "insensitive" } },
+              { name: { equals: baseName, mode: "insensitive" } }
+            ]
+          }
         });
       }
 
       if (!product) {
-        const allProducts: any[] = await (tx.inventoryProduct as any).findMany({
-          where: { companyId, isActive: true }
-        });
-        product = allProducts.find((p: any) =>
-          item.name.toLowerCase().startsWith(p.name.toLowerCase())
-        );
+        console.warn(`⚠️ [StockDecrement] Product/Variant not found for order item: "${item.name}" (sku: ${item.sku})`);
+        continue;
       }
 
-      if (!product || !product.hasVariants) continue;
-
-      const allVariants: any[] = await (tx.inventoryVariant as any).findMany({
-        where: { productId: product.id, isActive: true }
-      });
-      if (!allVariants.length) continue;
-
-      let targetVariant: any = null;
-
-      // 1. Direct variant ID match (payment-request stores variant.id in item.sku)
-      if (item.sku) {
-        targetVariant = allVariants.find((v: any) => v.id === item.sku);
-      }
-
-      // 2. Attribute value as whole word in item name (word-boundary, avoids false positives)
-      if (!targetVariant) {
-        targetVariant = allVariants.find((v: any) => {
-          const escaped = v.attributeValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          return new RegExp(`\\b${escaped}\\b`, "i").test(item.name);
-        });
-      }
-
-      // 3. Fallback: pick variant with same price as OrderItem (if unique)
-      if (!targetVariant) {
-        const samePrice = allVariants.filter((v: any) => v.price === item.price);
-        if (samePrice.length === 1) {
-          targetVariant = samePrice[0];
-        }
-      }
-
-      // 4. Last resort: most-stocked variant (triggers only when all above fail)
-      if (!targetVariant) {
-        targetVariant = allVariants.sort((a: any, b: any) => (b.stock ?? -1) - (a.stock ?? -1))[0];
-        console.warn(`⚠️ [StockDecrement] FALLBACK: No variant match for order ${orderId}, item "${item.name}" (qty ${item.quantity}). Using most-stocked variant "${targetVariant?.attributeValue}" (id: ${targetVariant?.id}). Product "${product.name}" has ${allVariants.length} variants: [${allVariants.map((v: any) => v.attributeValue).join(", ")}].`);
-      }
-
-      if (!targetVariant || targetVariant.stock === null || targetVariant.stock === undefined) continue;
-
-      let actualNewStock = 0;
-      let actualOldStock = 0;
-
+      // Decrement logic per product variant
       try {
-        const result = await tx.$queryRaw<{ stock: number }[]>`
+        let targetVariant: any = null;
+
+        if (item.sku) {
+          targetVariant = await (tx.inventoryVariant as any).findFirst({
+            where: { id: item.sku, productId: product.id, isActive: true }
+          });
+        }
+
+        if (!targetVariant && item.name.includes(" - ")) {
+          const attrVal = item.name.split(" - ").slice(1).join(" - ").trim();
+          targetVariant = await (tx.inventoryVariant as any).findFirst({
+            where: { productId: product.id, attributeValue: { equals: attrVal, mode: "insensitive" }, isActive: true }
+          });
+        }
+
+        if (!targetVariant) {
+          const variants = await (tx.inventoryVariant as any).findMany({
+            where: { productId: product.id, isActive: true }
+          });
+          if (variants.length === 1) targetVariant = variants[0];
+        }
+
+        if (!targetVariant) {
+          console.warn(`⚠️ [StockDecrement] Could not uniquely identify variant for item "${item.name}" (Product ID: ${product.id}).`);
+          continue;
+        }
+
+        if (targetVariant.stock === null) {
+          console.log(`ℹ️ [StockDecrement] Variant ${targetVariant.id} has no stock tracking (stock=null). Skipping.`);
+          continue;
+        }
+
+        let actualOldStock = targetVariant.stock;
+        let actualNewStock = 0;
+
+        const result: any = await tx.$queryRaw`
           UPDATE "InventoryVariant"
-          SET "stock" = "stock" - ${item.quantity}
+          SET "stock" = GREATEST(0, "stock" - ${item.quantity}), "updatedAt" = NOW()
           WHERE "id" = ${targetVariant.id} AND "stock" >= ${item.quantity}
           RETURNING "stock"
         `;
         if (!result.length) continue;
 
         actualNewStock = result[0].stock;
-        actualOldStock = actualNewStock + item.quantity;
 
         await tx.stockHistory.create({
           data: {
@@ -679,5 +686,11 @@ export async function decrementStockForOrder(orderId: string, companyId: string)
         continue;
       }
     }
-  }, { maxWait: 10000, timeout: 20000 });
+  };
+
+  if (txClient) {
+    await runner(txClient);
+  } else {
+    await (directPrisma || prisma).$transaction(runner, { maxWait: 10000, timeout: 20000 });
+  }
 }

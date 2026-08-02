@@ -23,9 +23,9 @@ const STATUS_RANK: Record<OrderStatus, number> = {
     [OrderStatus.PROCESSING]: 5,
     [OrderStatus.PREPARING]: 6,
     [OrderStatus.READY]: 7,
+    [OrderStatus.COMPLETED]: 7,
     [OrderStatus.SHIPPED]: 8,
     [OrderStatus.DELIVERED]: 9,
-    [OrderStatus.COMPLETED]: 10,
     [OrderStatus.CANCELLED]: 11,
     [OrderStatus.REJECTED]: 11,
     [OrderStatus.ARCHIVED]: 12,
@@ -168,14 +168,16 @@ export class OrderWorkflowService {
                         }
                     });
 
-                await tenantDb.conversation.update({
-                    where: { id: order.conversationId },
-                    data: { 
-                        intent: null,
-                        sessionState: undefined // Clear AI cart session state
-                    }
-                });
-                console.log(`🧹 [OrderWorkflow] Cleared intent and session state for completed order in Conv ${order.conversationId}`);
+                if (order.conversationId) {
+                    await tenantDb.conversation.update({
+                        where: { id: order.conversationId },
+                        data: { 
+                            intent: null,
+                            sessionState: undefined // Clear AI cart session state
+                        }
+                    }).catch((err: any) => console.warn(`Conversation ${order.conversationId} not found to clear intent:`, err.message));
+                    console.log(`🧹 [OrderWorkflow] Cleared intent and session state for completed order in Conv ${order.conversationId}`);
+                }
             }
 
             // ⛔ STRICT PERSISTENCE: Re-fetch fresh state to ensure no race conditions
@@ -216,10 +218,11 @@ export class OrderWorkflowService {
             [OrderStatus.BOT_CREATED_ORDER]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.PAID],
             [OrderStatus.USER_CONFIRMED_PENDING_AGENT]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.PAID],
             [OrderStatus.NEW]: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.PAID],
-            [OrderStatus.CONFIRMED]: [OrderStatus.READY, OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.PAID],
-            [OrderStatus.PAID]: [OrderStatus.READY, OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
-            [OrderStatus.PREPARING]: [OrderStatus.READY, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+            [OrderStatus.CONFIRMED]: [OrderStatus.READY, OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.PAID, OrderStatus.SHIPPED],
+            [OrderStatus.PAID]: [OrderStatus.READY, OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.SHIPPED],
+            [OrderStatus.PREPARING]: [OrderStatus.READY, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.SHIPPED],
             [OrderStatus.READY]: [OrderStatus.SHIPPED, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+            [OrderStatus.COMPLETED]: [OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.CANCELLED],
             [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
             [OrderStatus.DELIVERED]: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
         };
