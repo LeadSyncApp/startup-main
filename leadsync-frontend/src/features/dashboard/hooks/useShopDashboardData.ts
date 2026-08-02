@@ -17,6 +17,8 @@ interface ShopDashboardData {
   companyStatus: any;
 }
 
+import { onEvent } from '../../../lib/socketClient';
+
 export function useShopDashboardData() {
   const [data, setData] = useState<ShopDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -123,8 +125,15 @@ export function useShopDashboardData() {
 
   useEffect(() => {
     fetchAll();
+    const unsub1 = onEvent('order_updated', () => fetchAll(true));
+    const unsub2 = onEvent('payment_confirmed', () => fetchAll(true));
+    const unsub3 = onEvent('dashboard_metrics_updated', () => fetchAll(true));
+
     return () => {
       cancelledRef.current = true;
+      unsub1();
+      unsub2();
+      unsub3();
     };
   }, [fetchAll]);
 

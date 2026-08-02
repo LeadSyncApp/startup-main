@@ -21,10 +21,12 @@ export const DailyCollectionStats: React.FC = () => {
           const rawData = await response.json();
           const orders = Array.isArray(rawData) ? rawData : (rawData.data || []);
           const today = new Date().toISOString().split('T')[0];
-          const todayCollection = orders.filter((o: any) => o.status === 'PAID' && o.createdAt.startsWith(today)).reduce((sum: number, o: any) => sum + o.amount, 0);
-          const pendingPayments = orders.filter((o: any) => o.status === 'PENDING').reduce((sum: number, o: any) => sum + o.amount, 0);
-          const paidOrders = orders.filter((o: any) => o.status === 'PAID').length;
-          const pendingOrders = orders.filter((o: any) => o.status === 'PENDING').length;
+          const PAID_STATUSES = ['PAID', 'COMPLETED', 'DELIVERED', 'SHIPPED', 'PROCESSING', 'PREPARING', 'READY'];
+          const PENDING_STATUSES = ['PENDING', 'NEW', 'BOT_CREATED_ORDER', 'USER_CONFIRMED_PENDING_AGENT'];
+          const todayCollection = orders.filter((o: any) => PAID_STATUSES.includes(o.status) && o.createdAt.startsWith(today)).reduce((sum: number, o: any) => sum + o.amount, 0);
+          const pendingPayments = orders.filter((o: any) => PENDING_STATUSES.includes(o.status)).reduce((sum: number, o: any) => sum + o.amount, 0);
+          const paidOrders = orders.filter((o: any) => PAID_STATUSES.includes(o.status)).length;
+          const pendingOrders = orders.filter((o: any) => PENDING_STATUSES.includes(o.status)).length;
           setStats({ todayCollection, pendingPayments, paidOrders, pendingOrders });
         }
       } catch (error) {

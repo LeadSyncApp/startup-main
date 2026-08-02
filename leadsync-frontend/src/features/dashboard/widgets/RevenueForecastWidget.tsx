@@ -8,11 +8,11 @@ interface RevenueForecastWidgetProps {
   loading?: boolean;
 }
 
-function ForecastSkeleton() {
+function Skeleton() {
   return (
-    <div className="card-hover p-5" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+    <div className="rounded-2xl p-5" style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}>
       <div className="h-5 w-40 rounded animate-pulse mb-4" style={{ backgroundColor: 'var(--app-border)' }} />
-      <div className="h-48 rounded-lg animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
+      <div className="h-40 rounded-lg animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
     </div>
   );
 }
@@ -20,7 +20,6 @@ function ForecastSkeleton() {
 interface ChartTooltipProps {
   active?: boolean;
   payload?: Array<{ value: number; dataKey: string; color: string; payload: { date: string; forecast?: boolean } }>;
-  label?: string;
 }
 
 function ChartTooltip({ active, payload }: ChartTooltipProps) {
@@ -32,19 +31,19 @@ function ChartTooltip({ active, payload }: ChartTooltipProps) {
       style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)', color: 'var(--app-text)' }}
     >
       <p className="font-medium">{point.date}</p>
-      <p className="tabular-nums">{'\u20B9'}{payload[0].value.toLocaleString('en-IN')}</p>
+      <p className="tabular-nums font-semibold">{'\u20B9'}{payload[0].value.toLocaleString('en-IN')}</p>
       {point.forecast && <p style={{ color: 'var(--app-text-muted)' }}>Forecast</p>}
     </div>
   );
 }
 
 export const RevenueForecastWidget: React.FC<RevenueForecastWidgetProps> = ({ forecast, loading }) => {
-  if (loading) return <ForecastSkeleton />;
+  if (loading) return <Skeleton />;
 
   const hasData = forecast && forecast.historical && forecast.historical.length > 0;
   if (!hasData) {
     return (
-      <div className="card-hover p-5" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+      <div className="rounded-2xl p-5" style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}>
         <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--app-text)' }}>Revenue Forecast</h2>
         <p className="text-sm text-center py-8" style={{ color: 'var(--app-text-muted)' }}>
           Not enough data to generate a forecast
@@ -65,8 +64,8 @@ export const RevenueForecastWidget: React.FC<RevenueForecastWidgetProps> = ({ fo
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="card-hover p-5"
-      style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}
+      className="rounded-2xl p-5 transition-all duration-200 hover:shadow-sm"
+      style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}
     >
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold" style={{ color: 'var(--app-text)' }}>Revenue Forecast</h2>
@@ -82,7 +81,7 @@ export const RevenueForecastWidget: React.FC<RevenueForecastWidgetProps> = ({ fo
         </div>
       </div>
 
-      <div className="h-48">
+      <div className="h-40">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={combined} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border)" vertical={false} />
@@ -121,7 +120,7 @@ export const RevenueForecastWidget: React.FC<RevenueForecastWidgetProps> = ({ fo
           <TrendingUp className="h-3.5 w-3.5" style={{ color: 'var(--brand-saffron)' }} />
         </div>
         <div className="text-center">
-          <p className="text-2xs" style={{ color: 'var(--app-text-muted)' }}>Next 14 days (predicted)</p>
+          <p className="text-2xs" style={{ color: 'var(--app-text-muted)' }}>Next 14 days</p>
           <p className="text-sm font-bold tabular-nums" style={{ color: 'var(--brand-saffron)' }}>{'\u20B9'}{totalForecast.toLocaleString('en-IN')}</p>
         </div>
       </div>

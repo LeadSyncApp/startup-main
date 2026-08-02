@@ -1,10 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { IndianRupee } from 'lucide-react';
+import { IndianRupee, ArrowRight } from 'lucide-react';
 
 interface RecentOrdersWidgetProps {
   orders: { customer: string; amount: number; date: Date | string; status: string }[];
   loading?: boolean;
+  onNavigate?: (tab: string) => void;
 }
 
 function timeAgo(date: Date | string): string {
@@ -20,69 +21,75 @@ function timeAgo(date: Date | string): string {
 }
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
-  PAID: { bg: 'rgba(95,133,117,0.12)', color: 'var(--success-green)' },
-  DELIVERED: { bg: 'rgba(95,133,117,0.12)', color: 'var(--success-green)' },
-  PENDING: { bg: 'rgba(200,90,50,0.1)', color: 'var(--brand-saffron)' },
+  PAID: { bg: 'rgba(134, 194, 50, 0.1)', color: 'var(--success-green)' },
+  DELIVERED: { bg: 'rgba(134, 194, 50, 0.1)', color: 'var(--success-green)' },
+  PENDING: { bg: 'rgba(211, 107, 70, 0.08)', color: 'var(--brand-saffron)' },
 };
 
-function OrderSkeleton() {
+function Skeleton() {
   return (
-    <div className="card-hover p-5" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+    <div className="rounded-2xl p-5" style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}>
       <div className="h-4 w-32 rounded animate-pulse mb-3" style={{ backgroundColor: 'var(--app-border)' }} />
       <div className="space-y-2">
-        {[1, 2, 3].map(i => (
-          <div key={i} className="flex items-center gap-3 py-2">
-            <div className="flex-1 space-y-1.5">
-              <div className="h-3.5 w-24 rounded animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
-              <div className="h-2.5 w-16 rounded animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
-            </div>
-            <div className="h-4 w-16 rounded animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
-            <div className="h-5 w-14 rounded-full animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
-          </div>
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="h-8 rounded-lg animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
         ))}
       </div>
     </div>
   );
 }
 
-export const RecentOrdersWidget: React.FC<RecentOrdersWidgetProps> = ({ orders, loading }) => {
-  if (loading) return <OrderSkeleton />;
+export const RecentOrdersWidget: React.FC<RecentOrdersWidgetProps> = ({ orders, loading, onNavigate }) => {
+  if (loading) return <Skeleton />;
+
+  const displayOrders = orders.slice(0, 5);
 
   return (
-    <div className="card-hover p-5" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
-      <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--app-text)' }}>Recent Orders</h2>
+    <div className="rounded-2xl p-5 transition-all duration-200 hover:shadow-sm" style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold" style={{ color: 'var(--app-text)' }}>Recent Orders</h2>
+        {onNavigate && (
+          <button
+            onClick={() => onNavigate('orders')}
+            className="flex items-center gap-1 text-2xs font-medium px-2 py-1 rounded-lg transition-colors cursor-pointer hover:opacity-80"
+            style={{ color: 'var(--brand-saffron)', backgroundColor: 'rgba(211, 107, 70, 0.06)' }}
+          >
+            View All <ArrowRight className="h-3 w-3" />
+          </button>
+        )}
+      </div>
       <div className="space-y-0.5">
-      {orders.length === 0 && (
+      {displayOrders.length === 0 && (
         <p className="text-sm text-center py-4" style={{ color: 'var(--app-text-muted)' }}>
           No recent orders
         </p>
       )}
-      {orders.map((order, idx) => {
+      {displayOrders.map((order, idx) => {
         const style = statusStyles[order.status] || statusStyles.PENDING;
         return (
           <motion.div
             key={idx}
-            initial={{ opacity: 0, x: -6 }}
+            initial={{ opacity: 0, x: -4 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: idx * 0.03 }}
-            className="flex items-center gap-3 py-2 px-1 rounded-lg"
+            className="flex items-center gap-2.5 py-1.5 px-1 rounded-lg"
           >
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate" style={{ color: 'var(--app-text)' }}>
+              <p className="text-xs font-medium truncate" style={{ color: 'var(--app-text)' }}>
                 {order.customer}
               </p>
               <p className="text-2xs" style={{ color: 'var(--app-text-muted)' }}>
                 {timeAgo(order.date)}
               </p>
             </div>
-            <div className="flex items-center gap-1 tabular-nums shrink-0">
-              <IndianRupee className="h-3 w-3" style={{ color: 'var(--app-text-muted)' }} />
-              <span className="text-sm font-semibold" style={{ color: 'var(--app-text)' }}>
+            <div className="flex items-center gap-0.5 tabular-nums shrink-0">
+              <IndianRupee className="h-2.5 w-2.5" style={{ color: 'var(--app-text-muted)' }} />
+              <span className="text-xs font-semibold" style={{ color: 'var(--app-text)' }}>
                 {order.amount.toLocaleString('en-IN')}
               </span>
             </div>
             <span
-              className="text-2xs font-semibold px-2 py-0.5 rounded-full shrink-0"
+              className="text-2xs font-semibold px-1.5 py-0.5 rounded-full shrink-0"
               style={{ backgroundColor: style.bg, color: style.color }}
             >
               {order.status}

@@ -8,11 +8,11 @@ interface RevenueTrendWidgetProps {
   loading?: boolean;
 }
 
-function TrendSkeleton() {
+function Skeleton() {
   return (
-    <div className="card-hover p-5" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
-      <div className="h-6 w-32 rounded animate-pulse mb-4" style={{ backgroundColor: 'var(--app-border)' }} />
-      <div className="h-28 rounded-lg animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
+    <div className="rounded-2xl p-5" style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}>
+      <div className="h-5 w-32 rounded animate-pulse mb-4" style={{ backgroundColor: 'var(--app-border)' }} />
+      <div className="h-40 rounded-lg animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
     </div>
   );
 }
@@ -31,14 +31,14 @@ function ChartTooltip({ active, payload }: ChartTooltipProps) {
       style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)', color: 'var(--app-text)' }}
     >
       <p className="font-medium">{d.date}</p>
-      <p className="tabular-nums">{'\u20B9'}{d.amount.toLocaleString('en-IN')}</p>
+      <p className="tabular-nums font-semibold">{'\u20B9'}{d.amount.toLocaleString('en-IN')}</p>
       <p style={{ color: 'var(--app-text-muted)' }}>{d.orders} orders</p>
     </div>
   );
 }
 
 export const RevenueTrendWidget: React.FC<RevenueTrendWidgetProps> = ({ trend, chart, loading }) => {
-  if (loading) return <TrendSkeleton />;
+  if (loading) return <Skeleton />;
 
   const trendUp = trend !== null && trend > 0;
   const trendDown = trend !== null && trend < 0;
@@ -46,19 +46,21 @@ export const RevenueTrendWidget: React.FC<RevenueTrendWidgetProps> = ({ trend, c
   const TrendIcon = trendUp ? TrendingUp : TrendingDown;
 
   return (
-    <div className="card-hover p-5" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
-      <div className="space-y-3">
-      {trend !== null && (
-        <div
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
-          style={{ backgroundColor: `${trendColor}15`, color: trendColor }}
-        >
-          <TrendIcon className="h-3.5 w-3.5" />
-          {trendUp ? '\u2191' : '\u2193'} {Math.abs(trend)}% vs last month
-        </div>
-      )}
+    <div className="rounded-2xl p-5 transition-all duration-200 hover:shadow-sm" style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold" style={{ color: 'var(--app-text)' }}>Revenue Trend</h2>
+        {trend !== null && (
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-semibold"
+            style={{ backgroundColor: `${trendColor}12`, color: trendColor }}
+          >
+            <TrendIcon className="h-3 w-3" />
+            {trendUp ? '\u2191' : '\u2193'} {Math.abs(trend)}%
+          </span>
+        )}
+      </div>
 
-      <div className="h-40">
+      <div className="h-44">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chart} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border)" vertical={false} />
@@ -75,20 +77,19 @@ export const RevenueTrendWidget: React.FC<RevenueTrendWidgetProps> = ({ trend, c
               axisLine={false}
               tickFormatter={(v: number) => v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)}
             />
-            <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(200,90,50,0.06)' }} />
-            <Bar dataKey="amount" radius={[3, 3, 0, 0]} maxBarSize={24}>
+            <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(211, 107, 70, 0.04)' }} />
+            <Bar dataKey="amount" radius={[3, 3, 0, 0]} maxBarSize={20}>
               {chart.map((entry, i) => (
                 <Cell
                   key={i}
                   fill={entry.amount > 0 ? 'var(--brand-saffron)' : 'var(--app-border)'}
-                  fillOpacity={entry.amount > 0 ? 0.75 : 0.3}
+                  fillOpacity={entry.amount > 0 ? 0.7 : 0.3}
                 />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
     </div>
   );
 };

@@ -24,32 +24,22 @@ const channelLabels: Record<string, string> = {
   UNKNOWN: 'Other',
 };
 
-function ChannelSkeleton() {
+function Skeleton() {
   return (
-    <div className="card-hover p-5" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+    <div className="rounded-2xl p-5" style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}>
       <div className="h-4 w-32 rounded animate-pulse mb-4" style={{ backgroundColor: 'var(--app-border)' }} />
-      <div className="space-y-2">
-        <div className="h-3 rounded-full animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
-        <div className="flex gap-2">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="flex items-center gap-1.5">
-              <div className="h-2.5 w-2.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
-              <div className="h-3 w-14 rounded animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
-            </div>
-          ))}
-        </div>
-      </div>
+      <div className="h-3 rounded-full animate-pulse" style={{ backgroundColor: 'var(--app-border)' }} />
     </div>
   );
 }
 
 export const ChannelBreakdownWidget: React.FC<ChannelBreakdownWidgetProps> = ({ channels, loading }) => {
-  if (loading) return <ChannelSkeleton />;
+  if (loading) return <Skeleton />;
 
   const sorted = [...channels].sort((a, b) => b.percentage - a.percentage);
 
   return (
-    <div className="card-hover p-5" style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-border)' }}>
+    <div className="rounded-2xl p-5 transition-all duration-200 hover:shadow-sm" style={{ backgroundColor: 'var(--app-surface)', border: '1px solid var(--app-border)' }}>
       <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--app-text)' }}>Revenue by Channel</h2>
       <div className="space-y-3">
       {sorted.length === 0 && (
@@ -59,7 +49,7 @@ export const ChannelBreakdownWidget: React.FC<ChannelBreakdownWidgetProps> = ({ 
       )}
 
       {sorted.length > 0 && (
-        <div className="h-3 rounded-full overflow-hidden flex" style={{ backgroundColor: 'var(--app-border)' }}>
+        <div className="h-2.5 rounded-full overflow-hidden flex" style={{ backgroundColor: 'var(--app-border)' }}>
           {sorted.map((ch, i) => (
             <motion.div
               key={ch.channel}
@@ -73,21 +63,18 @@ export const ChannelBreakdownWidget: React.FC<ChannelBreakdownWidgetProps> = ({ 
         </div>
       )}
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
         {sorted.map(ch => (
           <div key={ch.channel} className="flex items-center gap-1.5 text-xs">
             <div
-              className="h-2.5 w-2.5 rounded-full shrink-0"
+              className="h-2 w-2 rounded-full shrink-0"
               style={{ backgroundColor: channelColors[ch.channel] || channelColors.UNKNOWN }}
             />
-            <span style={{ color: 'var(--app-text)' }}>
+            <span className="flex-1 truncate" style={{ color: 'var(--app-text)' }}>
               {channelLabels[ch.channel] || ch.channel}
             </span>
             <span className="font-semibold tabular-nums" style={{ color: 'var(--app-text)' }}>
               {ch.percentage}%
-            </span>
-            <span className="tabular-nums" style={{ color: 'var(--app-text-muted)' }}>
-              (₹{ch.revenue.toLocaleString('en-IN')})
             </span>
           </div>
         ))}
