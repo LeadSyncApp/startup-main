@@ -1,5 +1,14 @@
 import { Link } from "react-router-dom";
 
+/* ════════════════════════════════════════════════════════════════════ */
+/*                                FOOTER                               */
+/*                                                                      */
+/*  Every link here has to work for a LOGGED-OUT visitor. The previous  */
+/*  version pointed all five "Product" links at /dashboard, which is    */
+/*  auth-gated — clicking "Orders" bounced you to a login wall. They    */
+/*  now point at the matching section of this page instead.            */
+/* ════════════════════════════════════════════════════════════════════ */
+
 function Logo({ className = "" }: { className?: string }) {
   return (
     <Link to="/" className={`flex items-center gap-2 ${className}`}>
@@ -18,123 +27,92 @@ function Logo({ className = "" }: { className?: string }) {
   );
 }
 
-const footerLinks = {
-  product: [
-    { label: "Dashboard", to: "/dashboard" },
-    { label: "AI Auto-Replies", to: "/dashboard" },
-    { label: "Orders", to: "/dashboard" },
-    { label: "Inventory", to: "/dashboard" },
-    { label: "Broadcast", to: "/dashboard" },
-  ],
-  gettingStarted: [
-    { label: "Sign Up", to: "/onboarding" },
-    { label: "Log In", to: "/login" },
-  ],
-  company: [
-    { label: "About SaLira", to: "/" },
-  ],
-};
+/** `to` for router links, `href` for same-page anchors. */
+const COLUMNS: {
+  heading: string;
+  links: { label: string; to?: string; href?: string }[];
+}[] = [
+  {
+    heading: "What it does",
+    links: [
+      { label: "How it works", href: "#how-it-works" },
+      { label: "Orders from chat", href: "#features" },
+      { label: "Your day at a glance", href: "#features" },
+      { label: "Who it's for", href: "#who-its-for" },
+    ],
+  },
+  {
+    heading: "Get started",
+    links: [
+      { label: "Create your shop", to: "/onboarding" },
+      { label: "Log in", to: "/login" },
+    ],
+  },
+];
 
 export function Footer() {
   return (
-    <footer
-      className="border-t"
-      style={{ borderColor: "var(--app-border)" }}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-10">
-          {/* Brand */}
-          <div className="col-span-2 sm:col-span-1">
+    <footer className="border-t" style={{ borderColor: "var(--app-border)" }}>
+      <div className="max-w-6xl mx-auto px-5 sm:px-8 py-14">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-12">
+          <div className="col-span-2">
             <Logo className="mb-4" />
-            <p className="text-sm leading-relaxed" style={{ color: "var(--app-text-muted)" }}>
-              AI-powered commerce platform for Indian businesses.
+            <p
+              className="text-[14.5px] leading-relaxed max-w-xs"
+              style={{ color: "var(--app-text-muted)" }}
+            >
+              Answer customers, take orders and get paid — without being at your phone all day.
+              Built for small shops in India.
             </p>
           </div>
 
-          {/* Product */}
-          <div>
-            <h4
-              className="text-xs font-bold uppercase tracking-widest mb-4"
-              style={{ color: "var(--app-text)" }}
-            >
-              Product
-            </h4>
-            <ul className="space-y-2.5">
-              {footerLinks.product.map((link) => (
-                <li key={link.label}>
-                  <Link
-                    to={link.to}
-                    className="text-sm transition-colors hover:underline"
-                    style={{ color: "var(--app-text-muted)" }}
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Getting Started */}
-          <div>
-            <h4
-              className="text-xs font-bold uppercase tracking-widest mb-4"
-              style={{ color: "var(--app-text)" }}
-            >
-              Getting Started
-            </h4>
-            <ul className="space-y-2.5">
-              {footerLinks.gettingStarted.map((link) => (
-                <li key={link.label}>
-                  <Link
-                    to={link.to}
-                    className="text-sm transition-colors hover:underline"
-                    style={{ color: "var(--app-text-muted)" }}
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Company */}
-          <div>
-            <h4
-              className="text-xs font-bold uppercase tracking-widest mb-4"
-              style={{ color: "var(--app-text)" }}
-            >
-              Company
-            </h4>
-            <ul className="space-y-2.5">
-              {footerLinks.company.map((link) => (
-                <li key={link.label}>
-                  <Link
-                    to={link.to}
-                    className="text-sm transition-colors hover:underline"
-                    style={{ color: "var(--app-text-muted)" }}
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+          {COLUMNS.map((col) => (
+            <div key={col.heading}>
+              <h4
+                className="text-[11px] font-bold uppercase tracking-[0.16em] mb-4"
+                style={{ color: "var(--app-text)" }}
+              >
+                {col.heading}
+              </h4>
+              <ul className="space-y-2.5">
+                {col.links.map((link) => (
+                  <li key={link.label}>
+                    {link.to ? (
+                      <Link
+                        to={link.to}
+                        className="text-[14px] transition-colors hover:underline"
+                        style={{ color: "var(--app-text-muted)" }}
+                      >
+                        {link.label}
+                      </Link>
+                    ) : (
+                      <a
+                        href={link.href}
+                        className="text-[14px] transition-colors hover:underline"
+                        style={{ color: "var(--app-text-muted)" }}
+                      >
+                        {link.label}
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
 
-        {/* Bottom bar */}
         <div
-          className="pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4"
+          className="pt-7 border-t flex flex-col sm:flex-row items-center justify-between gap-3"
           style={{ borderColor: "var(--app-border)" }}
         >
-          <p className="text-xs" style={{ color: "var(--app-text-muted)" }}>
+          <p className="text-[12.5px]" style={{ color: "var(--app-text-muted)" }}>
             &copy; {new Date().getFullYear()} SaLira. All rights reserved.
           </p>
-          <div className="flex items-center gap-4">
-            {/* Social links — placeholder icons until real social profiles exist */}
-            <span className="text-xs" style={{ color: "var(--app-text-muted)" }}>
-              Coming soon: social links
-            </span>
-          </div>
+          {/* Social links intentionally omitted until real profiles exist —
+              an empty row reads better than "Coming soon: social links". */}
+          <p className="text-[12.5px]" style={{ color: "var(--app-text-muted)" }}>
+            Made in India
+          </p>
         </div>
       </div>
     </footer>

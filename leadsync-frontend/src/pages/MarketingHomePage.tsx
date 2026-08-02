@@ -1,50 +1,67 @@
 import { Helmet } from "react-helmet-async";
 import { NavBar } from "./marketing/NavBar";
-import { Hero } from "./marketing/Hero";
-import { HowItWorks } from "./marketing/HowItWorks";
-import { Verticals } from "./marketing/Verticals";
+import { ShopCounterStory } from "./marketing/story/ShopCounterStory";
+import { TrustStrip } from "./marketing/TrustStrip";
 import { Features } from "./marketing/Features";
+import { Verticals } from "./marketing/Verticals";
 import { BusinessScale } from "./marketing/BusinessScale";
+import { HonestProof } from "./marketing/HonestProof";
 import { FinalCTA } from "./marketing/FinalCTA";
 import { Footer } from "./marketing/Footer";
 
 /* ════════════════════════════════════════════════════════════════════ */
 /*                          MARKETING HOME PAGE                        */
+/*                                                                      */
+/*  Section backgrounds are deliberately varied rather than one flat    */
+/*  cream from top to bottom:                                          */
+/*    story        story-bg-0 → story-bg-5  (warms as the story runs)  */
+/*    trust strip  story-bg-5               (continues, no seam)       */
+/*    features     app-bg                   (resets, a breath)         */
+/*    verticals    story-bg-1                                          */
+/*    business     app-bg                                              */
+/*    proof        story-bg-4 / story-bg-5  (deepest cream)            */
+/*    final CTA    #A74B2A                  (the only saturated band)  */
 /* ════════════════════════════════════════════════════════════════════ */
+
+const DESCRIPTION =
+  "Answer customers, take orders and get paid — on Telegram and your website chat. SaLira replies for you, writes the order down, and has it ready in the morning.";
 
 export default function MarketingHomePage() {
   return (
     <>
       <Helmet>
-        <title>SaLira — Your Shop, Digitized</title>
+        <title>SaLira — Your shop, open even when you're asleep</title>
+        {/* Channel claims stay limited to what actually connects today.
+            WhatsApp and Instagram are labelled "coming soon" in TrustStrip. */}
+        <meta name="description" content={DESCRIPTION} />
         <meta
-          name="description"
-          content="Manage your shop across Telegram, WhatsApp, Instagram and more. Send invoices, track orders, automate replies, and grow your business — all from one place."
+          property="og:title"
+          content="SaLira — Your shop, open even when you're asleep"
         />
-        <meta property="og:title" content="SaLira — Your Shop, Digitized" />
-        <meta
-          property="og:description"
-          content="AI-powered commerce platform for Indian SMEs. Manage leads, orders, inventory, and customer conversations across multiple channels."
-        />
+        <meta property="og:description" content={DESCRIPTION} />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="SaLira" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="SaLira — Your Shop, Digitized" />
         <meta
-          name="twitter:description"
-          content="AI-powered commerce platform for Indian SMEs. Manage leads, orders, inventory, and customer conversations across multiple channels."
+          name="twitter:title"
+          content="SaLira — Your shop, open even when you're asleep"
         />
+        <meta name="twitter:description" content={DESCRIPTION} />
       </Helmet>
 
       <div className="min-h-screen" style={{ backgroundColor: "var(--app-bg)" }}>
         <NavBar />
-        <Hero />
-        <HowItWorks />
-        <Verticals />
+        <ShopCounterStory />
+        <TrustStrip />
+        {/* HowItWorks.tsx is deliberately not rendered — the scroll-story above
+            IS the "how it works" explanation. Same for Hero.tsx and
+            DashboardPreview.tsx, which the story replaced. Files kept on disk. */}
         <Features />
+        <Verticals />
         <BusinessScale />
         {/* PRICING DEFERRED: No real pricing tiers or subscription plans exist yet.
             Add a Pricing section here once pricing is finalized. */}
+        <HonestProof />
         <FinalCTA />
         <Footer />
       </div>
