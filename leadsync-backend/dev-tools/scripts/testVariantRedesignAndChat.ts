@@ -4,8 +4,8 @@
  * 2. Part B: Proactive In-Stock Variant Recommendation in AI Chat Reply
  */
 
-import { generateShopReply } from "../services/ai/ai.service";
-import { tenantContextStorage, TenantContext } from "../services/context/tenantContext.provider";
+import { generateShopReply } from "../../src/services/ai/ai.service";
+import { tenantContextStorage, TenantContext } from "../../src/services/context/tenantContext.provider";
 
 interface ProductVariantData {
   attribute_value: string;

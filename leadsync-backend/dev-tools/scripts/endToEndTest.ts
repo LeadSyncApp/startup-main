@@ -4,10 +4,10 @@
  * actual LLM-generated customer-facing reply text.
  */
 import "dotenv/config";
-import { prisma } from "../lib/prisma";
-import { tenantContextStorage, TenantContext } from "../services/context/tenantContext.provider";
-import { matchProductForMessage } from "../services/knowledge/productMatch.service";
-import { generateShopReply } from "../services/ai/ai.service";
+import { prisma } from "../../src/lib/prisma";
+import { tenantContextStorage, TenantContext } from "../../src/services/context/tenantContext.provider";
+import { matchProductForMessage } from "../../src/services/knowledge/productMatch.service";
+import { generateShopReply } from "../../src/services/ai/ai.service";
 
 const COMPANY_ID = "3102a85e-1798-45bb-b6c5-d94ea436f775";
 

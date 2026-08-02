@@ -10,7 +10,7 @@ async function testPaymentRequest() {
   // Fake login
   const token = jwt.sign(
     { userId: user.id, companyId: company.id, role: 'OWNER' }, 
-    process.env.JWT_SECRET || 'test_secret'
+    process.env.JWT_SECRET
   );
   
   const conversation = await prisma.conversation.findFirst({ where: { companyId: company.id } });

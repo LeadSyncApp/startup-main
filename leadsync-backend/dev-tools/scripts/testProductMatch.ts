@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { matchProductForMessage } from "../services/knowledge/productMatch.service";
+import { matchProductForMessage } from "../../src/services/knowledge/productMatch.service";
 
 const COMPANY_ID = "3102a85e-1798-45bb-b6c5-d94ea436f775";
 

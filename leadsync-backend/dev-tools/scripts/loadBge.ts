@@ -3,7 +3,7 @@
  * If this fails, report exactly why (no fallback, no silent pass).
  */
 import "dotenv/config";
-import { matchProductForMessage, ensureRerankerReady } from "../services/knowledge/productMatch.service";
+import { matchProductForMessage, ensureRerankerReady } from "../../src/services/knowledge/productMatch.service";
 
 const COMPANY_ID = "3102a85e-1798-45bb-b6c5-d94ea436f775";
 const QUERIES = [
