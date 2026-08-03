@@ -1,22 +1,28 @@
-// Safe environment loading — VITE_API_URL is the single source of truth.
-// Must be a full absolute URL with protocol (http:// or https://)
+// VITE_API_URL is the single source of truth for the backend API base URL.
+// Vite inlines this at build time from .env — no window.location fallback.
+// If VITE_API_URL is unset the app logs a warning and falls back to same-origin /api.
 
-const rawApiUrl = (typeof window !== 'undefined' ? window.location.origin + "/api" : process.env.VITE_API_URL)?.trim();
+const rawApiUrl = import.meta.env.VITE_API_URL?.trim();
 let API_BASE: string;
 
-// Validate VITE_API_URL is a proper absolute URL
 if (!rawApiUrl) {
-  throw new Error('VITE_API_URL is not defined in environment variables');
+  console.warn(
+    "⚠️ VITE_API_URL is not set. Falling back to same-origin /api. " +
+    "Set VITE_API_URL in your .env to point at the Railway backend."
+  );
+  API_BASE = "/api";
+} else if (
+  !rawApiUrl.startsWith("http://") &&
+  !rawApiUrl.startsWith("https://")
+) {
+  throw new Error(
+    `VITE_API_URL must be a full absolute URL starting with http:// or https://. Got: "${rawApiUrl}"`
+  );
+} else {
+  API_BASE = rawApiUrl.replace(/\/$/, "");
 }
 
-if (!rawApiUrl.startsWith('http://') && !rawApiUrl.startsWith('https://')) {
-  throw new Error(`VITE_API_URL must be a full absolute URL starting with http:// or https://. Got: "${rawApiUrl}"`);
-}
-
-API_BASE = rawApiUrl.replace(/\/$/, ""); // Remove trailing slash
-
-console.log('Validated API_BASE:', API_BASE);
-console.log('========================');
+console.log("API_BASE:", API_BASE);
 
 // ✅ Added PATCH here
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";

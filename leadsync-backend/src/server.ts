@@ -30,8 +30,7 @@ if (!key || key.length < 32) {
 
 const razorpaySecret = process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET;
 if (!razorpaySecret) {
-  sysLog.error("FATAL: RAZORPAY_WEBHOOK_SECRET or RAZORPAY_KEY_SECRET must be defined for secure payment webhook processing");
-  process.exit(1);
+  sysLog.warn("⚠️ RAZORPAY_WEBHOOK_SECRET / RAZORPAY_KEY_SECRET not set — payment webhook verification and Razorpay API calls will be unavailable. Set these before enabling live payments.");
 }
 
 // Log unhandled promise rejections as structured structured error logs
