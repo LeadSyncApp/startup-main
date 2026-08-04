@@ -1,7 +1,14 @@
 # Stage 1: Build stage
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
+
+# Install build essentials for native addons (prisma, bcryptjs)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy package metadata and prisma schema
 COPY package*.json ./
@@ -21,14 +28,14 @@ COPY src ./src
 RUN npx tsc
 
 # Stage 2: Production runner
-FROM node:20-alpine AS runner
+FROM node:20-slim AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Install libc6-compat for compatibility with native binaries (e.g. ONNX runtime)
-RUN apk add --no-cache libc6-compat
+# node:20-slim is Debian-based and includes glibc — no extra compat layers needed
+# for onnxruntime-node native binaries.
 
 # Copy package metadata and prisma schema
 COPY package*.json ./

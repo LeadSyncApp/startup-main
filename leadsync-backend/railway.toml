@@ -1,0 +1,6 @@
+[deploy]
+startCommand = "node dist/server.js"
+
+[deploy.environmentVariables]
+SKIP_ONNX_WARMUP = "true"
+ONNX_DISABLE = "true"
