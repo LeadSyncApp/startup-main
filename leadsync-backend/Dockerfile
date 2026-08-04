@@ -41,8 +41,13 @@ ENV NODE_ENV=production
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install production dependencies only and generate Prisma Client
-RUN npm ci --omit=dev --ignore-scripts && npx prisma generate
+# Install production dependencies and generate Prisma Client
+# No --ignore-scripts: sharp, onnxruntime-node, bcryptjs need postinstall to fetch/build native binaries
+RUN npm ci --omit=dev && npx prisma generate
+
+# Rebuild all native addons for the runner's linux-x64 target
+# (ensures sharp-linux-x64.node, onnxruntime_binding.node, bcryptjs bindings are present)
+RUN npm rebuild
 
 # Copy compiled Javascript bundle from builder stage
 COPY --from=builder /app/dist ./dist
