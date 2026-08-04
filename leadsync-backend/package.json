@@ -18,7 +18,7 @@
     "dev:setup": "npm run db:client",
     "migrate": "prisma migrate deploy",
     "db:client": "powershell -ExecutionPolicy Bypass -File ./scripts/db-client.ps1",
-    "postinstall": "powershell -ExecutionPolicy Bypass -File ./scripts/db-client.ps1",
+    "postinstall": "node scripts/postinstall.cjs",
     "repo:map": "powershell -ExecutionPolicy Bypass -File ./scripts/generate-repo-map.ps1"
   },
   "dependencies": {
