@@ -42,11 +42,12 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install production dependencies and generate Prisma Client
-# No --ignore-scripts: sharp, onnxruntime-node, bcryptjs need postinstall to fetch/build native binaries
-RUN npm ci --omit=dev && npx prisma generate
+# --ignore-scripts skips the top-level postinstall (PowerShell, no-op in Linux)
+RUN npm ci --omit=dev --ignore-scripts && npx prisma generate
 
-# Rebuild all native addons for the runner's linux-x64 target
-# (ensures sharp-linux-x64.node, onnxruntime_binding.node, bcryptjs bindings are present)
+# Rebuild native addons for the runner's linux-x64 target
+# Compiles sharp, onnxruntime-node, bcryptjs native binaries that were
+# downloaded as source by npm ci (skipped by --ignore-scripts above)
 RUN npm rebuild
 
 # Copy compiled Javascript bundle from builder stage
