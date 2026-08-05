@@ -170,8 +170,11 @@ app.use(express.json({
   }
 }));
 
-// Global API rate limiter (auth routes also have their own stricter limiter)
-app.use("/api", generalLimiter);
+// Global API rate limiter (skip /api/auth — they have their own stricter authLimiter)
+app.use("/api", (req, _res, next) => {
+  if (req.path.startsWith("/auth")) return next();
+  return generalLimiter(req, _res, next);
+});
 
 import { pgBossService } from "./services/infrastructure/pgboss/pgboss.service";
 import { WorkerRegistry } from "./services/infrastructure/pgboss/worker.registry";
