@@ -22,8 +22,6 @@ if (!rawApiUrl) {
   API_BASE = rawApiUrl.replace(/\/$/, "");
 }
 
-console.log("API_BASE:", API_BASE);
-
 // ✅ Added PATCH here
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 

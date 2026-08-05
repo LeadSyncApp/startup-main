@@ -9,7 +9,7 @@ import { SignInForm } from "./components/auth/SignInForm";
 import { connectSocket, disconnectSocket, onNotification } from "./lib/socketClient";
 import { useNotificationStore } from "./features/notifications/useNotificationStore";
 
-const API_BASE = import.meta.env.VITE_API_URL?.trim() || "";
+const API_BASE = import.meta.env.VITE_API_URL?.trim().replace(/\/api\/?$/, "") || "";
 import { AcceptInvitePage } from "./features/team/AcceptInvitePage";
 import MarketingHomePage from "./pages/MarketingHomePage";
 import { activityToast as activityToast } from "./features/activity-ledger/useActivityStore";

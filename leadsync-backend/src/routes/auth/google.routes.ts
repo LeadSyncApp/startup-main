@@ -19,7 +19,6 @@ function getGoogleAuthUrl(mode: "signin" | "signup") {
     access_type: "offline",
   });
   const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-  console.log("[Google OAuth] Redirect URL:", url);
   return url;
 }
 

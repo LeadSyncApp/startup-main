@@ -8,7 +8,7 @@ import {
 } from "react";
 import { apiClient } from "../../api/client";
 
-const API_BASE = import.meta.env.VITE_API_URL?.trim() || "";
+const API_BASE = import.meta.env.VITE_API_URL?.trim().replace(/\/api\/?$/, "") || "";
 
 /* =====================================================
    TENANCY INTERFACES
