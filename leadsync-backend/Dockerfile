@@ -33,6 +33,8 @@ FROM node:20-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV ONNX_DISABLE=true
+ENV SKIP_ONNX_WARMUP=true
 
 # Install build tools needed by npm rebuild to compile native addons
 # (sharp, onnxruntime-node, bcryptjs need python3 + make + g++ at rebuild time)
