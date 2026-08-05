@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, Menu, X } from "lucide-react";
 import { useTheme } from "../../features/theme/ThemeContext";
 
 /* ════════════════════════════════════════════════════════════════════ */
@@ -37,6 +38,7 @@ function Logo() {
 export function NavBar() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <nav
@@ -74,6 +76,21 @@ export function NavBar() {
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
 
+          {/* Mobile hamburger */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="md:hidden icon-interactive h-9 w-9 rounded-xl flex items-center justify-center border"
+            aria-label="Toggle menu"
+            style={{
+              borderColor: "var(--app-border)",
+              backgroundColor: "var(--app-surface)",
+              color: "var(--app-text-muted)",
+            }}
+          >
+            {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </button>
+
           <Link
             to="/login"
             className="hidden sm:inline-flex text-[14px] font-semibold px-3.5 py-2 rounded-xl transition-colors hover:opacity-70"
@@ -86,6 +103,34 @@ export function NavBar() {
           </Link>
         </div>
       </div>
+
+      {/* Mobile menu dropdown */}
+      {mobileOpen && (
+        <div
+          className="md:hidden border-t px-5 py-3 space-y-1"
+          style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-surface)" }}
+        >
+          {LINKS.map((l) => (
+            <a
+              key={l.href}
+              href={l.href}
+              onClick={() => setMobileOpen(false)}
+              className="block text-[14px] font-medium px-3 py-2.5 rounded-lg transition-colors hover:opacity-70"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              {l.label}
+            </a>
+          ))}
+          <Link
+            to="/login"
+            onClick={() => setMobileOpen(false)}
+            className="block text-[14px] font-semibold px-3 py-2.5 rounded-xl transition-colors hover:opacity-70"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            Log in
+          </Link>
+        </div>
+      )}
     </nav>
   );
 }

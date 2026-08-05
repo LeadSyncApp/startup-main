@@ -47,7 +47,7 @@ export const SimulationController: React.FC<SimulationControllerProps> = ({ onNa
               initial={{ opacity: 0, scale: 0.9, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 10 }}
-              className="pointer-events-auto mb-4 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl p-5 shadow-[0_20px_50px_rgba(212,168,67,0.15)] dark:shadow-[0_20px_50px_rgba(212,168,67,0.08)] overflow-hidden relative"
+              className="pointer-events-auto mb-4 w-full sm:w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl p-5 shadow-[0_20px_50px_rgba(212,168,67,0.15)] dark:shadow-[0_20px_50px_rgba(212,168,67,0.08)] overflow-hidden relative"
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-brand-saffron/5 rounded-full blur-3xl pointer-events-none" />
               

@@ -250,7 +250,7 @@ export function OnboardingWizard({
 
                   <button
                     type="button"
-                    onClick={() => { window.location.href = "/api/auth/google/signup"; }}
+                    onClick={() => { const apiBase = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") || ""; window.location.href = `${apiBase}/api/auth/google/signup`; }}
                     className="w-full py-4 border-2 rounded-2xl flex items-center justify-center gap-3 transition-all font-bold text-sm cursor-pointer shadow-sm text-[var(--app-text)]"
                     style={{ borderColor: 'var(--app-border)', backgroundColor: 'var(--app-bg)' }}
                     onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--app-border-strong)'; e.currentTarget.style.backgroundColor = 'var(--app-bg-soft)'; }}

@@ -47,7 +47,8 @@ export function SignInForm({ onSuccess, onSwitchToSignup }: SignInFormProps) {
   };
 
   const handleGoogleSignIn = () => {
-    window.location.href = "/api/auth/google/signin";
+    const apiBase = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") || "";
+    window.location.href = `${apiBase}/api/auth/google/signin`;
   };
 
   return (

@@ -31,7 +31,7 @@ router.get("/google/signin", (req, res, next) => {
  */
 router.get(
   "/google/callback",
-  passport.authenticate("google", { session: false, failureRedirect: "/login?error=google_auth_failed" }),
+  passport.authenticate("google", { session: false, failureRedirect: `${process.env.FRONTEND_URL || "http://localhost:5173"}/login?error=google_auth_failed` }),
   (req: any, res) => {
     try {
       const { user, isNew, linked, error, message } = req.auth || req.user || {};
@@ -47,7 +47,8 @@ router.get(
       }
 
       if (!user || !user.id) {
-        return res.redirect(`/login?error=no_user`);
+        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        return res.redirect(`${frontendUrl}/login?error=no_user`);
       }
 
       const token = signToken({
@@ -68,7 +69,8 @@ router.get(
       res.redirect(`${frontendUrl}${redirectPath}#token=${token}`);
     } catch (error) {
       console.error("Google callback error:", error);
-      res.redirect("/login?error=callback_failed");
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+      res.redirect(`${frontendUrl}/login?error=callback_failed`);
     }
   }
 );
