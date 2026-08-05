@@ -5,24 +5,37 @@ import { signToken } from "../../utils/jwt";
 
 const router = Router();
 
+function getGoogleAuthUrl(mode: "signin" | "signup") {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const callbackUrl = encodeURIComponent(process.env.GOOGLE_CALLBACK_URL || "http://localhost:4000/api/auth/google/callback");
+  const redirectUri = process.env.GOOGLE_CALLBACK_URL || "http://localhost:4000/api/auth/google/callback";
+  const state = `mode=${mode}`;
+  const params = new URLSearchParams({
+    client_id: clientId!,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "profile email",
+    state,
+    prompt: "select_account",
+    access_type: "offline",
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+}
+
 /**
  * GET /api/auth/google/signup
  * Initiates Google OAuth flow for SIGN UP (creates new account if none exists)
  */
-router.get("/google/signup", (req, res, next) => {
-  const scope = ["profile", "email"];
-  const state = "mode=signup";
-  passport.authenticate("google", { scope, state, prompt: "select_account" })(req, res, next);
+router.get("/google/signup", (req, res) => {
+  res.redirect(getGoogleAuthUrl("signup"));
 });
 
 /**
  * GET /api/auth/google/signin
  * Initiates Google OAuth flow for SIGN IN (only allows existing accounts)
  */
-router.get("/google/signin", (req, res, next) => {
-  const scope = ["profile", "email"];
-  const state = "mode=signin";
-  passport.authenticate("google", { scope, state, prompt: "select_account" })(req, res, next);
+router.get("/google/signin", (req, res) => {
+  res.redirect(getGoogleAuthUrl("signin"));
 });
 
 /**
