@@ -21,6 +21,7 @@ export function initializeGoogleStrategy() {
         clientID: GOOGLE_CLIENT_ID,
         clientSecret: GOOGLE_CLIENT_SECRET,
         callbackURL: GOOGLE_CALLBACK_URL,
+        scope: ["profile", "email"],
         userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
         passReqToCallback: true, // needed to read state param
       },
