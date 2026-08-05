@@ -16,7 +16,7 @@ if (process.env.ONNX_DISABLE === "true" || process.env.SKIP_ONNX_WARMUP === "tru
 
   const transformers = await import("@xenova/transformers");
 
-  const { pipeline, env, FeatureExtractionPipeline, AutoTokenizer, AutoModelForSequenceClassification } = transformers;
+  const { pipeline, env, AutoTokenizer, AutoModelForSequenceClassification } = transformers;
 
   // Limit internal ONNX WASM threads to 1 per worker thread to prevent thread contention
   env.backends.onnx.wasm.numThreads = 1;
@@ -27,11 +27,11 @@ if (process.env.ONNX_DISABLE === "true" || process.env.SKIP_ONNX_WARMUP === "tru
   const E5_MODEL_NAME = "Xenova/multilingual-e5-small";
   const RERANKER_MODEL_NAME = "onnx-community/bge-reranker-v2-m3-ONNX";
 
-  let embeddingPipeline: FeatureExtractionPipeline | null = null;
+  let embeddingPipeline: any = null;
   let rerankerTokenizer: any = null;
   let rerankerModel: any = null;
 
-  async function getEmbeddingPipeline(): Promise<FeatureExtractionPipeline> {
+  async function getEmbeddingPipeline(): Promise<any> {
     if (!embeddingPipeline) {
       embeddingPipeline = await pipeline("feature-extraction", E5_MODEL_NAME, {
         quantized: true,
