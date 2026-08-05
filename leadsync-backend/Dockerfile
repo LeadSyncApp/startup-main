@@ -34,6 +34,14 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Install build tools needed by npm rebuild to compile native addons
+# (sharp, onnxruntime-node, bcryptjs need python3 + make + g++ at rebuild time)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
 # node:20-slim is Debian-based and includes glibc — no extra compat layers needed
 # for onnxruntime-node native binaries.
 
