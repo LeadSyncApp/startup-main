@@ -109,9 +109,6 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 async function bootstrap() {
   try {
-    // TEMP DEBUG - remove after confirming Railway env injection
-    sysLog.info(`[DEBUG] ONNX_DISABLE="${process.env.ONNX_DISABLE}" SKIP_ONNX_WARMUP="${process.env.SKIP_ONNX_WARMUP}" (raw process.env)`);
-
     sysLog.info(`🚀 [Bootstrap] Starting application instance with profile: ${PROCESS_PROFILE}`);
 
     // Pre-warm ONNX worker pool (loads E5 & BGE models in worker thread)
