@@ -6,12 +6,11 @@ import { signToken } from "../../utils/jwt";
 const router = Router();
 
 function getGoogleAuthUrl(mode: "signin" | "signup") {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const callbackUrl = encodeURIComponent(process.env.GOOGLE_CALLBACK_URL || "http://localhost:4000/api/auth/google/callback");
-  const redirectUri = process.env.GOOGLE_CALLBACK_URL || "http://localhost:4000/api/auth/google/callback";
+  const clientId = (process.env.GOOGLE_CLIENT_ID || "").trim();
+  const redirectUri = (process.env.GOOGLE_CALLBACK_URL || "http://localhost:4000/api/auth/google/callback").trim();
   const state = `mode=${mode}`;
   const params = new URLSearchParams({
-    client_id: clientId!,
+    client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
     scope: "profile email",
@@ -19,7 +18,9 @@ function getGoogleAuthUrl(mode: "signin" | "signup") {
     prompt: "select_account",
     access_type: "offline",
   });
-  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  console.log("[Google OAuth] Redirect URL:", url);
+  return url;
 }
 
 /**
