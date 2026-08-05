@@ -1,7 +1,7 @@
 import axios from "axios";
 import { activityToast as toast } from "../features/activity-ledger/useActivityStore";
 
-let API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_URL?.trim() || "/api";
 
 /**
  * LeadSync Multi-Tenant Unified Axios Client
@@ -151,7 +151,9 @@ export async function authedFetch(url: string, options: RequestInit = {}): Promi
   if (accessToken) {
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
-  return fetch(url, { ...options, headers, credentials: "include" });
+  // If the url is relative (starts with /), prefix with the API base
+  const fullUrl = url.startsWith("/") ? `${API_BASE}${url}` : url;
+  return fetch(fullUrl, { ...options, headers, credentials: "include" });
 }
 
 /**

@@ -8,6 +8,8 @@ import {
 } from "react";
 import { apiClient } from "../../api/client";
 
+const API_BASE = import.meta.env.VITE_API_URL?.trim() || "";
+
 /* =====================================================
    TENANCY INTERFACES
 ===================================================== */
@@ -125,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         // Existing user - fetch full user data from backend
-        const res = await fetch("/api/auth/me", {
+        const res = await fetch(`${API_BASE}/api/auth/me`, {
           headers: { Authorization: `Bearer ${fragmentToken}` },
         });
 
@@ -165,7 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           // Fetch fresh user profile & permissions from backend to stay in sync
           try {
-            const res = await fetch("/api/auth/me", {
+            const res = await fetch(`${API_BASE}/api/auth/me`, {
               headers: { Authorization: `Bearer ${storedToken}` },
             });
             if (res.ok) {

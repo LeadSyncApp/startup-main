@@ -8,6 +8,8 @@ import { OnboardingWizard } from "./components/onboarding/OnboardingWizard";
 import { SignInForm } from "./components/auth/SignInForm";
 import { connectSocket, disconnectSocket, onNotification } from "./lib/socketClient";
 import { useNotificationStore } from "./features/notifications/useNotificationStore";
+
+const API_BASE = import.meta.env.VITE_API_URL?.trim() || "";
 import { AcceptInvitePage } from "./features/team/AcceptInvitePage";
 import MarketingHomePage from "./pages/MarketingHomePage";
 import { activityToast as activityToast } from "./features/activity-ledger/useActivityStore";
@@ -209,14 +211,14 @@ export default function App() {
       setTrackInventory(data.trackInventory);
       setChannelVerified(data.channels);
       setCurrentWorkflow(data.currentWorkflow);
-      const response = await fetch("/api/auth/complete-google-onboarding", {
+      const response = await fetch(`${API_BASE}/api/auth/complete-google-onboarding`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${pendingToken}` },
         body: JSON.stringify({ companyName: mockCompany, businessScale: data.businessScale, businessType: data.businessType, currentWorkflow: data.currentWorkflow }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Failed to complete onboarding");
-      const meRes = await fetch("/api/auth/me", { headers: { Authorization: `Bearer ${pendingToken}` } });
+      const meRes = await fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${pendingToken}` } });
       if (!meRes.ok) throw new Error("Failed to fetch user data");
       const meData = await meRes.json();
       completeOnboarding(meData.user, meData.company);
@@ -232,7 +234,7 @@ export default function App() {
       setDailyRevenueTarget(data.dailyRevenueTarget);
       setTrackInventory(data.trackInventory);
       setCurrentWorkflow(data.currentWorkflow);
-      const response = await fetch("/api/auth/signup", {
+      const response = await fetch(`${API_BASE}/api/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
