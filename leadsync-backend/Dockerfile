@@ -53,6 +53,9 @@ COPY prisma ./prisma/
 # --ignore-scripts skips the top-level postinstall (PowerShell, no-op in Linux)
 RUN npm ci --omit=dev --ignore-scripts && npx prisma generate
 
+# Copy scripts directory needed by npm rebuild lifecycle scripts
+COPY scripts ./scripts/
+
 # Rebuild native addons for the runner's linux-x64 target
 # Compiles sharp, onnxruntime-node, bcryptjs native binaries that were
 # downloaded as source by npm ci (skipped by --ignore-scripts above)
