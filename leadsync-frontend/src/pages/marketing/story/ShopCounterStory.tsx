@@ -186,23 +186,38 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
   // Local ref for tracking section scroll progress
   const sectionElementRef = useRef<HTMLElement | null>(null);
 
+  // Hero beat (index 0) starts tracking from top of page so phone stays hidden at initial load (scroll y = 0)
+  // and slides in from the side as a smooth surprise reveal as the user begins scrolling.
+  // Beats 1-5 track as their section scrolls into the viewport.
   const { scrollYProgress } = useScroll({
     target: sectionElementRef,
-    offset: ["start 65%", "start 64px"],
+    offset: isHero
+      ? (["start start", "start 160px"] as const)
+      : (["start 75%", "start 64px"] as const),
   });
 
-  // Hero beat (index 0) stays fixed at center (x = 0) on initial load.
-  // Subsequent beats (1-5) alternate entrance direction based on beat.phoneSide.
-  const initialX = isHero ? 0 : (beat.phoneSide === "right" ? 80 : -80);
+  // Alternating horizontal entrance direction matching beat.phoneSide (including Hero beat)
+  // "right" -> slides in from right (+120px to 0)
+  // "left"  -> slides in from left (-120px to 0)
+  const initialX = beat.phoneSide === "right" ? 120 : -120;
 
-  // Eased scroll-linked transform for a fast, buttery-smooth entrance slide
+  // Eased scroll-linked horizontal transform
   const rawX = useTransform(
     scrollYProgress,
     [0, 1],
     [initialX, 0],
     { ease: (t) => 1 - Math.pow(1 - t, 2.5) }
   );
+
+  // Fade-in opacity transform to ensure phone is completely hidden before scroll starts
+  const rawOpacity = useTransform(
+    scrollYProgress,
+    [0, 0.4, 1],
+    [0, 0.6, 1]
+  );
+
   const x = reduced ? 0 : rawX;
+  const opacity = reduced ? 1 : rawOpacity;
 
   // Desktop: text sits opposite the phone in the 2-col grid.
   const textColumn = beat.phoneSide === "left" ? "lg:col-start-2" : "lg:col-start-1";
@@ -228,7 +243,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
           settling into center (x = 0) exactly when sticky pins at top-16. */}
       <div className={`w-full lg:hidden ${DEBUG_STORY ? "debug-story-phone" : ""}`}>
         <div className="sticky top-16 flex justify-center z-20 overflow-visible">
-          <motion.div style={{ x }} className="will-change-transform">
+          <motion.div style={{ x, opacity }} className="will-change-transform">
             <InlinePhone beat={beat} instant={false} />
           </motion.div>
         </div>
@@ -459,7 +474,7 @@ export function ShopCounterStory({ active, setSectionRef }: ShopCounterStoryProp
   const beat = BEATS[active];
 
   return (
-    <div className="relative" id="how-it-works">
+    <div className="relative overflow-x-clip" id="how-it-works">
       {BEATS.map((b, i) => (
         <BeatSection key={b.id} beat={b} index={i} sectionRef={setSectionRef(i)} reduced={reduced} />
       ))}
