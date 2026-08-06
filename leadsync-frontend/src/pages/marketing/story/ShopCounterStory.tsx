@@ -191,11 +191,12 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
     offset: ["start 75%", "start 64px"],
   });
 
-  // Hero beat (index 0) remains centered on load (x = 0, opacity = 1) with description above phone.
-  // Beats 1-5 slide in from alternating left/right sides matching beat.phoneSide on scroll.
-  const initialX = isHero ? 0 : (beat.phoneSide === "right" ? 120 : -120);
+  // Alternating horizontal entrance direction matching beat.phoneSide
+  // "right" -> slides in from right (+120px to 0)
+  // "left"  -> slides in from left (-120px to 0)
+  const initialX = beat.phoneSide === "right" ? 120 : -120;
 
-  // Eased scroll-linked horizontal transform
+  // Eased scroll-linked horizontal transform for beats 1-5
   const rawX = useTransform(
     scrollYProgress,
     [0, 1],
@@ -207,11 +208,11 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
   const rawOpacity = useTransform(
     scrollYProgress,
     [0, 0.4, 1],
-    [isHero ? 1 : 0, isHero ? 1 : 0.6, 1]
+    [0, 0.6, 1]
   );
 
-  const x = reduced ? 0 : rawX;
-  const opacity = reduced ? 1 : rawOpacity;
+  const scrollX = reduced ? 0 : rawX;
+  const scrollOpacity = reduced ? 1 : rawOpacity;
 
   // Desktop: text sits opposite the phone in the 2-col grid.
   const textColumn = beat.phoneSide === "left" ? "lg:col-start-2" : "lg:col-start-1";
@@ -223,23 +224,32 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
         sectionRef(el);
       }}
       data-beat={index}
-      className={`relative flex flex-col items-start ${
+      className={`relative flex flex-col items-start min-h-screen ${
         isHero
-          ? "lg:flex-row lg:items-center lg:min-h-[calc(100vh-4rem)] lg:pt-14 lg:pb-20"
+          ? "lg:flex-row lg:items-center lg:min-h-screen lg:pt-14 lg:pb-20"
           : "lg:flex-row lg:items-center lg:min-h-screen lg:pt-20 lg:pb-20"
       } ${DEBUG_STORY ? "debug-story-section" : ""}`}
       style={{ backgroundColor: beat.bg }}
     >
-      {/* ── MOBILE: sticky phone with scroll-linked entrance motion ──
-          The phone sits in the section's normal flow. Its height pushes the text below.
-          position:sticky pins it at top-16 (64px) while the section scrolls through the viewport.
-          As it scrolls into view, motion.div slides it horizontally from left/right (driven by scrollYProgress),
-          settling into center (x = 0) exactly when sticky pins at top-16. */}
+      {/* ── MOBILE: sticky phone with entrance motion ──
+          Hero beat (beat 0) automatically slides in from the right on initial mount.
+          Beats 1-5 slide in from alternating left/right sides as driven by scroll progress. */}
       <div className={`w-full lg:hidden ${DEBUG_STORY ? "debug-story-phone" : ""}`}>
         <div className="sticky top-16 flex justify-center z-20 overflow-visible">
-          <motion.div style={{ x, opacity }} className="will-change-transform">
-            <InlinePhone beat={beat} instant={false} />
-          </motion.div>
+          {isHero && !reduced ? (
+            <motion.div
+              initial={{ x: 120, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.65, ease: EASE, delay: 0.15 }}
+              className="will-change-transform"
+            >
+              <InlinePhone beat={beat} instant={false} />
+            </motion.div>
+          ) : (
+            <motion.div style={{ x: scrollX, opacity: scrollOpacity }} className="will-change-transform">
+              <InlinePhone beat={beat} instant={false} />
+            </motion.div>
+          )}
         </div>
       </div>
 
