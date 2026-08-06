@@ -177,8 +177,8 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
       data-beat={index}
       className={`relative flex items-center lg:items-center ${
         isHero
-          ? "min-h-[100dvh] lg:min-h-[calc(100vh-4rem)] pt-[calc(4rem+280px)] lg:pt-14 pb-20"
-          : "min-h-[100dvh] lg:min-h-screen pt-[calc(4rem+280px)] lg:pt-20 pb-16 lg:pb-20"
+          ? "min-h-[100dvh] lg:min-h-[calc(100vh-4rem)] pt-[calc(50dvh+344px)] lg:pt-14 pb-20"
+          : "min-h-[100dvh] lg:min-h-screen pt-[calc(50dvh+344px)] lg:pt-20 pb-16 lg:pb-20"
       }`}
       style={{ backgroundColor: beat.bg }}
     >
