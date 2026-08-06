@@ -224,7 +224,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
         sectionRef(el);
       }}
       data-beat={index}
-      className={`relative flex flex-col items-start min-h-screen ${
+      className={`relative flex flex-col items-start pb-4 ${
         isHero
           ? "lg:flex-row lg:items-center lg:min-h-screen lg:pt-14 lg:pb-20"
           : "lg:flex-row lg:items-center lg:min-h-screen lg:pt-20 lg:pb-20"
@@ -254,14 +254,13 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
       </div>
 
       {/* ── MOBILE: text — in flow directly below phone ──
-          Positioned naturally below phone (pt-4) so it flows seamlessly with scroll,
-          eliminating floating text and empty gaps between sections. */}
+          Tightly positioned below phone (pt-2 pb-4) so scrolling immediately transitions to the next beat. */}
       <motion.div
         variants={stagger(0.09)}
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, amount: 0.4 }}
-        className={`w-full relative z-10 px-5 pt-4 pb-12 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
+        className={`w-full relative z-10 px-5 pt-2 pb-4 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
       >
         {isHero ? (
           <motion.span
