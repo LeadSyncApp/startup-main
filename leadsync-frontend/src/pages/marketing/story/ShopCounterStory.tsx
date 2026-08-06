@@ -176,10 +176,10 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
     <section
       ref={sectionRef}
       data-beat={index}
-      className={`relative flex items-center ${
+      className={`relative flex items-start lg:items-center ${
         isHero
-          ? "min-h-[100dvh] lg:min-h-[calc(100vh-4rem)] pt-[calc(4rem+240px)] lg:pt-14 pb-20"
-          : "min-h-[70dvh] lg:min-h-screen pt-[calc(4rem+240px)] lg:pt-20 pb-16 lg:pb-20"
+          ? "min-h-[100dvh] lg:min-h-[calc(100vh-4rem)] pt-[max(580px,calc(50dvh+260px))] lg:pt-14 pb-20"
+          : "min-h-[100dvh] lg:min-h-screen pt-[max(580px,calc(50dvh+260px))] lg:pt-20 pb-16 lg:pb-20"
       }`}
       style={{ backgroundColor: beat.bg }}
     >
@@ -367,7 +367,7 @@ export function ShopCounterStory() {
 
       {/* Pinned phone for MOBILE — transitions between screens as user scrolls */}
       {!reduced && (
-        <div className="lg:hidden fixed top-14 left-0 right-0 z-10 pointer-events-none flex justify-center">
+        <div className="lg:hidden fixed top-[calc(50dvh-240px)] left-0 right-0 z-10 pointer-events-none flex justify-center">
           <AnimatePresence mode="wait">
             <motion.div
               key={beat.id}
