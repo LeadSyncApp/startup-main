@@ -1,6 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { NavBar } from "./marketing/NavBar";
-import { ShopCounterStory, MobileStickyPhone, BEATS } from "./marketing/story/ShopCounterStory";
+import { ShopCounterStory, BEATS } from "./marketing/story/ShopCounterStory";
 import { useScrollBeat } from "./marketing/story/useScrollBeat";
 import { TrustStrip } from "./marketing/TrustStrip";
 import { Features } from "./marketing/Features";
@@ -54,10 +54,6 @@ export default function MarketingHomePage() {
 
       <div className="min-h-screen" style={{ backgroundColor: "var(--app-bg)" }}>
         <NavBar />
-        {/* Mobile sticky phone — rendered here (outside ShopCounterStory's
-            relative wrapper) to avoid containing-block issues that break
-            position:fixed on some mobile browsers. */}
-        <MobileStickyPhone active={active} />
         <ShopCounterStory active={active} setSectionRef={setSectionRef} />
         <TrustStrip />
         {/* HowItWorks.tsx is deliberately not rendered — the scroll-story above

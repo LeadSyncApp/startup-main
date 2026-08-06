@@ -175,10 +175,10 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
     <section
       ref={sectionRef}
       data-beat={index}
-      className={`relative flex items-start lg:items-center ${
+      className={`relative flex items-center lg:items-center ${
         isHero
-          ? "min-h-[100dvh] lg:min-h-[calc(100vh-4rem)] pt-[max(580px,calc(50dvh+260px))] lg:pt-14 pb-20"
-          : "min-h-[100dvh] lg:min-h-screen pt-[max(580px,calc(50dvh+260px))] lg:pt-20 pb-16 lg:pb-20"
+          ? "min-h-[100dvh] lg:min-h-[calc(100vh-4rem)] pt-[calc(4rem+280px)] lg:pt-14 pb-20"
+          : "min-h-[100dvh] lg:min-h-screen pt-[calc(4rem+280px)] lg:pt-20 pb-16 lg:pb-20"
       }`}
       style={{ backgroundColor: beat.bg }}
     >
@@ -322,6 +322,37 @@ export function ShopCounterStory({ active, setSectionRef }: ShopCounterStoryProp
         <BeatSection key={b.id} beat={b} index={i} sectionRef={setSectionRef(i)} reduced={reduced} />
       ))}
 
+      {/* Pinned phone for MOBILE — mirrors desktop's sticky-inside-absolute pattern,
+          but without horizontal left/right animation (narrow viewport). */}
+      {!reduced && (
+        <div className="lg:hidden absolute inset-0 pointer-events-none z-10">
+          <div className="sticky top-16 h-[calc(100dvh-4rem)]">
+            <div className="flex justify-center h-full">
+              <div className="mt-auto mb-auto">
+                <PhoneFrame
+                  time={beat.time}
+                  screenBg={beat.screenBg}
+                  statusTone={beat.statusTone}
+                >
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={beat.id}
+                      variants={screenSwap}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="flex-1 flex flex-col"
+                    >
+                      <StoryScreen id={beat.id} instant={false} />
+                    </motion.div>
+                  </AnimatePresence>
+                </PhoneFrame>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Pinned phone for DESKTOP — glides between left/right as beats alternate */}
       {!reduced && (
         <div className="hidden lg:block absolute inset-0 pointer-events-none z-10">
@@ -356,40 +387,6 @@ export function ShopCounterStory({ active, setSectionRef }: ShopCounterStoryProp
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * Mobile sticky phone — rendered at MarketingHomePage level (outside
- * ShopCounterStory's relative wrapper) to avoid containing-block issues
- * that break position:fixed on some mobile browsers.
- */
-export function MobileStickyPhone({ active }: { active: number }) {
-  const reduced = useReducedMotion() ?? false;
-  const beat = BEATS[active];
-
-  if (reduced) return null;
-
-  return (
-    <div className="lg:hidden fixed top-[calc(50dvh-240px)] left-0 right-0 z-10 pointer-events-none flex justify-center">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={beat.id}
-          variants={screenSwap}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-        >
-          <PhoneFrame
-            time={beat.time}
-            screenBg={beat.screenBg}
-            statusTone={beat.statusTone}
-          >
-            <StoryScreen id={beat.id} instant={false} />
-          </PhoneFrame>
-        </motion.div>
-      </AnimatePresence>
     </div>
   );
 }
