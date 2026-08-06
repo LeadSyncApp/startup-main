@@ -43,6 +43,9 @@ export async function initializeTelegramWebhooks() {
     return;
   }
   console.log("⚙️ [Telegram Webhooks] Initializing event-driven webhooks for all connected bots...");
+  console.log(`📋 [Telegram Webhooks] API_BASE_URL=${process.env.API_BASE_URL}`);
+  console.log(`📋 [Telegram Webhooks] NODE_ENV=${process.env.NODE_ENV}`);
+  console.log(`📋 [Telegram Webhooks] ENCRYPTION_KEY set=${!!process.env.ENCRYPTION_KEY} len=${process.env.ENCRYPTION_KEY?.length}`);
 
   try {
     const companies = await prisma.company.findMany({
@@ -55,26 +58,38 @@ export async function initializeTelegramWebhooks() {
     console.log(`🔎 Found ${companies.length} connected company bots.`);
 
     for (const company of companies) {
-      const decryptedToken = decryptSecret(company.telegramBotToken);
-      if (!decryptedToken) {
-        console.error(`❌ Failed to decrypt bot token for company: ${company.name}. Skipping.`);
-        continue;
-      }
-      const token = decryptedToken;
-
-      let secret = decryptSecret(company.telegramWebhookSecret);
-
-      // Ensure secret exists
-      if (!secret) {
-        secret = crypto.randomBytes(32).toString("hex");
-        await prisma.company.update({
-          where: { id: company.id },
-          data: { telegramWebhookSecret: encrypt(secret) }
-        });
-        console.log(`🔑 Generated new telegramWebhookSecret for company: ${company.name}`);
-      }
-
       try {
+        let decryptedToken: string | null = null;
+        try {
+          decryptedToken = decryptSecret(company.telegramBotToken);
+        } catch (decryptErr: any) {
+          console.error(`❌ Failed to decrypt bot token for company: ${company.name} — ${decryptErr.message}. Skipping.`);
+          continue;
+        }
+
+        if (!decryptedToken) {
+          console.error(`❌ Bot token is null/empty for company: ${company.name}. Skipping.`);
+          continue;
+        }
+        const token = decryptedToken;
+
+        let secret: string | null = null;
+        try {
+          secret = decryptSecret(company.telegramWebhookSecret);
+        } catch (decryptErr: any) {
+          console.error(`❌ Failed to decrypt webhook secret for company: ${company.name} — ${decryptErr.message}. Generating new secret.`);
+        }
+
+        // Ensure secret exists
+        if (!secret) {
+          secret = crypto.randomBytes(32).toString("hex");
+          await prisma.company.update({
+            where: { id: company.id },
+            data: { telegramWebhookSecret: encrypt(secret) }
+          });
+          console.log(`🔑 Generated new telegramWebhookSecret for company: ${company.name}`);
+        }
+
         // Register webhook with Telegram API
         const result = await registerTelegramWebhook(token, secret);
         if (result?.ok) {
@@ -113,7 +128,7 @@ export async function initializeTelegramWebhooks() {
           }).catch(() => {});
           console.warn(`⚠️ Bot token for ${company.name} was rejected by Telegram (401) — marking telegramConnected: false. Reconnect via the UI with a valid token to restore.`);
         } else {
-          console.error(`❌ Failed to register/sync bot @${company.telegramBotUsername || "bot"}:`, botErr.message);
+          console.error(`❌ Failed to register/sync bot @${company.telegramBotUsername || "bot"} (Company: ${company.name}):`, botErr.message);
         }
       }
     }

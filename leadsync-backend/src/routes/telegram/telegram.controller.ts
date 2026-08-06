@@ -162,6 +162,13 @@ router.post("/webhook", async (req: Request, res: Response) => {
 
     standardizedFrame.companyId = company.id;
 
+    webhookPersistenceService.persist(
+      "TELEGRAM",
+      company.id,
+      req.body?.update_id ? String(req.body.update_id) : null,
+      req.body || {}
+    ).catch((e) => console.warn("Failed to persist webhook metadata:", e));
+
     const boss = pgBossService.getBoss();
     await boss.send("webhook.process", standardizedFrame);
 

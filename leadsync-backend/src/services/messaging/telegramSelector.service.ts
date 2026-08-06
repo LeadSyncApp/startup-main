@@ -2,15 +2,12 @@ import { prisma } from "../../lib/prisma";
 
 export const INSTANCE_ID = Math.random().toString(36).substring(2, 10) + "_" + process.pid;
 
-// Determine environment: Cloud Run port is always 3000, development backend runs on 4000 or localhost
+// Determine environment: a public API_BASE_URL with NODE_ENV=production means cloud
 export const IS_LOCAL =
   !process.env.API_BASE_URL ||
   process.env.API_BASE_URL.includes("localhost") ||
   process.env.API_BASE_URL.includes("127.0.0.1") ||
-  process.env.API_BASE_URL.includes("ais-dev-") ||
-  process.env.API_BASE_URL.includes("ais-pre-") ||
-  (process.env.PORT && parseInt(process.env.PORT, 10) !== 3000) ||
-  process.env.NODE_ENV === "development";
+  (process.env.NODE_ENV != null && process.env.NODE_ENV !== "production");
 
 // Role-based PRIMARY/PASSIVE selection
 const envRole = process.env.TELEGRAM_CONSUMER_ROLE;
