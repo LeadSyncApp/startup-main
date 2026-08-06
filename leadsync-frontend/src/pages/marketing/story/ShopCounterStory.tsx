@@ -221,10 +221,10 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
     <section
       ref={sectionRef}
       data-beat={index}
-      className={`relative flex flex-col items-center justify-center min-h-screen py-10 ${
+      className={`relative flex flex-col items-center justify-center min-h-[65vh] py-6 ${
         isHero
-          ? "md:flex-row md:items-center md:min-h-screen md:py-16"
-          : "md:flex-row md:items-center md:min-h-screen md:py-16"
+          ? "md:flex-row md:items-center md:min-h-[70vh] md:py-10"
+          : "md:flex-row md:items-center md:min-h-[70vh] md:py-10"
       } ${DEBUG_STORY ? "debug-story-section" : ""}`}
       style={{ backgroundColor: beat.bg }}
     >
