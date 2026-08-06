@@ -10,12 +10,6 @@ export default {
     path.join(__dirname, "./index.html"),
     path.join(__dirname, "./src/**/*.{js,ts,jsx,tsx}")
   ],
-  /* Arbitrary values inside ternaries/template literals can't be detected by
-     Tailwind's JIT scanner. Safelist them so they're always emitted. */
-  safelist: [
-    "pt-[596px]",
-    "h-[564px]",
-  ],
   theme: {
     extend: {
       fontFamily: {

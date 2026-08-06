@@ -20,6 +20,17 @@ const DEBUG_STORY = false;
 /*  One scroll, one story: a customer's 9pm message becomes money in    */
 /*  the morning. A single phone stays pinned and hands itself across    */
 /*  the page as the beats alternate sides.                              */
+/*                                                                      */
+/*  MOBILE LAYOUT (per-section dual sticky):                            */
+/*    Each <section> owns its own sticky phone + text pair.             */
+/*    Phone: position:sticky top-16 (pins at 64px).                     */
+/*    Text:  position:sticky top-[600px] (pins below phone, 36px gap).  */
+/*    Both pin simultaneously while section is in viewport, then        */
+/*    release together when section scrolls out.                        */
+/*                                                                      */
+/*  DESKTOP LAYOUT (unchanged):                                         */
+/*    Phone in a global overlay with horizontal animation.              */
+/*    Text in normal flow inside the section grid.                      */
 /* ════════════════════════════════════════════════════════════════════ */
 
 type ScreenId = "lock" | "chat-asked" | "chat-answered" | "order" | "paid" | "dashboard";
@@ -172,27 +183,127 @@ interface BeatSectionProps {
 function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
   const isHero = index === 0;
 
-  // Text sits opposite the phone.
+  // Desktop: text sits opposite the phone in the 2-col grid.
   const textColumn = beat.phoneSide === "left" ? "lg:col-start-2" : "lg:col-start-1";
 
   return (
     <section
       ref={sectionRef}
       data-beat={index}
-      className={`relative flex items-center lg:items-center ${
+      className={`relative flex flex-col items-start ${
         isHero
-          ? "min-h-screen lg:min-h-[calc(100vh-4rem)] pt-[596px] lg:pt-14 pb-20"
-          : "min-h-screen lg:min-h-screen pt-[596px] lg:pt-20 pb-16 lg:pb-20"
+          ? "lg:flex-row lg:items-center lg:min-h-[calc(100vh-4rem)] lg:pt-14 lg:pb-20"
+          : "lg:flex-row lg:items-center lg:min-h-screen lg:pt-20 lg:pb-20"
       } ${DEBUG_STORY ? "debug-story-section" : ""}`}
       style={{ backgroundColor: beat.bg }}
     >
-      <div className="w-full max-w-6xl mx-auto px-5 sm:px-8 grid lg:grid-cols-2 gap-6 lg:gap-8 items-center">
-        {/* Phone, in flow: hidden on mobile (sticky phone handles it); desktop only when motion is reduced */}
+      {/* ── MOBILE: sticky phone in normal flow ──
+          The phone sits in the section's normal flow. Its 500px height
+          pushes the text below. position:sticky pins it at top-16 (64px)
+          while the section scrolls through the viewport. */}
+      <div className={`w-full lg:hidden ${DEBUG_STORY ? "debug-story-phone" : ""}`}>
+        <div className="sticky top-16 flex justify-center z-20">
+          <InlinePhone beat={beat} instant={false} />
+        </div>
+      </div>
+
+      {/* ── MOBILE: text — sticky below phone ──
+          Pins at top-[600px] (36px below phone bottom at 564px).
+          Scrolls freely within the section, never crossing the phone. */}
+      <motion.div
+        variants={stagger(0.09)}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.4 }}
+        className={`w-full sticky top-[600px] z-10 px-5 py-8 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
+      >
+        {isHero ? (
+          <motion.span
+            variants={fadeUp}
+            className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] px-3 py-1.5 rounded-full mb-6"
+            style={{
+              backgroundColor: "var(--brand-saffron-soft)",
+              color: "var(--brand-saffron)",
+            }}
+          >
+            <Sparkles className="h-3 w-3" />
+            {beat.eyebrow}
+          </motion.span>
+        ) : (
+          <motion.p
+            variants={fadeUp}
+            className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-4"
+            style={{ color: "var(--brand-saffron)", fontFamily: "var(--font-mono)" }}
+          >
+            {beat.eyebrow}
+          </motion.p>
+        )}
+
+        {isHero ? (
+          <motion.h1
+            variants={fadeUp}
+            className="display-soft text-[2.4rem] leading-[1.06] font-bold mb-6"
+            style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
+          >
+            {beat.heading}
+          </motion.h1>
+        ) : (
+          <motion.h2
+            variants={fadeUp}
+            className="display-soft text-[2rem] leading-[1.08] font-bold mb-5"
+            style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
+          >
+            {beat.heading}
+          </motion.h2>
+        )}
+
+        <motion.p
+          variants={fadeUp}
+          className="text-[16.5px] leading-relaxed"
+          style={{ color: "var(--text-secondary)" }}
+        >
+          {beat.body}
+        </motion.p>
+
+        {isHero && (
+          <>
+            <motion.div
+              variants={fadeUp}
+              className="flex flex-col items-stretch gap-3 mt-8"
+            >
+              <Link
+                to="/onboarding"
+                className="btn-primary text-base !px-7 !py-3.5 inline-flex items-center justify-center gap-2"
+              >
+                Start free
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                to="/login"
+                className="btn-secondary text-base !px-7 !py-3.5 justify-center"
+              >
+                Log in
+              </Link>
+            </motion.div>
+            <motion.p
+              variants={fadeUp}
+              className="text-[13px] mt-4"
+              style={{ color: "var(--app-text-muted)" }}
+            >
+              Free to start · No card needed · Set up in a few minutes
+            </motion.p>
+          </>
+        )}
+      </motion.div>
+
+      {/* ── DESKTOP: grid with phone + text side-by-side (unchanged) ── */}
+      <div className="hidden lg:grid w-full max-w-6xl mx-auto px-8 grid-cols-2 gap-8 items-center">
+        {/* Phone, in flow: only when motion is reduced (overlay handles it otherwise) */}
         <div
-          className={`hidden ${
-            reduced ? "lg:flex" : ""
+          className={`${
+            reduced ? "flex" : "hidden"
           } justify-center row-start-1 ${
-            beat.phoneSide === "left" ? "lg:col-start-1" : "lg:col-start-2"
+            beat.phoneSide === "left" ? "col-start-1" : "col-start-2"
           }`}
         >
           <InlinePhone beat={beat} instant={reduced} />
@@ -203,7 +314,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, amount: 0.4 }}
-          className={`${textColumn} row-start-2 lg:row-start-1 max-w-xl ${DEBUG_STORY ? "debug-story-text" : ""}`}
+          className={`${textColumn} row-start-1 max-w-xl`}
         >
           {isHero ? (
             <motion.span
@@ -230,7 +341,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
           {isHero ? (
             <motion.h1
               variants={fadeUp}
-              className="display-soft text-[2.4rem] leading-[1.06] sm:text-[3.1rem] lg:text-[3.5rem] font-bold mb-6"
+              className="display-soft text-[3.5rem] leading-[1.06] font-bold mb-6"
               style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
             >
               {beat.heading}
@@ -238,7 +349,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
           ) : (
             <motion.h2
               variants={fadeUp}
-              className="display-soft text-[2rem] leading-[1.08] sm:text-[2.6rem] lg:text-[3rem] font-bold mb-5"
+              className="display-soft text-[3rem] leading-[1.08] font-bold mb-5"
               style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
             >
               {beat.heading}
@@ -247,7 +358,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
 
           <motion.p
             variants={fadeUp}
-            className="text-[16.5px] sm:text-[17.5px] leading-relaxed"
+            className="text-[17.5px] leading-relaxed"
             style={{ color: "var(--text-secondary)" }}
           >
             {beat.body}
@@ -257,7 +368,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
             <>
               <motion.div
                 variants={fadeUp}
-                className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-8"
+                className="flex flex-row items-center gap-3 mt-8"
               >
                 <Link
                   to="/onboarding"
@@ -285,7 +396,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
         </motion.div>
       </div>
 
-      {/* Scroll cue, hero only */}
+      {/* Scroll cue, hero only, desktop */}
       {isHero && !reduced && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -326,39 +437,8 @@ export function ShopCounterStory({ active, setSectionRef }: ShopCounterStoryProp
         <BeatSection key={b.id} beat={b} index={i} sectionRef={setSectionRef(i)} reduced={reduced} />
       ))}
 
-      {/* Pinned phone for MOBILE — mirrors desktop's sticky-inside-absolute pattern,
-          but without horizontal left/right animation (narrow viewport).
-          Height is fixed px (not dvh) so it can never drift from SECTION_PT_PX. */}
-      {!reduced && (
-        <div className={`lg:hidden absolute inset-0 pointer-events-none z-10 ${DEBUG_STORY ? "debug-story-phone" : ""}`}>
-          <div className="sticky top-16 h-[564px]">
-            <div className="flex justify-center h-full">
-              <div className="mt-auto mb-auto">
-                <PhoneFrame
-                  time={beat.time}
-                  screenBg={beat.screenBg}
-                  statusTone={beat.statusTone}
-                >
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={beat.id}
-                      variants={screenSwap}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      className="flex-1 flex flex-col"
-                    >
-                      <StoryScreen id={beat.id} instant={false} />
-                    </motion.div>
-                  </AnimatePresence>
-                </PhoneFrame>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Pinned phone for DESKTOP — glides between left/right as beats alternate */}
+      {/* ── DESKTOP ONLY: global pinned phone with horizontal glide ──
+          Mobile uses per-section sticky phones (inside BeatSection). */}
       {!reduced && (
         <div className="hidden lg:block absolute inset-0 pointer-events-none z-10">
           <div className="sticky top-16 h-[calc(100dvh-4rem)]">

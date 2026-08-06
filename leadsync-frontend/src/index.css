@@ -575,13 +575,3 @@
   outline: 2px solid lime;
   outline-offset: -2px;
 }
-
-/* ── Fixed-pixel utilities for the story phone layout.
-     Tailwind JIT can't detect these inside ternary expressions,
-     so they're defined here instead of via class strings. ── */
-.pt-\[596px\] {
-  padding-top: 596px;
-}
-.h-\[564px\] {
-  height: 564px;
-}
