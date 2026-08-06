@@ -174,11 +174,11 @@ export function HonestProof() {
               className="h-10 w-10 rounded-full flex items-center justify-center text-[15px] font-bold shrink-0"
               style={{ backgroundColor: "var(--brand-saffron-soft)", color: "var(--brand-saffron)" }}
             >
-              S
+              N
             </span>
             <span className="text-[14px] leading-tight">
               <span className="block font-bold" style={{ color: "var(--app-text)" }}>
-                Your name here
+                Nikilesh Ram S K
               </span>
               Founder, SaLira
             </span>
