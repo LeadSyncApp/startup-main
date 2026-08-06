@@ -243,7 +243,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
         sectionRef(el);
       }}
       data-beat={index}
-      className={`relative flex flex-col items-start min-h-screen ${
+      className={`relative flex flex-col items-start pb-6 ${
         isHero
           ? "lg:flex-row lg:items-center lg:min-h-screen lg:pt-14 lg:pb-20"
           : "lg:flex-row lg:items-center lg:min-h-screen lg:pt-20 lg:pb-20"
@@ -272,16 +272,14 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
         </div>
       </div>
 
-      {/* ── MOBILE: text — in flow directly below phone with bidirectional scroll-linked fade-up ──
-          Description text stays opacity 0 until section enters viewport, preventing pre-scroll peeking,
-          and animates bidirectionally when scrolling DOWN and scrolling UP. */}
+      {/* ── MOBILE: text — in flow directly below phone with dynamic scroll-linked fade-up ──
+          Driven dynamically by scrollYProgress on every scroll down and up (no static viewport once:true). */}
       <motion.div
         style={{ y: isHero ? 0 : textY, opacity: isHero ? 1 : textOpacity }}
         className={`w-full relative z-10 px-5 pt-2 pb-6 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
       >
         {isHero ? (
-          <motion.span
-            variants={fadeUp}
+          <span
             className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] px-3 py-1.5 rounded-full mb-6"
             style={{
               backgroundColor: "var(--brand-saffron-soft)",
@@ -290,49 +288,42 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
           >
             <Sparkles className="h-3 w-3" />
             {beat.eyebrow}
-          </motion.span>
+          </span>
         ) : (
-          <motion.p
-            variants={fadeUp}
+          <p
             className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-4"
             style={{ color: "var(--brand-saffron)", fontFamily: "var(--font-mono)" }}
           >
             {beat.eyebrow}
-          </motion.p>
+          </p>
         )}
 
         {isHero ? (
-          <motion.h1
-            variants={fadeUp}
+          <h1
             className="display-soft text-[2.4rem] leading-[1.06] font-bold mb-6"
             style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
           >
             {beat.heading}
-          </motion.h1>
+          </h1>
         ) : (
-          <motion.h2
-            variants={fadeUp}
+          <h2
             className="display-soft text-[2rem] leading-[1.08] font-bold mb-5"
             style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
           >
             {beat.heading}
-          </motion.h2>
+          </h2>
         )}
 
-        <motion.p
-          variants={fadeUp}
+        <p
           className="text-[16.5px] leading-relaxed"
           style={{ color: "var(--text-secondary)" }}
         >
           {beat.body}
-        </motion.p>
+        </p>
 
         {isHero && (
           <>
-            <motion.div
-              variants={fadeUp}
-              className="flex flex-col items-stretch gap-3 mt-8"
-            >
+            <div className="flex flex-col items-stretch gap-3 mt-8">
               <Link
                 to="/onboarding"
                 className="btn-primary text-base !px-7 !py-3.5 inline-flex items-center justify-center gap-2"
@@ -346,14 +337,13 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
               >
                 Log in
               </Link>
-            </motion.div>
-            <motion.p
-              variants={fadeUp}
+            </div>
+            <p
               className="text-[13px] mt-4"
               style={{ color: "var(--app-text-muted)" }}
             >
               Free to start · No card needed · Set up in a few minutes
-            </motion.p>
+            </p>
           </>
         )}
       </motion.div>
