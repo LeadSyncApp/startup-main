@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { ArrowRight, ChevronDown, Sparkles } from "lucide-react";
 import { EASE, fadeUp, screenSwap, stagger } from "../motion";
 import { PhoneFrame } from "./PhoneFrame";
@@ -183,12 +183,30 @@ interface BeatSectionProps {
 function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
   const isHero = index === 0;
 
+  // Local ref for tracking section scroll progress
+  const sectionElementRef = useRef<HTMLElement | null>(null);
+
+  const { scrollYProgress } = useScroll({
+    target: sectionElementRef,
+    offset: ["start 90%", "start 64px"],
+  });
+
+  // Alternating horizontal entrance direction matching beat.phoneSide
+  // "right" -> slides in from right (+120px to 0)
+  // "left"  -> slides in from left (-120px to 0)
+  const initialX = beat.phoneSide === "right" ? 120 : -120;
+  const rawX = useTransform(scrollYProgress, [0, 1], [initialX, 0]);
+  const x = reduced ? 0 : rawX;
+
   // Desktop: text sits opposite the phone in the 2-col grid.
   const textColumn = beat.phoneSide === "left" ? "lg:col-start-2" : "lg:col-start-1";
 
   return (
     <section
-      ref={sectionRef}
+      ref={(el) => {
+        sectionElementRef.current = el;
+        sectionRef(el);
+      }}
       data-beat={index}
       className={`relative flex flex-col items-start ${
         isHero
@@ -197,13 +215,16 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
       } ${DEBUG_STORY ? "debug-story-section" : ""}`}
       style={{ backgroundColor: beat.bg }}
     >
-      {/* ── MOBILE: sticky phone in normal flow ──
-          The phone sits in the section's normal flow. Its 500px height
-          pushes the text below. position:sticky pins it at top-16 (64px)
-          while the section scrolls through the viewport. */}
+      {/* ── MOBILE: sticky phone with scroll-linked entrance motion ──
+          The phone sits in the section's normal flow. Its height pushes the text below.
+          position:sticky pins it at top-16 (64px) while the section scrolls through the viewport.
+          As it scrolls into view, motion.div slides it horizontally from left/right (driven by scrollYProgress),
+          settling into center (x = 0) exactly when sticky pins at top-16. */}
       <div className={`w-full lg:hidden ${DEBUG_STORY ? "debug-story-phone" : ""}`}>
-        <div className="sticky top-16 flex justify-center z-20">
-          <InlinePhone beat={beat} instant={false} />
+        <div className="sticky top-16 flex justify-center z-20 overflow-visible">
+          <motion.div style={{ x }} className="will-change-transform">
+            <InlinePhone beat={beat} instant={false} />
+          </motion.div>
         </div>
       </div>
 
