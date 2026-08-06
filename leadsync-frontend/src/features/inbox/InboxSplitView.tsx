@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import InboxList from "./InboxList";
 import InboxDetail from "./InboxDetail";
+import { ArrowLeft } from "lucide-react";
 
 interface InboxSplitViewProps {
   initialLeadId?: string | null;
@@ -8,6 +9,7 @@ interface InboxSplitViewProps {
 
 export default function InboxSplitView({ initialLeadId = null }: InboxSplitViewProps) {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(initialLeadId);
+  const [isMobileDetail, setIsMobileDetail] = useState(false);
 
   // Broadcast the currently-open conversation so other surfaces (e.g. the
   // "My Chats" sidebar badge) can exclude it from unread counts on the SAME
@@ -19,18 +21,34 @@ export default function InboxSplitView({ initialLeadId = null }: InboxSplitViewP
     );
   }, [selectedLeadId]);
 
+  const handleSelectLead = (leadId: string) => {
+    setSelectedLeadId(leadId);
+    setIsMobileDetail(true);
+  };
+
+  const handleBackToList = () => {
+    setIsMobileDetail(false);
+  };
+
   return (
     <div className="flex h-full w-full min-h-0 overflow-hidden">
-      {/* Left column: fixed 320px on desktop, full-width on mobile, scrollable, full-height border */}
-      <div className="w-full md:w-[320px] shrink-0 min-h-0 overflow-y-auto border-r border-[var(--app-border)] h-full bg-app-surface flex flex-col">
+      {/* Left column: list panel - hidden on mobile when detail is open */}
+      <div className={`${isMobileDetail ? 'hidden md:flex' : 'flex'} w-full md:w-[320px] shrink-0 min-h-0 overflow-y-auto border-r border-[var(--app-border)] h-full bg-app-surface flex-col`}>
         <InboxList
           selectedLeadId={selectedLeadId}
-          onSelectLead={(leadId: string) => setSelectedLeadId(leadId)}
+          onSelectLead={handleSelectLead}
         />
       </div>
 
-      {/* Right column: fills remaining width flexibly */}
-      <div data-tour="chat-detail-panel" className="flex-1 min-w-0 min-h-0 overflow-hidden h-full flex flex-col relative">
+      {/* Right column: detail panel - hidden on mobile when list is showing */}
+      <div data-tour="chat-detail-panel" className={`${!isMobileDetail ? 'hidden md:flex' : 'flex'} flex-1 min-w-0 min-h-0 overflow-hidden h-full flex-col relative`}>
+        {/* Mobile back button */}
+        <button
+          onClick={handleBackToList}
+          className="md:hidden absolute top-3 left-3 z-10 p-2 rounded-lg bg-[var(--app-surface)] border border-[var(--app-border)] shadow-sm cursor-pointer"
+        >
+          <ArrowLeft className="h-4 w-4 text-[var(--app-text)]" />
+        </button>
         {selectedLeadId ? (
           <InboxDetail leadId={selectedLeadId} showBackButton={false} />
         ) : (

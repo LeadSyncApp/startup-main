@@ -309,20 +309,11 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
         </button>
         <div className="flex items-center gap-2">
           <img src="/salira-logo.png" alt="SaLira" className="h-6 w-6 rounded-md object-contain" />
-          <span className="font-bold text-[var(--app-text)] text-sm">{merchantName}</span>
+          <span className="font-bold text-[var(--app-text)] text-sm truncate max-w-[120px]">{merchantName}</span>
         </div>
-        <button
-          onClick={() => setIsDrawerOpen(true)}
-          className="p-2 rounded-lg hover:bg-[var(--app-bg-soft)] text-[var(--app-text-muted)] relative cursor-pointer"
-        >
-          <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-[var(--brand-saffron)] text-[var(--app-bg)] text-2xs font-bold flex items-center justify-center">
-              {unreadCount}
-            </span>
-          )}
-        </button>
-        <NotificationBell />
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+        </div>
       </div>
 
       {/* Mobile Sidebar Drawer */}
@@ -370,15 +361,15 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
       )}
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[var(--app-surface)] border-t border-[var(--app-border)] flex justify-around items-center z-30 px-2">
-        {allowedTabs.slice(0, 5).map((tab) => {
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[var(--app-surface)] border-t border-[var(--app-border)] flex justify-around items-center z-30 px-1 safe-area-bottom">
+        {allowedTabs.slice(0, 4).map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className="flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer"
+              className="flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer min-w-0"
             >
               <div className="relative">
                 <Icon className={`h-5 w-5 ${isActive ? 'text-[var(--brand-saffron)]' : 'text-[var(--app-text-muted)]'}`} />
@@ -388,17 +379,24 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
                   </span>
                 )}
               </div>
-              <span className={`text-2xs mt-1 font-medium ${isActive ? 'text-[var(--brand-saffron)]' : 'text-[var(--app-text-muted)]'}`}>
+              <span className={`text-2xs mt-1 font-medium truncate max-w-[60px] ${isActive ? 'text-[var(--brand-saffron)]' : 'text-[var(--app-text-muted)]'}`}>
                 {tab.label}
               </span>
             </button>
           );
         })}
+        <button
+          onClick={() => setMobileSidebarOpen(true)}
+          className="flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer"
+        >
+          <Menu className="h-5 w-5 text-[var(--app-text-muted)]" />
+          <span className="text-2xs mt-1 font-medium text-[var(--app-text-muted)]">More</span>
+        </button>
       </nav>
 
       {/* Main Content */}
-      <main data-layout-main className={`flex-1 h-full min-w-0 overflow-y-auto overflow-x-hidden pt-14 md:pt-0 pb-16 md:pb-0 ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex flex-col min-h-0' : ''}`}>
-        <div className={`w-full min-w-0 ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex-1 min-h-0 flex flex-col' : 'p-4 md:p-6 lg:p-8 max-w-7xl mx-auto'}`}>
+      <main data-layout-main className={`flex-1 h-full min-w-0 overflow-y-auto overflow-x-hidden pt-14 md:pt-0 pb-20 md:pb-0 safe-area-bottom ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex flex-col min-h-0' : ''}`}>
+        <div className={`w-full min-w-0 ${activeTab === 'inbox' || window.location.pathname.startsWith('/inbox') ? 'flex-1 min-h-0 flex flex-col' : 'p-3 sm:p-4 md:p-6 lg:p-8 max-w-7xl mx-auto'}`}>
           {children}
         </div>
       </main>

@@ -123,11 +123,15 @@ app.use(
 // Rate limiters — backed by PostgreSQL for multi-instance safety
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  max: 50, // Increased: frontend makes multiple calls during page load (login, google callback, /me)
   message: { message: "Too many requests from this IP, please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
-  store: new PgRateLimitStore({ windowMs: 15 * 60 * 1000, max: 20 }),
+  store: new PgRateLimitStore({ windowMs: 15 * 60 * 1000, max: 50 }),
+  skip: (req) => {
+    // Exclude /api/auth/me from strict rate limiting — called frequently during page load
+    return req.path === "/me";
+  },
 });
 
 const generalLimiter = rateLimit({
@@ -350,17 +354,33 @@ app.get("/api/internal/queue-health", async (_req, res) => {
 });
 
 import { errorMiddleware } from "./middleware/error.middleware";
+import fs from "fs";
 
-// Serve frontend static files
+// Serve frontend static files (only if dist exists — on Railway the frontend is on Vercel)
 const frontendDistPath = path.resolve(__dirname, '../../leadsync-frontend/dist');
-app.use(express.static(frontendDistPath));
-app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api')) {
-    res.sendFile(path.join(frontendDistPath, 'index.html'));
-  } else {
-    res.status(404).json({ error: 'API route not found' });
-  }
-});
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      const indexPath = path.join(frontendDistPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).json({ error: 'Frontend not found' });
+      }
+    } else {
+      res.status(404).json({ error: 'API route not found' });
+    }
+  });
+} else {
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/widget') && !req.path.startsWith('/public')) {
+      res.status(404).json({ error: 'Frontend is served from Vercel', frontendUrl: process.env.FRONTEND_URL || 'https://startup-main-delta.vercel.app' });
+    } else {
+      next();
+    }
+  });
+}
 
 app.use(errorMiddleware);
 

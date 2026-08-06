@@ -33,7 +33,7 @@ const createPrismaClient = () => {
 
 // Helper: execute query with automatic retry for transient DB connection resets (P1017, P1001, ECONNRESET)
 async function executeQueryWithTransientRetry<T>(queryFn: () => Promise<T>): Promise<T> {
-  const MAX_RETRIES = 2;
+  const MAX_RETRIES = 3;
   let attempt = 0;
   while (true) {
     try {
@@ -45,13 +45,18 @@ async function executeQueryWithTransientRetry<T>(queryFn: () => Promise<T>): Pro
         err?.code === "P1017" ||
         err?.code === "P1001" ||
         err?.code === "P1002" ||
+        err?.code === "P1008" ||
         errMsg.includes("Server has closed the connection") ||
         errMsg.includes("ECONNRESET") ||
-        errMsg.includes("socket hang up");
+        errMsg.includes("socket hang up") ||
+        errMsg.includes("Can't reach database server") ||
+        errMsg.includes("Connection refused") ||
+        errMsg.includes("ETIMEDOUT");
 
       if (isTransientConnectionErr && attempt <= MAX_RETRIES) {
-        sysLog.warn(`⚠️ [Prisma] Transient DB connection error (${err?.code || errMsg}). Retrying query (attempt ${attempt}/${MAX_RETRIES})...`);
-        await new Promise((r) => setTimeout(r, 200 * attempt));
+        const delay = Math.min(500 * Math.pow(2, attempt - 1), 5000);
+        sysLog.warn(`⚠️ [Prisma] Transient DB connection error (${err?.code || errMsg.substring(0, 80)}). Retrying query (attempt ${attempt}/${MAX_RETRIES}) after ${delay}ms...`);
+        await new Promise((r) => setTimeout(r, delay));
         continue;
       }
       throw err;

@@ -501,6 +501,36 @@
   }
 }
 
+/* ── Mobile safe area padding for notched devices ── */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* ── Mobile responsive utilities ── */
+@media (max-width: 767px) {
+  /* Ensure proper viewport fit on mobile */
+  html {
+    overflow: hidden;
+    height: 100%;
+    height: -webkit-fill-available;
+  }
+  body {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    overflow: hidden;
+  }
+  
+  /* Fix iOS rubber-band scrolling */
+  #root {
+    height: 100dvh;
+    overflow: hidden;
+  }
+}
+
 /* ── Guide drawer open: reflow main content so nothing hides behind 400px drawer ── */
 @media (min-width: 768px) {
   html[data-guide-drawer="open"] main[data-layout-main] {
