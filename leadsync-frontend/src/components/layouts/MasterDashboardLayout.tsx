@@ -6,7 +6,6 @@ import {
   LogOut,
   Users,
   ShoppingBag,
-  Bell,
   Home,
   Zap,
   Menu,
@@ -70,10 +69,9 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
 }) => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const { gatewayStatus, events } = useActivityStore();
+  const { gatewayStatus } = useActivityStore();
   const { theme, toggleTheme } = useTheme();
   const { companyId, company } = useAuth();
-  const unreadCount = events.filter(e => !e.read).length;
 
   // Real badge counts — reuse the same endpoints that power InboxList
   // (filter=mine) and StreamTriage (filter=unclaimed). No new backend needed.
