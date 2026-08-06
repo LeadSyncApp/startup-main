@@ -1,6 +1,6 @@
-import { useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, ChevronDown, Sparkles } from "lucide-react";
 import { EASE, fadeUp, screenSwap, stagger } from "../motion";
 import { PhoneFrame } from "./PhoneFrame";
@@ -183,100 +183,67 @@ interface BeatSectionProps {
 function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
   const isHero = index === 0;
 
-  // Local ref for tracking section scroll progress
-  const sectionElementRef = useRef<HTMLElement | null>(null);
-
-  // Scroll offset ["start 85%", "start 64px"]:
-  // Animation triggers as section top enters lower 15% of viewport and settles at sticky top-16 (64px).
-  const { scrollYProgress } = useScroll({
-    target: sectionElementRef,
-    offset: ["start 85%", "start 64px"],
-  });
-
-  // Alternating horizontal entrance direction matching beat.phoneSide
-  // "right" -> slides in from right (+120px to 0)
-  // "left"  -> slides in from left (-120px to 0)
-  const initialX = beat.phoneSide === "right" ? 120 : -120;
-
-  // Eased scroll-linked horizontal transform for phone
-  const rawX = useTransform(
-    scrollYProgress,
-    [0, 1],
-    [initialX, 0],
-    { ease: (t) => 1 - Math.pow(1 - t, 2.5) }
-  );
-
-  // Fade-in opacity transform for phone (0 when section is below viewport -> 1 at sticky pin)
-  const rawPhoneOpacity = useTransform(
-    scrollYProgress,
-    [0, 0.4, 1],
-    [0, 0.6, 1]
-  );
-
-  // Bidirectional scroll-linked fade-up transform for description text (y: 28px -> 0, opacity: 0 -> 1)
-  // Operates identically whether scrolling DOWN or scrolling UP!
-  const rawTextY = useTransform(
-    scrollYProgress,
-    [0, 1],
-    [28, 0],
-    { ease: (t) => 1 - Math.pow(1 - t, 2) }
-  );
-
-  const rawTextOpacity = useTransform(
-    scrollYProgress,
-    [0, 0.4, 1],
-    [0, 0.6, 1]
-  );
-
-  const scrollX = reduced ? 0 : rawX;
-  const scrollOpacity = reduced ? 1 : rawPhoneOpacity;
-  const textY = reduced ? 0 : rawTextY;
-  const textOpacity = reduced ? 1 : rawTextOpacity;
-
   // Desktop: text sits opposite the phone in the 2-col grid.
   const textColumn = beat.phoneSide === "left" ? "lg:col-start-2" : "lg:col-start-1";
 
+  // Alternating entrance direction for mobile phone (right / left)
+  const phoneInitialX = beat.phoneSide === "right" ? 100 : -100;
+
+  // Bidirectional phone entrance variants (scroll down & scroll up)
+  const phoneVariants = {
+    hidden: { x: reduced ? 0 : phoneInitialX, opacity: reduced ? 1 : 0 },
+    visible: {
+      x: 0,
+      opacity: 1,
+      transition: { duration: 0.55, ease: EASE },
+    },
+  };
+
+  // Bidirectional text fade-up variants (scroll down & scroll up)
+  const textVariants = {
+    hidden: { y: reduced ? 0 : 28, opacity: reduced ? 1 : 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: { duration: 0.5, ease: EASE, delay: 0.08 },
+    },
+  };
+
   return (
     <section
-      ref={(el) => {
-        sectionElementRef.current = el;
-        sectionRef(el);
-      }}
+      ref={sectionRef}
       data-beat={index}
-      className={`relative flex flex-col items-start pb-6 ${
+      className={`relative flex flex-col items-center justify-center min-h-screen py-10 ${
         isHero
           ? "lg:flex-row lg:items-center lg:min-h-screen lg:pt-14 lg:pb-20"
           : "lg:flex-row lg:items-center lg:min-h-screen lg:pt-20 lg:pb-20"
       } ${DEBUG_STORY ? "debug-story-section" : ""}`}
       style={{ backgroundColor: beat.bg }}
     >
-      {/* ── MOBILE: sticky phone with entrance motion ──
-          Hero beat (beat 0) automatically slides in from the right on initial mount.
-          Beats 1-5 slide in from alternating left/right sides as driven by scroll progress. */}
+      {/* ── MOBILE: sticky phone with bidirectional scroll entrance motion ──
+          Animates bidirectionally when scrolling DOWN and scrolling UP (once: false). */}
       <div className={`w-full lg:hidden ${DEBUG_STORY ? "debug-story-phone" : ""}`}>
         <div className="sticky top-16 flex justify-center z-20 overflow-visible">
-          {isHero && !reduced ? (
-            <motion.div
-              initial={{ x: 120, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ duration: 0.65, ease: EASE, delay: 0.15 }}
-              className="will-change-transform"
-            >
-              <InlinePhone beat={beat} instant={false} />
-            </motion.div>
-          ) : (
-            <motion.div style={{ x: scrollX, opacity: scrollOpacity }} className="will-change-transform">
-              <InlinePhone beat={beat} instant={false} />
-            </motion.div>
-          )}
+          <motion.div
+            variants={phoneVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: false, amount: 0.2 }}
+            className="will-change-transform"
+          >
+            <InlinePhone beat={beat} instant={false} />
+          </motion.div>
         </div>
       </div>
 
-      {/* ── MOBILE: text — in flow directly below phone with dynamic scroll-linked fade-up ──
-          Driven dynamically by scrollYProgress on every scroll down and up (no static viewport once:true). */}
+      {/* ── MOBILE: text — in flow directly below phone with bidirectional scroll fade-up ──
+          Animates bidirectionally when scrolling DOWN and scrolling UP (once: false). */}
       <motion.div
-        style={{ y: isHero ? 0 : textY, opacity: isHero ? 1 : textOpacity }}
-        className={`w-full relative z-10 px-5 pt-2 pb-6 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
+        variants={textVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: false, amount: 0.2 }}
+        className={`w-full relative z-10 px-5 pt-3 pb-8 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
       >
         {isHero ? (
           <span
