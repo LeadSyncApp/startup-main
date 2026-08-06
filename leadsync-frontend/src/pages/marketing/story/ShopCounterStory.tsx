@@ -186,15 +186,17 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
   // Local ref for tracking section scroll progress
   const sectionElementRef = useRef<HTMLElement | null>(null);
 
-  // Hero beat (index 0) starts tracking from top of page so phone stays hidden at initial load (scroll y = 0)
-  // and slides in from the side as a smooth surprise reveal as the user begins scrolling.
-  // Beats 1-5 track as their section scrolls into the viewport.
-  const { scrollYProgress } = useScroll({
+  // Global scrollY hook for hero beat + targeted section scrollYProgress for beats 1-5
+  const { scrollY } = useScroll();
+  const { scrollYProgress: sectionScrollYProgress } = useScroll({
     target: sectionElementRef,
-    offset: isHero
-      ? (["start start", "start 160px"] as const)
-      : (["start 75%", "start 64px"] as const),
+    offset: ["start 75%", "start 64px"],
   });
+
+  // Hero beat drives entrance from scrollY (30px to 220px of page scroll)
+  // Beats 1-5 track as their section scrolls into the viewport
+  const heroProgress = useTransform(scrollY, [30, 220], [0, 1]);
+  const progress = isHero ? heroProgress : sectionScrollYProgress;
 
   // Alternating horizontal entrance direction matching beat.phoneSide (including Hero beat)
   // "right" -> slides in from right (+120px to 0)
@@ -203,7 +205,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
 
   // Eased scroll-linked horizontal transform
   const rawX = useTransform(
-    scrollYProgress,
+    progress,
     [0, 1],
     [initialX, 0],
     { ease: (t) => 1 - Math.pow(1 - t, 2.5) }
@@ -211,7 +213,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
 
   // Fade-in opacity transform to ensure phone is completely hidden before scroll starts
   const rawOpacity = useTransform(
-    scrollYProgress,
+    progress,
     [0, 0.4, 1],
     [0, 0.6, 1]
   );
