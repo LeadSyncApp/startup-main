@@ -199,13 +199,24 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
     },
   };
 
-  // Bidirectional text fade-up variants (scroll down & scroll up)
-  const textVariants = {
-    hidden: { y: reduced ? 0 : 28, opacity: reduced ? 1 : 0 },
+  // Staggered parent container variants for mobile description text
+  const textContainerVariants = {
+    hidden: {},
     visible: {
-      y: 0,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.05,
+      },
+    },
+  };
+
+  // Individual staggered item entrance variants (eyebrow, heading, body, CTAs)
+  const textItemVariants = {
+    hidden: { opacity: reduced ? 1 : 0, y: reduced ? 0 : 32 },
+    visible: {
       opacity: 1,
-      transition: { duration: 0.5, ease: EASE, delay: 0.08 },
+      y: 0,
+      transition: { duration: 0.48, ease: EASE },
     },
   };
 
@@ -236,17 +247,18 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
         </div>
       </div>
 
-      {/* ── MOBILE: text — in flow directly below phone with bidirectional scroll fade-up ──
-          Animates bidirectionally when scrolling DOWN and scrolling UP (once: false). */}
+      {/* ── MOBILE: text — in flow directly below phone with staggered bidirectional fade-up ──
+          Staggered children (eyebrow -> heading -> body) animate prominently right as text enters view. */}
       <motion.div
-        variants={textVariants}
+        variants={textContainerVariants}
         initial="hidden"
         whileInView="visible"
-        viewport={{ once: false, amount: 0.2 }}
+        viewport={{ once: false, amount: 0.35 }}
         className={`w-full relative z-10 px-5 pt-3 pb-8 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
       >
         {isHero ? (
-          <span
+          <motion.span
+            variants={textItemVariants}
             className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] px-3 py-1.5 rounded-full mb-6"
             style={{
               backgroundColor: "var(--brand-saffron-soft)",
@@ -255,42 +267,49 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
           >
             <Sparkles className="h-3 w-3" />
             {beat.eyebrow}
-          </span>
+          </motion.span>
         ) : (
-          <p
+          <motion.p
+            variants={textItemVariants}
             className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-4"
             style={{ color: "var(--brand-saffron)", fontFamily: "var(--font-mono)" }}
           >
             {beat.eyebrow}
-          </p>
+          </motion.p>
         )}
 
         {isHero ? (
-          <h1
+          <motion.h1
+            variants={textItemVariants}
             className="display-soft text-[2.4rem] leading-[1.06] font-bold mb-6"
             style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
           >
             {beat.heading}
-          </h1>
+          </motion.h1>
         ) : (
-          <h2
+          <motion.h2
+            variants={textItemVariants}
             className="display-soft text-[2rem] leading-[1.08] font-bold mb-5"
             style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
           >
             {beat.heading}
-          </h2>
+          </motion.h2>
         )}
 
-        <p
+        <motion.p
+          variants={textItemVariants}
           className="text-[16.5px] leading-relaxed"
           style={{ color: "var(--text-secondary)" }}
         >
           {beat.body}
-        </p>
+        </motion.p>
 
         {isHero && (
           <>
-            <div className="flex flex-col items-stretch gap-3 mt-8">
+            <motion.div
+              variants={textItemVariants}
+              className="flex flex-col items-stretch gap-3 mt-8"
+            >
               <Link
                 to="/onboarding"
                 className="btn-primary text-base !px-7 !py-3.5 inline-flex items-center justify-center gap-2"
@@ -304,13 +323,14 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
               >
                 Log in
               </Link>
-            </div>
-            <p
+            </motion.div>
+            <motion.p
+              variants={textItemVariants}
               className="text-[13px] mt-4"
               style={{ color: "var(--app-text-muted)" }}
             >
               Free to start · No card needed · Set up in a few minutes
-            </p>
+            </motion.p>
           </>
         )}
       </motion.div>
