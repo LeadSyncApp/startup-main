@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, ChevronDown, Sparkles } from "lucide-react";
-import { EASE } from "../motion";
+import { EASE, screenSwap } from "../motion";
 import { PhoneFrame } from "./PhoneFrame";
 import { LockScreen } from "./screens/LockScreen";
 import { ChatScreen } from "./screens/ChatScreen";
@@ -223,8 +223,8 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
       data-beat={index}
       className={`relative flex flex-col items-center justify-center min-h-screen py-10 ${
         isHero
-          ? "lg:flex-row lg:items-center lg:min-h-0 lg:py-14"
-          : "lg:flex-row lg:items-center lg:min-h-0 lg:py-12"
+          ? "lg:flex-row lg:items-center lg:min-h-screen lg:py-16"
+          : "lg:flex-row lg:items-center lg:min-h-screen lg:py-16"
       } ${DEBUG_STORY ? "debug-story-section" : ""}`}
       style={{ backgroundColor: beat.bg }}
     >
@@ -332,22 +332,17 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
         )}
       </motion.div>
 
-      {/* ── DESKTOP: 2-column grid with phone & text in separate columns (0% overlap) ── */}
-      <div className="hidden lg:grid w-full max-w-6xl mx-auto px-8 grid-cols-2 gap-12 lg:gap-16 items-center z-20">
-        {/* Phone column */}
+      {/* ── DESKTOP: 2-column grid with text in col-start-1 or col-start-2 ── */}
+      <div className="hidden lg:grid w-full max-w-6xl mx-auto px-8 grid-cols-2 gap-12 lg:gap-16 items-center relative z-10">
+        {/* Placeholder spacer div matching phone column for reduced motion */}
         <div
-          className={`flex justify-center row-start-1 ${
+          className={`${
+            reduced ? "flex" : "hidden"
+          } justify-center row-start-1 ${
             beat.phoneSide === "left" ? "col-start-1" : "col-start-2"
           }`}
         >
-          <motion.div
-            initial={{ opacity: 0, x: beat.phoneSide === "left" ? -50 : 50 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: false, amount: 0.3 }}
-            transition={{ duration: 0.6, ease: EASE }}
-          >
-            <InlinePhone beat={beat} instant={false} />
-          </motion.div>
+          <InlinePhone beat={beat} instant={reduced} />
         </div>
 
         {/* Text column */}
@@ -471,14 +466,51 @@ interface ShopCounterStoryProps {
   setSectionRef: (index: number) => (el: HTMLElement | null) => void;
 }
 
-export function ShopCounterStory({ active: _active, setSectionRef }: ShopCounterStoryProps) {
+export function ShopCounterStory({ active, setSectionRef }: ShopCounterStoryProps) {
   const reduced = useReducedMotion() ?? false;
+  const beat = BEATS[active];
 
   return (
     <div className="relative overflow-x-clip" id="how-it-works">
       {BEATS.map((b, i) => (
         <BeatSection key={b.id} beat={b} index={i} sectionRef={setSectionRef(i)} reduced={reduced} />
       ))}
+
+      {/* ── DESKTOP ONLY: global pinned phone with grid-bounded horizontal glide ── */}
+      {!reduced && (
+        <div className="hidden lg:block absolute inset-0 pointer-events-none z-20">
+          <div className="sticky top-16 h-[calc(100dvh-4rem)] flex items-center">
+            <div className="w-full max-w-6xl mx-auto px-8 relative">
+              <motion.div
+                className="w-1/2 flex justify-center"
+                animate={{
+                  x: beat.phoneSide === "left" ? "0%" : "100%",
+                }}
+                transition={{ duration: 0.75, ease: EASE }}
+              >
+                <PhoneFrame
+                  time={beat.time}
+                  screenBg={beat.screenBg}
+                  statusTone={beat.statusTone}
+                >
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={beat.id}
+                      variants={screenSwap}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="flex-1 flex flex-col"
+                    >
+                      <StoryScreen id={beat.id} instant={false} />
+                    </motion.div>
+                  </AnimatePresence>
+                </PhoneFrame>
+              </motion.div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
