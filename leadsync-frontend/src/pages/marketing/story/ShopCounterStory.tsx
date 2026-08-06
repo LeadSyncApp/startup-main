@@ -182,18 +182,22 @@ function BeatSection({ beat, index, onEnter, reduced }: BeatSectionProps) {
     <section
       ref={ref}
       className={`relative flex items-center ${
-        isHero ? "min-h-[calc(100vh-4rem)] pt-14 pb-20" : "min-h-screen py-20"
+        isHero
+          ? "min-h-[calc(100vh-4rem)] pt-[calc(4rem+260px)] lg:pt-14 pb-20"
+          : "min-h-screen pt-[calc(4rem+260px)] lg:pt-20 pb-20"
       }`}
       style={{ backgroundColor: beat.bg }}
     >
       <div className="w-full max-w-6xl mx-auto px-5 sm:px-8 grid lg:grid-cols-2 gap-10 lg:gap-8 items-center">
-        {/* Phone, in flow: mobile always; desktop only when motion is reduced */}
+        {/* Phone, in flow: hidden on mobile (sticky phone handles it); desktop only when motion is reduced */}
         <div
-          className={`flex justify-center row-start-1 ${
+          className={`hidden ${
+            reduced ? "lg:flex" : ""
+          } justify-center row-start-1 ${
             beat.phoneSide === "left" ? "lg:col-start-1" : "lg:col-start-2"
-          } ${reduced ? "" : "lg:hidden"}`}
+          }`}
         >
-          <InlinePhone beat={beat} instant={false} />
+          <InlinePhone beat={beat} instant={reduced} />
         </div>
 
         <motion.div
@@ -322,7 +326,30 @@ export function ShopCounterStory() {
         <BeatSection key={b.id} beat={b} index={i} onEnter={handleEnter} reduced={reduced} />
       ))}
 
-      {/* Pinned phone. Glides between the two halves as the beats alternate. */}
+      {/* Pinned phone for MOBILE — centered at top, transitions between screens */}
+      {!reduced && (
+        <div className="lg:hidden fixed top-16 left-0 right-0 z-10 pointer-events-none flex justify-center pt-4">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={beat.id}
+              variants={screenSwap}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+            >
+              <PhoneFrame
+                time={beat.time}
+                screenBg={beat.screenBg}
+                statusTone={beat.statusTone}
+              >
+                <StoryScreen id={beat.id} instant={false} />
+              </PhoneFrame>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* Pinned phone for DESKTOP — glides between left/right as beats alternate */}
       {!reduced && (
         <div className="hidden lg:block absolute inset-0 pointer-events-none z-10">
           <div className="sticky top-16 h-[calc(100vh-4rem)]">
