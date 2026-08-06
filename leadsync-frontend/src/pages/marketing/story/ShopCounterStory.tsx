@@ -188,14 +188,20 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
 
   const { scrollYProgress } = useScroll({
     target: sectionElementRef,
-    offset: ["start 90%", "start 64px"],
+    offset: ["start 65%", "start 64px"],
   });
 
-  // Alternating horizontal entrance direction matching beat.phoneSide
-  // "right" -> slides in from right (+120px to 0)
-  // "left"  -> slides in from left (-120px to 0)
-  const initialX = beat.phoneSide === "right" ? 120 : -120;
-  const rawX = useTransform(scrollYProgress, [0, 1], [initialX, 0]);
+  // Hero beat (index 0) stays fixed at center (x = 0) on initial load.
+  // Subsequent beats (1-5) alternate entrance direction based on beat.phoneSide.
+  const initialX = isHero ? 0 : (beat.phoneSide === "right" ? 80 : -80);
+
+  // Eased scroll-linked transform for a fast, buttery-smooth entrance slide
+  const rawX = useTransform(
+    scrollYProgress,
+    [0, 1],
+    [initialX, 0],
+    { ease: (t) => 1 - Math.pow(1 - t, 2.5) }
+  );
   const x = reduced ? 0 : rawX;
 
   // Desktop: text sits opposite the phone in the 2-col grid.
