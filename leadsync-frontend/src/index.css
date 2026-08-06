@@ -492,12 +492,17 @@
   }
 }
 
-/* ── Reduced motion: disable CSS keyframe animations for motion-sensitive users ── */
+/* ── Reduced motion: disable CSS keyframe animations for motion-sensitive users ──
+   NOTE: This only targets CSS @keyframes animations. Framer-motion uses
+   JavaScript-driven animations which are controlled via useReducedMotion() hook. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+  /* Only disable CSS keyframe animations, NOT transitions or framer-motion */
+  .ambient-glow,
+  .pulse-live,
+  .animate-bounce,
+  .animate-spin,
+  .animate-pulse {
+    animation: none !important;
   }
 }
 
@@ -528,6 +533,31 @@
   #root {
     height: 100dvh;
     overflow: hidden;
+  }
+  
+  /* Phone frame mobile sizing */
+  .phone-frame {
+    width: 220px;
+    height: 452px;
+  }
+}
+
+/* ── Marketing page phone animations ── */
+@media (prefers-reduced-motion: no-preference) {
+  /* Ensure phone screen transitions work on mobile */
+  .phone-screen-enter {
+    animation: phoneScreenIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+
+@keyframes phoneScreenIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

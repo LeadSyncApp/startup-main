@@ -75,7 +75,7 @@ export function PhoneFrame({
       />
 
       <div
-        className="relative overflow-hidden rounded-[2.1rem] w-[248px] h-[512px] sm:w-[292px] sm:h-[604px]"
+        className="relative overflow-hidden rounded-[2.1rem] w-[220px] h-[452px] sm:w-[292px] sm:h-[604px]"
         style={{ background: screenBg }}
       >
         {/* Dynamic island */}

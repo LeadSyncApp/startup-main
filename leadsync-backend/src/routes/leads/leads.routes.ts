@@ -1,5 +1,5 @@
 import { Router, Response } from "express";
-import { prisma, directPrisma } from "../../lib/prisma";
+import { prisma } from "../../lib/prisma";
 import { authMiddleware, authorizeRoles, AuthRequest } from "../../middleware/auth.middleware";
 import { notificationService } from "../../services/infrastructure/notification.service";
 import { safeEmitConversationUpdate, emitToAgent, emitToCompany } from "../../lib/socket";
@@ -72,10 +72,10 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       whereClauses.push(`(l.name ILIKE $${searchParamIdx} OR l.contact ILIKE $${searchParamIdx})`);
     }
 
-    // Fast-path for countOnly request
+    // Fast-path for countOnly request — use pooled prisma (DATABASE_URL) for reliability
     if (countOnly) {
       const countSql = `SELECT CAST(COUNT(*) AS integer) AS count FROM "Lead" l WHERE ${whereClauses.join(" AND ")}`;
-      const countRows = await directPrisma.$queryRawUnsafe<{ count: number }[]>(countSql, ...params);
+      const countRows = await prisma.$queryRawUnsafe<{ count: number }[]>(countSql, ...params);
       const total = countRows.length > 0 ? Number(countRows[0].count) : 0;
 
       return res.json({
@@ -161,14 +161,14 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       ORDER BY fl."lastActiveAt" DESC;
     `;
 
-    const rawRows = await directPrisma.$queryRawUnsafe<any[]>(sql, ...params);
+    const rawRows = await prisma.$queryRawUnsafe<any[]>(sql, ...params);
     let total = rawRows.length > 0 ? Number(rawRows[0].total_count) : 0;
 
     // Fallback for empty paginated result sets beyond bounds
     if (rawRows.length === 0 && page > 1) {
       const countSql = `SELECT CAST(COUNT(*) AS integer) AS count FROM "Lead" l WHERE ${whereClauses.join(" AND ")}`;
       const countParams = params.slice(0, paramIndex - 3);
-      const countRows = await directPrisma.$queryRawUnsafe<{ count: number }[]>(countSql, ...countParams);
+      const countRows = await prisma.$queryRawUnsafe<{ count: number }[]>(countSql, ...countParams);
       total = countRows.length > 0 ? Number(countRows[0].count) : 0;
     }
 
@@ -179,7 +179,7 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     const uniqueProductIds = [...new Set<string>(productIds)];
     const productBatchMap = new Map<string, any>();
     if (uniqueProductIds.length > 0) {
-      const batchProducts = await directPrisma.inventoryProduct.findMany({
+      const batchProducts = await prisma.inventoryProduct.findMany({
         where: { id: { in: uniqueProductIds }, companyId, isActive: true },
         select: {
           id: true,

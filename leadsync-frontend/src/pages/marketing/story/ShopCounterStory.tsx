@@ -193,7 +193,7 @@ function BeatSection({ beat, index, onEnter, reduced }: BeatSectionProps) {
             beat.phoneSide === "left" ? "lg:col-start-1" : "lg:col-start-2"
           } ${reduced ? "" : "lg:hidden"}`}
         >
-          <InlinePhone beat={beat} instant={reduced} />
+          <InlinePhone beat={beat} instant={false} />
         </div>
 
         <motion.div
