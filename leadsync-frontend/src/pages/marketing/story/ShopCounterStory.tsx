@@ -238,79 +238,45 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
       } ${DEBUG_STORY ? "debug-story-section" : ""}`}
       style={{ backgroundColor: beat.bg }}
     >
-      {/* ── MOBILE: sticky phone with scroll-linked entrance motion ──
-          The phone sits in the section's normal flow. Its height pushes the text below.
-          position:sticky pins it at top-16 (64px) while the section scrolls through the viewport.
-          As it scrolls into view, motion.div slides it horizontally from left/right (driven by scrollYProgress),
-          settling into center (x = 0) exactly when sticky pins at top-16. */}
-      <div className={`w-full lg:hidden ${DEBUG_STORY ? "debug-story-phone" : ""}`}>
-        <div className="sticky top-16 flex justify-center z-20 overflow-visible">
-          <motion.div style={{ x, opacity }} className="will-change-transform">
-            <InlinePhone beat={beat} instant={false} />
-          </motion.div>
-        </div>
-      </div>
-
-      {/* ── MOBILE: text — sticky below phone ──
-          Pins at top-[600px] (36px below phone bottom at 564px).
-          Scrolls freely within the section, never crossing the phone. */}
-      <motion.div
-        variants={stagger(0.09)}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.4 }}
-        className={`w-full sticky top-[600px] z-10 px-5 py-8 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
-      >
-        {isHero ? (
-          <motion.span
-            variants={fadeUp}
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] px-3 py-1.5 rounded-full mb-6"
-            style={{
-              backgroundColor: "var(--brand-saffron-soft)",
-              color: "var(--brand-saffron)",
-            }}
+      {/* ── MOBILE: Hero beat renders text FIRST above phone; Beats 1-5 render phone top-16 + text top-[600px] ── */}
+      {isHero ? (
+        <div className="w-full lg:hidden">
+          {/* Hero text rendered first at top of section */}
+          <motion.div
+            variants={stagger(0.09)}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.4 }}
+            className={`w-full px-5 pt-6 pb-8 max-w-xl mx-auto ${DEBUG_STORY ? "debug-story-text" : ""}`}
           >
-            <Sparkles className="h-3 w-3" />
-            {beat.eyebrow}
-          </motion.span>
-        ) : (
-          <motion.p
-            variants={fadeUp}
-            className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-4"
-            style={{ color: "var(--brand-saffron)", fontFamily: "var(--font-mono)" }}
-          >
-            {beat.eyebrow}
-          </motion.p>
-        )}
+            <motion.span
+              variants={fadeUp}
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] px-3 py-1.5 rounded-full mb-6"
+              style={{
+                backgroundColor: "var(--brand-saffron-soft)",
+                color: "var(--brand-saffron)",
+              }}
+            >
+              <Sparkles className="h-3 w-3" />
+              {beat.eyebrow}
+            </motion.span>
 
-        {isHero ? (
-          <motion.h1
-            variants={fadeUp}
-            className="display-soft text-[2.4rem] leading-[1.06] font-bold mb-6"
-            style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
-          >
-            {beat.heading}
-          </motion.h1>
-        ) : (
-          <motion.h2
-            variants={fadeUp}
-            className="display-soft text-[2rem] leading-[1.08] font-bold mb-5"
-            style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
-          >
-            {beat.heading}
-          </motion.h2>
-        )}
+            <motion.h1
+              variants={fadeUp}
+              className="display-soft text-[2.4rem] leading-[1.06] font-bold mb-6"
+              style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
+            >
+              {beat.heading}
+            </motion.h1>
 
-        <motion.p
-          variants={fadeUp}
-          className="text-[16.5px] leading-relaxed"
-          style={{ color: "var(--text-secondary)" }}
-        >
-          {beat.body}
-        </motion.p>
+            <motion.p
+              variants={fadeUp}
+              className="text-[16.5px] leading-relaxed"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              {beat.body}
+            </motion.p>
 
-        {isHero && (
-          <>
             <motion.div
               variants={fadeUp}
               className="flex flex-col items-stretch gap-3 mt-8"
@@ -331,14 +297,67 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
             </motion.div>
             <motion.p
               variants={fadeUp}
-              className="text-[13px] mt-4"
+              className="text-[13px] mt-4 mb-6"
               style={{ color: "var(--app-text-muted)" }}
             >
               Free to start · No card needed · Set up in a few minutes
             </motion.p>
-          </>
-        )}
-      </motion.div>
+          </motion.div>
+
+          {/* Hero sticky phone rendered below text, sliding in from right on scroll */}
+          <div className={`w-full ${DEBUG_STORY ? "debug-story-phone" : ""}`}>
+            <div className="sticky top-16 flex justify-center z-20 overflow-visible pb-12">
+              <motion.div style={{ x, opacity }} className="will-change-transform">
+                <InlinePhone beat={beat} instant={false} />
+              </motion.div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* MOBILE Beats 1-5: sticky phone in normal flow (top-16) */}
+          <div className={`w-full lg:hidden ${DEBUG_STORY ? "debug-story-phone" : ""}`}>
+            <div className="sticky top-16 flex justify-center z-20 overflow-visible">
+              <motion.div style={{ x, opacity }} className="will-change-transform">
+                <InlinePhone beat={beat} instant={false} />
+              </motion.div>
+            </div>
+          </div>
+
+          {/* MOBILE Beats 1-5: text — sticky below phone (top-[600px]) */}
+          <motion.div
+            variants={stagger(0.09)}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.4 }}
+            className={`w-full sticky top-[600px] z-10 px-5 py-8 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
+          >
+            <motion.p
+              variants={fadeUp}
+              className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-4"
+              style={{ color: "var(--brand-saffron)", fontFamily: "var(--font-mono)" }}
+            >
+              {beat.eyebrow}
+            </motion.p>
+
+            <motion.h2
+              variants={fadeUp}
+              className="display-soft text-[2rem] leading-[1.08] font-bold mb-5"
+              style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
+            >
+              {beat.heading}
+            </motion.h2>
+
+            <motion.p
+              variants={fadeUp}
+              className="text-[16.5px] leading-relaxed"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              {beat.body}
+            </motion.p>
+          </motion.div>
+        </>
+      )}
 
       {/* ── DESKTOP: grid with phone + text side-by-side (unchanged) ── */}
       <div className="hidden lg:grid w-full max-w-6xl mx-auto px-8 grid-cols-2 gap-8 items-center">
