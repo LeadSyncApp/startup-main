@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { NavBar } from "./marketing/NavBar";
-import { ShopCounterStory } from "./marketing/story/ShopCounterStory";
+import { ShopCounterStory, MobileStickyPhone, BEATS } from "./marketing/story/ShopCounterStory";
+import { useScrollBeat } from "./marketing/story/useScrollBeat";
 import { TrustStrip } from "./marketing/TrustStrip";
 import { Features } from "./marketing/Features";
 import { Verticals } from "./marketing/Verticals";
@@ -27,6 +28,8 @@ const DESCRIPTION =
   "Answer customers, take orders and get paid — on Telegram and your website chat. SaLira replies for you, writes the order down, and has it ready in the morning.";
 
 export default function MarketingHomePage() {
+  const { active, setSectionRef } = useScrollBeat(BEATS.length, false);
+
   return (
     <>
       <Helmet>
@@ -51,7 +54,11 @@ export default function MarketingHomePage() {
 
       <div className="min-h-screen" style={{ backgroundColor: "var(--app-bg)" }}>
         <NavBar />
-        <ShopCounterStory />
+        {/* Mobile sticky phone — rendered here (outside ShopCounterStory's
+            relative wrapper) to avoid containing-block issues that break
+            position:fixed on some mobile browsers. */}
+        <MobileStickyPhone active={active} />
+        <ShopCounterStory active={active} setSectionRef={setSectionRef} />
         <TrustStrip />
         {/* HowItWorks.tsx is deliberately not rendered — the scroll-story above
             IS the "how it works" explanation. Same for Hero.tsx and

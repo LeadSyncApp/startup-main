@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -46,7 +45,7 @@ function Em({ children }: { children: ReactNode }) {
   );
 }
 
-const BEATS: BeatDef[] = [
+export const BEATS: BeatDef[] = [
   {
     id: "lock",
     phoneSide: "right",
@@ -308,85 +307,20 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
   );
 }
 
-export function ShopCounterStory() {
+interface ShopCounterStoryProps {
+  active: number;
+  setSectionRef: (index: number) => (el: HTMLElement | null) => void;
+}
+
+export function ShopCounterStory({ active, setSectionRef }: ShopCounterStoryProps) {
   const reduced = useReducedMotion() ?? false;
-  const [active, setActive] = useState(0);
-  const sectionRefs = useRef<(HTMLElement | null)[]>([]);
-
-  // Scroll-position-based beat detection — more reliable than IntersectionObserver
-  // on Android where viewport height changes cause useInView to miscalculate.
-  useEffect(() => {
-    if (reduced) return;
-
-    let rafId: number | null = null;
-
-    const detectActiveBeat = () => {
-      const scrollY = window.scrollY;
-      const viewportHeight = window.innerHeight;
-      const triggerPoint = scrollY + viewportHeight * 0.4;
-
-      let newActive = 0;
-      for (let i = sectionRefs.current.length - 1; i >= 0; i--) {
-        const el = sectionRefs.current[i];
-        if (!el) continue;
-        if (el.offsetTop <= triggerPoint) {
-          newActive = i;
-          break;
-        }
-      }
-      setActive(newActive);
-    };
-
-    const onScroll = () => {
-      if (rafId !== null) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        detectActiveBeat();
-      });
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    detectActiveBeat();
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (rafId !== null) cancelAnimationFrame(rafId);
-    };
-  }, [reduced]);
-
   const beat = BEATS[active];
-
-  const setSectionRef = useCallback((index: number) => (el: HTMLElement | null) => {
-    sectionRefs.current[index] = el;
-  }, []);
 
   return (
     <div className="relative" id="how-it-works">
       {BEATS.map((b, i) => (
         <BeatSection key={b.id} beat={b} index={i} sectionRef={setSectionRef(i)} reduced={reduced} />
       ))}
-
-      {/* Pinned phone for MOBILE — transitions between screens as user scrolls */}
-      {!reduced && (
-        <div className="lg:hidden fixed top-[calc(50dvh-240px)] left-0 right-0 z-10 pointer-events-none flex justify-center">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={beat.id}
-              variants={screenSwap}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-            >
-              <PhoneFrame
-                time={beat.time}
-                screenBg={beat.screenBg}
-                statusTone={beat.statusTone}
-              >
-                <StoryScreen id={beat.id} instant={false} />
-              </PhoneFrame>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      )}
 
       {/* Pinned phone for DESKTOP — glides between left/right as beats alternate */}
       {!reduced && (
@@ -422,6 +356,40 @@ export function ShopCounterStory() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Mobile sticky phone — rendered at MarketingHomePage level (outside
+ * ShopCounterStory's relative wrapper) to avoid containing-block issues
+ * that break position:fixed on some mobile browsers.
+ */
+export function MobileStickyPhone({ active }: { active: number }) {
+  const reduced = useReducedMotion() ?? false;
+  const beat = BEATS[active];
+
+  if (reduced) return null;
+
+  return (
+    <div className="lg:hidden fixed top-[calc(50dvh-240px)] left-0 right-0 z-10 pointer-events-none flex justify-center">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={beat.id}
+          variants={screenSwap}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+        >
+          <PhoneFrame
+            time={beat.time}
+            screenBg={beat.screenBg}
+            statusTone={beat.statusTone}
+          >
+            <StoryScreen id={beat.id} instant={false} />
+          </PhoneFrame>
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
