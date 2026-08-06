@@ -318,6 +318,8 @@ export function ShopCounterStory() {
   useEffect(() => {
     if (reduced) return;
 
+    let rafId: number | null = null;
+
     const detectActiveBeat = () => {
       const scrollY = window.scrollY;
       const viewportHeight = window.innerHeight;
@@ -335,11 +337,20 @@ export function ShopCounterStory() {
       setActive(newActive);
     };
 
-    // Use passive scroll listener for performance
-    window.addEventListener("scroll", detectActiveBeat, { passive: true });
-    // Run once on mount
+    const onScroll = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        detectActiveBeat();
+      });
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
     detectActiveBeat();
-    return () => window.removeEventListener("scroll", detectActiveBeat);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [reduced]);
 
   const beat = BEATS[active];
