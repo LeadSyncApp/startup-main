@@ -223,14 +223,14 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
       data-beat={index}
       className={`relative flex flex-col items-center justify-center min-h-screen py-10 ${
         isHero
-          ? "lg:flex-row lg:items-center lg:min-h-screen lg:py-16"
-          : "lg:flex-row lg:items-center lg:min-h-screen lg:py-16"
+          ? "md:flex-row md:items-center md:min-h-screen md:py-16"
+          : "md:flex-row md:items-center md:min-h-screen md:py-16"
       } ${DEBUG_STORY ? "debug-story-section" : ""}`}
       style={{ backgroundColor: beat.bg }}
     >
       {/* ── MOBILE: sticky phone with bidirectional scroll entrance motion ──
           Animates bidirectionally when scrolling DOWN and scrolling UP (once: false). */}
-      <div className={`w-full lg:hidden ${DEBUG_STORY ? "debug-story-phone" : ""}`}>
+      <div className={`w-full md:hidden ${DEBUG_STORY ? "debug-story-phone" : ""}`}>
         <div className="sticky top-16 flex justify-center z-20 overflow-visible">
           <motion.div
             variants={phoneVariants}
@@ -251,7 +251,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
         initial="hidden"
         whileInView="visible"
         viewport={{ once: false, amount: 0.35 }}
-        className={`w-full relative z-10 px-5 pt-3 pb-8 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
+        className={`w-full relative z-10 px-5 pt-3 pb-8 max-w-xl mx-auto md:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
       >
         {isHero ? (
           <motion.span
@@ -333,7 +333,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
       </motion.div>
 
       {/* ── DESKTOP: 2-column grid with text in col-start-1 or col-start-2 ── */}
-      <div className="hidden lg:grid w-full max-w-6xl mx-auto px-8 grid-cols-2 gap-12 lg:gap-16 items-center relative z-10">
+      <div className="hidden md:grid w-full max-w-6xl mx-auto px-8 grid-cols-2 gap-8 lg:gap-16 items-center relative z-10">
         {/* Placeholder spacer div matching phone column for reduced motion */}
         <div
           className={`${
@@ -380,7 +380,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
           {isHero ? (
             <motion.h1
               variants={textItemVariants}
-              className="display-soft text-[3.5rem] leading-[1.06] font-bold mb-6"
+              className="display-soft text-[2.8rem] lg:text-[3.5rem] leading-[1.06] font-bold mb-6"
               style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
             >
               {beat.heading}
@@ -388,7 +388,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
           ) : (
             <motion.h2
               variants={textItemVariants}
-              className="display-soft text-[3rem] leading-[1.08] font-bold mb-5"
+              className="display-soft text-[2.4rem] lg:text-[3rem] leading-[1.08] font-bold mb-5"
               style={{ color: "var(--app-text)", letterSpacing: "-0.03em" }}
             >
               {beat.heading}
@@ -441,7 +441,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.4, duration: 0.6 }}
-          className="hidden lg:flex absolute bottom-7 left-1/2 -translate-x-1/2 flex-col items-center gap-1.5"
+          className="hidden md:flex absolute bottom-7 left-1/2 -translate-x-1/2 flex-col items-center gap-1.5"
         >
           <span
             className="text-[10px] font-semibold uppercase tracking-[0.18em]"
@@ -478,7 +478,7 @@ export function ShopCounterStory({ active, setSectionRef }: ShopCounterStoryProp
 
       {/* ── DESKTOP ONLY: global pinned phone with grid-bounded horizontal glide ── */}
       {!reduced && (
-        <div className="hidden lg:block absolute inset-0 pointer-events-none z-20">
+        <div className="hidden md:block absolute inset-0 pointer-events-none z-20">
           <div className="sticky top-16 h-[calc(100dvh-4rem)] flex items-center">
             <div className="w-full max-w-6xl mx-auto px-8 relative">
               <motion.div
