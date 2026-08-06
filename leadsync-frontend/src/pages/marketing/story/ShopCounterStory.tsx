@@ -253,15 +253,15 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
         </div>
       </div>
 
-      {/* ── MOBILE: text — sticky below phone ──
-          Pins at top-[600px] (36px below phone bottom at 564px).
-          Scrolls freely within the section, never crossing the phone. */}
+      {/* ── MOBILE: text — in flow directly below phone ──
+          Positioned naturally below phone (pt-4) so it flows seamlessly with scroll,
+          eliminating floating text and empty gaps between sections. */}
       <motion.div
         variants={stagger(0.09)}
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, amount: 0.4 }}
-        className={`w-full sticky top-[600px] z-10 px-5 py-8 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
+        className={`w-full relative z-10 px-5 pt-4 pb-12 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
       >
         {isHero ? (
           <motion.span
