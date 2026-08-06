@@ -186,9 +186,11 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
   // Local ref for tracking section scroll progress
   const sectionElementRef = useRef<HTMLElement | null>(null);
 
+  // Scroll offset ["start 85%", "start 64px"]:
+  // Animation triggers as section top enters lower 15% of viewport and settles at sticky top-16 (64px).
   const { scrollYProgress } = useScroll({
     target: sectionElementRef,
-    offset: ["start 75%", "start 64px"],
+    offset: ["start 85%", "start 64px"],
   });
 
   // Alternating horizontal entrance direction matching beat.phoneSide
@@ -196,7 +198,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
   // "left"  -> slides in from left (-120px to 0)
   const initialX = beat.phoneSide === "right" ? 120 : -120;
 
-  // Eased scroll-linked horizontal transform for beats 1-5
+  // Eased scroll-linked horizontal transform for phone
   const rawX = useTransform(
     scrollYProgress,
     [0, 1],
@@ -204,15 +206,32 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
     { ease: (t) => 1 - Math.pow(1 - t, 2.5) }
   );
 
-  // Fade-in opacity transform for beats 1-5
-  const rawOpacity = useTransform(
+  // Fade-in opacity transform for phone (0 when section is below viewport -> 1 at sticky pin)
+  const rawPhoneOpacity = useTransform(
+    scrollYProgress,
+    [0, 0.4, 1],
+    [0, 0.6, 1]
+  );
+
+  // Bidirectional scroll-linked fade-up transform for description text (y: 28px -> 0, opacity: 0 -> 1)
+  // Operates identically whether scrolling DOWN or scrolling UP!
+  const rawTextY = useTransform(
+    scrollYProgress,
+    [0, 1],
+    [28, 0],
+    { ease: (t) => 1 - Math.pow(1 - t, 2) }
+  );
+
+  const rawTextOpacity = useTransform(
     scrollYProgress,
     [0, 0.4, 1],
     [0, 0.6, 1]
   );
 
   const scrollX = reduced ? 0 : rawX;
-  const scrollOpacity = reduced ? 1 : rawOpacity;
+  const scrollOpacity = reduced ? 1 : rawPhoneOpacity;
+  const textY = reduced ? 0 : rawTextY;
+  const textOpacity = reduced ? 1 : rawTextOpacity;
 
   // Desktop: text sits opposite the phone in the 2-col grid.
   const textColumn = beat.phoneSide === "left" ? "lg:col-start-2" : "lg:col-start-1";
@@ -224,7 +243,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
         sectionRef(el);
       }}
       data-beat={index}
-      className={`relative flex flex-col items-start pb-4 ${
+      className={`relative flex flex-col items-start min-h-screen ${
         isHero
           ? "lg:flex-row lg:items-center lg:min-h-screen lg:pt-14 lg:pb-20"
           : "lg:flex-row lg:items-center lg:min-h-screen lg:pt-20 lg:pb-20"
@@ -253,14 +272,12 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
         </div>
       </div>
 
-      {/* ── MOBILE: text — in flow directly below phone ──
-          Tightly positioned below phone (pt-2 pb-4) so scrolling immediately transitions to the next beat. */}
+      {/* ── MOBILE: text — in flow directly below phone with bidirectional scroll-linked fade-up ──
+          Description text stays opacity 0 until section enters viewport, preventing pre-scroll peeking,
+          and animates bidirectionally when scrolling DOWN and scrolling UP. */}
       <motion.div
-        variants={stagger(0.09)}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.4 }}
-        className={`w-full relative z-10 px-5 pt-2 pb-4 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
+        style={{ y: isHero ? 0 : textY, opacity: isHero ? 1 : textOpacity }}
+        className={`w-full relative z-10 px-5 pt-2 pb-6 max-w-xl mx-auto lg:hidden ${DEBUG_STORY ? "debug-story-text" : ""}`}
       >
         {isHero ? (
           <motion.span
