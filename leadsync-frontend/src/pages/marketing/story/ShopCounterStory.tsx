@@ -10,6 +10,10 @@ import { OrderScreen } from "./screens/OrderScreen";
 import { PaidScreen } from "./screens/PaidScreen";
 import { DashboardScreen } from "./screens/DashboardScreen";
 
+/* ── Debug: set to true to draw red outlines around the phone and text
+     containers so overlap is instantly visible in a screenshot. ── */
+const DEBUG_STORY = false;
+
 /* ════════════════════════════════════════════════════════════════════ */
 /*                          THE SHOP COUNTER                           */
 /*                                                                      */
@@ -177,9 +181,9 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
       data-beat={index}
       className={`relative flex items-center lg:items-center ${
         isHero
-          ? "min-h-[100dvh] lg:min-h-[calc(100vh-4rem)] pt-[calc(50dvh+344px)] lg:pt-14 pb-20"
-          : "min-h-[100dvh] lg:min-h-screen pt-[calc(50dvh+344px)] lg:pt-20 pb-16 lg:pb-20"
-      }`}
+          ? "min-h-screen lg:min-h-[calc(100vh-4rem)] pt-[596px] lg:pt-14 pb-20"
+          : "min-h-screen lg:min-h-screen pt-[596px] lg:pt-20 pb-16 lg:pb-20"
+      } ${DEBUG_STORY ? "debug-story-section" : ""}`}
       style={{ backgroundColor: beat.bg }}
     >
       <div className="w-full max-w-6xl mx-auto px-5 sm:px-8 grid lg:grid-cols-2 gap-6 lg:gap-8 items-center">
@@ -199,7 +203,7 @@ function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, amount: 0.4 }}
-          className={`${textColumn} row-start-2 lg:row-start-1 max-w-xl`}
+          className={`${textColumn} row-start-2 lg:row-start-1 max-w-xl ${DEBUG_STORY ? "debug-story-text" : ""}`}
         >
           {isHero ? (
             <motion.span
@@ -323,10 +327,11 @@ export function ShopCounterStory({ active, setSectionRef }: ShopCounterStoryProp
       ))}
 
       {/* Pinned phone for MOBILE — mirrors desktop's sticky-inside-absolute pattern,
-          but without horizontal left/right animation (narrow viewport). */}
+          but without horizontal left/right animation (narrow viewport).
+          Height is fixed px (not dvh) so it can never drift from SECTION_PT_PX. */}
       {!reduced && (
-        <div className="lg:hidden absolute inset-0 pointer-events-none z-10">
-          <div className="sticky top-16 h-[calc(100dvh-4rem)]">
+        <div className={`lg:hidden absolute inset-0 pointer-events-none z-10 ${DEBUG_STORY ? "debug-story-phone" : ""}`}>
+          <div className="sticky top-16 h-[564px]">
             <div className="flex justify-center h-full">
               <div className="mt-auto mb-auto">
                 <PhoneFrame

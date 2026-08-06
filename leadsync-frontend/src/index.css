@@ -560,3 +560,28 @@
     transition: margin-right 0.3s ease;
   }
 }
+
+/* ── Debug outlines for ShopCounterStory overlap debugging.
+     Activate by setting DEBUG_STORY = true in ShopCounterStory.tsx. ── */
+.debug-story-section {
+  outline: 2px dashed magenta;
+  outline-offset: -2px;
+}
+.debug-story-phone {
+  outline: 2px solid red;
+  outline-offset: -2px;
+}
+.debug-story-text {
+  outline: 2px solid lime;
+  outline-offset: -2px;
+}
+
+/* ── Fixed-pixel utilities for the story phone layout.
+     Tailwind JIT can't detect these inside ternary expressions,
+     so they're defined here instead of via class strings. ── */
+.pt-\[596px\] {
+  padding-top: 596px;
+}
+.h-\[564px\] {
+  height: 564px;
+}
