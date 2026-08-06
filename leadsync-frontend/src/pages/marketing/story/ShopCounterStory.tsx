@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, ChevronDown, Sparkles } from "lucide-react";
 import { EASE, fadeUp, screenSwap, stagger } from "../motion";
 import { PhoneFrame } from "./PhoneFrame";
@@ -162,29 +162,24 @@ function InlinePhone({ beat, instant }: { beat: BeatDef; instant: boolean }) {
 interface BeatSectionProps {
   beat: BeatDef;
   index: number;
-  onEnter: (index: number) => void;
+  sectionRef: (el: HTMLElement | null) => void;
   reduced: boolean;
 }
 
-function BeatSection({ beat, index, onEnter, reduced }: BeatSectionProps) {
-  const ref = useRef<HTMLElement | null>(null);
-  const inView = useInView(ref, { amount: 0.15, margin: "-10% 0px -10% 0px" });
+function BeatSection({ beat, index, sectionRef, reduced }: BeatSectionProps) {
   const isHero = index === 0;
-
-  useEffect(() => {
-    if (inView) onEnter(index);
-  }, [inView, index, onEnter]);
 
   // Text sits opposite the phone.
   const textColumn = beat.phoneSide === "left" ? "lg:col-start-2" : "lg:col-start-1";
 
   return (
     <section
-      ref={ref}
+      ref={sectionRef}
+      data-beat={index}
       className={`relative flex items-center ${
         isHero
-          ? "min-h-[calc(100vh-4rem)] pt-[calc(4rem+220px)] lg:pt-14 pb-20"
-          : "min-h-[70vh] lg:min-h-screen pt-[calc(4rem+220px)] lg:pt-20 pb-16 lg:pb-20"
+          ? "min-h-[100dvh] lg:min-h-[calc(100vh-4rem)] pt-[calc(4rem+240px)] lg:pt-14 pb-20"
+          : "min-h-[70dvh] lg:min-h-screen pt-[calc(4rem+240px)] lg:pt-20 pb-16 lg:pb-20"
       }`}
       style={{ backgroundColor: beat.bg }}
     >
@@ -316,19 +311,52 @@ function BeatSection({ beat, index, onEnter, reduced }: BeatSectionProps) {
 export function ShopCounterStory() {
   const reduced = useReducedMotion() ?? false;
   const [active, setActive] = useState(0);
-  const handleEnter = useCallback((index: number) => setActive(index), []);
+  const sectionRefs = useRef<(HTMLElement | null)[]>([]);
+
+  // Scroll-position-based beat detection — more reliable than IntersectionObserver
+  // on Android where viewport height changes cause useInView to miscalculate.
+  useEffect(() => {
+    if (reduced) return;
+
+    const detectActiveBeat = () => {
+      const scrollY = window.scrollY;
+      const viewportHeight = window.innerHeight;
+      const triggerPoint = scrollY + viewportHeight * 0.4;
+
+      let newActive = 0;
+      for (let i = sectionRefs.current.length - 1; i >= 0; i--) {
+        const el = sectionRefs.current[i];
+        if (!el) continue;
+        if (el.offsetTop <= triggerPoint) {
+          newActive = i;
+          break;
+        }
+      }
+      setActive(newActive);
+    };
+
+    // Use passive scroll listener for performance
+    window.addEventListener("scroll", detectActiveBeat, { passive: true });
+    // Run once on mount
+    detectActiveBeat();
+    return () => window.removeEventListener("scroll", detectActiveBeat);
+  }, [reduced]);
 
   const beat = BEATS[active];
+
+  const setSectionRef = useCallback((index: number) => (el: HTMLElement | null) => {
+    sectionRefs.current[index] = el;
+  }, []);
 
   return (
     <div className="relative" id="how-it-works">
       {BEATS.map((b, i) => (
-        <BeatSection key={b.id} beat={b} index={i} onEnter={handleEnter} reduced={reduced} />
+        <BeatSection key={b.id} beat={b} index={i} sectionRef={setSectionRef(i)} reduced={reduced} />
       ))}
 
-      {/* Pinned phone for MOBILE — centered at top, transitions between screens */}
+      {/* Pinned phone for MOBILE — transitions between screens as user scrolls */}
       {!reduced && (
-        <div className="lg:hidden fixed top-14 left-0 right-0 z-10 pointer-events-none flex justify-center pt-3 pb-4" style={{ backgroundColor: "var(--app-bg)" }}>
+        <div className="lg:hidden fixed top-14 left-0 right-0 z-10 pointer-events-none flex justify-center">
           <AnimatePresence mode="wait">
             <motion.div
               key={beat.id}
@@ -352,7 +380,7 @@ export function ShopCounterStory() {
       {/* Pinned phone for DESKTOP — glides between left/right as beats alternate */}
       {!reduced && (
         <div className="hidden lg:block absolute inset-0 pointer-events-none z-10">
-          <div className="sticky top-16 h-[calc(100vh-4rem)]">
+          <div className="sticky top-16 h-[calc(100dvh-4rem)]">
             <div className="relative h-full max-w-6xl mx-auto px-8">
               <motion.div
                 className="absolute"

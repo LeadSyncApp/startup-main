@@ -517,28 +517,20 @@
 
 /* ── Mobile responsive utilities ── */
 @media (max-width: 767px) {
-  /* Ensure proper viewport fit on mobile */
+  /* Proper viewport on mobile — use dvh for Android address bar collapse */
   html {
-    overflow: hidden;
     height: 100%;
-    height: -webkit-fill-available;
+    height: 100dvh;
   }
   body {
     min-height: 100vh;
-    min-height: -webkit-fill-available;
-    overflow: hidden;
+    min-height: 100dvh;
   }
   
   /* Fix iOS rubber-band scrolling */
   #root {
-    height: 100dvh;
-    overflow: hidden;
-  }
-  
-  /* Phone frame mobile sizing */
-  .phone-frame {
-    width: 220px;
-    height: 452px;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
 }
 
