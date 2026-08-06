@@ -168,7 +168,7 @@ interface BeatSectionProps {
 
 function BeatSection({ beat, index, onEnter, reduced }: BeatSectionProps) {
   const ref = useRef<HTMLElement | null>(null);
-  const inView = useInView(ref, { amount: 0.55 });
+  const inView = useInView(ref, { amount: 0.15, margin: "-10% 0px -10% 0px" });
   const isHero = index === 0;
 
   useEffect(() => {
@@ -183,12 +183,12 @@ function BeatSection({ beat, index, onEnter, reduced }: BeatSectionProps) {
       ref={ref}
       className={`relative flex items-center ${
         isHero
-          ? "min-h-[calc(100vh-4rem)] pt-[calc(4rem+260px)] lg:pt-14 pb-20"
-          : "min-h-screen pt-[calc(4rem+260px)] lg:pt-20 pb-20"
+          ? "min-h-[calc(100vh-4rem)] pt-[calc(4rem+220px)] lg:pt-14 pb-20"
+          : "min-h-[70vh] lg:min-h-screen pt-[calc(4rem+220px)] lg:pt-20 pb-16 lg:pb-20"
       }`}
       style={{ backgroundColor: beat.bg }}
     >
-      <div className="w-full max-w-6xl mx-auto px-5 sm:px-8 grid lg:grid-cols-2 gap-10 lg:gap-8 items-center">
+      <div className="w-full max-w-6xl mx-auto px-5 sm:px-8 grid lg:grid-cols-2 gap-6 lg:gap-8 items-center">
         {/* Phone, in flow: hidden on mobile (sticky phone handles it); desktop only when motion is reduced */}
         <div
           className={`hidden ${
@@ -328,7 +328,7 @@ export function ShopCounterStory() {
 
       {/* Pinned phone for MOBILE — centered at top, transitions between screens */}
       {!reduced && (
-        <div className="lg:hidden fixed top-16 left-0 right-0 z-10 pointer-events-none flex justify-center pt-4">
+        <div className="lg:hidden fixed top-14 left-0 right-0 z-10 pointer-events-none flex justify-center pt-3 pb-4" style={{ backgroundColor: "var(--app-bg)" }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={beat.id}
