@@ -152,10 +152,10 @@ export const OrderFulfillmentBoard: React.FC = () => {
           <p className="text-sm text-app-text-muted font-medium">Manage your paid orders and logistics</p>
         </div>
 
-        <div data-tour="tab-bar" className="flex bg-app-surface p-1.5 rounded-2xl items-center gap-1 border border-app-border">
+        <div data-tour="tab-bar" className="flex max-w-full overflow-x-auto flex-nowrap bg-app-surface p-1.5 rounded-2xl items-center gap-1 border border-app-border">
           <button 
             onClick={() => setTab('READY')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
               tab === 'READY' 
                 ? 'bg-[var(--brand-saffron)] text-white shadow-md' 
                 : 'text-app-text-muted hover:text-app-text hover:bg-app-surface-alt'
@@ -166,7 +166,7 @@ export const OrderFulfillmentBoard: React.FC = () => {
           </button>
           <button 
             onClick={() => setTab('SHIPPED')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
               tab === 'SHIPPED' 
                 ? 'bg-[var(--brand-saffron)] text-white shadow-md' 
                 : 'text-app-text-muted hover:text-app-text hover:bg-app-surface-alt'
@@ -177,7 +177,7 @@ export const OrderFulfillmentBoard: React.FC = () => {
           </button>
           <button 
             onClick={() => setTab('PENDING')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
               tab === 'PENDING' 
                 ? 'bg-[var(--brand-saffron)] text-white shadow-md' 
                 : 'text-app-text-muted hover:text-app-text hover:bg-app-surface-alt'
@@ -190,7 +190,7 @@ export const OrderFulfillmentBoard: React.FC = () => {
             data-tour="order-refresh"
             onClick={fetchOrders}
             title="Refresh orders from server"
-            className="p-2 hover:bg-app-surface-alt text-app-text-muted hover:text-app-text rounded-xl transition cursor-pointer"
+            className="p-2 hover:bg-app-surface-alt text-app-text-muted hover:text-app-text rounded-xl transition cursor-pointer shrink-0"
           >
             <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
           </button>
