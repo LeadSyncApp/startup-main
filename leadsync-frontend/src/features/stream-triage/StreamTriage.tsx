@@ -642,9 +642,9 @@ export function StreamTriage() {
       </div>
 
       {/* Two-column layout */}
-      <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">
         {/* LEFT: Detail card */}
-        <div className="flex flex-col justify-between">
+        <div className="flex flex-col justify-between order-2 lg:order-1">
           <AnimatePresence mode="wait">
             {!activeLead ? (
               <motion.div
@@ -837,7 +837,7 @@ export function StreamTriage() {
         </div>
 
         {/* RIGHT: Queue panel */}
-        <div className={`rounded-2xl ${glassStyles} overflow-hidden`}>
+        <div className={`rounded-2xl ${glassStyles} overflow-hidden order-1 lg:order-2`}>
           <div className="p-3 space-y-3 max-h-[620px] overflow-y-auto custom-scrollbar">
             {TIERS.map(tier => (
               <TierSection
