@@ -7,6 +7,7 @@ import { ordersGuide } from '../../guides/ordersGuide';
 import { automationGuide } from '../../guides/automationGuide';
 import { inventoryGuide } from '../../guides/inventoryGuide';
 import { settingsGuide } from '../../guides/settingsGuide';
+import { shopGuide } from '../../guides/shopGuide';
 
 const guides: Record<string, PageGuide> = {
   messages: messagesGuide,
@@ -17,6 +18,7 @@ const guides: Record<string, PageGuide> = {
   automation: automationGuide,
   inventory: inventoryGuide,
   settings: settingsGuide,
+  shop: shopGuide,
 };
 
 export const getGuideForPage = (tabId: string): PageGuide | null => {

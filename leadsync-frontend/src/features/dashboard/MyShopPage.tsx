@@ -94,75 +94,85 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
       <div className="space-y-4">
         {/* Financial summary - only for owners/managers */}
         {canViewFinancials && (
-          <CollectionStatsWidget
-            todayCollection={collectionData?.todayCollection}
-            pendingPayments={collectionData?.pendingPayments}
-            paidOrders={collectionData?.paidOrders}
-            pendingOrders={collectionData?.pendingOrders}
-            loading={collectionLoading}
-          />
+          <div data-tour="collection-stats">
+            <CollectionStatsWidget
+              todayCollection={collectionData?.todayCollection}
+              pendingPayments={collectionData?.pendingPayments}
+              paidOrders={collectionData?.paidOrders}
+              pendingOrders={collectionData?.pendingOrders}
+              loading={collectionLoading}
+            />
+          </div>
         )}
 
         {/* Hero KPI cards */}
-        <HealthCheckWidget
-          kpis={{
-            leads: metrics?.metrics?.totalLeads ?? kpis?.leads ?? 0,
-            conversations: kpis?.conversations ?? 0,
-            orders: metrics?.metrics?.totalOrders ?? kpis?.orders ?? 0,
-            agents: kpis?.agents ?? 0,
-          }}
-          conversionRate={funnel?.conversionRate ?? 0}
-          loading={loading}
-        />
+        <div data-tour="kpi-health-cards">
+          <HealthCheckWidget
+            kpis={{
+              leads: metrics?.metrics?.totalLeads ?? kpis?.leads ?? 0,
+              conversations: kpis?.conversations ?? 0,
+              orders: metrics?.metrics?.totalOrders ?? kpis?.orders ?? 0,
+              agents: kpis?.agents ?? 0,
+            }}
+            conversionRate={funnel?.conversionRate ?? 0}
+            loading={loading}
+          />
+        </div>
 
         {/* Action Required - prominent at top */}
         {!alertsLoading && alertsData && (
-          <NeedsAttentionWidget
-            alerts={alertsData}
-            onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined}
-          />
+          <div data-tour="needs-attention">
+            <NeedsAttentionWidget
+              alerts={alertsData}
+              onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined}
+            />
+          </div>
         )}
       </div>
 
       {/* ── SECTION 2: Revenue Charts (Financial only, 2-col grid) ── */}
       {canViewFinancials && (
-        <CollapsibleSection title="Revenue Analytics" subtitle="Trend & forecast overview" defaultOpen={true}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <RevenueTrendWidget
-              trend={revenueData?.analyticsRevenue?.trend ?? null}
-              chart={revenueData?.analyticsDashboard?.revenueChart ?? []}
-              loading={revenueLoading}
-            />
-            <RevenueForecastWidget
-              forecast={forecastData}
-              loading={forecastLoading}
-            />
-          </div>
-        </CollapsibleSection>
+        <div data-tour="revenue-analytics">
+          <CollapsibleSection title="Revenue Analytics" subtitle="Trend & forecast overview" defaultOpen={true}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <RevenueTrendWidget
+                trend={revenueData?.analyticsRevenue?.trend ?? null}
+                chart={revenueData?.analyticsDashboard?.revenueChart ?? []}
+                loading={revenueLoading}
+              />
+              <RevenueForecastWidget
+                forecast={forecastData}
+                loading={forecastLoading}
+              />
+            </div>
+          </CollapsibleSection>
+        </div>
       )}
 
       {/* ── SECTION 3: Operations Grid (Workload + Orders + Channels) ── */}
-      <CollapsibleSection title="Operations" subtitle="Workload, orders & channel performance" defaultOpen={true}>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <WorkloadOverviewWidget
-            data={workloadData?.conversationSummary ?? null}
-            teamMembers={workloadData?.teamMembers ?? null}
-            loading={workloadLoading}
-            onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined}
-          />
-          <RecentOrdersWidget
-            orders={revenueData?.analyticsRevenue?.recentOrders ?? []}
-            loading={revenueLoading}
-            onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined}
-          />
-          {canViewFinancials && (
-            <ChannelBreakdownWidget
-              channels={revenueData?.analyticsRevenue?.channelAttribution ?? []}
-              loading={revenueLoading}
+      <div data-tour="operations-overview">
+        <CollapsibleSection title="Operations" subtitle="Workload, orders & channel performance" defaultOpen={true}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <WorkloadOverviewWidget
+              data={workloadData?.conversationSummary ?? null}
+              teamMembers={workloadData?.teamMembers ?? null}
+              loading={workloadLoading}
+              onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined}
             />
-          )}
-        </div>
-      </CollapsibleSection>
+            <RecentOrdersWidget
+              orders={revenueData?.analyticsRevenue?.recentOrders ?? []}
+              loading={revenueLoading}
+              onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined}
+            />
+            {canViewFinancials && (
+              <ChannelBreakdownWidget
+                channels={revenueData?.analyticsRevenue?.channelAttribution ?? []}
+                loading={revenueLoading}
+              />
+            )}
+          </div>
+        </CollapsibleSection>
+      </div>
 
       {/* ── SECTION 4: Team & Inventory (Collapsible by default) ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -219,7 +229,7 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
       </CollapsibleSection>
 
       {/* ── Export toolbar (bottom) ── */}
-      <div className="flex items-center gap-2 pt-2">
+      <div data-tour="export-toolbar" className="flex items-center gap-2 pt-2">
         <button
           onClick={handleRefresh}
           disabled={refreshing}
