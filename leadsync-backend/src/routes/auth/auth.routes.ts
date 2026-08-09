@@ -626,7 +626,7 @@ router.post("/staff-signup", async (req, res) => {
 const completeGoogleOnboardingSchema = z.object({
   businessScale: z.enum(["HOME", "SME"]),
   businessType: z.string().min(1, "Business type is required"),
-  currentWorkflow: z.enum(["PAPER", "SPREADSHEET", "CRM"]),
+  currentWorkflow: z.enum(["PAPER", "SPREADSHEET", "CRM"]).optional(),
   companyName: z.string().min(1, "Company name is required"),
 });
 
