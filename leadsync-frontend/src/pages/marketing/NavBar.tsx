@@ -21,7 +21,7 @@ function Logo() {
   return (
     <Link to="/" className="flex items-center gap-2 shrink-0">
       <img
-        src="/salira-logo.png"
+        src="/salira-logo-v2.png"
         alt="SaLira"
         className="h-9 w-9 rounded-xl object-contain shrink-0"
       />

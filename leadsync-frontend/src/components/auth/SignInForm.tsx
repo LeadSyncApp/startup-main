@@ -60,7 +60,7 @@ export function SignInForm({ onSuccess, onSwitchToSignup }: SignInFormProps) {
       >
         {/* Brand */}
         <div className="text-center mb-8">
-          <img src="/salira-logo.png" alt="SaLira" className="h-12 w-12 rounded-xl object-contain mx-auto mb-4" />
+          <img src="/salira-logo-v2.png" alt="SaLira" className="h-12 w-12 rounded-xl object-contain mx-auto mb-4" />
           <h1 className="text-2xl font-bold" style={{ color: 'var(--app-text)' }}>Welcome back</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--app-text-muted)' }}>Sign in to your shop account</p>
         </div>

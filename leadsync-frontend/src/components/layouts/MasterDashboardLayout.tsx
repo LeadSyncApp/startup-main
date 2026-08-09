@@ -224,7 +224,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
         <div className="p-5 border-b border-[var(--app-border)]">
           <div className="flex items-center gap-3">
             <img 
-              src="/salira-logo.png" 
+              src="/salira-logo-v2.png" 
               alt="SaLira" 
               className="h-9 w-9 rounded-lg object-contain shrink-0 btn-interactive" 
             />
@@ -306,7 +306,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
           <Menu className="h-5 w-5" />
         </button>
         <div className="flex items-center gap-2">
-          <img src="/salira-logo.png" alt="SaLira" className="h-6 w-6 rounded-md object-contain" />
+          <img src="/salira-logo-v2.png" alt="SaLira" className="h-6 w-6 rounded-md object-contain" />
           <span className="font-bold text-[var(--app-text)] text-sm truncate max-w-[120px]">{merchantName}</span>
         </div>
         <div className="flex items-center gap-1">

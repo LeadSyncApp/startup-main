@@ -49,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Header Panel */}
       <div className="mb-8">
         <h1 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-          <img src="/salira-logo.png" alt="SaLira" className="size-6 object-contain rounded-md" />
+          <img src="/salira-logo-v2.png" alt="SaLira" className="size-6 object-contain rounded-md" />
           {merchantName}
         </h1>
         <div className="flex gap-2 mb-3">

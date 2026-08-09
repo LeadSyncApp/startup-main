@@ -119,7 +119,7 @@ export function OnboardingWizard({
         </div>
 
         <div className="relative z-10 flex items-center gap-3">
-          <img src="/salira-logo.png" alt="SaLira" className="h-10 w-10 rounded-xl object-contain shadow-xl shadow-orange-500/20" />
+          <img src="/salira-logo-v2.png" alt="SaLira" className="h-10 w-10 rounded-xl object-contain shadow-xl shadow-orange-500/20" />
           <div>
             <span className="font-black tracking-tight text-xl text-[var(--app-text)]">SaLira</span>
             <span className="text-[10px] font-bold ml-2 uppercase tracking-widest px-2 py-0.5 rounded-full border text-[var(--brand-saffron)]" style={{ backgroundColor: 'var(--brand-saffron-soft)', borderColor: 'var(--brand-saffron)', opacity: 0.8 }}>Sandbox</span>

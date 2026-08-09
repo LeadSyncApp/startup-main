@@ -219,7 +219,7 @@ export function AcceptInvitePage() {
         <Card className="overflow-hidden">
           {/* Header */}
           <div className="p-8 sm:p-10 text-center border-b" style={{ borderColor: 'var(--app-border)' }}>
-            <img src="/salira-logo.png" alt="SaLira" className="h-16 w-16 rounded-2xl object-contain mx-auto mb-4" />
+            <img src="/salira-logo-v2.png" alt="SaLira" className="h-16 w-16 rounded-2xl object-contain mx-auto mb-4" />
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>
               Join {invite?.company.name}
             </h1>
