@@ -164,7 +164,7 @@ app.use(
     origin: getAllowedOrigins(),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Webhook-Signature', 'X-Shopify-Hmac-SHA256', 'X-WC-Webhook-Signature', 'x-webhook-signature', 'x-shopify-hmac-sha256', 'x-wc-webhook-signature', 'x-telegram-bot-api-secret-token'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-requested-with', 'X-Webhook-Signature', 'X-Shopify-Hmac-SHA256', 'X-WC-Webhook-Signature', 'x-webhook-signature', 'x-shopify-hmac-sha256', 'x-wc-webhook-signature', 'x-telegram-bot-api-secret-token'],
   })
 );
 
