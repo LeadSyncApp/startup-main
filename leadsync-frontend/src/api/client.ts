@@ -3,6 +3,9 @@ import { activityToast as toast } from "../features/activity-ledger/useActivityS
 
 // 1. Compute normalized ROOT_BASE by stripping any trailing "/api" or slashes
 const rawApiUrl = import.meta.env.VITE_API_URL?.trim() || "";
+if (rawApiUrl && !rawApiUrl.startsWith("http://") && !rawApiUrl.startsWith("https://")) {
+  console.warn(`[API Config] ⚠️ VITE_API_URL should be a full URL starting with http:// or https://. Got: "${rawApiUrl}"`);
+}
 const cleanUrl = rawApiUrl.replace(/\/+$/, "");
 const ROOT_BASE = cleanUrl.endsWith("/api")
   ? cleanUrl.slice(0, -4)

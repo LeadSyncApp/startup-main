@@ -2,25 +2,17 @@
 // Vite inlines this at build time from .env — no window.location fallback.
 // If VITE_API_URL is unset the app logs a warning and falls back to same-origin /api.
 
-const rawApiUrl = import.meta.env.VITE_API_URL?.trim();
-let API_BASE: string;
-
-if (!rawApiUrl) {
-  console.warn(
-    "⚠️ VITE_API_URL is not set. Falling back to same-origin /api. " +
-    "Set VITE_API_URL in your .env to point at the Railway backend."
-  );
-  API_BASE = "/api";
-} else if (
-  !rawApiUrl.startsWith("http://") &&
-  !rawApiUrl.startsWith("https://")
-) {
-  throw new Error(
-    `VITE_API_URL must be a full absolute URL starting with http:// or https://. Got: "${rawApiUrl}"`
-  );
-} else {
-  API_BASE = rawApiUrl.replace(/\/$/, "");
+// 1. Compute normalized ROOT_BASE by stripping any trailing "/api" or slashes
+const rawApiUrl = import.meta.env.VITE_API_URL?.trim() || "";
+if (rawApiUrl && !rawApiUrl.startsWith("http://") && !rawApiUrl.startsWith("https://")) {
+  console.warn(`[API Config] ⚠️ VITE_API_URL should be a full URL starting with http:// or https://. Got: "${rawApiUrl}"`);
 }
+const cleanUrl = rawApiUrl.replace(/\/+$/, "");
+const ROOT_BASE = cleanUrl.endsWith("/api")
+  ? cleanUrl.slice(0, -4)
+  : cleanUrl;
+
+export const API_BASE = `${ROOT_BASE}/api`;
 
 // ✅ Added PATCH here
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -36,7 +28,17 @@ async function apiFetch(endpoint: string, options: ApiOptions = {}) {
 
   const isFormData = options.body instanceof FormData;
 
-  const finalUrl = `${API_BASE}${endpoint}`;
+  let finalUrl: string;
+  if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
+    finalUrl = endpoint;
+  } else {
+    const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    if (path.startsWith("/api/") || path === "/api") {
+      finalUrl = `${ROOT_BASE}${path}`;
+    } else {
+      finalUrl = `${ROOT_BASE}/api${path}`;
+    }
+  }
 
   try {
     const res = await fetch(finalUrl, {
