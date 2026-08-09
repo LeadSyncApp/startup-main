@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { authedFetch, getCompanyId } from '../../../api/client';
+import { can } from '../../../lib/permissions';
+import { useAuth } from '../../auth-tenancy/AuthContext';
 
 // Priority 1: KPIs + Alerts (above the fold)
 export function useDashboardKPIs() {
@@ -65,6 +67,9 @@ export function useDashboardForecast() {
 
 // Priority 3: Workload + staff + secondary
 export function useDashboardWorkload() {
+  const { user } = useAuth();
+  const hasPermission = can(user, 'dashboard.viewTeamWorkload');
+
   return useQuery({
     queryKey: ['dashboard', 'workload'],
     queryFn: async () => {
@@ -78,6 +83,7 @@ export function useDashboardWorkload() {
       ]);
       return { conversationSummary, teamMembers };
     },
+    enabled: hasPermission,
     staleTime: 30_000,
   });
 }

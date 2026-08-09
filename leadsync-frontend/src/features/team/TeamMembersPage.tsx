@@ -181,6 +181,10 @@ export function TeamMembersPage() {
   };
 
   useEffect(() => {
+    if (!can(user, "team.viewOwn")) {
+      setIsLoading(false);
+      return;
+    }
     fetchMembers();
   }, []);
 
