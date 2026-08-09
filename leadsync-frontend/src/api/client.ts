@@ -2,6 +2,7 @@ import axios from "axios";
 import { activityToast as toast } from "../features/activity-ledger/useActivityStore";
 
 const API_BASE = import.meta.env.VITE_API_URL?.trim() || "/api";
+let isRedirecting = false;
 
 /**
  * LeadSync Multi-Tenant Unified Axios Client
@@ -62,7 +63,14 @@ apiClient.interceptors.response.use(
           localStorage.removeItem("access_token");
           localStorage.removeItem("user");
           localStorage.removeItem("company");
-          window.location.href = "/login";
+
+          if (!isRedirecting) {
+            isRedirecting = true;
+            toast.error("Your session expired — please sign in again.");
+            setTimeout(() => {
+              window.location.href = "/login";
+            }, 1500);
+          }
         }
       }
 
