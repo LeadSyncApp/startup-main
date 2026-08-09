@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { authedFetch, getCompanyId } from '../../../api/client';
+import { can } from '../../../lib/permissions';
+import { useAuth } from '../../auth-tenancy/AuthContext';
 
 interface ShopDashboardData {
   analyticsDashboard: any;
@@ -20,10 +22,14 @@ interface ShopDashboardData {
 import { onEvent } from '../../../lib/socketClient';
 
 export function useShopDashboardData() {
+  const { user } = useAuth();
   const [data, setData] = useState<ShopDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const cancelledRef = useRef(false);
+
+  const hasWorkloadPermission = can(user, 'dashboard.viewTeamWorkload');
+  const hasTeamViewPermission = can(user, 'team.viewOwn');
 
   const fetchAll = useCallback(async (isRefresh = false) => {
     cancelledRef.current = false;
@@ -55,9 +61,9 @@ export function useShopDashboardData() {
           authedFetch(`/api/dashboard/alerts${qs}`),
           authedFetch(`/api/dashboard/funnel${qs}`),
           authedFetch(`/api/dashboard/forecast${qs}`),
-          authedFetch(`/api/dashboard/conversation-summary${qs}`),
+          hasWorkloadPermission ? authedFetch(`/api/dashboard/conversation-summary${qs}`) : Promise.resolve(null),
           authedFetch(`/api/dashboard/metrics${qs}`),
-          authedFetch(`/api/team/members${qs}`),
+          hasTeamViewPermission ? authedFetch(`/api/team/members${qs}`) : Promise.resolve(null),
           getCompanyId() ? authedFetch(`/api/automation/conversational-rules/${getCompanyId()}${qs}`) : Promise.resolve(null),
           authedFetch(`/api/dashboard/low-stock${qs}`),
           authedFetch(`/api/company/status${qs}`),
@@ -87,7 +93,7 @@ export function useShopDashboardData() {
           alertsRes.ok ? alertsRes.json() : null,
           funnelRes.ok ? funnelRes.json() : null,
           forecastRes.ok ? forecastRes.json() : null,
-          conversationSummaryRes.ok ? conversationSummaryRes.json() : null,
+          conversationSummaryRes && conversationSummaryRes.ok ? conversationSummaryRes.json() : null,
           metricsRes.ok ? metricsRes.json() : null,
           teamMembersRes && teamMembersRes.ok ? teamMembersRes.json() : null,
           automationRulesRes && automationRulesRes.ok ? automationRulesRes.json() : null,
@@ -121,7 +127,7 @@ export function useShopDashboardData() {
         setLoading(false);
       }
     }
-  }, []);
+  }, [hasWorkloadPermission]);
 
   useEffect(() => {
     fetchAll();
