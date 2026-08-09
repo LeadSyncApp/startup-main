@@ -26,7 +26,12 @@ router.get("/members", authMiddleware as any, async (req: any, res: any) => {
     if (companyId) {
       const forceRefresh = req.query.refresh === "true";
       const cacheKey = `team_members_${companyId}`;
-      const cached = forceRefresh ? null : await cacheService.get(cacheKey);
+      let cached = null;
+      try {
+        cached = forceRefresh ? null : await cacheService.get(cacheKey);
+      } catch (cacheErr) {
+        console.error("Cache read failed for team members:", cacheErr);
+      }
       if (cached) {
         return res.json(cached);
       }
@@ -79,7 +84,11 @@ router.get("/members", authMiddleware as any, async (req: any, res: any) => {
     const responseData = { members: correctedMembers };
 
     if (companyId) {
-      await cacheService.set(`team_members_${companyId}`, responseData, 60);
+      try {
+        await cacheService.set(`team_members_${companyId}`, responseData, 60);
+      } catch (cacheErr) {
+        console.error("Cache write failed for team members:", cacheErr);
+      }
     }
 
     res.json(responseData);

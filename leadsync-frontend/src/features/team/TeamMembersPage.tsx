@@ -31,7 +31,7 @@ interface TeamMember {
   createdAt: string;
   permissionOverrides?: string[] | null;
   _count: {
-    assignedConversations: number;
+    claimedConversations: number;
     processedOrders: number;
   };
 }
@@ -509,7 +509,7 @@ export function TeamMembersPage() {
               </div>
               <div>
                 <div className="text-2xl font-black" style={{ color: 'var(--app-text)' }}>
-                  {activeMembers.reduce((sum, m) => sum + m._count.assignedConversations, 0)}
+                  {activeMembers.reduce((sum, m) => sum + (m._count?.claimedConversations ?? (m._count as any)?.assignedConversations ?? 0), 0)}
                 </div>
                 <div className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Active Conversations</div>
               </div>
@@ -1084,7 +1084,7 @@ export function TeamMembersPage() {
                             <div className="flex items-center gap-3 text-[11px] font-bold" style={{ color: 'var(--text-secondary)' }}>
                               <span className="flex items-center gap-1">
                                 <MessageSquare className="h-3.5 w-3.5" />
-                                {member._count.assignedConversations}
+                                {member._count?.claimedConversations ?? (member._count as any)?.assignedConversations ?? 0}
                               </span>
                               <span className="flex items-center gap-1">
                                 <ShoppingBag className="h-3.5 w-3.5" />

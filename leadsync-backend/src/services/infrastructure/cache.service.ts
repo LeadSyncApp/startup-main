@@ -60,18 +60,22 @@ class CacheService {
     async set<T>(key: string, data: T, ttlSeconds: number = 300): Promise<void> {
         this.memoryCache.set(key, data, ttlSeconds);
         // Persist to DB for idempotency
-        await prisma.idempotency.upsert({
-            where: { key },
-            update: {
-                result: JSON.stringify(data),
-                expiresAt: new Date(Date.now() + ttlSeconds * 1000),
-            },
-            create: {
-                key,
-                result: JSON.stringify(data),
-                expiresAt: new Date(Date.now() + ttlSeconds * 1000),
-            },
-        });
+        try {
+            await prisma.idempotency.upsert({
+                where: { key },
+                update: {
+                    result: JSON.stringify(data),
+                    expiresAt: new Date(Date.now() + ttlSeconds * 1000),
+                },
+                create: {
+                    key,
+                    result: JSON.stringify(data),
+                    expiresAt: new Date(Date.now() + ttlSeconds * 1000),
+                },
+            });
+        } catch (error) {
+            console.error(`Cache DB write failed for key ${key}:`, error);
+        }
     }
 
     async get<T>(key: string): Promise<T | null> {
@@ -80,21 +84,26 @@ class CacheService {
         if (memData) return memData as T;
 
         // Try DB
-        const dbEntry = await prisma.idempotency.findUnique({
-            where: { key },
-        });
+        try {
+            const dbEntry = await prisma.idempotency.findUnique({
+                where: { key },
+            });
 
-        if (!dbEntry) return null;
+            if (!dbEntry) return null;
 
-        if (new Date() > dbEntry.expiresAt) {
-            await this.delete(key);
+            if (new Date() > dbEntry.expiresAt) {
+                await this.delete(key);
+                return null;
+            }
+
+            const data = typeof dbEntry.result === 'string' ? JSON.parse(dbEntry.result) : dbEntry.result;
+            // Populate memory cache
+            this.memoryCache.set(key, data, (dbEntry.expiresAt.getTime() - Date.now()) / 1000);
+            return data as T;
+        } catch (error) {
+            console.error(`Cache DB read failed for key ${key}:`, error);
             return null;
         }
-
-        const data = typeof dbEntry.result === 'string' ? JSON.parse(dbEntry.result) : dbEntry.result;
-        // Populate memory cache
-        this.memoryCache.set(key, data, (dbEntry.expiresAt.getTime() - Date.now()) / 1000);
-        return data as T;
     }
 
     async delete(key: string): Promise<void> {
