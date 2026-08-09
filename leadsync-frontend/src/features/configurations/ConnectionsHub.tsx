@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Send, Globe, MessageCircle, MessageSquare, X, Check,
@@ -35,33 +35,36 @@ export function ConnectionsHub() {
   const [isMetaStubModalOpen, setIsMetaStubModalOpen] = useState(false);
   const [activeMetaPlatform, setActiveMetaPlatform] = useState<string>("");
 
+  const isMountedRef = useRef(true);
   useEffect(() => {
-    let active = true;
-    const fetchStatus = async () => {
-      try {
-        const response = await apiClient.get("/integrations/status");
-        if (active && response.data) {
-          const { telegram } = response.data;
-          setTelegramConnected(!!telegram.connected);
-          setTelegramBotUsername(telegram.username || "");
-          updateCompany({
-            telegramConnected: !!telegram.connected,
-            telegramBotUsername: telegram.username || ""
-          });
-        }
-      } catch (err) {
-        console.error("Error fetching integration status:", err);
-      }
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
     };
+  }, []);
 
+  const fetchStatus = async () => {
+    try {
+      const response = await apiClient.get("/integrations/status");
+      if (isMountedRef.current && response.data) {
+        const { telegram } = response.data;
+        setTelegramConnected(!!telegram.connected);
+        setTelegramBotUsername(telegram.username || "");
+        updateCompany({
+          telegramConnected: !!telegram.connected,
+          telegramBotUsername: telegram.username || ""
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching integration status:", err);
+    }
+  };
+
+  useEffect(() => {
     if (company) {
       setWhatsAppConnected(!!company.businessType);
       fetchStatus();
     }
-
-    return () => {
-      active = false;
-    };
   }, [company?.id]);
 
   const handleConnectTelegram = async (e: React.FormEvent) => {
@@ -84,6 +87,7 @@ export function ConnectionsHub() {
       setTelegramBotUsername(response.data.botUsername || "");
       setIsTelegramModalOpen(false);
       setTelegramToken("");
+      await fetchStatus();
     } catch (error: any) {
       console.error("Telegram token validation error:", error);
       toast.error(error?.response?.data?.message || "Failed to connect bot. Verify the token with @BotFather.");
