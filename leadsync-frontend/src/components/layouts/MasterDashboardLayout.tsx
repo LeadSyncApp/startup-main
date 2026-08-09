@@ -347,13 +347,24 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
                 );
               })}
             </nav>
-            {onLogout && (
-              <div className="p-3 border-t border-[var(--app-border)]">
-                <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-[var(--app-text-muted)] hover:text-[var(--danger-red)] cursor-pointer">
+            <div className="p-3 border-t border-[var(--app-border)] space-y-1">
+              <button
+                onClick={toggleTheme}
+                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--app-text-muted)] hover:text-[var(--brand-saffron)] hover:bg-[var(--brand-saffron-soft)] transition-all cursor-pointer"
+              >
+                {theme === 'light' ? (
+                  <Moon className="h-4 w-4" />
+                ) : (
+                  <Sun className="h-4 w-4" />
+                )}
+                {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
+              </button>
+              {onLogout && (
+                <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--app-text-muted)] hover:text-[var(--danger-red)] hover:bg-[var(--app-bg-soft)] transition-all cursor-pointer">
                   <LogOut className="h-4 w-4" /> Log Out
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </motion.div>
         </div>
       )}
