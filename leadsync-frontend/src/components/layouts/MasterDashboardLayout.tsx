@@ -217,7 +217,7 @@ export const MasterDashboardLayout: React.FC<MasterDashboardLayoutProps> = ({
           }} 
         />
       </div>
-    <div className="flex h-[100dvh] bg-[var(--app-bg)] overflow-hidden relative z-[1]">
+    <div className="flex h-[100dvh] w-full max-w-full overflow-hidden overflow-x-hidden bg-[var(--app-bg)] relative z-[1]">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col h-full w-64 flex-shrink-0 bg-transparent border-r border-[var(--app-border)]">
         {/* Brand Header */}
