@@ -58,7 +58,7 @@ initializeGoogleStrategy();
 
 const app = express();
 
-app.set("trust proxy", 1); // Trust first proxy for Railway deployment
+app.set("trust proxy", 2); // Railway may use 2 proxy hops; trust both
 
 app.use(compression()); // ✅ GZIP Compression
 
@@ -123,11 +123,11 @@ app.use(
 // Rate limiters — backed by PostgreSQL for multi-instance safety
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // Increased: frontend makes multiple calls during page load (login, google callback, /me)
+  max: 300, // TEMPORARY: raised from 50 to unblock real users during Railway proxy investigation
   message: { message: "Too many requests from this IP, please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
-  store: new PgRateLimitStore({ windowMs: 15 * 60 * 1000, max: 50 }),
+  store: new PgRateLimitStore({ windowMs: 15 * 60 * 1000, max: 300 }),
   skip: (req) => {
     // Exclude /api/auth/me from strict rate limiting — called frequently during page load
     return req.path === "/me";
@@ -213,6 +213,11 @@ app.get("/health", async (_req, res) => {
 });
 
 /* 🔓 PUBLIC ROUTES */
+// TEMP DEBUG — log IP resolution on auth routes to verify trust proxy fix
+app.use("/api/auth", (req, _res, next) => {
+  console.log(`[AUTH-IP-DEBUG] ip=${req.ip} xff=${req.headers["x-forwarded-for"]} path=${req.path}`);
+  next();
+});
 app.use("/api/auth", authLimiter, authRoutes); // strict limiter on auth
 app.use("/api/auth", authLimiter, googleAuthRoutes); // Google OAuth routes
 app.use("/api/auth", meRoutes); // /api/auth/me
