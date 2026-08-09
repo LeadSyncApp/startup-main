@@ -117,6 +117,19 @@ router.patch("/preferences", authMiddleware, async (req: AuthRequest, res: Respo
 });
 
 /* =========================================
+   MARK ALL AS READ
+   ========================================= */
+router.patch("/read-all", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.userId;
+        await notificationService.markAllAsRead(userId);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to mark all as read" });
+    }
+});
+
+/* =========================================
    MARK AS READ (Single)
    ========================================= */
 router.patch("/:id/read", authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -134,19 +147,6 @@ router.patch("/:id/read", authMiddleware, async (req: AuthRequest, res: Response
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ message: "Failed to mark as read" });
-    }
-});
-
-/* =========================================
-   MARK ALL AS READ
-   ========================================= */
-router.patch("/read-all", authMiddleware, async (req: AuthRequest, res: Response) => {
-    try {
-        const userId = req.user!.userId;
-        await notificationService.markAllAsRead(userId);
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ message: "Failed to mark all as read" });
     }
 });
 
