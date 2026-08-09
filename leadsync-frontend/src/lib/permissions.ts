@@ -31,6 +31,7 @@ export type Permission =
   | "broadcast.send"
   | "inventory.manage"
   | "dashboard.view"
+  | "dashboard.viewTeamWorkload"
   | "dashboard.financial"
   | "automation.manage"
   | "company.delete";
@@ -61,6 +62,7 @@ const PERMISSION_MAP: Record<Permission, Role[]> = {
   "broadcast.send":                 ["OWNER", "MANAGER"],
   "inventory.manage":               ["OWNER", "MANAGER", "STAFF"],
   "dashboard.view":                 ["OWNER", "MANAGER", "STAFF"],
+  "dashboard.viewTeamWorkload":     ["OWNER", "MANAGER"],
   "dashboard.financial":            ["OWNER", "MANAGER"],
   "automation.manage":              ["OWNER", "MANAGER"],
   "company.delete":                 ["OWNER"],

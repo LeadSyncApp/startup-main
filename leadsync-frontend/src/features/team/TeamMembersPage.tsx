@@ -114,6 +114,7 @@ const OVERRIDABLE_PERMISSIONS: {
     items: [
       { key: "team.invite", label: "Invite Team Members", description: "Send team invitations and view team onboarding statuses." },
       { key: "team.viewOwn", label: "View Team Members", description: "See the full staff list and their activity." },
+      { key: "dashboard.viewTeamWorkload", label: "View Team Workload", description: "See the conversation workload overview for all staff members." },
     ],
   },
 ];

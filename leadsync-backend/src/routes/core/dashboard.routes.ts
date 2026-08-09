@@ -2,7 +2,7 @@ import { decryptSecret } from "../../utils/encryption";
 import { Router, Response } from "express";
 import { prisma } from "../../lib/prisma";
 import { Prisma, ConversationStatus, OrderStatus } from "@prisma/client";
-import { authMiddleware, injectTenantContext, AuthRequest } from "../../middleware/auth.middleware";
+import { authMiddleware, authorizePermission, injectTenantContext, AuthRequest } from "../../middleware/auth.middleware";
 import { getGroq } from "../../services/ai/ai.service";
 import { cacheService } from "../../services/infrastructure/cache.service";
 import { upload, fileParserService } from "../../services/integrations/fileParser.service";
@@ -1006,12 +1006,8 @@ router.get("/agent-stats", authMiddleware, async (req: AuthRequest, res: Respons
  * GET /dashboard/conversation-summary
  * Manager/owner/admin overview of who is currently handling which conversation.
  */
-router.get("/conversation-summary", authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get("/conversation-summary", authMiddleware, authorizePermission("dashboard.viewTeamWorkload"), async (req: AuthRequest, res: Response) => {
   try {
-    const role = req.user!.role;
-    if (role !== "OWNER" && role !== "MANAGER") {
-      return res.status(403).json({ error: "Manager/owner only" });
-    }
     const companyId = req.user!.companyId;
 
     const forceRefresh = req.query.refresh === "true";

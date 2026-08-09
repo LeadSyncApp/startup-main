@@ -153,12 +153,14 @@ export const MyShopPage: React.FC<MyShopPageProps> = ({ onNavigate }) => {
       <div data-tour="operations-overview">
         <CollapsibleSection title="Operations" subtitle="Workload, orders & channel performance" defaultOpen={true}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <WorkloadOverviewWidget
-              data={workloadData?.conversationSummary ?? null}
-              teamMembers={workloadData?.teamMembers ?? null}
-              loading={workloadLoading}
-              onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined}
-            />
+            {can(user, 'dashboard.viewTeamWorkload') && (
+              <WorkloadOverviewWidget
+                data={workloadData?.conversationSummary ?? null}
+                teamMembers={workloadData?.teamMembers ?? null}
+                loading={workloadLoading}
+                onNavigate={onNavigate ? (tab) => onNavigate(tab as TabID) : undefined}
+              />
+            )}
             <RecentOrdersWidget
               orders={revenueData?.analyticsRevenue?.recentOrders ?? []}
               loading={revenueLoading}
