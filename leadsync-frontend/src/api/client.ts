@@ -1,7 +1,19 @@
 import axios from "axios";
 import { activityToast as toast } from "../features/activity-ledger/useActivityStore";
 
-const API_BASE = import.meta.env.VITE_API_URL?.trim() || "/api";
+// 1. Compute normalized ROOT_BASE by stripping any trailing "/api" or slashes
+const rawApiUrl = import.meta.env.VITE_API_URL?.trim() || "";
+const cleanUrl = rawApiUrl.replace(/\/+$/, "");
+const ROOT_BASE = cleanUrl.endsWith("/api")
+  ? cleanUrl.slice(0, -4)
+  : cleanUrl;
+
+// 2. apiClient's baseURL is ROOT_BASE + "/api" (always exactly one /api)
+const API_BASE = `${ROOT_BASE}/api`;
+
+// [TEMP-DIAGNOSTIC] Log resolved API base URLs for deployment verification (can be removed later)
+console.log(`[API Config] ROOT_BASE="${ROOT_BASE}", apiClient.baseURL="${API_BASE}"`);
+
 let isRedirecting = false;
 
 /**
@@ -170,8 +182,19 @@ export async function authedFetch(url: string, options: RequestInit = {}): Promi
   if (accessToken) {
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
-  // If the url is relative (starts with /), prefix with the API base
-  const fullUrl = url.startsWith("/") ? `${API_BASE}${url}` : url;
+  
+  let fullUrl: string;
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    fullUrl = url;
+  } else {
+    const path = url.startsWith("/") ? url : `/${url}`;
+    if (path.startsWith("/api/") || path === "/api") {
+      fullUrl = `${ROOT_BASE}${path}`;
+    } else {
+      fullUrl = `${ROOT_BASE}/api${path}`;
+    }
+  }
+
   return fetch(fullUrl, { ...options, headers, credentials: "include" });
 }
 
