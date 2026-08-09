@@ -63,7 +63,7 @@ export function ShopProfilePage() {
 
   const handleUpgradeToSME = () => {
     if (user?.role !== 'OWNER') {
-      toast.error("Only the Malik (Owner) can request an upgrade.");
+      toast.error("Only the Shop Owner can request an upgrade.");
       return;
     }
     setIsUpgrading(true);

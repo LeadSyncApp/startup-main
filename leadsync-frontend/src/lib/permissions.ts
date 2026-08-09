@@ -129,7 +129,7 @@ export function can(
  */
 export function getRoleLabel(role: Role): string {
   switch (role) {
-    case "OWNER":   return "Owner / Malik";
+    case "OWNER":   return "Owner";
     case "MANAGER": return "Shop Manager";
     case "STAFF":   return "Standard Staff";
   }
