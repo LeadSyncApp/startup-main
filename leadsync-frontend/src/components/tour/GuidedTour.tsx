@@ -165,7 +165,7 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ activeTab }) => {
       scrollTimerRef.current = null;
     }
 
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
 
     const afterFirstScroll = () => {
       const rect = el.getBoundingClientRect();
