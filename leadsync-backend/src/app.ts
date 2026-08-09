@@ -4,6 +4,7 @@ import cors from "cors";
 import compression from "compression";
 import helmet from "helmet";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import jwt from "jsonwebtoken";
 import pinoHttp from "pino-http";
 import crypto from "crypto";
 import { PgRateLimitStore, startRateLimitCleanup } from "./stores/pgRateLimitStore";
@@ -136,10 +137,36 @@ const authLimiter = rateLimit({
 
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 200,
+  max: 2000, // SAFETY VALVE: raised to 2000 to unblock users while per-user keying operates
   standardHeaders: true,
   legacyHeaders: false,
-  store: new PgRateLimitStore({ windowMs: 60 * 1000, max: 200 }),
+  keyGenerator: (req) => {
+    // 1. Check if req.user is already populated by Express
+    if ((req as any).user?.userId) return `user_${(req as any).user.userId}`;
+    if ((req as any).user?.id) return `user_${(req as any).user.id}`;
+
+    // 2. Verified JWT verification if Authorization Bearer token is present
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.slice(7).trim();
+        const secret = process.env.JWT_SECRET || "";
+        if (secret) {
+          const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as any;
+          const userId = decoded?.userId || decoded?.sub || decoded?.id;
+          if (userId) {
+            return `user_${userId}`;
+          }
+        }
+      } catch {
+        // Verification failed (invalid signature, expired, malformed); fallback to IP
+      }
+    }
+
+    // 3. Fallback for unauthenticated requests: IP-based keying
+    return ipKeyGenerator(req.ip || req.socket.remoteAddress || "unknown");
+  },
+  store: new PgRateLimitStore({ windowMs: 60 * 1000, max: 2000 }),
 });
 
 // Webhook-specific rate limiter: 100 req/min per IP, keyed by IP+companyId
