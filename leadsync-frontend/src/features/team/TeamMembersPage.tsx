@@ -113,6 +113,7 @@ const OVERRIDABLE_PERMISSIONS: {
     category: "Team Management",
     items: [
       { key: "team.invite", label: "Invite Team Members", description: "Send team invitations and view team onboarding statuses." },
+      { key: "team.viewOwn", label: "View Team Members", description: "See the full staff list and their activity." },
     ],
   },
 ];

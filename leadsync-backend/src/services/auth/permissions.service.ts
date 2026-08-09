@@ -53,7 +53,7 @@ const PERMISSION_MAP: Record<Permission, Role[]> = {
   "team.remove":                    ["OWNER"],
   "team.changeRole":                ["OWNER"],
   "team.view":                      ["OWNER", "MANAGER"],
-  "team.viewOwn":                   ["OWNER", "MANAGER", "STAFF"],
+  "team.viewOwn":                   ["OWNER", "MANAGER"],
   "orders.claim":                   ["OWNER", "MANAGER", "STAFF"],
   "orders.confirm":                 ["OWNER", "MANAGER"],
   "orders.fulfill":                 ["OWNER", "MANAGER", "STAFF"],
