@@ -250,6 +250,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [token, user]);
 
+  // Cross-layer bridge: the axios interceptor in client.ts lives outside React
+  // and cannot call hooks. It dispatches this custom event synchronously when a
+  // 401 fires, so we clear React state BEFORE the 1500ms redirect to /login.
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      localStorage.removeItem("token");
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("company");
+
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("leadsync_")) {
+          localStorage.removeItem(key);
+        }
+      });
+
+      setToken(null);
+      setUser(null);
+      setCompany(null);
+      setIsPendingOnboarding(false);
+      setPendingToken(null);
+    };
+
+    window.addEventListener("auth:session-expired", handleSessionExpired);
+    return () => window.removeEventListener("auth:session-expired", handleSessionExpired);
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{

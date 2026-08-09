@@ -34,7 +34,15 @@ apiClient.interceptors.request.use(
 
 // Response Interceptor: Manages token expirations, client cooldown rates, and privilege breaches
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // A successful login/signup means the user has a fresh session.
+    // Reset the redirect guard so the next genuine 401 can redirect normally.
+    const url = response.config?.url || "";
+    if (url.includes("/auth/login") || url.includes("/auth/signup")) {
+      isRedirecting = false;
+    }
+    return response;
+  },
   (error) => {
     if (error.response) {
       const { status, headers, config } = error.response;
@@ -66,6 +74,9 @@ apiClient.interceptors.response.use(
 
           if (!isRedirecting) {
             isRedirecting = true;
+            // Notify React layer to clear AuthContext state synchronously
+            // before the delayed redirect fires, preventing the /login→/dashboard bounce.
+            window.dispatchEvent(new Event("auth:session-expired"));
             toast.error("Your session expired — please sign in again.");
             setTimeout(() => {
               window.location.href = "/login";
